@@ -1,7 +1,7 @@
 from dolfin import FunctionSpace, Function, DirichletBC, \
                    TrialFunction, TestFunction, Constant, \
-                   FacetNormal, dx, ds, dS, \
-                   inner, grad, lhs, rhs, jump, solve
+                   FacetNormal, dx, ds, dS, solve, \
+                   inner, grad, lhs, rhs, jump, avg
 from dgvof.convection import get_convection_scheme
 
 class BlendedAlgebraicVofScheme():
@@ -39,12 +39,14 @@ class BlendedAlgebraicVofScheme():
         
         # Upstream and downstream normal velocities
         vel = velocity_field
-        vel_nU = (inner(vel, normal) + abs(inner(vel, normal)))/2
-        vel_nD = (inner(vel, normal) - abs(inner(vel, normal)))/2
-        
-        # The blended flux
-        flux = jump((1-beta)*vel_nU*c + beta*vel_nD*c)
-        
+        flux_nU = c*(inner(vel, normal) + abs(inner(vel, normal)))/2
+        flux_nD = c*(inner(vel, normal) + abs(inner(vel, normal)))/2
+
+        # Define the blended flux
+        # The blending factor beta is not DG, so beta('+') == beta('-')
+        b = beta('+')
+        flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
+
         # Equation to solve
         eq = (c-cp)/self.dt*v*dx \
              - c*inner(vel, grad(v))*dx \

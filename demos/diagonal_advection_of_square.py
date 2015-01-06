@@ -2,6 +2,7 @@ import time
 import numpy
 import dolfin
 from dgvof.vof import BlendedAlgebraicVofScheme
+from dgvof.plot import Plot2DDG0
 
 dolfin.set_log_level(dolfin.WARNING)
 
@@ -12,8 +13,9 @@ VEL_TURN_TIME = 0.5
 TMAX = 1.0
 Nt = 300
 HRIC_FORCE_UPWIND = False
-PLOT = True
+PLOT = False
 PLOT_INTERPOLATED = True
+PNG_OUTPUT_FREQUENCY = 1
 
 print 'CFL ~', (TMAX/Nt)/(xmax/Nx)*VEL[0], (TMAX/Nt)/(ymax/Ny)*VEL[1]
 
@@ -69,6 +71,7 @@ dt_vec = t_vec[1:] - t_vec[:-1]
 
 runtime_output(t_vec[0], vof.colour_function)
 vof.prev_colour_function.assign(c0)
+movie = Plot2DDG0(mesh, vof.colour_function)
 for it in xrange(1, Nt):
     t = t_vec[it]
     dt = dt_vec[it-1]
@@ -80,7 +83,11 @@ for it in xrange(1, Nt):
 
     vof.update(t, dt)
     runtime_output(t, vof.colour_function)
-    
+    if it % PNG_OUTPUT_FREQUENCY == 0:
+        movie_png_filename = "movie_%05d_%010.5f.png" % (it, t)
+        print movie_png_filename
+        movie.plot(movie_png_filename)
+            
     #plot(c_face, title='c_f at t=%f'%t, wireframe=True)
     if PLOT and it % 30 == 0 and it != 0:
         dolfin.plot(vof.colour_function, title='c at t=%f'%t)
