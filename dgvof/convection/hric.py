@@ -12,9 +12,12 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         Update the values of c at the faces, i.e the value
         that will be advected
         """
-        c_cell_vec = alpha_function.vector()
+        a_cell_vec = alpha_function.vector()
         beta = self.blending_function
         beta_vec = beta.vector()
+        
+        # Reconstruct the gradient to calculate upstream values
+        self.reconstruct_gradient(alpha_function)
         
         Co_max = 0
         for facet in dolfin.facets(self.mesh):
@@ -57,18 +60,22 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             if numpy.dot(normal, ump) > 0:
                 iaC = ic0
                 iaD = ic1
+                vec_to_upstream = -mp_dist
             else:
                 iaC = ic1
                 iaD = ic0
+                vec_to_upstream = mp_dist
             
             # Find alpha in D and C cells
-            aD = c_cell_vec[self.alpha_dofmap[iaD]]
-            aC = c_cell_vec[self.alpha_dofmap[iaC]]
-            # Extrapolate to the upwind U cell
-            aU = 2*aC - aD
-            aU = max(aU, 0)
-            aU = min(aU, 1)
-
+            aD = a_cell_vec[self.alpha_dofmap[iaD]]
+            aC = a_cell_vec[self.alpha_dofmap[iaC]]
+            
+            # Extrapolate to the upwind U cell using the gradient
+            # and ensure boundedness using the neighbouring values
+            aU = aC + numpy.dot(self.gradient[iaC], vec_to_upstream)
+            aU = max(aU, self.neighbour_minval[iaC])
+            aU = min(aU, self.neighbour_maxval[iaC])
+            
             # Calculate the Courant number
             dx = (mp_dist[0]**2 + mp_dist[1]**2)**0.5
             u = (ump[0]**2 + ump[1]**2)**0.5

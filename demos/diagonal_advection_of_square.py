@@ -2,7 +2,8 @@ import time
 import numpy
 import dolfin
 from dgvof.vof import BlendedAlgebraicVofScheme
-from dgvof.plot import Plot2DDG0
+from dgvof.plot import Plot2DDG0, plot_2d_DG0
+from tictoc import tic, toc
 
 dolfin.set_log_level(dolfin.WARNING)
 
@@ -60,18 +61,45 @@ class RuntimeOutput(object):
         print "Time = %6.3f - runtime = %5.3f - csum = %8.5f - minmax = %8.5f %8.5f" % (t, runtime, csum, cmin, cmax)
         self.prevtime = now
 
-# Function object dumping interesting variables to screen
-runtime_output = RuntimeOutput()
-
 ###############################################################################
 # Time loop
 
 t_vec = numpy.linspace(0, TMAX, Nt)
 dt_vec = t_vec[1:] - t_vec[:-1]
 
-runtime_output(t_vec[0], vof.colour_function)
+def make_movie_frame():
+    movie_png_filename = "fig/cfunc_%05d_%010.5f.png" % (it, t)
+    print movie_png_filename
+    movie.plot(movie_png_filename, skip_zero_values=False)
+    
+    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient[:,0],
+                "fig/gradient_x_cfunc_%05d_%010.5f.png" % (it, t),
+                xlim=(movie.coords[:,0].min(), movie.coords[:,0].max()),
+                ylim=(movie.coords[:,1].min(), movie.coords[:,1].max()),
+                cmap='seismic')
+    
+    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient[:,1],
+                "fig/gradient_y_cfunc_%05d_%010.5f.png" % (it, t),
+                xlim=(movie.coords[:,0].min(), movie.coords[:,0].max()),
+                ylim=(movie.coords[:,1].min(), movie.coords[:,1].max()),
+                cmap='seismic')
+
 vof.prev_colour_function.assign(c0)
-movie = Plot2DDG0(mesh, vof.colour_function)
+
+# Not needed, but nice to have for visualization of the 0th time step
+vof.colour_function.assign(c0)
+vof.convection_scheme.reconstruct_gradient(vof.colour_function)
+
+# Function object dumping interesting variables to screen
+runtime_output = RuntimeOutput()
+runtime_output(t_vec[0], vof.colour_function)
+
+# Make png frames of the evolution of the colour function
+movie = Plot2DDG0(vof.colour_function)
+t = t_vec[0]; it = 0
+make_movie_frame()
+
+tic('timeloop')
 for it in xrange(1, Nt):
     t = t_vec[it]
     dt = dt_vec[it-1]
@@ -84,15 +112,14 @@ for it in xrange(1, Nt):
     vof.update(t, dt)
     runtime_output(t, vof.colour_function)
     if it % PNG_OUTPUT_FREQUENCY == 0:
-        movie_png_filename = "movie_%05d_%010.5f.png" % (it, t)
-        print movie_png_filename
-        movie.plot(movie_png_filename)
-            
+        make_movie_frame()
+    
     #plot(c_face, title='c_f at t=%f'%t, wireframe=True)
     if PLOT and it % 30 == 0 and it != 0:
         dolfin.plot(vof.colour_function, title='c at t=%f'%t)
     #interactive()
     #if it > 2: break
+toc()
 
 ###############################################################################
 # Visualisation

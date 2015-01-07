@@ -1,49 +1,80 @@
 import numpy
-import matplotlib
 from matplotlib import pyplot
 from matplotlib.collections import PolyCollection
 import dolfin
 
 class Plot2DDG0(object):
-    def __init__(self, mesh, func):
-        self.mesh = mesh
+    def __init__(self, func):
+        """
+        A plotter for DG0 functions in 2D
+        """
         self.func = func
-        self.dofmap = func.function_space().dofmap().dofs()
         
-        coords = mesh.coordinates()
-        self.Ncell = mesh.num_entities(2)
+        # Get information about the underlying function space
+        function_space = func.function_space()
+        element = function_space.ufl_element()
+        cell = function_space.cell()
+        
+        # Check that the function is of a supported type
+        assert element.family() == 'Discontinuous Lagrange'
+        assert element.degree() == 0
+        assert cell.topological_dimension() == 2
+        
+        self.mesh = function_space.mesh()
+        self.dofmap = function_space.dofmap().dofs()
         
         # Build matplotlib plolygon data
+        self.coords = self.mesh.coordinates()
+        self.Ncell = self.mesh.num_entities(2)
         self.verts = []
-        for i, cell in enumerate(dolfin.cells(mesh)):
+        for cell in dolfin.cells(self.mesh):
             corners = cell.entities(0)
-            xs = [coords[i,0] for i in corners]
-            ys = [coords[i,1] for i in corners]
+            xs = [self.coords[i,0] for i in corners]
+            ys = [self.coords[i,1] for i in corners]
             self.verts.append(zip(xs, ys))
     
-    def plot(self, filename):
+    def plot(self, filename, skip_zero_values=False):
+        """
+        Plot the current state of the referenced function to a file
+        """
+        # Rearange function values according to the dofmap
         values = numpy.zeros(self.Ncell, float)
         funcvals = self.func.vector()
         for i in xrange(self.Ncell):
             values[self.dofmap[i]] = funcvals[i]
         
-        verts2, vals2 = [], []
-        for vx, v in zip(self.verts, values):
-            if v != 0:
-                verts2.append(vx)
-                vals2.append(v)
-        vals2 = numpy.array(vals2) 
+        # Only include polygons with non-zero values
+        if skip_zero_values:
+            verts2, vals2 = [], []
+            for vx, v in zip(self.verts, values):
+                if v != 0:
+                    verts2.append(vx)
+                    vals2.append(v)
+            vals2 = numpy.array(vals2)
+        else:
+            verts2 = self.verts
+            vals2 = values
         
-        # Make plot
-        fig = pyplot.figure()
-        ax = fig.add_subplot(111)
-        polys = PolyCollection(verts2, array=vals2,
-                               cmap=matplotlib.cm.jet,
-                               edgecolors='black',
-                               linewidths=0.25)
-        ax.add_collection(polys)
-        ax.autoscale_view()
-        fig.colorbar(polys, ax=ax)
-        
-        fig.savefig(filename)
-        pyplot.close(fig)
+        plot_2d_DG0(verts2, vals2, filename,
+                    xlim=(self.coords[:,0].min(), self.coords[:,0].max()),
+                    ylim=(self.coords[:,1].min(), self.coords[:,1].max()),
+                    clim=(0, 1)) 
+    
+def plot_2d_DG0(vertices, values, filename, xlim, ylim, clim=None, cmap='Blues'):
+    # Make plot
+    fig = pyplot.figure()
+    ax = fig.add_subplot(111)
+    polys = PolyCollection(vertices, array=values,
+                           cmap=cmap,
+                           edgecolors='black',
+                           linewidths=0.25)
+    ax.add_collection(polys)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    cb = fig.colorbar(polys, ax=ax)
+    if clim is not None:
+        cb.set_clim(0, 1)
+    fig.tight_layout()
+    
+    fig.savefig(filename)
+    pyplot.close(fig)
