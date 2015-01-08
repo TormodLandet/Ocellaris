@@ -2,7 +2,7 @@ import dolfin
 import numpy
 
 class GradientReconstructor(object):
-    def __init__(self, alpha_func, centroids, use_vertex_neighbours=True):
+    def __init__(self, alpha_func, alpha_dofmap, centroids, use_vertex_neighbours=True):
         """
         Reconstructor for the gradient in each cell. Assumes DG0
         
@@ -11,6 +11,7 @@ class GradientReconstructor(object):
         specifically equation 11.36 on page 322 for details on the method
         """
         self.alpha_function = alpha_func
+        self.alpha_dofmap = alpha_dofmap
         self.centroids = centroids
         self.use_vertex_neighbours = use_vertex_neighbours
         self.reconstruction_initialized = False
@@ -101,7 +102,8 @@ class GradientReconstructor(object):
             # Get the matrices
             AT = self.lstsq_matrices[idx]
             ATAI = self.lstsq_inv_matrices[idx]
-            b = [(a_cell_vec[ni] - a_cell_vec[idx]) for ni in neighbours]
+            a0  = a_cell_vec[self.alpha_dofmap[idx]]
+            b = [(a_cell_vec[self.alpha_dofmap[ni]] - a0) for ni in neighbours]
             b = numpy.array(b, float)
             
             # Store min and max values which can be used to enforce convective boundedness

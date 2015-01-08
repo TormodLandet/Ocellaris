@@ -40,7 +40,7 @@ class BlendedAlgebraicVofScheme():
         # Upstream and downstream normal velocities
         vel = velocity_field
         flux_nU = c*(inner(vel, normal) + abs(inner(vel, normal)))/2
-        flux_nD = c*(inner(vel, normal) + abs(inner(vel, normal)))/2
+        flux_nD = c*(inner(vel, normal) - abs(inner(vel, normal)))/2
 
         # Define the blended flux
         # The blending factor beta is not DG, so beta('+') == beta('-')

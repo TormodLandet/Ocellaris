@@ -98,7 +98,7 @@ class ConvectionScheme(object):
         self.force_upwind = False
         
         # For gradient reconstruction
-        self.gradient_reconstructor = GradientReconstructor(self.alpha_function, self.centroids)
+        self.gradient_reconstructor = GradientReconstructor(self.alpha_function, self.alpha_dofmap, self.centroids)
 
     def update(self, t, dt, velocity):
         raise NotImplementedError()

@@ -71,7 +71,7 @@ def make_movie_frame():
     movie_png_filename = "fig/cfunc_%05d_%010.5f.png" % (it, t)
     print movie_png_filename
     movie.plot(movie_png_filename, skip_zero_values=False)
-    
+    return
     plot_2d_DG0(movie.verts, vof.convection_scheme.gradient_reconstructor.gradient[:,0],
                 "fig/gradient_x_cfunc_%05d_%010.5f.png" % (it, t),
                 xlim=(movie.coords[:,0].min(), movie.coords[:,0].max()),

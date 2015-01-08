@@ -22,9 +22,13 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         neighbour_minval = self.gradient_reconstructor.neighbour_minval
         neighbour_maxval = self.gradient_reconstructor.neighbour_maxval
         
+        EPS = 1e-6
         Co_max = 0
         for facet in dolfin.facets(self.mesh):
             i = facet.index()
+            
+            if self.force_upwind:
+                beta_vec[self.dofmap[i]] = 0.0
             
             # Find the local cells (the two cells sharing this face)
             connected_cells = self.con12(i)
@@ -85,10 +89,18 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             Co = u*dt/dx
             Co_max = max(Co_max, Co)
             
-            if aD == aU or self.force_upwind:
+            # Aproximate gradient at the interface
+            g = 0.5*(gradient[iaC] + gradient[iaD])
+            len_g2 = g[0]**2 + g[1]**2
+            
+            if aD == aU or len_g2 < EPS:
                 # No change in this area, use upstream value
                 beta_vec[self.dofmap[i]] = 0.0
                 continue
+            
+            # Angle between face normal and surface normal
+            len_normal2 = normal[0]**2 + normal[1]**2
+            cos_theta = numpy.dot(normal, g) / (len_normal2*len_g2)**0.5
             
             # Introduce normalized variables
             tilde_aC = (aC - aU)/(aD - aU)
@@ -103,11 +115,33 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             else:
                 # Downwind
                 tilde_aF = 1
-
-            tilde_aF_star2 = tilde_aF
-
+            
+            # Corrected tilde_aF to avoid aligning with interfaces
+            t = abs(cos_theta)**0.5
+            tilde_aF_star = tilde_aF*t + tilde_aC*(1-t)
+            
+            tilde_aF_star2 = tilde_aF_star
+            
+            # Avoid tilde_aF being slightly lower that tilde_aC due to
+            # floating point errors, it must be greater or equal 
+            if tilde_aC - EPS < tilde_aF_star2 < tilde_aC:
+                tilde_aF_star2 = tilde_aC
+            
             # Calculate the downstream blending factor (0=upstream, 1=downstream)
             tilde_beta = (tilde_aF_star2 - tilde_aC)/(1 - tilde_aC)
+            
+            if not (0.0 <= tilde_beta <= 1.0):
+                print 'ERROR, tilde_beta %r is out of range [0, 1]' % tilde_beta
+                print ' face normal: %r' % normal
+                print ' surface gradient: %r' % g
+                print ' cos(theta): %r' % cos_theta
+                print ' sqrt(abs(cos(theta))) %r' % t
+                print ' tilde_aF %r' % tilde_aF
+                print ' tilde_aF_star %r' % tilde_aF_star
+                print ' tilde_aF_star2 %r' % tilde_aF_star2
+                print ' tilde_aC %r' % tilde_aC
+                print ' aU %r, aC %r, aD %r' % (aU, aC, aD)
+            
             assert 0.0 <= tilde_beta <= 1.0
             beta_vec[self.dofmap[i]] = tilde_beta
         
