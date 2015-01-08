@@ -7,6 +7,19 @@ from . import ConvectionScheme, register_convection_scheme
 
 @register_convection_scheme('HRIC')
 class ConvectionSchemeHric2D(ConvectionScheme):
+    def __init__(self, alpha_function):
+        super(ConvectionSchemeHric2D, self).__init__(alpha_function)
+        
+        # We need cell volumes and facet areas
+        self.volumes = numpy.zeros(self.ncells, float)
+        self.areas = numpy.zeros(self.nfacets, float)
+        for cell in dolfin.cells(self.mesh):
+            idx = cell.index()
+            self.volumes[idx] = cell.volume()
+            # Loop over connected facets and get the area
+            for i, fi in enumerate(self.con21(idx)):
+                self.areas[fi] = cell.facet_area(i)
+    
     def update(self, t, dt, velocity):
         """
         Update the values of c at the faces, i.e the value
@@ -25,18 +38,18 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         EPS = 1e-6
         Co_max = 0
         for facet in dolfin.facets(self.mesh):
-            i = facet.index()
+            fidx = facet.index()
             
             if self.force_upwind:
-                beta_vec[self.dofmap[i]] = 0.0
+                beta_vec[self.dofmap[fidx]] = 0.0
             
             # Find the local cells (the two cells sharing this face)
-            connected_cells = self.con12(i)
+            connected_cells = self.con12(fidx)
 
             if len(connected_cells) != 2:
                 # This should be an exterior facet (on ds)
                 assert facet.exterior()
-                beta_vec[self.dofmap[i]] = 0.0
+                beta_vec[self.dofmap[fidx]] = 0.0
                 continue
             
             # Indices of the two local cells
@@ -83,10 +96,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             aU = max(aU, neighbour_minval[iaC])
             aU = min(aU, neighbour_maxval[iaC])
             
-            # Calculate the Courant number
-            dx = (mp_dist[0]**2 + mp_dist[1]**2)**0.5
-            u = (ump[0]**2 + ump[1]**2)**0.5
-            Co = u*dt/dx
+            # Calculate the facet Courant number
+            Co = numpy.dot(ump, normal)*dt*self.areas[fidx]/self.volumes[iaC]
             Co_max = max(Co_max, Co)
             
             # Aproximate gradient at the interface
@@ -95,7 +106,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if aD == aU or len_g2 < EPS:
                 # No change in this area, use upstream value
-                beta_vec[self.dofmap[i]] = 0.0
+                beta_vec[self.dofmap[fidx]] = 0.0
                 continue
             
             # Angle between face normal and surface normal
@@ -107,7 +118,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if tilde_aC <= 0 or tilde_aC >= 1:
                 # Only upwind is stable
-                beta_vec[self.dofmap[i]] = 0.0
+                beta_vec[self.dofmap[fidx]] = 0.0
                 continue
             elif 0 <= tilde_aC <= 0.5:
                 # Blend upwind and downwind
@@ -116,11 +127,17 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 # Downwind
                 tilde_aF = 1
             
-            # Corrected tilde_aF to avoid aligning with interfaces
+            # Correct tilde_aF to avoid aligning with interfaces
             t = abs(cos_theta)**0.5
             tilde_aF_star = tilde_aF*t + tilde_aC*(1-t)
             
-            tilde_aF_star2 = tilde_aF_star
+            # Correct tilde_af_star for high Courant numbers
+            if Co < 0.3:
+                tilde_aF_star2 = tilde_aF_star
+            elif Co < 0.7:
+                tilde_aF_star2 = tilde_aC + (tilde_aF_star - tilde_aC)*(0.7 - Co)/(0.7 - 0.3)
+            else:
+                tilde_aF_star2 = tilde_aC
             
             # Avoid tilde_aF being slightly lower that tilde_aC due to
             # floating point errors, it must be greater or equal 
@@ -143,7 +160,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 print ' aU %r, aC %r, aD %r' % (aU, aC, aD)
             
             assert 0.0 <= tilde_beta <= 1.0
-            beta_vec[self.dofmap[i]] = tilde_beta
+            beta_vec[self.dofmap[fidx]] = tilde_beta
         
         beta.vector()[:] = beta_vec
         print 'HRIC alpha_face  %10.5f %10.5f,  Co_max = %.3f' % (beta_vec.min(), beta_vec.max(), Co_max)
