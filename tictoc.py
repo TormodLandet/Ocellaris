@@ -1,18 +1,24 @@
-import time, threading
+import time
+
+_tictoc_data = []
 
 def tic(description=''):
-    data = threading.local()
-    if not hasattr(data, 'tictoc'):
-        data.tictoc = []
-    data.tictoc.append((description, time.time()))
+    _tictoc_data.append((description, time.time()))
     print 'START "%s"' % description
 
 def toc():
-    data = threading.local()
-    if not hasattr(data, 'tictoc') or not data.tictoc:
+    if not _tictoc_data:
         print 'ERROR: toc() without a tic()'
         return
     
-    description, t0 = data.pop() 
+    description, t0 = _tictoc_data.pop() 
     dt = time.time() - t0
     print 'DONE "%s" in %.2fs' % (description, dt)
+
+if __name__ == '__main__':
+    tic()
+    time.sleep(0.5)
+    toc()
+    
+    tic('test2')
+    toc()
