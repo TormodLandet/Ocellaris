@@ -3,21 +3,24 @@ The HRIC upwind/downwind blending sheme
 """
 import numpy
 import dolfin
-from . import ConvectionScheme, convection_scheme
+from . import ConvectionScheme, register_convection_scheme
 
-@convection_scheme('HRIC')
+@register_convection_scheme('HRIC')
 class ConvectionSchemeHric2D(ConvectionScheme):
-    def update(self, t, dt, alpha_function, velocity):
+    def update(self, t, dt, velocity):
         """
         Update the values of c at the faces, i.e the value
         that will be advected
         """
-        a_cell_vec = alpha_function.vector()
+        a_cell_vec = self.alpha_function.vector()
         beta = self.blending_function
         beta_vec = beta.vector()
         
         # Reconstruct the gradient to calculate upstream values
-        self.reconstruct_gradient(alpha_function)
+        self.gradient_reconstructor.reconstruct()
+        gradient = self.gradient_reconstructor.gradient
+        neighbour_minval = self.gradient_reconstructor.neighbour_minval
+        neighbour_maxval = self.gradient_reconstructor.neighbour_maxval
         
         Co_max = 0
         for facet in dolfin.facets(self.mesh):
@@ -72,9 +75,9 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             # Extrapolate to the upwind U cell using the gradient
             # and ensure boundedness using the neighbouring values
-            aU = aC + numpy.dot(self.gradient[iaC], vec_to_upstream)
-            aU = max(aU, self.neighbour_minval[iaC])
-            aU = min(aU, self.neighbour_maxval[iaC])
+            aU = aC + numpy.dot(gradient[iaC], vec_to_upstream)
+            aU = max(aU, neighbour_minval[iaC])
+            aU = min(aU, neighbour_maxval[iaC])
             
             # Calculate the Courant number
             dx = (mp_dist[0]**2 + mp_dist[1]**2)**0.5

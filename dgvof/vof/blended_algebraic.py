@@ -28,7 +28,7 @@ class BlendedAlgebraicVofScheme():
         
         # The convection blending function that counteracts numerical diffusion
         scheme = get_convection_scheme(convection_scheme)
-        self.convection_scheme = scheme(mesh, self.function_space)
+        self.convection_scheme = scheme(self.colour_function)
         beta = self.convection_scheme.blending_function
         
         # The time step (real value to be supplied later)
@@ -68,7 +68,7 @@ class BlendedAlgebraicVofScheme():
         using the given divergence free velocity field
         """
         # Update the convection blending factors
-        self.convection_scheme.update(t, dt, self.colour_function, self.velocity_field)
+        self.convection_scheme.update(t, dt, self.velocity_field)
         
         # Solve the advection equation
         self.dt.assign(dt)

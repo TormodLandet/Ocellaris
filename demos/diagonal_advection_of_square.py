@@ -72,13 +72,13 @@ def make_movie_frame():
     print movie_png_filename
     movie.plot(movie_png_filename, skip_zero_values=False)
     
-    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient[:,0],
+    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient_reconstructor.gradient[:,0],
                 "fig/gradient_x_cfunc_%05d_%010.5f.png" % (it, t),
                 xlim=(movie.coords[:,0].min(), movie.coords[:,0].max()),
                 ylim=(movie.coords[:,1].min(), movie.coords[:,1].max()),
                 cmap='seismic')
     
-    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient[:,1],
+    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient_reconstructor.gradient[:,1],
                 "fig/gradient_y_cfunc_%05d_%010.5f.png" % (it, t),
                 xlim=(movie.coords[:,0].min(), movie.coords[:,0].max()),
                 ylim=(movie.coords[:,1].min(), movie.coords[:,1].max()),
@@ -88,7 +88,7 @@ vof.prev_colour_function.assign(c0)
 
 # Not needed, but nice to have for visualization of the 0th time step
 vof.colour_function.assign(c0)
-vof.convection_scheme.reconstruct_gradient(vof.colour_function)
+vof.convection_scheme.gradient_reconstructor.reconstruct()
 
 # Function object dumping interesting variables to screen
 runtime_output = RuntimeOutput()

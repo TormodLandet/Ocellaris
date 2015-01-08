@@ -61,6 +61,10 @@ class Plot2DDG0(object):
                     clim=(0, 1)) 
     
 def plot_2d_DG0(vertices, values, filename, xlim, ylim, clim=None, cmap='Blues'):
+    """
+    Helper function to plot DG0 2D results. 
+    Use the Plot2DDG0 class for a nicer interface to this function
+    """
     # Make plot
     fig = pyplot.figure()
     ax = fig.add_subplot(111)
@@ -68,13 +72,17 @@ def plot_2d_DG0(vertices, values, filename, xlim, ylim, clim=None, cmap='Blues')
                            cmap=cmap,
                            edgecolors='black',
                            linewidths=0.25)
+    
+    if clim is not None:
+        polys.set_clim(*clim)
+        polys.cmap.set_under('grey')
+        polys.cmap.set_over('grey')
+    
     ax.add_collection(polys)
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
-    cb = fig.colorbar(polys, ax=ax)
-    if clim is not None:
-        cb.set_clim(0, 1)
-    fig.tight_layout()
+    fig.colorbar(polys, ax=ax)
     
+    fig.tight_layout()
     fig.savefig(filename)
     pyplot.close(fig)
