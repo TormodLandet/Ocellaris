@@ -67,10 +67,6 @@ class BlendedAlgebraicVofScheme():
         #cvelU = (inner(compr_vel, normal) + abs(inner(compr_vel, normal)))/2
         #q = c * (1-cp)
         #cflux = q('+')*cvelU('+') - q('-')*cvelU('-')
-        self.facet_areas = {}
-        for edge in dolfin.edges(self.mesh):
-            mp = edge.midpoint()
-            self.facet_areas[edge.index()] = (mp.x(), mp.y(), edge.length())
         compr_vel = Constant((0.0, 0.0))
         cflux = Constant(0.0)
         
@@ -90,8 +86,8 @@ class BlendedAlgebraicVofScheme():
         # Store the reference to the convecting velocity field
         self.velocity_field = simulation.data['u']
         
-        simulation.add_plot('c', self.colour_function)
-        simulation.add_plot('c_grad', gradient)
+        simulation.plotting.add_plot('c', self.colour_function)
+        simulation.plotting.add_plot('c_grad', gradient)
         #import dolfin
         #simulation.add_plot('cvel', dolfin.project(cvel, V=fgrad.function_space()))
         #print 'cvel'
@@ -122,12 +118,16 @@ class BlendedAlgebraicVofScheme():
         """
         Explicit compression
         """
+        #self.simulation.plotting.plot('c', '_uncompr')
+        
         compr_fac = self.simulation.input['VOF'].get('compression_factor', 1.0)
         if compr_fac == 0:
             return
         
         facet_info = self.simulation.data['facet_info']
+        #cell_info = self.simulation.data['cell_info']
         conFC = self.simulation.data['connectivity_FC']
+        ndim = self.simulation.ndim
         
         colour_func_vec = self.colour_function.vector()
         colour_func_dofmap = self.convection_scheme.alpha_dofmap
@@ -136,6 +136,17 @@ class BlendedAlgebraicVofScheme():
         gradient_dofmap0 = self.convection_scheme.gradient_reconstructor.gradient_dofmap0
         gradient_dofmap1 = self.convection_scheme.gradient_reconstructor.gradient_dofmap1
         
+        # Fast functions for length of vectors
+        if ndim == 2:
+            norm = lambda vec: (vec[0]**2 + vec[1]**2)**0.5
+        else:
+            norm = lambda vec: (vec[0]**2 + vec[1]**2 + vec[2]**2)**0.5
+            
+        # Get a numpy array from a location in a VectorFunctionSpace of the gradient
+        gdofs  = (gradient_dofmap0, gradient_dofmap1)
+        gradient2array = lambda vecfun, i: numpy.array([vecfun[dm[i]] for dm in gdofs], float)
+        
+        # Find faces where there is a change of colour between the cells
         EPS = 1e-6
         faces_to_flux = []
         for facet in dolfin.facets(self.mesh):
@@ -161,73 +172,68 @@ class BlendedAlgebraicVofScheme():
                 continue
             
             # Facet midpoint
-            face_mp = facet_info[fidx].midpoint
+            #face_mp = facet_info[fidx].midpoint
             
             # Velocity at the midpoint (do not care which side of the face)
-            ump = numpy.zeros(2, float)
-            self.velocity_field.eval(ump, face_mp)
+            #ump = numpy.zeros(2, float)
+            #self.velocity_field.eval(ump, face_mp)
             
             # Find a normal pointing out from local cell 0
             normal = finfo.normal
             
+            # Find average gradient  
+            gradient = 0.5*(gradient2array(gradient_vec, i0) + gradient2array(gradient_vec, i1))
+            
             # Find indices of downstream ("D") cell and central ("C") cell
-            uf = numpy.dot(normal, ump)
-            if uf > 0:
+            if numpy.dot(normal, gradient) > 0:
                 iC, iD = i0, i1
                 cC, cD = c0, c1
             else:
                 iC, iD = i1, i0
                 cC, cD = c1, c0
             
-            # Find gradient in D cell
-            gdofs  = (gradient_dofmap0, gradient_dofmap1)
-            func2vec = lambda vec, i: numpy.array([vec[dm[i]] for dm in gdofs], float)  
-            gC = func2vec(gradient_vec, iC)
-            
-            # Find area of face
-            mx, my, area = self.facet_areas[fidx]
-            assert face_mp[0] == mx and face_mp[1] == my 
+            # We must allow some "diffusion", otherwise the front will not move
+            if cD > 0.9:
+                continue
             
             # The colour function values are for sorting purposes only,
             # the others are to calculate the compressive flux on this face
-            faces_to_flux.append((cD, cC, iD, iC, ump, gC, normal, area))
+            faces_to_flux.append((cD, cC, iD, iC, gradient, normal, finfo.area))
         
         # Sort to bring the largest values of the colour function in
         # the recipient cell first
-        faces_to_flux.sort(reverse=True)
+        faces_to_flux.sort(reverse=False)
         
-        norm = lambda vec: (vec[0]**2 + vec[1]**2)**0.5
-        for cD, cC, iD, iC, ump, gC, normal, area in faces_to_flux:
+        for _, _, iD, iC, gradient, normal, area in faces_to_flux:
             # Find updated colour function in D and C cells
             cC = colour_func_vec[colour_func_dofmap[iC]]
             cD = colour_func_vec[colour_func_dofmap[iD]]
             
-            # Weighting factor to avoid toucing areas with constant colour
-            w = cC*(1-cC)
-            
-            if w < EPS:
-                # Skip areas of constant colour
-                continue
-                  
+            # Volumes of the two cells
+            #vC = cell_info[iC].volume
+            #vD = cell_info[iD].volume
+                    
             # Compressive velocity
-            Uc = compr_fac*norm(ump)*gC/(norm(gC) + EPS)
+            
+            #Uc = compr_fac*norm(ump)*unity_gradient
             
             # Volume to flux
-            cDelta = numpy.dot(Uc, normal)*w*area
-            if cDelta < 0:
-                # This should be just noise
-                assert cDelta < EPS*100
-                continue
+            #volDelta = numpy.dot(Uc, normal)*area
+            #if volDelta < 0:
+            #    # This should be just noise
+            #    assert volDelta < EPS*100
+            #    volDelta = 0.0
             
-            # Find updated colour function in D and C cells
-            cC = colour_func_vec[colour_func_dofmap[iC]]
-            cD = colour_func_vec[colour_func_dofmap[iD]]
+            unity_gradient = gradient/(norm(gradient) + EPS)
+            w = abs(numpy.dot(unity_gradient, normal))*compr_fac
             
             # Take no more than what exists and do not overfill
-            cDelta = max(cDelta, cC)
+            cDelta = cC*w #max(volDelta, cC)
             cDelta = min(cDelta, 1 - cD)
             
+            if cDelta < 0:
+                cDelta = max(cDelta, cC-1)
+                
             # Local sharpening of the colour function in D and C cells
-            colour_func_vec[colour_func_dofmap[iC]] -= cDelta 
-            colour_func_vec[colour_func_dofmap[iD]] += cDelta
-            
+            colour_func_vec[colour_func_dofmap[iC]] -= cDelta
+            colour_func_vec[colour_func_dofmap[iD]] += cDelta            

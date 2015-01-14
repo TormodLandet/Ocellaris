@@ -78,5 +78,6 @@ class ConvectionScheme(object):
     def update(self, t, dt, velocity):
         raise NotImplementedError()
 
-from . import hric
 from . import upwind
+from . import cicsam
+from . import hric

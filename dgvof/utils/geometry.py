@@ -11,7 +11,7 @@ def init_connectivity(simulation):
     Initialize the needed connectivity data
     """
     mesh = simulation.data['mesh']
-    ndim = simulation.data['ndim'] = mesh.topology().dim()
+    ndim = simulation.ndim
     
     if ndim == 2:
         # Connectivity from face to edge
@@ -54,7 +54,7 @@ def precompute_cell_data(simulation):
     Get cell volume and midpoint in an easy to use format
     """
     mesh = simulation.data['mesh']
-    ndim = simulation.data['ndim']
+    ndim = simulation.ndim
     
     cell_info = {}        
     for cell in dolfin.cells(mesh):
@@ -75,7 +75,7 @@ def precompute_facet_data(simulation):
     """
     mesh = simulation.data['mesh']
     conFC = simulation.data['connectivity_FC']
-    ndim = simulation.data['ndim']
+    ndim = simulation.ndim
     cell_info = simulation.data['cell_info']
     
     # Get the facet areas from the cells

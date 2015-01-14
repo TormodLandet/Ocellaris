@@ -3,35 +3,24 @@ The HRIC upwind/downwind blending sheme
 """
 import numpy
 import dolfin
+import math
 from . import ConvectionScheme, register_convection_scheme
 
-@register_convection_scheme('HRIC')
+@register_convection_scheme('CICSAM')
 class ConvectionSchemeHric2D(ConvectionScheme):
     
-    description = 'High Resolution Interface Capturing (HRIC, Modified HRIC and Refined HRIC)'
+    description = 'Compressive Interface Capturing Scheme for Arbitrary Meshes'
     
     def __init__(self, simulation, func_name):
         """
-        Implementation of the HRIC VOF convection scheme
+        Implementation of the CICSAM VOF convection scheme
         
-        HRIC:
-          "A Two-Fluid Navie-Stokes Solver to Simulate Water Entry"
-          Twenty-Second Symposium on Naval Hydrodynamics, 1999
-          S. Muzaferija, M. Peric, P. Sames, t. Schellin
-        
-        MHRIC:
-          "Fluent Theory Guide v15.0"
-          2013
-          ANSYS 
-        
-        RHRIC:
-          "Free surface flow analysis based on improved HRIC VOF method"
-          Journal of the Society of Naval Architects of Korea
-          Vol. 47, No 3, pp. 279-290, June 2010
-          Il-Ryong Park, Kwang-Soo Kim, Jin Kim and Suak-Ho Van
+        From:
+          "Numerical prediction of two fluid systems with sharp interfaces"
+          Imperial College, London, 1997
+          Onno Ubbink
         """
         super(ConvectionSchemeHric2D, self).__init__(simulation, func_name)
-        self.variant = simulation.input.get('convection', {}).get(func_name, {}).get('HRIC_version', 'HRIC')
     
     def update(self, t, dt, velocity):
         """
@@ -52,8 +41,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         gradient = self.gradient_reconstructor.gradient
         gradient_dofmap0 = self.gradient_reconstructor.gradient_dofmap0
         gradient_dofmap1 = self.gradient_reconstructor.gradient_dofmap1
-        neighbour_minval = self.gradient_reconstructor.neighbour_minval
-        neighbour_maxval = self.gradient_reconstructor.neighbour_maxval
         
         EPS = 1e-6
         Co_max = 0
@@ -73,15 +60,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             # Indices of the two local cells
             ic0, ic1 = connected_cells
             
-            # Hack to speed up calculations
-            nmin0 = neighbour_minval.vector()[self.alpha_dofmap[ic0]]
-            nmax0 = neighbour_maxval.vector()[self.alpha_dofmap[ic0]]
-            nmin1 = neighbour_minval.vector()[self.alpha_dofmap[ic1]]
-            nmax1 = neighbour_maxval.vector()[self.alpha_dofmap[ic1]]
-            if (nmax0 - nmin0) < EPS and (nmax1 - nmin1) < EPS:
-                beta_vec[self.dofmap[fidx]] = 0.0
-                continue
-            
             # Velocity at the midpoint (do not care which side of the face)
             ump = numpy.zeros(2, float)
             velocity.eval(ump, finfo.midpoint)
@@ -100,12 +78,10 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 iaC = ic0
                 iaD = ic1
                 vec_to_downstream = mp_dist
-                #nminC, nmaxC = nmin0, nmax0
             else:
                 iaC = ic1
                 iaD = ic0
                 vec_to_downstream = -mp_dist
-                #nminC, nmaxC = nmin1, nmax1
             
             # Find alpha in D and C cells
             aD = a_cell_vec[self.alpha_dofmap[iaD]]
@@ -115,7 +91,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             gdofs  = (gradient_dofmap0, gradient_dofmap1)
             func2vec = lambda fun, i: numpy.array([fun.vector()[dm[i]] for dm in gdofs], float)  
             gC = func2vec(gradient, iaC)
-            len_gC2 = numpy.dot(gC, gC)
             
             # Upstream value
             # See Ubbink's PhD (1997) equations 4.21 and 4.22
@@ -131,10 +106,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 beta_vec[self.dofmap[fidx]] = 0.0
                 continue
             
-            # Angle between face normal and surface normal
-            len_normal2 = numpy.dot(normal, normal)
-            cos_theta = numpy.dot(normal, gC) / (len_normal2*len_gC2)**0.5
-            
             # Introduce normalized variables
             tilde_aC = (aC - aU)/(aD - aU)
             
@@ -142,45 +113,20 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 # Only upwind is stable
                 beta_vec[self.dofmap[fidx]] = 0.0
                 continue
+        
+            # Compressive scheme, Hyper-C
+            tilde_aF_HC = min(tilde_aC/Co, 1)
             
-            if self.variant == 'HRIC':
-                # Compressive scheme
-                tilde_aF = 2*tilde_aC if 0 <= tilde_aC <= 0.5 else 1
-                
-                # Correct tilde_aF to avoid aligning with interfaces
-                t = abs(cos_theta)**0.5
-                tilde_aF_star = tilde_aF*t + tilde_aC*(1-t)
-                
-                # Correct tilde_af_star for high Courant numbers
-                if Co < 0.3:
-                    tilde_aF_final = tilde_aF_star
-                elif Co < 0.7:
-                    tilde_aF_final = tilde_aC + (tilde_aF_star - tilde_aC)*(0.7 - Co)/(0.7 - 0.3)
-                else:
-                    tilde_aF_final = tilde_aC
+            # Less compressive scheme, Ultimate-Quickest
+            tilde_aF_UC = min((8*Co*tilde_aC + (1-Co)*(6*tilde_aC + 3))/8, tilde_aF_HC)
             
-            elif self.variant == 'MHRIC':
-                # Compressive scheme
-                tilde_aF = 2*tilde_aC if 0 <= tilde_aC <= 0.5 else 1
-                
-                # Less compressive scheme
-                tilde_aF_ultimate_quickest = min((6*tilde_aC + 3)/8, tilde_aF)
-                
-                # Correct tilde_aF to avoid aligning with interfaces
-                t = abs(cos_theta)**0.5
-                tilde_aF_final = tilde_aF*t + tilde_aF_ultimate_quickest*(1-t)
-            
-            elif self.variant == 'RHRIC':
-                # Compressive scheme
-                tilde_aF_hyperc = min(tilde_aC/Co, 1)
-                
-                # Less compressive scheme
-                tilde_aF_hric = min(tilde_aC*Co + 2*tilde_aC*(1-Co), tilde_aF_hyperc)
-                
-                # Correct tilde_aF to avoid aligning with interfaces 
-                t = cos_theta**4
-                tilde_aF_final = tilde_aF_hyperc*t + tilde_aF_hric*(1-t)
-            
+            # Correct tilde_aF to avoid aligning with interfaces
+            d = vec_to_downstream
+            theta = math.acos(abs(numpy.dot(gC, d)/(numpy.dot(gC, gC) * numpy.dot(d, d))**0.5))
+            ky = 1.0
+            y = min(ky*(math.cos(2*theta) + 1)/2, 1)
+            tilde_aF_final = tilde_aF_HC*y + tilde_aF_UC*(1-y)
+        
             # Avoid tilde_aF being slightly lower that tilde_aC due to
             # floating point errors, it must be greater or equal 
             if tilde_aC - EPS < tilde_aF_final < tilde_aC:
@@ -193,7 +139,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 print 'ERROR, tilde_beta %r is out of range [0, 1]' % tilde_beta
                 print ' face normal: %r' % normal
                 print ' surface gradient: %r' % gC
-                print ' cos(theta): %r' % cos_theta
+                print ' theta: %r' % theta
                 print ' sqrt(abs(cos(theta))) %r' % t
                 print ' tilde_aF_final %r' % tilde_aF_final
                 print ' tilde_aC %r' % tilde_aC

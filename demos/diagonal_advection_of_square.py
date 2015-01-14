@@ -2,7 +2,7 @@ import time
 import numpy
 import dolfin
 from dgvof.vof import BlendedAlgebraicVofScheme
-from dgvof import Plotter, Simulation
+from dgvof import Simulation
 from tictoc import tic, toc
 
 dolfin.set_log_level(dolfin.WARNING)
@@ -12,12 +12,12 @@ ymax = 1.5; Ny = 60
 VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
 TMAX = 1.0
-Nt = 1000
+Nt = 500 #1000
 HRIC_FORCE_UPWIND = False
 PLOT = False
 PLOT_INTERPOLATED = False
-PNG_OUTPUT_FREQUENCY = 1
-TS_MAX = 11 #1e10
+PNG_OUTPUT_FREQUENCY = 10
+TS_MAX = 1e10
 
 print 'CFL ~', (TMAX/Nt)/(xmax/Nx)*VEL[0], (TMAX/Nt)/(ymax/Ny)*VEL[1]
 
@@ -85,23 +85,6 @@ class RuntimeOutput(object):
 t_vec = numpy.linspace(0, TMAX, Nt)
 dt_vec = t_vec[1:] - t_vec[:-1]
 
-def make_movie_frame():
-    movie_png_filename = "fig/cfunc_%05d_%010.5f.png" % (it, t)
-    print movie_png_filename
-    movie.plot(movie_png_filename, skip_zero_values=False)
-    return
-    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient_reconstructor.gradient[:,0],
-                "fig/gradient_x_cfunc_%05d_%010.5f.png" % (it, t),
-                xlim=(movie.coords[:,0].min(), movie.coords[:,0].max()),
-                ylim=(movie.coords[:,1].min(), movie.coords[:,1].max()),
-                cmap='seismic')
-    
-    plot_2d_DG0(movie.verts, vof.convection_scheme.gradient_reconstructor.gradient[:,1],
-                "fig/gradient_y_cfunc_%05d_%010.5f.png" % (it, t),
-                xlim=(movie.coords[:,0].min(), movie.coords[:,0].max()),
-                ylim=(movie.coords[:,1].min(), movie.coords[:,1].max()),
-                cmap='seismic')
-
 vof.prev_colour_function.assign(c0)
 
 # Not needed, but nice to have for visualization of the 0th time step
@@ -117,12 +100,13 @@ import json
 print json.dumps(sim.input, indent=4)
 
 # Make png frames of the evolution of the colour function
-sim.plot_all(0, 0.0)
+sim.plotting.plot_all()
 
 tic('timeloop')
 for it in xrange(1, Nt):
     t = t_vec[it]
     dt = dt_vec[it-1]
+    sim.new_timestep(it, t, dt)
 
     if t < VEL_TURN_TIME:
         vel.assign(dolfin.Constant(VEL))
@@ -132,7 +116,7 @@ for it in xrange(1, Nt):
     vof.update(t, dt)
     runtime_output(it, t, vof.colour_function)
     if it % PNG_OUTPUT_FREQUENCY == 0:
-        sim.plot_all(it, t)
+        sim.plotting.plot_all()
     
     #plot(c_face, title='c_f at t=%f'%t, wireframe=True)
     if PLOT and it % 30 == 0 and it != 0:

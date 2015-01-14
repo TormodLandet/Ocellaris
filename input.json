@@ -7,12 +7,12 @@
 	
 	"VOF": {
 		"type": "BlendedAlgebraic",
-		"compression_factor": 0.2
+		"compression_factor": 0.0
 	},
 	
 	"convection": {
 		"c": {
-			"convection_scheme": "HRIC",
+			"convection_scheme": "CICSAM",
 			"HRIC_version": "HRIC"
 		}
 	}
