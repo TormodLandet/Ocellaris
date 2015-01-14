@@ -2,7 +2,7 @@ import time
 import numpy
 import dolfin
 from dgvof.vof import BlendedAlgebraicVofScheme
-from dgvof.plot import Plot2DDG0, plot_2d_DG0
+from dgvof import Plotter, Simulation
 from tictoc import tic, toc
 
 dolfin.set_log_level(dolfin.WARNING)
@@ -12,35 +12,48 @@ ymax = 1.5; Ny = 60
 VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
 TMAX = 1.0
-Nt = 300
+Nt = 1000
 HRIC_FORCE_UPWIND = False
 PLOT = False
-PLOT_INTERPOLATED = True
+PLOT_INTERPOLATED = False
 PNG_OUTPUT_FREQUENCY = 1
+TS_MAX = 11 #1e10
 
 print 'CFL ~', (TMAX/Nt)/(xmax/Nx)*VEL[0], (TMAX/Nt)/(ymax/Ny)*VEL[1]
 
-class InitialC(dolfin.Expression):
+class CField(dolfin.Expression):
+    t = 0
     def eval(self, value, x):
-        value[0] = 1 if (0.25 < x[0] < 0.50 and 0.25 < x[1] < 0.50) else 0
-c0expr = InitialC()
+        if self.t < VEL_TURN_TIME:
+            cx = 0.375 + VEL[0]*self.t
+            cy = 0.375 + VEL[1]*self.t
+        else:
+            cx = 0.375 + 2*VEL[0]*VEL_TURN_TIME - VEL[0]*self.t
+            cy = 0.375 + 2*VEL[1]*VEL_TURN_TIME - VEL[1]*self.t
+        value[0] = 1 if (cx-0.125 < x[0] < cx+0.125 and cy-0.125 < x[1] < cy+0.125) else 0
+cexpr = CField()
 
 ################################################################################
 # Problem definition
 
-# Initialize mesh and function space
+sim = Simulation()
+sim.read_json_input_file('input.json')
+
+# Initialize mesh
 mesh = dolfin.RectangleMesh(0, 0, xmax, ymax, Nx, Ny, 'left/right')
+sim.set_mesh(mesh)
 
 # Initialize the convecting velocity field
-vel_func_space = dolfin.VectorFunctionSpace(mesh, "DG", 0)
+vel_func_space = dolfin.VectorFunctionSpace(mesh, "DG", 1)
 vel = dolfin.Function(vel_func_space)
+sim.data['u'] = vel
 
 # Initialize the VOF scheme
-vof = BlendedAlgebraicVofScheme(mesh, 'HRIC', vel)
+vof = BlendedAlgebraicVofScheme(sim)
 vof.convection_scheme.force_upwind = HRIC_FORCE_UPWIND
 
 # Initialize the colour function field
-c0 = dolfin.interpolate(c0expr, vof.function_space)
+c0 = dolfin.interpolate(cexpr, vof.function_space)
 
 ################################################################################
 # Runtime postprocessing
@@ -49,16 +62,21 @@ class RuntimeOutput(object):
     def __init__(self):
         self.prevtime = time.time()
         
-    def __call__(self, t, cfunc):
+    def __call__(self, timestep, t, cfunc):
         cvec = cfunc.vector().array()
         
         csum = dolfin.assemble(cfunc*dolfin.dx)
         cmax = cvec.max()
         cmin = cvec.min()
+        
+        cexpr.t = t
+        target = dolfin.interpolate(cexpr, vof.function_space).vector().array()
+        error = ((target - cvec)**2).sum() *  60*60/(Nx*Ny)
     
         now = time.time()
         runtime = now - self.prevtime
-        print "Time = %6.3f - runtime = %5.3f - csum = %8.5f - minmax = %8.5f %8.5f" % (t, runtime, csum, cmin, cmax)
+        print "%5d - Time = %6.3f - runtime = %5.3f - csum = %8.5f - minmax = %8.5f %8.5f, error = %8.3f" % \
+              (timestep, t, runtime, csum, cmin, cmax, error)
         self.prevtime = now
 
 ###############################################################################
@@ -92,12 +110,14 @@ vof.convection_scheme.gradient_reconstructor.reconstruct()
 
 # Function object dumping interesting variables to screen
 runtime_output = RuntimeOutput()
-runtime_output(t_vec[0], vof.colour_function)
+runtime_output(0, t_vec[0], vof.colour_function)
+
+# Dump input data
+import json
+print json.dumps(sim.input, indent=4)
 
 # Make png frames of the evolution of the colour function
-movie = Plot2DDG0(vof.colour_function)
-t = t_vec[0]; it = 0
-make_movie_frame()
+sim.plot_all(0, 0.0)
 
 tic('timeloop')
 for it in xrange(1, Nt):
@@ -110,15 +130,17 @@ for it in xrange(1, Nt):
         vel.assign(dolfin.Constant(-VEL))
 
     vof.update(t, dt)
-    runtime_output(t, vof.colour_function)
+    runtime_output(it, t, vof.colour_function)
     if it % PNG_OUTPUT_FREQUENCY == 0:
-        make_movie_frame()
+        sim.plot_all(it, t)
     
     #plot(c_face, title='c_f at t=%f'%t, wireframe=True)
     if PLOT and it % 30 == 0 and it != 0:
         dolfin.plot(vof.colour_function, title='c at t=%f'%t)
     #interactive()
-    #if it > 2: break
+    
+    if it > TS_MAX:
+        break
 toc()
 
 ###############################################################################

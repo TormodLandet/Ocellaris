@@ -1,0 +1,19 @@
+{
+	"program": "dgvof",
+	"type": "input",
+	"version": 1.0,
+	
+	"multiphase_model": "VOF",
+	
+	"VOF": {
+		"type": "BlendedAlgebraic",
+		"compression_factor": 0.2
+	},
+	
+	"convection": {
+		"c": {
+			"convection_scheme": "HRIC",
+			"HRIC_version": "HRIC"
+		}
+	}
+}

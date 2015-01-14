@@ -14,6 +14,7 @@ class Plot2DDG0(object):
         function_space = func.function_space()
         element = function_space.ufl_element()
         cell = function_space.cell()
+        assert function_space.num_sub_spaces() == 0
         
         # Check that the function is of a supported type
         assert element.family() == 'Discontinuous Lagrange'
@@ -23,7 +24,7 @@ class Plot2DDG0(object):
         self.mesh = function_space.mesh()
         self.dofmap = function_space.dofmap().dofs()
         
-        # Build matplotlib plolygon data
+        # Build matplotlib polygon data
         self.coords = self.mesh.coordinates()
         self.Ncell = self.mesh.num_entities(2)
         self.verts = []
