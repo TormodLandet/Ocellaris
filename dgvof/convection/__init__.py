@@ -71,9 +71,7 @@ class ConvectionScheme(object):
         self.nfacets = self.mesh.num_facets()
         
         # For gradient reconstruction
-        compute_facet_gradient = simulation.input.get('convection', {}).get(func_name, {}).get('compute_facet_gradient', False)
-        self.gradient_reconstructor = GradientReconstructor(simulation, self.alpha_function, self.alpha_dofmap,
-                                                            compute_facet_gradient=compute_facet_gradient)
+        self.gradient_reconstructor = GradientReconstructor(simulation, self.alpha_function)
 
     def update(self, t, dt, velocity):
         raise NotImplementedError()

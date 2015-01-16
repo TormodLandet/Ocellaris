@@ -8,14 +8,18 @@ dolfin.set_log_level(dolfin.WARNING)
 
 xmax = 1.5; Nx = 60
 ymax = 1.5; Ny = 60
+
 VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
+
 TMAX = 1.0
 Nt = 500 #1000
-PLOT = True
-PLOT_INTERPOLATED = False
+TS_MAX = 10
+
+PLOT = False
 PNG_OUTPUT_FREQUENCY = 10
-TS_MAX = 1e10
+PLOT_INTERPOLATED = False
+
 
 print 'CFL ~', (TMAX/Nt)/(xmax/Nx)*VEL[0], (TMAX/Nt)/(ymax/Ny)*VEL[1]
 
@@ -113,7 +117,7 @@ for it in xrange(1, Nt):
     postprocess(vof.colour_function, t)
     sim.end_timestep()
     
-    if it > TS_MAX:
+    if it == TS_MAX:
         break
 
 ###############################################################################
