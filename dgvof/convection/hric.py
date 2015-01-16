@@ -152,10 +152,10 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 tilde_aF_star = tilde_aF*t + tilde_aC*(1-t)
                 
                 # Correct tilde_af_star for high Courant numbers
-                if Co < 0.3:
+                if Co < 0.4:
                     tilde_aF_final = tilde_aF_star
-                elif Co < 0.7:
-                    tilde_aF_final = tilde_aC + (tilde_aF_star - tilde_aC)*(0.7 - Co)/(0.7 - 0.3)
+                elif Co < 0.75:
+                    tilde_aF_final = tilde_aC + (tilde_aF_star - tilde_aC)*(0.75 - Co)/(0.75 - 0.4)
                 else:
                     tilde_aF_final = tilde_aC
             
@@ -203,4 +203,5 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             beta_vec[self.dofmap[fidx]] = tilde_beta
         
         beta.vector()[:] = beta_vec
+        self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
         #print 'HRIC alpha_face  %10.5f %10.5f,  Co_max = %.3f' % (beta_vec.min(), beta_vec.max(), Co_max)

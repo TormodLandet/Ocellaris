@@ -3,7 +3,6 @@ import numpy
 import dolfin
 from dgvof.vof import BlendedAlgebraicVofScheme
 from dgvof import Simulation
-from tictoc import tic, toc
 
 dolfin.set_log_level(dolfin.WARNING)
 
@@ -13,8 +12,7 @@ VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
 TMAX = 1.0
 Nt = 500 #1000
-HRIC_FORCE_UPWIND = False
-PLOT = False
+PLOT = True
 PLOT_INTERPOLATED = False
 PNG_OUTPUT_FREQUENCY = 10
 TS_MAX = 1e10
@@ -50,7 +48,6 @@ sim.data['u'] = vel
 
 # Initialize the VOF scheme
 vof = BlendedAlgebraicVofScheme(sim)
-vof.convection_scheme.force_upwind = HRIC_FORCE_UPWIND
 
 # Initialize the colour function field
 c0 = dolfin.interpolate(cexpr, vof.function_space)
@@ -58,26 +55,22 @@ c0 = dolfin.interpolate(cexpr, vof.function_space)
 ################################################################################
 # Runtime postprocessing
 
-class RuntimeOutput(object):
-    def __init__(self):
-        self.prevtime = time.time()
-        
-    def __call__(self, timestep, t, cfunc):
-        cvec = cfunc.vector().array()
-        
-        csum = dolfin.assemble(cfunc*dolfin.dx)
-        cmax = cvec.max()
-        cmin = cvec.min()
-        
-        cexpr.t = t
-        target = dolfin.interpolate(cexpr, vof.function_space).vector().array()
-        error = ((target - cvec)**2).sum() *  60*60/(Nx*Ny)
+def postprocess(cfunc, t):
+    cvec = cfunc.vector().array()
     
-        now = time.time()
-        runtime = now - self.prevtime
-        print "%5d - Time = %6.3f - runtime = %5.3f - csum = %8.5f - minmax = %8.5f %8.5f, error = %8.3f" % \
-              (timestep, t, runtime, csum, cmin, cmax, error)
-        self.prevtime = now
+    csum = dolfin.assemble(cfunc*dolfin.dx)
+    cmax = cvec.max()
+    cmin = cvec.min()
+    
+    cexpr.t = t
+    target = dolfin.interpolate(cexpr, vof.function_space).vector().array()
+    error = ((target - cvec)**2).sum() *  60*60/(Nx*Ny)
+    
+    sim.reporting.report_timestep_value('csum', csum)
+    sim.reporting.report_timestep_value('cmin', cmin)
+    sim.reporting.report_timestep_value('cmax', cmax)
+    sim.reporting.report_timestep_value('error', error)
+        
 
 ###############################################################################
 # Time loop
@@ -91,9 +84,6 @@ vof.prev_colour_function.assign(c0)
 vof.colour_function.assign(c0)
 vof.convection_scheme.gradient_reconstructor.reconstruct()
 
-# Function object dumping interesting variables to screen
-runtime_output = RuntimeOutput()
-runtime_output(0, t_vec[0], vof.colour_function)
 
 # Dump input data
 import json
@@ -102,7 +92,9 @@ print json.dumps(sim.input, indent=4)
 # Make png frames of the evolution of the colour function
 sim.plotting.plot_all()
 
-tic('timeloop')
+postprocess(vof.colour_function, 0.0)
+sim.reporting.print_timestep_report()
+
 for it in xrange(1, Nt):
     t = t_vec[it]
     dt = dt_vec[it-1]
@@ -114,18 +106,15 @@ for it in xrange(1, Nt):
         vel.assign(dolfin.Constant(-VEL))
 
     vof.update(t, dt)
-    runtime_output(it, t, vof.colour_function)
-    if it % PNG_OUTPUT_FREQUENCY == 0:
+    
+    if PLOT and it % PNG_OUTPUT_FREQUENCY == 0:
         sim.plotting.plot_all()
     
-    #plot(c_face, title='c_f at t=%f'%t, wireframe=True)
-    if PLOT and it % 30 == 0 and it != 0:
-        dolfin.plot(vof.colour_function, title='c at t=%f'%t)
-    #interactive()
+    postprocess(vof.colour_function, t)
+    sim.end_timestep()
     
     if it > TS_MAX:
         break
-toc()
 
 ###############################################################################
 # Visualisation
@@ -145,5 +134,5 @@ if PLOT_INTERPOLATED:
 
     #plot(mesh, wireframe=True, title='Mesh DG')
 
-if PLOT or PLOT_INTERPOLATED:
+if PLOT_INTERPOLATED:
     dolfin.interactive()

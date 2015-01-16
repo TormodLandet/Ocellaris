@@ -1,5 +1,6 @@
 import json
 import collections
+import time
 from .plot import Plotter
 from .utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 
@@ -8,11 +9,17 @@ class Simulation(object):
         self.input = {}
         self.data = {}
         self.plotting = Plotting(self)
+        self.reporting = Reporting(self)
         
+        # Several parts of the code wants to know these things,
+        # so we keep them in a central place
         self.ndim = 0
         self.timestep = 0
         self.time = 0.0
         self.dt = 0.0
+        
+        # For timing the analysis
+        self.prevtime = self.starttime = time.time()
     
     def set_mesh(self, mesh):
         """
@@ -33,12 +40,24 @@ class Simulation(object):
     
     def new_timestep(self, timestep_number, t, dt):
         """
-        Several parts of the code wants to know these things,
-        so we keep them in a central place
+        Called at the start of a new time step
         """
         self.timestep = timestep_number
         self.time = t
         self.dt = dt
+    
+    def end_timestep(self, report=True):
+        """
+        Called at the end of a time step
+        """
+        # Report the time spent in this time step
+        newtime = time.time()
+        self.reporting.report_timestep_value('tstime', newtime-self.prevtime)
+        self.reporting.report_timestep_value('tottime', newtime-self.starttime)
+        self.prevtime = newtime
+        
+        if report:
+            self.reporting.print_timestep_report()
     
     def read_json_input_file(self, filename):
         with open(filename, 'rt') as inpf:
@@ -83,3 +102,34 @@ class Plotting(object):
         name_template = sim.input.get('plots', {}).get('name_template', name_template_dafault)
         filename = name_template.format(name=name, timestep=sim.timestep, t=sim.time, extra=extra)
         self.plots[name].plot(filename)
+        
+class Reporting(object):
+    def __init__(self, simulation):
+        """
+        Central place to register reports that will be output during
+        the simulation
+        """
+        self.simulation = simulation
+        self.timesteps = []
+        self.timestep_xy_reports = {}
+    
+    def report_timestep_value(self, report_name, value):
+        """
+        Add a timestep to a report
+        """
+        time = self.simulation.time
+        if not self.timesteps or not self.timesteps[-1] == time:
+            self.timesteps.append(time)
+        self.timestep_xy_reports.setdefault(report_name, []).append(value)
+    
+    def print_timestep_report(self):
+        """
+        Plot all registered plotters
+        """
+        info = []
+        for report_name in sorted(self.timestep_xy_reports):
+            value = self.timestep_xy_reports[report_name][-1]
+            info.append('%s = %10g' % (report_name, value))
+        it, t = self.simulation.timestep, self.simulation.time
+        print 'Reports for timestep = %5d, time = %10.4f,' % (it, t),
+        print ', '.join(info)

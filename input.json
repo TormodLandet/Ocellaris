@@ -12,7 +12,7 @@
 	
 	"convection": {
 		"c": {
-			"convection_scheme": "CICSAM",
+			"convection_scheme": "HRIC",
 			"HRIC_version": "HRIC"
 		}
 	}
