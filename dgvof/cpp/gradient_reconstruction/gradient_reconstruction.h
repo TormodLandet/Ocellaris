@@ -17,8 +17,6 @@ void reconstruct_gradient(const Function& alpha_function,
                           const Array<int>& neighbours,
                           const Array<double>& lstsq_matrices,
                           const Array<double>& lstsq_inv_matrices,
-                          Function& neighbour_minval,
-                          Function& neighbour_maxval,
                           Function& gradient)
 {
 	const FunctionSpace& V = *alpha_function.function_space();

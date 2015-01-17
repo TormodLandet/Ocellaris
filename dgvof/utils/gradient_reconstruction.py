@@ -16,6 +16,7 @@ class GradientReconstructor(object):
         self.mesh = alpha_func.function_space().mesh()
         self.use_vertex_neighbours = use_vertex_neighbours
         self.reconstruction_initialized = False
+        self.use_cpp = simulation.input.get('use_cpp_extensions', True)
     
     def initialize(self):
         """
@@ -30,8 +31,6 @@ class GradientReconstructor(object):
         self.gradient = dolfin.Function(Vvec)
         self.gradient_dofmap0 = Vvec.sub(0).dofmap().dofs()
         self.gradient_dofmap1 = Vvec.sub(1).dofmap().dofs()
-        self.neighbour_minval = dolfin.Function(V)
-        self.neighbour_maxval = dolfin.Function(V)
         
         # Connectivity info needed in calculations
         cell_info = self.simulation.data['cell_info']
@@ -111,9 +110,11 @@ class GradientReconstructor(object):
         if not self.reconstruction_initialized:
             self.initialize()
         
-        if True:
+        if not self.use_cpp:
+            # Pure Python version
             reconstructor = _reconstruct_gradient 
         else:
+            # Faster C++ version
             cpp_gradient_reconstruction = load_module('gradient_reconstruction')
             reconstructor = cpp_gradient_reconstruction.reconstruct_gradient
         
@@ -124,13 +125,16 @@ class GradientReconstructor(object):
                       self.neighbours, 
                       self.lstsq_matrices,
                       self.lstsq_inv_matrices,
-                      self.neighbour_minval,
-                      self.neighbour_maxval,
                       self.gradient)
 
-def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours, lstsq_matrices, lstsq_inv_matrices, neighbour_minval, neighbour_maxval, gradient):
+def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours, lstsq_matrices, lstsq_inv_matrices, gradient):
     """
     Reconstruct the gradient, Python version of the code
+    
+    This function used to have a more Pythonyc implementation
+    that was most likely also faster. See old commits for that
+    code. This code is here to verify the C++ version that is
+    much faster than this (and the old Pythonic version)
     """
     a_cell_vec = alpha_function.vector()
     mesh = alpha_function.function_space().mesh()
@@ -142,10 +146,10 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
     gradient_dofmap1 = Vvec.sub(1).dofmap().dofs()
     
     np_gradient = gradient.vector().array()
-    #np_minvals = neighbour_minval.vector().array()
-    #np_maxvals = neighbour_maxval.vector().array()
-    
-    # Reshape arrays
+
+    # Reshape arrays. The C++ version needs flatt arrays
+    # (limitation in Instant/Dolfin) and we have the same
+    # interface for both versions of the code
     ncells = len(num_neighbours)
     ndim = mesh.topology().dim()
     neighbours = neighbours.reshape((ncells, max_neighbours))
@@ -154,20 +158,16 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
     
     for i, cell in enumerate(dolfin.cells(mesh)):
         idx = cell.index()
-        #dix = alpha_dofmap[idx]
+        dix = alpha_dofmap[idx]
         Nnbs = num_neighbours[i]
         nbs = neighbours[i,:Nnbs]
         
         # Get the matrices
         AT = lstsq_matrices[i,:,:Nnbs]
         ATAI = lstsq_inv_matrices[i]
-        a0  = a_cell_vec[alpha_dofmap[idx]]
+        a0  = a_cell_vec[dix]
         b = [(a_cell_vec[alpha_dofmap[ni]] - a0) for ni in nbs]
         b = numpy.array(b, float)
-        
-        # Store min and max values which can be used to enforce convective boundedness
-        #np_minvals[dix] = b.min()
-        #np_maxvals[dix] = b.max()
         
         # Calculate the and store the gradient
         g = numpy.dot(ATAI, numpy.dot(AT, b))
@@ -175,6 +175,3 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
         np_gradient[gradient_dofmap1[idx]] = g[1]
     
     gradient.vector()[:] = np_gradient
-    #neighbour_minval.vector()[:] = np_minvals
-    #neighbour_maxval.vector()[:] = np_maxvals 
-        

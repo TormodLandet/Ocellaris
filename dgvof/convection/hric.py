@@ -52,8 +52,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         gradient = self.gradient_reconstructor.gradient
         gradient_dofmap0 = self.gradient_reconstructor.gradient_dofmap0
         gradient_dofmap1 = self.gradient_reconstructor.gradient_dofmap1
-        neighbour_minval = self.gradient_reconstructor.neighbour_minval
-        neighbour_maxval = self.gradient_reconstructor.neighbour_maxval
         
         EPS = 1e-6
         Co_max = 0
@@ -72,15 +70,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             # Indices of the two local cells
             ic0, ic1 = connected_cells
-            
-            # Hack to speed up calculations
-            nmin0 = neighbour_minval.vector()[self.alpha_dofmap[ic0]]
-            nmax0 = neighbour_maxval.vector()[self.alpha_dofmap[ic0]]
-            nmin1 = neighbour_minval.vector()[self.alpha_dofmap[ic1]]
-            nmax1 = neighbour_maxval.vector()[self.alpha_dofmap[ic1]]
-            if (nmax0 - nmin0) < EPS and (nmax1 - nmin1) < EPS:
-                beta_vec[self.dofmap[fidx]] = 0.0
-                continue
             
             # Velocity at the midpoint (do not care which side of the face)
             ump = numpy.zeros(2, float)
@@ -111,6 +100,11 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             aD = a_cell_vec[self.alpha_dofmap[iaD]]
             aC = a_cell_vec[self.alpha_dofmap[iaC]]
             
+            if abs(aC - aD) < EPS:
+                # No change in this area, use upstream value
+                beta_vec[self.dofmap[fidx]] = 0.0
+                continue
+            
             # Gradient
             gdofs  = (gradient_dofmap0, gradient_dofmap1)
             func2vec = lambda fun, i: numpy.array([fun.vector()[dm[i]] for dm in gdofs], float)  
@@ -126,7 +120,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             Co = abs(uf)*dt*finfo.area/cell_info[iaC].volume
             Co_max = max(Co_max, Co)
             
-            if abs(aC - aD) < EPS or abs(aU - aD) < EPS:
+            if abs(aU - aD) < EPS:
                 # No change in this area, use upstream value
                 beta_vec[self.dofmap[fidx]] = 0.0
                 continue
