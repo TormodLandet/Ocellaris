@@ -1,8 +1,9 @@
 from dolfin import compile_extension_module
 import numpy
 import os
+import time
 
-def _get_cpp_module(source_dir, header_files, source_files):
+def _get_cpp_module(source_dir, header_files, source_files, force_recompile=False):
     """
     Use the dolfin machinery to compile, wrap with swig and load a c++ module
     """
@@ -17,7 +18,11 @@ def _get_cpp_module(source_dir, header_files, source_files):
         with open(hpp_filename, 'rt') as f:
             hpp_code = f.read()
         header_sources.append(hpp_code)
-        
+    
+    # Force recompilation
+    if force_recompile:
+        header_sources.append('// %s \n' % time.time())
+    
     try:
         module = compile_extension_module(code='\n\n\n'.join(header_sources),
                                           source_directory=source_dir, 
@@ -64,7 +69,7 @@ class _ModuleCache(object):
 # Functions to be used by other modules
 
 _MODULES = _ModuleCache()
-_MODULES.add_module('gradient_reconstruction', 'gradient_reconstruction', ['gradient_reconstruction.h'], ['gradient_reconstruction.cpp'])
+_MODULES.add_module('gradient_reconstruction', 'gradient_reconstruction', ['gradient_reconstruction.h'], [])
 
 def load_module(name, reload=False):
     """

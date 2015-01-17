@@ -29,7 +29,6 @@ class BlendedAlgebraicVofScheme():
         
         simulation.data['c'] = self.colour_function
         simulation.data['c_p'] = self.prev_colour_function
-        simulation.input.setdefault('convection', {}).setdefault('c', {})['compute_facet_gradient'] = True
         
         # Create test and trial functions
         c = TrialFunction(self.function_space)

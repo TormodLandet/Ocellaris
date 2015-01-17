@@ -6,15 +6,15 @@ from dgvof import Simulation
 
 dolfin.set_log_level(dolfin.WARNING)
 
-xmax = 1.5; Nx = 60
-ymax = 1.5; Ny = 60
+xmax = 1.5; Nx = 128
+ymax = 1.5; Ny = 128
 
 VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
 
 TMAX = 1.0
-Nt = 500 #1000
-TS_MAX = 10
+Nt = 1000
+TS_MAX = 20
 
 PLOT = False
 PNG_OUTPUT_FREQUENCY = 10
@@ -140,3 +140,5 @@ if PLOT_INTERPOLATED:
 
 if PLOT_INTERPOLATED:
     dolfin.interactive()
+
+sim.plotting.plot_all()

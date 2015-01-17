@@ -78,7 +78,7 @@ class GradientReconstructor(object):
         # Turn the lists into numpy arrays for ease of communication with C++
         N = len(everyones_neighbours)
         self.num_neighbours = numpy.array([len(nbs) for nbs in everyones_neighbours], dtype='i', order='C')
-        NBmax = sum(self.num_neighbours)
+        NBmax = self.num_neighbours.max()
         self.neighbours = numpy.zeros((N, NBmax), dtype='i', order='C')
         self.lstsq_matrices = numpy.zeros((N, ndim, NBmax), float, order='C')
         for i in xrange(N):
@@ -90,6 +90,7 @@ class GradientReconstructor(object):
         self.lstsq_matrices = self.lstsq_matrices.reshape(-1, order='C')
         self.lstsq_inv_matrices = self.lstsq_inv_matrices.reshape(-1, order='C')
         self.neighbours = self.neighbours.reshape(-1, order='C')
+        self.max_neighbours = NBmax
         
         self.reconstruction_initialized = True
     
@@ -110,7 +111,7 @@ class GradientReconstructor(object):
         if not self.reconstruction_initialized:
             self.initialize()
         
-        if False:
+        if True:
             reconstructor = _reconstruct_gradient 
         else:
             cpp_gradient_reconstruction = load_module('gradient_reconstruction')
@@ -119,6 +120,7 @@ class GradientReconstructor(object):
         # Run the gradient reconstruction
         reconstructor(self.alpha_function,
                       self.num_neighbours,
+                      self.max_neighbours,
                       self.neighbours, 
                       self.lstsq_matrices,
                       self.lstsq_inv_matrices,
@@ -126,7 +128,7 @@ class GradientReconstructor(object):
                       self.neighbour_maxval,
                       self.gradient)
 
-def _reconstruct_gradient(alpha_function, num_neighbours, neighbours, lstsq_matrices, lstsq_inv_matrices, neighbour_minval, neighbour_maxval, gradient):
+def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours, lstsq_matrices, lstsq_inv_matrices, neighbour_minval, neighbour_maxval, gradient):
     """
     Reconstruct the gradient, Python version of the code
     """
@@ -140,12 +142,19 @@ def _reconstruct_gradient(alpha_function, num_neighbours, neighbours, lstsq_matr
     gradient_dofmap1 = Vvec.sub(1).dofmap().dofs()
     
     np_gradient = gradient.vector().array()
-    np_minvals = neighbour_minval.vector().array()
-    np_maxvals = neighbour_maxval.vector().array()
+    #np_minvals = neighbour_minval.vector().array()
+    #np_maxvals = neighbour_maxval.vector().array()
+    
+    # Reshape arrays
+    ncells = len(num_neighbours)
+    ndim = mesh.topology().dim()
+    neighbours = neighbours.reshape((ncells, max_neighbours))
+    lstsq_matrices = lstsq_matrices.reshape((ncells, ndim, max_neighbours))
+    lstsq_inv_matrices = lstsq_inv_matrices.reshape((ncells, ndim, ndim))
     
     for i, cell in enumerate(dolfin.cells(mesh)):
         idx = cell.index()
-        dix = alpha_dofmap[idx]
+        #dix = alpha_dofmap[idx]
         Nnbs = num_neighbours[i]
         nbs = neighbours[i,:Nnbs]
         
@@ -157,8 +166,8 @@ def _reconstruct_gradient(alpha_function, num_neighbours, neighbours, lstsq_matr
         b = numpy.array(b, float)
         
         # Store min and max values which can be used to enforce convective boundedness
-        np_minvals[dix] = b.min()
-        np_maxvals[dix] = b.max()
+        #np_minvals[dix] = b.min()
+        #np_maxvals[dix] = b.max()
         
         # Calculate the and store the gradient
         g = numpy.dot(ATAI, numpy.dot(AT, b))
@@ -166,6 +175,6 @@ def _reconstruct_gradient(alpha_function, num_neighbours, neighbours, lstsq_matr
         np_gradient[gradient_dofmap1[idx]] = g[1]
     
     gradient.vector()[:] = np_gradient
-    neighbour_minval.vector()[:] = np_minvals
-    neighbour_maxval.vector()[:] = np_maxvals 
+    #neighbour_minval.vector()[:] = np_minvals
+    #neighbour_maxval.vector()[:] = np_maxvals 
         
