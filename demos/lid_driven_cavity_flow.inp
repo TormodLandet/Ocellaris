@@ -1,0 +1,33 @@
+{
+    "program": "ocellaris",
+    "type": "input",
+    "version": 1.0,
+    
+    "fluid_properties": {
+        "rho0": 1025.0,
+        "nu0": 0.001
+    },
+    
+    "mesh": {
+        "type": "Rectangle",
+        "Nx": 40,
+        "Ny": 40
+    },
+    
+    "time": {
+        "dt": 0.01,
+        "tmax": 1.0
+    },
+    
+    "solver": {
+        "type": "IPCS",
+        "polynomial_degree_velocity": 1,
+        "polynomial_degree_pressure": 1
+    },
+    
+    "convection": {
+        "u": {
+            "convection_scheme": "upwind"
+        }
+    }
+}

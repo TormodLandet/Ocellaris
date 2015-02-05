@@ -1,7 +1,6 @@
-import functools
 import numpy
 import dolfin
-from dgvof.utils import report_error, GradientReconstructor
+from ocellaris.utils import report_error, GradientReconstructor
 
 _CONVECTION_SCHEMES = {}
 

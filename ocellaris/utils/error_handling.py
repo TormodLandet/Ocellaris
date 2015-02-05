@@ -1,12 +1,13 @@
 import sys
 
 def report_error(header, description, stop=False):
-    print '='*80
-    print 'ERROR:', header
+    print 'ERROR === '*8
+    print
+    print header
     print
     print description
     print
-    print '='*80 
+    print 'ERROR === '*8 
     if stop:
         sys.exit(-1)
     

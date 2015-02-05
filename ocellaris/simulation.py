@@ -62,7 +62,7 @@ class Simulation(object):
     def read_json_input_file(self, filename):
         with open(filename, 'rt') as inpf:
             inp = json.load(inpf, object_pairs_hook=collections.OrderedDict)
-        assert inp['program'] == 'dgvof'
+        assert inp['program'] == 'ocellaris'
         assert inp['version'] == 1.0
         assert inp['type'] == 'input'
         self.input = inp

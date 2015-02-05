@@ -1,10 +1,11 @@
-import time
+import os
 import numpy
 import dolfin
-from dgvof.vof import BlendedAlgebraicVofScheme
-from dgvof import Simulation
+from ocellaris.multiphase import get_multi_phase_model
+from ocellaris import Simulation
 
-dolfin.set_log_level(dolfin.WARNING)
+thisdir = os.path.dirname(os.path.abspath(__file__))
+inpfile = os.path.join(thisdir, 'vof_test.inp')
 
 xmax = 1.5; Nx = 128
 ymax = 1.5; Ny = 128
@@ -19,7 +20,6 @@ TS_MAX = 20
 PLOT = False
 PNG_OUTPUT_FREQUENCY = 10
 PLOT_INTERPOLATED = False
-
 
 print 'CFL ~', (TMAX/Nt)/(xmax/Nx)*VEL[0], (TMAX/Nt)/(ymax/Ny)*VEL[1]
 
@@ -38,8 +38,10 @@ cexpr = CField()
 ################################################################################
 # Problem definition
 
+dolfin.set_log_level(dolfin.WARNING)
+
 sim = Simulation()
-sim.read_json_input_file('input.json')
+sim.read_json_input_file(inpfile)
 
 # Initialize mesh
 mesh = dolfin.RectangleMesh(0, 0, xmax, ymax, Nx, Ny, 'left/right')
@@ -51,7 +53,8 @@ vel = dolfin.Function(vel_func_space)
 sim.data['u'] = vel
 
 # Initialize the VOF scheme
-vof = BlendedAlgebraicVofScheme(sim)
+multiphase_model = get_multi_phase_model('BlendedAlgebraicVOF')
+vof = multiphase_model(sim)
 
 # Initialize the colour function field
 c0 = dolfin.interpolate(cexpr, vof.function_space)

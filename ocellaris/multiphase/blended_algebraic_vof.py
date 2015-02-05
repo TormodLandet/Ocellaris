@@ -4,12 +4,16 @@ from dolfin import FunctionSpace, Function, DirichletBC, \
                    TrialFunction, TestFunction, Constant, \
                    FacetNormal, dx, ds, dS, solve, \
                    inner, grad, lhs, rhs, jump
-from dgvof.convection import get_convection_scheme
+from . import register_multi_phase_model, MultiPhaseModel 
+from ..convection import get_convection_scheme
 
-class BlendedAlgebraicVofScheme():
+@register_multi_phase_model('BlendedAlgebraicVOF')
+class BlendedAlgebraicVofModel(MultiPhaseModel):
+    description = 'A blended algebraic VOF scheme implementing HRIC/CICSAM type schemes'
+    
     def __init__(self, simulation):
         """
-        A blended alegraic VOF scheme works by using a specific 
+        A blended algebraic VOF scheme works by using a specific 
         convection scheme in the advection of the colour function
         that ensures a sharp interface.
         
@@ -119,7 +123,7 @@ class BlendedAlgebraicVofScheme():
         """
         #self.simulation.plotting.plot('c', '_uncompr')
         
-        compr_fac = self.simulation.input['VOF'].get('compression_factor', 1.0)
+        compr_fac = self.simulation.input.setdefault('VOF', {}).setdefault('compression_factor', 1.0)
         if compr_fac == 0:
             return
         
@@ -235,4 +239,5 @@ class BlendedAlgebraicVofScheme():
                 
             # Local sharpening of the colour function in D and C cells
             colour_func_vec[colour_func_dofmap[iC]] -= cDelta
-            colour_func_vec[colour_func_dofmap[iD]] += cDelta            
+            colour_func_vec[colour_func_dofmap[iD]] += cDelta
+         

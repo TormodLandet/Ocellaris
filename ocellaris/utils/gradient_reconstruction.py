@@ -1,6 +1,6 @@
 import dolfin
 import numpy
-from dgvof.cpp import load_module
+from ocellaris.cpp import load_module
 
 class GradientReconstructor(object):
     def __init__(self, simulation, alpha_func, use_vertex_neighbours=True):

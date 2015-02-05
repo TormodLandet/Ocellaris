@@ -1,12 +1,11 @@
 {
-	"program": "dgvof",
+	"program": "ocellaris",
 	"type": "input",
 	"version": 1.0,
 	
-	"multiphase_model": "VOF",
+	"multiphase_model": "BlendedAlgebraicVOF",
 	
 	"VOF": {
-		"type": "BlendedAlgebraic",
 		"compression_factor": 0.0
 	},
 	
