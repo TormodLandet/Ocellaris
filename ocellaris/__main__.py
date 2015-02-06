@@ -1,21 +1,23 @@
 import time
-from ocellaris import version, Simulation, run_simulation
+from ocellaris import get_version, get_detailed_version, Simulation, run_simulation
 
 def main(inputfile):
     """
     Run Ocellaris
     """
-    t1 = time.time()
-    print 'Ocellaris v %s' % version 
-    print '========================================'
+    version = get_detailed_version() or get_version()
+    
+    print '='*80
+    print '                  Ocellaris   %s' % version 
+    print '='*80
     print
     
     sim = Simulation()
     sim.read_json_input_file(inputfile)
     run_simulation(sim)
     
-    print '========================================'
-    print 'Ocellaris DONE after %.3f seconds' % (time.time() - t1)
+    print '='*80
+    print 'Ocellaris exiting successfully'
 
 if __name__ == '__main__':
     # Get command line arguments

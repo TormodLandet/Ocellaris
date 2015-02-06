@@ -9,10 +9,9 @@ class SinglePhaseScheme(MultiPhaseModel):
         self.simulation = simulation
     
     def get_density(self):
-        rho0 = self.simulation.input['fluid_properties']['rho0']
+        rho0 = self.simulation.input['physical_properties']['rho0']
         return dolfin.Constant(rho0)
 
     def get_laminar_kinematic_viscosity(self):
-        nu0 = self.simulation.input['fluid_properties']['nu0']
+        nu0 = self.simulation.input['physical_properties']['nu0']
         return dolfin.Constant(nu0)
-

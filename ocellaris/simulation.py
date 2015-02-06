@@ -10,6 +10,8 @@ class Simulation(object):
         self.data = {}
         self.plotting = Plotting(self)
         self.reporting = Reporting(self)
+        self._pre_timestep_hooks = []
+        self._post_timestep_hooks = []
         
         # Several parts of the code wants to know these things,
         # so we keep them in a central place
@@ -20,6 +22,10 @@ class Simulation(object):
         
         # For timing the analysis
         self.prevtime = self.starttime = time.time()
+        
+        # Setup reporting
+        rep = lambda report: self.reporting.print_timestep_report() if report else None
+        self.add_post_timestep_hook(rep)
     
     def set_mesh(self, mesh):
         """
@@ -37,6 +43,18 @@ class Simulation(object):
         init_connectivity(self)
         precompute_cell_data(self)
         precompute_facet_data(self)
+        
+    def add_pre_timestep_hook(self, hook):
+        """
+        Add a function that will run before the solver in each time step
+        """
+        self._pre_timestep_hooks.append(hook)
+        
+    def add_post_timestep_hook(self, hook):
+        """
+        Add a function that will run after the solver in each time step
+        """
+        self._post_timestep_hooks.append(hook)
     
     def new_timestep(self, timestep_number, t, dt):
         """
@@ -45,6 +63,8 @@ class Simulation(object):
         self.timestep = timestep_number
         self.time = t
         self.dt = dt
+        for hook in self._pre_timestep_hooks:
+            hook(t, dt)
     
     def end_timestep(self, report=True):
         """
@@ -56,8 +76,8 @@ class Simulation(object):
         self.reporting.report_timestep_value('tottime', newtime-self.starttime)
         self.prevtime = newtime
         
-        if report:
-            self.reporting.print_timestep_report()
+        for hook in self._post_timestep_hooks:
+            hook(report)
     
     def read_json_input_file(self, filename):
         with open(filename, 'rt') as inpf:

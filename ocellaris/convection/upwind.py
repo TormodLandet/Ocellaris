@@ -5,6 +5,8 @@ from . import ConvectionScheme, register_convection_scheme
 
 @register_convection_scheme('Upwind')
 class ConvectionSchemeUpwind(ConvectionScheme):
+    description = 'First order upwind'
+    
     def __init__(self, simulation, func_name):
         """
         Implementation of the upwind convection scheme
