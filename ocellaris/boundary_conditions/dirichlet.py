@@ -2,7 +2,7 @@ import dolfin
 from . import register_boundary_condition, BoundaryCondition
 
 @register_boundary_condition('ConstantValue')
-class DirichletBC(BoundaryCondition):
+class DirichletBoundary(BoundaryCondition):
     description = 'A prescribed constant value Dirichlet condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
@@ -10,6 +10,7 @@ class DirichletBC(BoundaryCondition):
         Dirichlet condition with constant value
         """
         self.simulation = simulation
+        self.func_space = simulation.data['V%s' % var_name] 
         
         value = inp_dict['value']
         if isinstance(value, list):
@@ -24,13 +25,10 @@ class DirichletBC(BoundaryCondition):
         """
         Add a Dirichlet condition to this variable
         """
-        # Get the variables function space
-        func = self.simulation.data[var_name]
-        V = func.function_space()
-        
-        # Store the boundary condition for use in the solver
         assert isinstance(value, (float, int, long))
         value = dolfin.Constant(value)
-        bc = dolfin.DirichletBC(V, value, subdomains, subdomain_id)
+        
+        # Store the boundary condition for use in the solver
+        bc = dolfin.DirichletBC(self.func_space, value, subdomains, subdomain_id)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)

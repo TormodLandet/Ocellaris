@@ -22,7 +22,7 @@
             "region_code": "x[1] >= 1.0 - 1e-8",
             
             "p": {
-                "type": "ConstantValue",
+                "type": "ConstantGradient",
                 "value": 0
             },
             "u": {
@@ -37,7 +37,7 @@
             
             "p": {
                 "type": "ConstantGradient",
-                "value": 0.0
+                "value": 0
             },
             "u": {
                 "type": "ConstantValue",

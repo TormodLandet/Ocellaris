@@ -17,6 +17,12 @@ def run_simulation(simulation, verbose=True):
     # Load the mesh
     load_mesh(simulation)
     
+    # Create function spaces
+    make_function_spaces(simulation)
+    
+    # Load the boundary conditions
+    setup_boundary_conditions(simulation)
+    
     # Setup physical constants
     g = simulation.input['physical_properties']['g']
     assert len(g) == simulation.ndim
@@ -32,9 +38,6 @@ def run_simulation(simulation, verbose=True):
     # Get the solver
     solver_name = simulation.input['solver']['type']
     solver = get_solver(solver_name)(simulation)
-    
-    # Load the boundary conditions
-    setup_boundary_conditions(simulation)
     
     # Print information about configuration parameters
     if verbose:
@@ -79,6 +82,18 @@ def load_mesh(simulation):
     
     simulation.set_mesh(mesh)
 
+def make_function_spaces(simulation):
+    """
+    Create function spaces for velocity and pressure
+    """
+    Pu = simulation.input['solver'].get('polynomial_degree_velocity', 1)
+    Pp = simulation.input['solver'].get('polynomial_degree_pressure', 1)
+    mesh = simulation.data['mesh']
+    Vu = dolfin.FunctionSpace(mesh, 'Discontinuous Lagrange', Pu)
+    Vp = dolfin.FunctionSpace(mesh, 'Discontinuous Lagrange', Pp)
+    simulation.data['Vu'] = Vu
+    simulation.data['Vp'] = Vp
+
 def setup_boundary_conditions(simulation):
     """
     Setup boundary conditions based on the simulation input
@@ -86,8 +101,9 @@ def setup_boundary_conditions(simulation):
     # Create a function to mark the external facets
     marker = dolfin.FacetFunction("size_t", simulation.data['mesh'])
     
-    # Make a space to gather Dirichlet boundary conditions
+    # Make dicts to gather Dirichlet and Neumann boundary conditions
     simulation.data['dirichlet_bcs'] = {}
+    simulation.data['neumann_bcs'] = {}
      
     # Create boundary regions and let them mark the part of the
     # boundary that they belong to. They also create boundary

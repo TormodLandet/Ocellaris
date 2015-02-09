@@ -50,7 +50,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         normal = FacetNormal(self.mesh)
         
         # Upstream and downstream normal velocities
-        vel = simulation.data['u']
+        vel = simulation.data['u_conv']
         flux_nU = c*(inner(vel, normal) + abs(inner(vel, normal)))/2
         flux_nD = c*(inner(vel, normal) - abs(inner(vel, normal)))/2
 
