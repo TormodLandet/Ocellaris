@@ -35,7 +35,6 @@ class MultiPhaseModel(object):
     description = 'No description available'
     
     def update(self, t, dt):
-        print 'mpm', t, dt
         pass
 
 from . import single_phase

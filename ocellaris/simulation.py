@@ -1,6 +1,7 @@
 import json
 import collections
 import time
+import dolfin
 from .plot import Plotter
 from .utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 
@@ -10,6 +11,7 @@ class Simulation(object):
         self.data = {}
         self.plotting = Plotting(self)
         self.reporting = Reporting(self)
+        self.log = Log(self)
         self._pre_timestep_hooks = []
         self._post_timestep_hooks = []
         
@@ -43,7 +45,7 @@ class Simulation(object):
         init_connectivity(self)
         precompute_cell_data(self)
         precompute_facet_data(self)
-        
+    
     def add_pre_timestep_hook(self, hook):
         """
         Add a function that will run before the solver in each time step
@@ -153,3 +155,25 @@ class Reporting(object):
         it, t = self.simulation.timestep, self.simulation.time
         print 'Reports for timestep = %5d, time = %10.4f,' % (it, t),
         print ', '.join(info)
+
+class Log(object):
+    def __init__(self, simulation):
+        self.simulation = simulation
+        self.log_level = dolfin.INFO
+    
+    def set_log_level(self, log_level):
+        """
+        Set the Ocillaris log level
+        (not the dolfin log level!)
+        """
+        self.log_level = log_level
+    
+    def info(self, text):
+        "Log info"
+        if self.log_level <= dolfin.INFO:
+            print text
+    
+    def debug(self, text):
+        "Log debug"
+        if self.log_level <= dolfin.DEBUG:
+            print text

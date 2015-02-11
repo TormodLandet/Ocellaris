@@ -45,9 +45,12 @@ class BoundaryRegion(object):
             if not isinstance(value, dict) or 'type' not in value:
                 continue
             bc_type = value['type']
+            simulation.log.info('Applying %s boundary condition for %s on %s' % 
+                                (bc_type, key, self.name))
             bc_class = get_boundary_condition(bc_type)
             bc = bc_class(simulation, key, value, marker, mark_id)
             self.conditions[key] = bc
+
 
 class RegionSelector(dolfin.SubDomain):
     def set_code(self, code, index):

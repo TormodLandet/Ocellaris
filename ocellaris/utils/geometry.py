@@ -33,15 +33,15 @@ def init_connectivity(simulation):
         simulation.data['connectivity_CC'] = con22
     
     else:
-        # Connectivity from face to edge
+        # Connectivity from cell to face
         mesh.init(3, 2)
         con32 = mesh.topology()(3, 2)
     
-        # Connectivity from edge to face
+        # Connectivity from face to cell
         mesh.init(2, 3)
         con23 = mesh.topology()(2, 3)
         
-        # Connectivity from face to face
+        # Connectivity from cell to cell
         mesh.init(3, 3)
         con33 = mesh.topology()(3, 3)
         

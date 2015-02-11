@@ -42,9 +42,11 @@ class NeumannBoundary(BoundaryCondition):
         Add a Neumann condition to this variable
         """
         assert isinstance(value, (float, int, long))
-        value = dolfin.Constant(value)
+        df_value = dolfin.Constant(value)
         
         # Store the boundary condition for use in the solver
-        bc = OcellarisNeumannBC(self.simulation, value, subdomain_id)
+        bc = OcellarisNeumannBC(self.simulation, df_value, subdomain_id)
         bcs = self.simulation.data['neumann_bcs']
         bcs.setdefault(var_name, []).append(bc)
+        
+        self.simulation.log.info('    ConstantGradient %r for %s' % (value, var_name))

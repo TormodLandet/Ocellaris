@@ -5,22 +5,37 @@ from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
 
-def run_simulation(simulation, verbose=True):
+def run_simulation(simulation):
     """
     Prepare and run a simulation
     """
-    if verbose:
-        print 'Preparing simulation ...'
-        print
-        t1 = time.time()
+    # Set log levels
+    available_log_levels = {'critical': dolfin.CRITICAL,
+                            'error': dolfin.ERROR,
+                            'warning': dolfin.WARNING,
+                            'info': dolfin.INFO,
+                            'progress': dolfin.PROGRESS,
+                            'debug': dolfin.DEBUG}
+    # Ocellaris log level
+    log_level = simulation.input.get('output', {}).get('ocellaris_log_level', 'info')
+    simulation.log.set_log_level(available_log_levels[log_level])
+    # Dolfin log level
+    df_log_level = simulation.input.get('output', {}).get('dolfin_log_level', 'warning')
+    dolfin.set_log_level(available_log_levels[df_log_level])
+    
+    simulation.log.info('Preparing simulation ...\n')
+    t1 = time.time()
     
     # Load the mesh
     load_mesh(simulation)
     
-    # Create function spaces
+    # Create function spaces. This must be done
+    # early as it is needed by the DirichletBC
     make_function_spaces(simulation)
     
-    # Load the boundary conditions
+    # Load the boundary conditions. This must be done
+    # before creating the solver as the solver needs
+    # the Neumann conditions to define weak forms
     setup_boundary_conditions(simulation)
     
     # Setup physical constants
@@ -40,28 +55,25 @@ def run_simulation(simulation, verbose=True):
     solver = get_solver(solver_name)(simulation)
     
     # Print information about configuration parameters
-    if verbose:
-        print 'Preparing simulation done in %.3f seconds' % (time.time() - t1)
-        print 
-        print 'Simulation configuration:'
-        print '{:-^40}'.format(' input begin ')
-        print json.dumps(simulation.input, indent=4)
-        print '{:-^40}'.format(' input end ')
-        print
-        print "Running simulation ..."
-        t1 = time.time()
+    simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t1))
+    simulation.log.info('\nSimulation configuration:')
+    simulation.log.info('{:-^40}'.format(' input begin '))
+    simulation.log.info(json.dumps(simulation.input, indent=4))
+    simulation.log.info('{:-^40}'.format(' input end '))
+    simulation.log.info("\nRunning simulation ...\n")
+    t1 = time.time()
 
     # Run the simulation 
     solver.run()
     
-    if simulation.input.get('debug', True):
-        print '\nGlobal simulation data at end of simulation:'
-        for key, value in sorted(simulation.data.items()):
-            print '%20s = %s' % (key, repr(type(value))[:57])
-        print
+    simulation.log.debug('\nGlobal simulation data at end of simulation:')
+    for key, value in sorted(simulation.data.items()):
+        simulation.log.debug('%20s = %s' % (key, repr(type(value))[:57]))
     
-    if verbose:
-        print 'Simulation done in %.3f seconds' % (time.time() - t1)
+    simulation.log.info('\nSimulation done in %.3f seconds' % (time.time() - t1))
+        
+    if simulation.input.get('output', {}).get('plot_at_end', False):
+        plot_at_end(simulation)
 
 def load_mesh(simulation):
     """
@@ -109,18 +121,35 @@ def setup_boundary_conditions(simulation):
     # boundary that they belong to. They also create boundary
     # condition objects that are later used in the eq. solvers
     boundary = []
-    for index, area in enumerate(simulation.input['boundary_conditions']):
+    for index, _ in enumerate(simulation.input['boundary_conditions']):
         part = BoundaryRegion(simulation, marker, index)
         boundary.append(part)
     simulation.data['boundary'] = boundary
+    simulation.data['boundary_marker'] = marker
     
-    # Create a boundary meassure that is aware of the marked regions
+    # Create a boundary measure that is aware of the marked regions
     ds = dolfin.Measure('ds')[marker]
     simulation.data['ds'] = ds
+
+def plot_at_end(simulation):
+    """
+    Open dolfin plotting windows with results at the end of
+    the simulation
+    """
+    # Plot velocity components
+    for d in range(simulation.ndim):
+        name = 'u%d' % d
+        dolfin.plot(simulation.data[name], title=name)
+        #name = 'u_star%d' % d
+        #dolfin.plot(simulation.data[name], title=name)
     
-    print 'Dirichlet boundary conditions:'
-    for key, vals in sorted(simulation.data['dirichlet_bcs'].items()):
-        print '  ', key
-        for v in vals:
-            print '    ', v 
-    exit()
+    # Plot pressure
+    dolfin.plot(simulation.data['p'], title='p')
+    
+    # Plot colour function
+    if 'c' in simulation.data:
+        dolfin.plot(simulation.data['c'], title='c')
+        
+    dolfin.plot(simulation.data['boundary_marker'], title='boundary_marker')
+    
+    dolfin.interactive()

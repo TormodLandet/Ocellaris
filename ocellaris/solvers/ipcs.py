@@ -1,8 +1,8 @@
+from __future__ import division
 import dolfin
-from dolfin import dot, nabla_grad, avg, jump, dx, ds, dS
 from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error
-from . import Solver, register_solver
+from . import Solver, register_solver, define_advection_problem, define_poisson_problem
 
 @register_solver('IPCS')
 class SolverIPCS(Solver):
@@ -42,14 +42,15 @@ class SolverIPCS(Solver):
         sim.data['up'] = dolfin.as_vector(upvec)
         sim.data['upp'] = dolfin.as_vector(uppvec)
         sim.data['u_conv'] = u_conv = dolfin.as_vector(u_conv)
+        sim.data['u_star'] = u_star = dolfin.as_vector(u_star)
         
         # Create pressure function
-        sim.data['p'] = dolfin.Function(Vp)
-        sim.data['p_star'] = ps = dolfin.Function(Vp)
+        sim.data['p'] = p = dolfin.Function(Vp)
+        sim.data['p_hat'] = dolfin.Function(Vp)
         
         # Mesh parameters
         n = dolfin.FacetNormal(mesh)
-        h = dolfin.CellSize(mesh)
+        #h = dolfin.CellSize(mesh)
         
         # Physical properties
         rho = sim.data['rho']
@@ -66,22 +67,41 @@ class SolverIPCS(Solver):
         self.convection_schemes = conv_schemes
         
         # Define the momentum prediction equations
-        penalty = 1.0/avg(h)
+        h = 1/mesh.num_cells()
+        penalty = 1.0/h
         self.eqs_mom_pred = []
         for d in range(sim.ndim):
             beta = conv_schemes[d].blending_function
-            f = -1/rho*ps.dx(d) + g[d]
+            f = -1/rho*p.dx(d) + g[d]
             a1, L1 = define_advection_problem(Vu, upvec[d], uppvec[d], 
                                               u_conv, n, beta, self.dt)
-            a2, L2 = define_poisson_problem(Vu, nu, f, n, penalty, [])
+            a2, L2 = define_poisson_problem(Vu, -nu, f, n, penalty, [])
             eq = a1+a2, L1+L2
             self.eqs_mom_pred.append(eq)
         
         # Define the pressure correction equation
-        penalty = 1.0/avg(h)
-        f = 1/rho
+        penalty = 1.0/h
+        f = 3/(2*self.dt)*dolfin.nabla_div(u_star)
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
-        self.eq_pressure = define_poisson_problem(Vp, 1, f, n, penalty, neumann_bcs)
+        self.eq_pressure = define_poisson_problem(Vp, 1/rho, f, n, penalty, neumann_bcs)
+        
+    def update_convection(self, t, dt):
+        """
+        Update terms used to linearise and discretise the convective term
+        """
+        ndim = self.simulation.ndim
+        data = self.simulation.data
+        
+        # Update convective velocity field components
+        for d in range(ndim):
+            uic = data['u_conv%d' % d]
+            uip =  data['up%d' % d]
+            uipp = data['upp%d' % d]
+            uic.vector()[:] = 2*uip.vector()[:] - uipp.vector()[:]
+        
+        # Update the convection blending factors
+        for cs in self.convection_schemes:
+            cs.update(t, dt, data['u_conv'])
     
     def momentum_prediction(self, t, dt):
         """
@@ -93,29 +113,92 @@ class SolverIPCS(Solver):
             a, L = self.eqs_mom_pred[d]
             
             # Solve the advection equation
-            self.dt.assign(dt)
             dolfin.solve(a == L, us, bcs)
     
     def pressure_correction(self):
         """
         Solve the pressure correction equation
+        
+        We handle the case where only Neumann conditions are given
+        for the pressure by taking out the nullspace, a constant shift
+        of the pressure, by providing the nullspace to the solver
         """
-        pass
+        p_hat = self.simulation.data['p_hat']
+        bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
+        a, L = self.eq_pressure
+        
+        # Assemble matrix and vector
+        A = dolfin.assemble(a)
+        b = dolfin.assemble(L)
+        
+        # Create vector that spans the null space
+        null_vec = dolfin.Vector(p_hat.vector())
+        null_vec[:] = 1
+        null_vec *= 1/null_vec.norm("l2")
+        
+        # Create null space basis object and attach to Krylov solver
+        solver = dolfin.KrylovSolver(A, "gmres")
+        null_space = dolfin.VectorSpaceBasis([null_vec])
+        solver.set_nullspace(null_space)
+        
+        # Apply boundary conditions
+        for bc in bcs:
+            bc.apply(A, b)
+        
+        # Orthogonalize b with respect to the null space
+        null_space.orthogonalize(b)
+        
+        solver.solve(p_hat.vector(), b) 
     
     def velocity_update(self):
-        pass
+        """
+        Update the velocity estimates with the updated pressure
+        field from the pressure correction equation
+        """
+        rho = self.simulation.data['rho']
+        p_hat = self.simulation.data['p_hat']
+        Vu = self.simulation.data['Vu']
+        
+        for d in range(self.simulation.ndim):
+            us = self.simulation.data['u_star%d' % d]
+            u_new = self.simulation.data['u%d' % d]
+            bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
+            
+            # Update the velocity
+            f = us - 2*self.dt/(3*rho) * p_hat.dx(d)
+            un = dolfin.project(f, Vu, bcs)
+            u_new.assign(un)
+    
+    def pressure_update(self):
+        """
+        Update the pressure at the end of an inner iteration
+        """
+        p_hat = self.simulation.data['p_hat']
+        p = self.simulation.data['p']
+        p.vector()[:] += p_hat.vector()[:] 
+    
+    def velocity_update_final(self):
+        """
+        Update the velocities at the end of the time step
+        """
+        for d in range(self.simulation.ndim):
+            u_new = self.simulation.data['u%d' % d]
+            us = self.simulation.data['u_star%d' % d]
+            up = self.simulation.data['up%d' % d]
+            upp = self.simulation.data['upp%d' % d]
+            upp.vector()[:] = up.vector()[:]
+            up.vector()[:] = u_new.vector()[:]
+            us.vector()[:] = u_new.vector()[:]
     
     def run(self):
         """
         Run the simulation
         """
-        ndim = self.simulation.ndim
         dt = self.simulation.input['time']['dt']
         tmax = self.simulation.input['time']['tmax']
         num_inner_iter = self.simulation.input['solver'].get('num_inner_iter', 1)
         assert dt > 0
         
-        data = self.simulation.data
         t = 0
         it = 0
         while t+dt <= tmax + 1e-8:
@@ -124,70 +207,14 @@ class SolverIPCS(Solver):
             self.simulation.new_timestep(it, t, dt)
             self.dt.assign(dt)
             
-            # Update convective velocity field components
-            for d in range(ndim):
-                uic = data['u_conv%d' % d]
-                uip =  data['up%d' % d]
-                uipp = data['upp%d' % d]
-                uic.vector()[:] = 2*uip.vector()[:] - uipp.vector()[:] 
-            
-            # Update the convection blending factors
-            for cs in self.convection_schemes:
-                cs.update(t, dt, data['u_conv'])
+            self.update_convection(t, dt)
             
             for _ in xrange(num_inner_iter):
                 self.momentum_prediction(t, dt)
                 self.pressure_correction()
                 self.velocity_update()
+                self.pressure_update()
+            
+            self.velocity_update_final()
             
             self.simulation.end_timestep()
-
-def define_advection_problem(V, up, upp, u_conv, n, beta, dt):
-    u = dolfin.TrialFunction(V)
-    v = dolfin.TestFunction(V)
-    
-    # Upstream and downstream normal velocities
-    flux_nU = u*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
-    flux_nD = u*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
-
-    # Define the blended flux
-    # The blending factor beta is not DG, so beta('+') == beta('-')
-    b = beta('+')
-    flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
-    
-    # Equation to solve
-    eq = (3*u - 4*up + upp)/(2*dt)*v*dx \
-         - u*dot(u_conv, nabla_grad(v))*dx \
-         + flux*jump(v)*dS \
-         + u*dot(u_conv, n)*v*ds
-    a, L = dolfin.lhs(eq), dolfin.rhs(eq)
-    
-    return a, L
-
-def define_poisson_problem(V, k, f, n, penalty, neumann_bcs):
-    """
-    Define the Poisson problem for u in f.space V
-    
-        div(k*grad(u)) = f
-    
-    Returns the bilinear and linear forms
-    """
-    u = dolfin.TrialFunction(V)
-    v = dolfin.TestFunction(V)
-    
-    # FIXME: introduce k in the equation!
-    
-    a = dot(nabla_grad(v), nabla_grad(u))*dx \
-        - dot(avg(nabla_grad(v)), jump(u, n))*dS \
-        - dot(jump(v, n), avg(nabla_grad(u)))*dS \
-        + penalty*dot(jump(v, n), jump(u, n))*dS \
-        - dot(nabla_grad(v), u*n)*ds \
-        - dot(v*n, nabla_grad(u))*ds \
-        + penalty*v*u*ds
-    L = v*f*dx #- u0*dot(grad(v), n)*ds + (gamma/h)*u0*v*ds(1)
-    
-    # Add Neumann boundary conditions
-    for nbc in neumann_bcs:
-        L += v*nbc.value*nbc.ds 
-
-    return a, L

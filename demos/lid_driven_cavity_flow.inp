@@ -6,20 +6,20 @@
     "physical_properties": {
         "rho0": 1025.0,
         "nu0": 0.001,
-        "g": [0, -9.81]
+        "g": [0, 0]
     },
     
     "mesh": {
         "type": "Rectangle",
-        "Nx": 40,
-        "Ny": 40
+        "Nx": 20,
+        "Ny": 20
     },
     
     "boundary_conditions": [
         {
-            "name": "lid",
+            "name": "walls",
             "selector": "region",
-            "region_code": "x[1] >= 1.0 - 1e-8",
+            "region_code": "True",
             
             "p": {
                 "type": "ConstantGradient",
@@ -31,9 +31,9 @@
             }
         },
         {
-            "name": "walls",
+            "name": "lid",
             "selector": "region",
-            "region_code": "x[1] < 1.0 - 1e-8",
+            "region_code": "x[1] >= 1.0 - 1e-8",
             
             "p": {
                 "type": "ConstantGradient",
@@ -48,7 +48,13 @@
     
     "time": {
         "dt": 0.01,
-        "tmax": 0.03    
+        "tmax": 0.03   
+    },
+    
+    "output": {
+        "plot_at_end": true,
+        "dolfin_log_level": "warning",
+        "ocellaris_log_level": "info"
     },
     
     "solver": {

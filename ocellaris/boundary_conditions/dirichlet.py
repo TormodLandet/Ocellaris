@@ -26,9 +26,11 @@ class DirichletBoundary(BoundaryCondition):
         Add a Dirichlet condition to this variable
         """
         assert isinstance(value, (float, int, long))
-        value = dolfin.Constant(value)
+        df_value = dolfin.Constant(value)
         
         # Store the boundary condition for use in the solver
-        bc = dolfin.DirichletBC(self.func_space, value, subdomains, subdomain_id)
+        bc = dolfin.DirichletBC(self.func_space, df_value, subdomains, subdomain_id, method='geometric')
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
+        
+        self.simulation.log.info('    Constant value %r for %s' % (value, var_name))
