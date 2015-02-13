@@ -8,10 +8,15 @@ class OcellarisNeumannBC(object):
         used when defining the linear part of the weak forms
         """
         self.simulation = simulation
-        self.value = value
+        self._value = value
         self.subdomain_id = subdomain_id
         
-    @property
+    def func(self):
+        """
+        The boundary value derivative function 
+        """
+        return self._value
+    
     def ds(self):
         """
         Returns the ds measure of the subdomain

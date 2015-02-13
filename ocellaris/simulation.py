@@ -4,6 +4,7 @@ import time
 import dolfin
 from .plot import Plotter
 from .utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
+from .utils import timeit
 
 class Simulation(object):
     def __init__(self):
@@ -58,6 +59,7 @@ class Simulation(object):
         """
         self._post_timestep_hooks.append(hook)
     
+    @timeit
     def new_timestep(self, timestep_number, t, dt):
         """
         Called at the start of a new time step
@@ -68,6 +70,7 @@ class Simulation(object):
         for hook in self._pre_timestep_hooks:
             hook(t, dt)
     
+    @timeit
     def end_timestep(self, report=True):
         """
         Called at the end of a time step

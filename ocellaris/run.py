@@ -4,6 +4,7 @@ import dolfin
 from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
+from .utils import timeit
 
 def run_simulation(simulation):
     """
@@ -70,8 +71,16 @@ def run_simulation(simulation):
     for key, value in sorted(simulation.data.items()):
         simulation.log.debug('%20s = %s' % (key, repr(type(value))[:57]))
     
-    simulation.log.info('\nSimulation done in %.3f seconds' % (time.time() - t1))
-        
+    # Print the runtime of the functions timed with the @timeit decorator
+    simulation.log.info('\nSummary of time spent:')
+    tottime = time.time() - t1
+    for funcname in sorted(timeit.timings):
+        durations = timeit.timings[funcname]
+        simulation.log.info('  %30s total time %7.3fs for %5d runs, minimum runtime %7.3fs'
+                            % (funcname, sum(durations), len(durations), min(durations)) +
+                            '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100))
+    simulation.log.info('\nSimulation done in %.3f seconds' % tottime)
+    
     if simulation.input.get('output', {}).get('plot_at_end', False):
         plot_at_end(simulation)
 
@@ -142,6 +151,8 @@ def plot_at_end(simulation):
         dolfin.plot(simulation.data[name], title=name)
         #name = 'u_star%d' % d
         #dolfin.plot(simulation.data[name], title=name)
+    
+    dolfin.plot(simulation.data['u'], title='u')
     
     # Plot pressure
     dolfin.plot(simulation.data['p'], title='p')
