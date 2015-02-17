@@ -3,6 +3,11 @@
 Solve the lid driven cavity flow using p1 DG elements
 """
 from __future__ import division
+from functools import wraps
+import time
+from collections import defaultdict
+import numpy
+from matplotlib import pyplot
 import dolfin
 from dolfin import dot, nabla_grad, avg, jump, dx, dS
 
@@ -11,24 +16,25 @@ from dolfin import dot, nabla_grad, avg, jump, dx, dS
 dolfin.set_log_level(dolfin.WARNING)
 
 # Mesh size and polynomial degree
-N = 32
-P = 1
+N = 64
+Pu = 2
+Pp = 1
 
 # Time stepping
-dt = 1/(8*N)
-tmax = 1.0
-num_inner_iter = 2
+dt = 0.01 # 1/(8*N)
+tmax = 5.0
+min_inner_iter = 1 # 3
+max_inner_iter = 25
+iter_Linf_norm_max = 1e-2
 df_dt = dolfin.Constant(dt)
 
-Re = 80
-tramp = 0.2
-nu1 = 1/Re # Start with this viscosity
-nu2 = 1/Re # viscosity = nu2 after tramp seconds
-umax = 1.0 # Velocity at lid 
+Re = 100
+umax = 1.0 # Velocity at lid
+kin_visc = 1/Re
 
 # Physical properties used in simulation
 rho = dolfin.Constant(1)
-nu = dolfin.Constant(nu1)
+nu = dolfin.Constant(kin_visc)
 g = dolfin.Constant([0, 0])
 u_lid = dolfin.Constant(umax)
 
@@ -37,12 +43,19 @@ beta = dolfin.Constant(0.0)
 
 # Geometry and function spaces
 mesh = dolfin.UnitSquareMesh(N, N)
+x = mesh.coordinates()
+
+# Grade mesh towards the walls
+if False:
+    x[:] = (x - 0.5) * 2
+    x[:] = 0.5*(numpy.cos(numpy.pi*(x-1.) / 2.) + 1.)
+
 ndim = 2
-Vu = dolfin.FunctionSpace(mesh, 'DG', P)
-Vp = dolfin.FunctionSpace(mesh, 'DG', P)
+Vu = dolfin.FunctionSpace(mesh, 'DG', Pu)
+Vp = dolfin.FunctionSpace(mesh, 'DG', Pp)
 
 # Show dolfin 3D plots?
-PLOT = False
+PLOT = True
 
 ###########################################################################################
 
@@ -119,7 +132,7 @@ def define_poisson_problem(V, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
     # Enforce Neumann BCs weakly
     for nbc in neumann_bcs:
         L += v*nbc.value*nbc.ds
-        
+    
     # FIXME: introduce k in the equation properly!!!!
     a = k*a
     L = k*L
@@ -148,7 +161,7 @@ class Walls(dolfin.SubDomain):
         return on_boundary
 class Lid(dolfin.SubDomain):
     def inside(self, x, on_boundary):
-        return on_boundary and x[1] > 0.999999
+        return on_boundary and x[1] > 0.999999 #and x[0]*(1-x[0]) > 0.00001
 marker = dolfin.FacetFunction("size_t", mesh)
 Walls().mark(marker, 1)
 Lid().mark(marker, 2)
@@ -187,7 +200,7 @@ time_coeffs = dolfin.Constant([1, -1, 0]) # First time step
 time_coeffs2 = dolfin.Constant([3/2, -2, 1/2]) # All later time steps
 
 # Define the momentum prediction equations
-penalty = dolfin.Constant(100)/h
+penalty = dolfin.Constant(1000)/h
 eqs_mom_pred = []
 for d in range(ndim):
     f = -1/rho*p.dx(d) + g[d]
@@ -197,7 +210,7 @@ for d in range(ndim):
     eqs_mom_pred.append(eq)
 
 # Define the pressure correction equation
-penalty = dolfin.Constant(100)/h
+penalty = dolfin.Constant(1000)/h
 f = time_coeffs[0]/df_dt*dolfin.nabla_div(u_star_vec)
 eq_pressure = define_poisson_problem(Vp, 1/rho, -f, n, penalty, dirichlet_bcs_pres, neumann_bcs_pres)
 
@@ -207,9 +220,6 @@ eq_pressure = define_poisson_problem(Vp, 1/rho, -f, n, penalty, dirichlet_bcs_pr
 # A small decorator that stores the cummulative time spent in each 
 # function that is wrapped by the decorator.
 # Functions are identified by their names
-from functools import wraps
-import time
-from collections import defaultdict
 def timeit(f):
     """
     Decorator to time a set of functions
@@ -325,6 +335,44 @@ def errornorm(u1, u2):
     ua2 = u2.vector().array()
     return abs(ua1 - ua2).max()
 
+# Data from Ghia, Ghia and Shin (1982)
+ghia_x = [1.0, 0.9688, 0.9609, 0.9531, 0.9453, 0.9063, 0.8594, 0.8047, 0.5,
+                  0.2344, 0.2266, 0.1563, 0.0938, 0.0781, 0.0703, 0.0625, 0.0]
+ghia_y = [1.0, 0.9766, 0.9688, 0.9609, 0.9531, 0.8516, 0.7344, 0.6172, 0.5,
+          0.4531, 0.2813, 0.1719, 0.1016, 0.0703, 0.0625, 0.0547, 0.0]
+ghia_data = {100: 
+                {'u': [1.0, 0.84123, 0.78871, 0.73722, 0.68717, 0.23151, 0.00332, -0.13641,
+                       -0.20581, -0.21090, -0.15662, -0.10150, -0.06434, -0.04775, -0.04192, -0.03717, 0.0],
+                 'v': [0, -0.05906, -0.07391, -0.08864, -0.10313, -0.16914, -0.22445, -0.24533,
+                       0.05454, 0.17527, 0.17507, 0.16077, 0.12317, 0.10890, 0.10091, 0.09233, 0.0]},
+             1000:
+                {'u': [1, 0.65928, 0.57492, 0.51117, 0.46604, 0.33304, 0.18719, 0.05702, -0.06080, -0.10648,
+                       -0.27805, -0.38289, -0.29730, -0.22220, -0.20196, -0.18109, 0],
+                 'v': [0, -0.21388, -0.27669, -0.33714, -0.39188, -0.51550, -0.42665, -0.31966, 
+                       0.02526, 0.32235, 0.33075, 0.37095, 0.32627, 0.30353, 0.29012, 0.27485, 0.0]}}
+
+def ghia_error():
+    """
+    Calculate L2 error wrt Ghia data
+    """
+    if Re not in ghia_data:
+        return -1
+    
+    
+    error = 0
+    res = numpy.array([0.0])
+    pos = numpy.array([0.5, 0.0])
+    for i, y in enumerate(ghia_y):
+        pos[1] = y
+        # Get calculated value
+        u_list[0].eval(res, pos)
+        calc_val = res[0]
+        # Get Ghia et als value
+        ghia_val = ghia_data[Re]['u'][i]
+        # Sum squared errors 
+        error += (ghia_val - calc_val)**2
+    return error**0.5
+
 @timeit
 def plotit():
     """
@@ -332,31 +380,21 @@ def plotit():
     to make quick and dirty static variables to hold the plot
     information in between calls 
     """
-    import numpy
-    import matplotlib.pyplot as plt
-    
     Nplots = 4
     if not hasattr(plotit, 'figs'):
         # This is the first call, lets set up the plots    
-        plt.ion()
-        plotit.figs = [plt.figure() for _ in range(Nplots)]
+        pyplot.ion()
+        plotit.figs = [pyplot.figure() for _ in range(Nplots)]
         plotit.axes = [fig.add_subplot(111) for fig in plotit.figs]
         plotit.lines = [ax.plot([], [], label='Re=%.0f'  % Re)[0] for ax in plotit.axes]
         
-        # Data from Ghia, Ghia and Shin (1982)
-        # Re = 100
-        ghia_y = [1.0, 0.9766, 0.9688, 0.9609, 0.9531, 0.8516, 0.7344, 0.6172, 0.5,
-                  0.4531, 0.2813, 0.1719, 0.1016, 0.0703, 0.0625, 0.0547, 0.0]
-        ghia_u = [1.0, 0.84123, 0.78871, 0.73722, 0.68717, 0.23151, 0.00332, -0.13641,
-                  -0.20581, -0.21090, -0.15662, -0.10150, -0.06434, -0.04775, -0.04192, -0.03717, 0.0]
-        ghia_x = [1.0, 0.9688, 0.9609, 0.9531, 0.9453, 0.9063, 0.8594, 0.8047, 0.5,
-                  0.2344, 0.2266, 0.1563, 0.0938, 0.0781, 0.0703, 0.0625, 0.0]
-        ghia_v = [0, -0.05906, -0.07391, -0.08864, -0.10313, -0.16914, -0.22445, -0.24533,
-                  0.05454, 0.17527, 0.17507, 0.16077, 0.12317, 0.10890, 0.10091, 0.09233, 0.0]
-        plotit.axes[0].plot(ghia_u, ghia_y, 'ks', label='Ghia Re=100')
-        plotit.axes[0].legend(loc='lower right')
-        plotit.axes[1].plot(ghia_x, ghia_v, 'ks', label='Ghia Re=100')
-        plotit.axes[1].legend(loc='lower right')
+        if Re in ghia_data:
+            ghia_u = ghia_data[Re]['u']
+            ghia_v = ghia_data[Re]['v']
+            plotit.axes[0].plot(ghia_u, ghia_y, 'ks', label='Ghia Re=%d' % Re)
+            plotit.axes[0].legend(loc='lower right')
+            plotit.axes[1].plot(ghia_x, ghia_v, 'ks', label='Ghia Re=%d' % Re)
+            plotit.axes[1].legend(loc='lower left')
     
     posvec = numpy.linspace(0, 1, 100)
     res = numpy.array([0.0])
@@ -422,6 +460,7 @@ def plotit():
 ###########################################################################################
 
 # Run the simulation
+t_start = time.time()
 t = 0
 it = 0
 while t+dt <= tmax + 1e-8:
@@ -429,14 +468,13 @@ while t+dt <= tmax + 1e-8:
     t += dt
     print 'TIMESTEP %5d  -  t = %10.4f' % (it, t)
     
-    #g.assign(dolfin.Constant([0, -min(1, t/tmax*2)]))
-    #u_lid.assign(umax*min(1, t/tramp))
-    if t > tramp:
-        nu.assign(nu2)
-    
     update_convection(t, dt)
     
-    for inner_iter in range(num_inner_iter):
+    error = 1e10
+    inner_iter = -1
+    while inner_iter < min_inner_iter-1 or error > iter_Linf_norm_max:
+        inner_iter += 1
+        
         momentum_prediction(t, dt)
         pressure_correction()
         velocity_update()
@@ -446,11 +484,17 @@ while t+dt <= tmax + 1e-8:
         u0a = u_list[0].vector().array()
         u1a = u_list[1].vector().array()
         maxvel = (u0a**2+u1a**2).max()**0.5
-        print '        Inner iter %d, max velocity %15.4e' % (inner_iter, maxvel),
+        print '        Inner iter %3d, max velocity %15.4e' % (inner_iter, maxvel),
         error = sum(errornorm(u_list[d], u_star_list[d]) for d in range(ndim))
         print ' errornorm*: %10.3e' % error,
         errorC = sum(errornorm(u_list[d], u_conv_list[d]) for d in range(ndim))
-        print ' errornormC: %10.3e' % errorC
+        print ' errornormC: %10.3e' % errorC,
+        errorG = ghia_error()
+        print ' Ghia-err: %10.3e' % errorG
+        
+        if inner_iter == max_inner_iter:
+            print '        Max inner iter reached!'
+            break
     
     velocity_update_final()
     plotit()
@@ -458,23 +502,21 @@ while t+dt <= tmax + 1e-8:
     # Change to the second order time derivative for velocities
     time_coeffs.assign(time_coeffs2)
     
-    # DEBUG:
-    pa = p.vector().array()
-    print '    Velocity in x direction ranging from', u0a.min(), 'to', u0a.max()
-    print '    Velocity in y direction ranging from', u1a.min(), 'to', u1a.max()
-    print '    Pressure ranging from', pa.min(), 'to', pa.max()
-    if maxvel > 1.5:
-        print 'Diverging ...'
+    if maxvel > 3:
+        print '\n\n ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !'
+        print '\n    Diverging solution!'
+        print '\n ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! \n'
         break
 
 # Print the runtime of the functions timed with the @timeit decorator
 print '\n\nTIMINGS:'
-tottime = sum(sum(vals) for vals in timeit.timings.itervalues())
+tottime = time.time() - t_start
 for funcname in sorted(timeit.timings):
     durations = timeit.timings[funcname]
-    print '%30s total time %7.3fs for %5d runs, minimum runtime %7.3fs' % \
+    print '%30s total time %10.3fs for %5d runs, minimum runtime %7.3fs' % \
           (funcname, sum(durations), len(durations), min(durations)),
     print '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100) 
+print 'TOTAL time: %.3f seconds' % tottime
 
 ###########################################################################################
 
@@ -485,6 +527,8 @@ if PLOT:
     dolfin.plot(u_list[1], title='u_y')
     dolfin.plot(p, title='p')
     dolfin.interactive()
+else:
+    raw_input('Press any key to quit')
 
-raw_input('Press any key to quit')
-
+pyplot.show()
+raw_input('Press any key to quit2222')
