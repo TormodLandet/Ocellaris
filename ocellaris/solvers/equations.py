@@ -23,14 +23,14 @@ def define_advection_problem(V, up, upp, u_conv, n, beta, time_coeffs, dt, diric
     flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
     
     # Equation to solve
-    c1, c2, c3 = time_coeffs[0], time_coeffs[1], time_coeffs[2]
+    c1, c2, c3 = time_coeffs 
     eq = (c1*u + c2*up + c3*upp)/dt*v*dx \
          - u*dot(u_conv, nabla_grad(v))*dx \
          + flux*jump(v)*dS
     
     # Enforce Dirichlet BCs weakly
     for dbc in dirichlet_bcs:
-        eq += dot(u_conv, n)*v*dbc.func()*dbc.ds()
+        eq += dot(u_conv, n)*v*(u - dbc.func())*dbc.ds()
     
     a, L = dolfin.lhs(eq), dolfin.rhs(eq)
     

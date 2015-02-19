@@ -3,25 +3,32 @@ import numpy
 import dolfin
 from ocellaris.multiphase import get_multi_phase_model
 from ocellaris import Simulation
+from ocellaris.run import load_mesh, setup_boundary_conditions
 
 thisdir = os.path.dirname(os.path.abspath(__file__))
 inpfile = os.path.join(thisdir, 'vof_test.inp')
 
-xmax = 1.5; Nx = 128
-ymax = 1.5; Ny = 128
+sim = Simulation()
+sim.read_json_input_file(inpfile)
 
 VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
 
 TMAX = 1.0
 Nt = 1000
-TS_MAX = 20
+TS_MAX = 200000
 
-PLOT = False
+PLOT = True
 PNG_OUTPUT_FREQUENCY = 10
 PLOT_INTERPOLATED = False
 
-print 'CFL ~', (TMAX/Nt)/(xmax/Nx)*VEL[0], (TMAX/Nt)/(ymax/Ny)*VEL[1]
+Nx = sim.input['mesh']['Nx']
+Ny = sim.input['mesh']['Ny']
+xmax = sim.input['mesh']['endx']
+ymax = sim.input['mesh']['endy'] 
+hx = xmax / Nx
+hy = ymax / Ny
+print 'CFL ~', (TMAX/Nt)/hx*VEL[0], (TMAX/Nt)/hy*VEL[1]
 
 class CField(dolfin.Expression):
     t = 0
@@ -40,24 +47,23 @@ cexpr = CField()
 
 dolfin.set_log_level(dolfin.WARNING)
 
-sim = Simulation()
-sim.read_json_input_file(inpfile)
-
-# Initialize mesh
-mesh = dolfin.RectangleMesh(0, 0, xmax, ymax, Nx, Ny, 'left/right')
-sim.set_mesh(mesh)
+# Prepare simulation
+load_mesh(sim)
+mesh = sim.data['mesh']
+sim.data['Vc'] = dolfin.FunctionSpace(mesh, "DG", 0)
+setup_boundary_conditions(sim)
 
 # Initialize the convecting velocity field
 vel_func_space = dolfin.VectorFunctionSpace(mesh, "DG", 1)
 vel = dolfin.Function(vel_func_space)
-sim.data['u'] = vel
+sim.data['u_conv'] = vel
 
 # Initialize the VOF scheme
 multiphase_model = get_multi_phase_model('BlendedAlgebraicVOF')
 vof = multiphase_model(sim)
 
 # Initialize the colour function field
-c0 = dolfin.interpolate(cexpr, vof.function_space)
+c0 = dolfin.interpolate(cexpr, sim.data['Vc'])
 
 ################################################################################
 # Runtime postprocessing
@@ -70,7 +76,7 @@ def postprocess(cfunc, t):
     cmin = cvec.min()
     
     cexpr.t = t
-    target = dolfin.interpolate(cexpr, vof.function_space).vector().array()
+    target = dolfin.interpolate(cexpr, sim.data['Vc']).vector().array()
     error = ((target - cvec)**2).sum() *  60*60/(Nx*Ny)
     
     sim.reporting.report_timestep_value('csum', csum)
@@ -90,8 +96,7 @@ vof.prev_colour_function.assign(c0)
 # Not needed, but nice to have for visualization of the 0th time step
 vof.colour_function.assign(c0)
 vof.convection_scheme.gradient_reconstructor.reconstruct()
-
-
+    
 # Dump input data
 import json
 print json.dumps(sim.input, indent=4)
@@ -141,7 +146,6 @@ if PLOT_INTERPOLATED:
 
     #plot(mesh, wireframe=True, title='Mesh DG')
 
-if PLOT_INTERPOLATED:
     dolfin.interactive()
 
 sim.plotting.plot_all()

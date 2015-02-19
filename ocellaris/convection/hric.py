@@ -4,6 +4,7 @@ The HRIC upwind/downwind blending sheme
 import numpy
 import dolfin
 from . import ConvectionScheme, register_convection_scheme
+import gc
 
 @register_convection_scheme('HRIC')
 class ConvectionSchemeHric2D(ConvectionScheme):
@@ -39,9 +40,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         according to the HRIC algorithm. Several versions of HRIC
         are implemented
         """
-        a_cell_vec = self.alpha_function.vector()
-        beta = self.blending_function
-        beta_vec = beta.vector()
+        alpha_arr = self.alpha_function.vector().get_local()
+        beta_arr = self.blending_function.vector().get_local()
         
         conFC = self.simulation.data['connectivity_FC']
         facet_info = self.simulation.data['facet_info']
@@ -50,8 +50,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         # Reconstruct the gradient to calculate upstream values
         #self.gradient_reconstructor.reconstruct()
         gradient = self.gradient_reconstructor.gradient
-        gradient_dofmap0 = self.gradient_reconstructor.gradient_dofmap0
-        gradient_dofmap1 = self.gradient_reconstructor.gradient_dofmap1
+        gradient_dofmaps = self.gradient_reconstructor.gradient_dofmaps
+        gradient_arr = gradient.vector().get_local()
         
         EPS = 1e-6
         Co_max = 0
@@ -65,7 +65,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             if len(connected_cells) != 2:
                 # This should be an exterior facet (on ds)
                 assert facet.exterior()
-                beta_vec[self.dofmap[fidx]] = 0.0
+                beta_arr[self.dofmap[fidx]] = 0.0
                 continue
             
             # Indices of the two local cells
@@ -97,18 +97,17 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 #nminC, nmaxC = nmin1, nmax1
             
             # Find alpha in D and C cells
-            aD = a_cell_vec[self.alpha_dofmap[iaD]]
-            aC = a_cell_vec[self.alpha_dofmap[iaC]]
+            aD = alpha_arr[self.alpha_dofmap[iaD]]
+            aC = alpha_arr[self.alpha_dofmap[iaC]]
             
             if abs(aC - aD) < EPS:
                 # No change in this area, use upstream value
-                beta_vec[self.dofmap[fidx]] = 0.0
+                beta_arr[self.dofmap[fidx]] = 0.0
                 continue
             
             # Gradient
-            gdofs  = (gradient_dofmap0, gradient_dofmap1)
-            func2vec = lambda fun, i: numpy.array([fun.vector()[dm[i]] for dm in gdofs], float)  
-            gC = func2vec(gradient, iaC)
+            gdofs  = [dm[iaC] for dm in gradient_dofmaps]
+            gC = [gradient_arr[gd] for gd in gdofs]
             len_gC2 = numpy.dot(gC, gC)
             
             # Upstream value
@@ -122,7 +121,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if abs(aU - aD) < EPS:
                 # No change in this area, use upstream value
-                beta_vec[self.dofmap[fidx]] = 0.0
+                beta_arr[self.dofmap[fidx]] = 0.0
                 continue
             
             # Angle between face normal and surface normal
@@ -134,7 +133,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if tilde_aC <= 0 or tilde_aC >= 1:
                 # Only upwind is stable
-                beta_vec[self.dofmap[fidx]] = 0.0
+                beta_arr[self.dofmap[fidx]] = 0.0
                 continue
             
             if self.variant == 'HRIC':
@@ -194,8 +193,17 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 print ' aU %r, aC %r, aD %r' % (aU, aC, aD)
             
             assert 0.0 <= tilde_beta <= 1.0
-            beta_vec[self.dofmap[fidx]] = tilde_beta
+            beta_arr[self.dofmap[fidx]] = tilde_beta
+            
+            if False:
+                print fidx, self.dofmap[fidx]
+                print connected_cells
+                print iaC, iaD, aC, aD
+                print normal
+                print tilde_beta
+                exit()
         
-        beta.vector()[:] = beta_vec
+        self.blending_function.vector()[:] = beta_arr
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
         #print 'HRIC alpha_face  %10.5f %10.5f,  Co_max = %.3f' % (beta_vec.min(), beta_vec.max(), Co_max)
+        

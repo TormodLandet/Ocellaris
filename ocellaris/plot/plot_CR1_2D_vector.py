@@ -2,11 +2,12 @@ import numpy
 from matplotlib import pyplot
 from matplotlib.collections import PolyCollection
 import dolfin
+from ocellaris.utils import facet_dofmap
 
 class Plot2DCR1Vec(object):
-    def __init__(self, func):
+    def __init__(self, simulation, func):
         """
-        A plotter for DG0 functions in 2D
+        A plotter for Crouzeix-Raviart vector functions in 2D
         """
         self.func = func
         
@@ -23,8 +24,8 @@ class Plot2DCR1Vec(object):
         assert function_space.num_sub_spaces() == 2
         
         self.mesh = function_space.mesh()
-        self.dofmap0 = function_space.sub(0).dofmap().dofs()
-        self.dofmap1 = function_space.sub(1).dofmap().dofs()
+        self.dofmap0 = facet_dofmap(function_space.sub(0))
+        self.dofmap1 = facet_dofmap(function_space.sub(1))
         
         # Build matplotlib plolygon data
         self.coords = self.mesh.coordinates()

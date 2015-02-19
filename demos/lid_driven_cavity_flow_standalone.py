@@ -16,12 +16,12 @@ from dolfin import dot, nabla_grad, avg, jump, dx, dS
 dolfin.set_log_level(dolfin.WARNING)
 
 # Mesh size and polynomial degree
-N = 64
+N = 32
 Pu = 2
 Pp = 1
 
 # Time stepping
-dt = 0.01 # 1/(8*N)
+dt = 0.05 # 1/(8*N)
 tmax = 5.0
 min_inner_iter = 1 # 3
 max_inner_iter = 25
@@ -31,6 +31,7 @@ df_dt = dolfin.Constant(dt)
 Re = 100
 umax = 1.0 # Velocity at lid
 kin_visc = 1/Re
+divergence_criterion = 10
 
 # Physical properties used in simulation
 rho = dolfin.Constant(1)
@@ -80,16 +81,15 @@ def define_advection_problem(V, up, upp, u_conv, n, beta, time_coeffs, dt, penal
     flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
     
     # Equation to solve
-    c1, c2, c3 = time_coeffs[0],time_coeffs[1], time_coeffs[2] 
+    c1, c2, c3 = time_coeffs 
     eq = (c1*u + c2*up + c3*upp)/dt*v*dx \
          - u*dot(u_conv, nabla_grad(v))*dx \
          + flux*jump(v)*dS
-    #     + u*dot(u_conv, n)*v*ds
     
     # Enforce Dirichlet BCs weakly
     for dbc in dirichlet_bcs:
         #eq += penalty*dot(u_conv, n)*v*(u - dbc.value)*dbc.ds
-        eq += dot(u_conv, n)*v*dbc.value*dbc.ds
+        eq += dot(u_conv, n)*v*(u - dbc.value)*dbc.ds
     
     a, L = dolfin.lhs(eq), dolfin.rhs(eq)
     
@@ -200,7 +200,7 @@ time_coeffs = dolfin.Constant([1, -1, 0]) # First time step
 time_coeffs2 = dolfin.Constant([3/2, -2, 1/2]) # All later time steps
 
 # Define the momentum prediction equations
-penalty = dolfin.Constant(1000)/h
+penalty = dolfin.Constant(10000)/h
 eqs_mom_pred = []
 for d in range(ndim):
     f = -1/rho*p.dx(d) + g[d]
@@ -210,7 +210,7 @@ for d in range(ndim):
     eqs_mom_pred.append(eq)
 
 # Define the pressure correction equation
-penalty = dolfin.Constant(1000)/h
+penalty = dolfin.Constant(10)/h
 f = time_coeffs[0]/df_dt*dolfin.nabla_div(u_star_vec)
 eq_pressure = define_poisson_problem(Vp, 1/rho, -f, n, penalty, dirichlet_bcs_pres, neumann_bcs_pres)
 
@@ -351,6 +351,7 @@ ghia_data = {100:
                  'v': [0, -0.21388, -0.27669, -0.33714, -0.39188, -0.51550, -0.42665, -0.31966, 
                        0.02526, 0.32235, 0.33075, 0.37095, 0.32627, 0.30353, 0.29012, 0.27485, 0.0]}}
 
+@timeit
 def ghia_error():
     """
     Calculate L2 error wrt Ghia data
@@ -396,7 +397,7 @@ def plotit():
             plotit.axes[1].plot(ghia_x, ghia_v, 'ks', label='Ghia Re=%d' % Re)
             plotit.axes[1].legend(loc='lower left')
     
-    posvec = numpy.linspace(0, 1, 100)
+    posvec = numpy.linspace(0, 1, 1000)
     res = numpy.array([0.0])
     pos = numpy.array([0.0, 0.0])
     velx = numpy.zeros_like(posvec)
@@ -475,6 +476,12 @@ while t+dt <= tmax + 1e-8:
     while inner_iter < min_inner_iter-1 or error > iter_Linf_norm_max:
         inner_iter += 1
         
+        if it < 3 and 0 < inner_iter < 5:
+            # The convection is not well extrapolated in the first time
+            # steps. Use the previous solution
+            for d in range(ndim):
+                u_conv_list[d].assign(u_list[d])
+        
         momentum_prediction(t, dt)
         pressure_correction()
         velocity_update()
@@ -502,7 +509,7 @@ while t+dt <= tmax + 1e-8:
     # Change to the second order time derivative for velocities
     time_coeffs.assign(time_coeffs2)
     
-    if maxvel > 3:
+    if maxvel > divergence_criterion:
         print '\n\n ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !'
         print '\n    Diverging solution!'
         print '\n ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! \n'
@@ -516,7 +523,7 @@ for funcname in sorted(timeit.timings):
     print '%30s total time %10.3fs for %5d runs, minimum runtime %7.3fs' % \
           (funcname, sum(durations), len(durations), min(durations)),
     print '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100) 
-print 'TOTAL time: %.3f seconds' % tottime
+print '%30s total time %10.3fs\n' % ('ALL', tottime)
 
 ###########################################################################################
 

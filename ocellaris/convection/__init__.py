@@ -1,6 +1,6 @@
 import numpy
 import dolfin
-from ocellaris.utils import report_error, GradientReconstructor
+from ocellaris.utils import report_error, GradientReconstructor, facet_dofmap
 
 _CONVECTION_SCHEMES = {}
 
@@ -63,7 +63,7 @@ class ConvectionScheme(object):
         
         # Dofmaps
         self.alpha_dofmap = self.alpha_function_space.dofmap().dofs()
-        self.dofmap = self.function_space.dofmap().dofs()
+        self.dofmap = facet_dofmap(self.function_space)
         
         # Mesh size
         self.ncells = self.mesh.num_cells()

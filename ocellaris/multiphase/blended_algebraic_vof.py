@@ -1,11 +1,10 @@
+from __future__ import division
 import numpy
 import dolfin
-from dolfin import FunctionSpace, Function, DirichletBC, \
-                   TrialFunction, TestFunction, Constant, \
-                   FacetNormal, dx, ds, dS, solve, \
-                   inner, grad, lhs, rhs, jump
+from dolfin import Function, Constant, FacetNormal, solve
 from . import register_multi_phase_model, MultiPhaseModel 
 from ..convection import get_convection_scheme
+from ..solvers.equations import define_advection_problem
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
 class BlendedAlgebraicVofModel(MultiPhaseModel):
@@ -27,16 +26,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.mesh = simulation.data['mesh']
         
         # Define function space and solution function
-        self.function_space = FunctionSpace(self.mesh, "DG", 0)
-        self.colour_function = Function(self.function_space)
-        self.prev_colour_function = cp = Function(self.function_space)
-        
-        simulation.data['c'] = self.colour_function
-        simulation.data['c_p'] = self.prev_colour_function
-        
-        # Create test and trial functions
-        c = TrialFunction(self.function_space)
-        v = TestFunction(self.function_space)
+        # This should be moved externally?
+        V = simulation.data['Vc']
+        self.colour_function = c = Function(V)
+        self.prev_colour_function = cp = Function(V)
+        self.prev2_colour_function = cpp = Function(V)
+        simulation.data['c'] = c
+        simulation.data['c_p'] = cp
+        simulation.data['c_pp'] = cpp
         
         # The convection blending function that counteracts numerical diffusion
         scheme = get_convection_scheme(simulation.input['convection']['c'].get('convection_scheme', 'HRIC'))
@@ -46,11 +43,42 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # The time step (real value to be supplied later)
         self.dt = Constant(1.0)
         
+        # Use first order backward time difference on the first time step
+        # Coefficients for u, up and upp 
+        self.time_coeffs = dolfin.Constant([1, -1, 0])
+        
         # The normal on each face
         normal = FacetNormal(self.mesh)
         
+        # Reconstruct the gradient from the colour function DG0 field
+        self.convection_scheme.gradient_reconstructor.initialize()
+        gradient = self.convection_scheme.gradient_reconstructor.gradient
+        
+        dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
+        #self.eq = define_advection_problem(V, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
+        
+        self.setup_equation(normal, dirichlet_bcs, beta, cp)
+        
+        simulation.plotting.add_plot('c', self.colour_function)
+        simulation.plotting.add_plot('c_grad', gradient)
+        simulation.plotting.add_plot('c_beta', beta)
+        #import dolfin
+        #simulation.add_plot('cvel', dolfin.project(cvel, V=fgrad.function_space()))
+        #print 'cvel'
+        #self.plots.append(('cvel', Plot2DCR1Vec()))
+        #print 'cf'
+        #self.plots.append(('cf', Plot2DCR1Vec(dolfin.project(cf, V=fgrad.function_space()))))
+    
+    def setup_equation(self, normal, dirichlet_bcs, beta, cp):
+        from dolfin import TrialFunction, TestFunction, dx, ds, dS, inner, grad, lhs, rhs, jump
+        
+        # Create test and trial functions
+        V = self.simulation.data['Vc']
+        c = TrialFunction(V)
+        v = TestFunction(V)
+        
         # Upstream and downstream normal velocities
-        vel = simulation.data['u_conv']
+        vel = self.simulation.data['u_conv']
         flux_nU = c*(inner(vel, normal) + abs(inner(vel, normal)))/2
         flux_nD = c*(inner(vel, normal) - abs(inner(vel, normal)))/2
 
@@ -58,10 +86,6 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # The blending factor beta is not DG, so beta('+') == beta('-')
         b = beta('+')
         flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
-        
-        # Reconstruct the gradient from the colour function DG0 field
-        self.convection_scheme.gradient_reconstructor.initialize()
-        gradient = self.convection_scheme.gradient_reconstructor.gradient
         
         # Compressive flux
         #compr_fac = Constant(simulation.input['VOF'].get('compression_factor', 1.0))
@@ -79,24 +103,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
              - c*(1-cp)*inner(compr_vel, grad(v))*dx \
              + (flux + cflux)*jump(v)*dS \
              + c*inner(vel, normal)*v*ds
-        self.lhs = lhs(eq)
-        self.rhs = rhs(eq)
-        
-        # Boundary condition (C=0 on boundary)
-        # TODO: this is not very general ...
-        self.bc = DirichletBC(self.function_space, 0, lambda x, on_boundary: on_boundary)
-        
-        # Store the reference to the convecting velocity field
-        self.velocity_field = simulation.data['u']
-        
-        simulation.plotting.add_plot('c', self.colour_function)
-        simulation.plotting.add_plot('c_grad', gradient)
-        #import dolfin
-        #simulation.add_plot('cvel', dolfin.project(cvel, V=fgrad.function_space()))
-        #print 'cvel'
-        #self.plots.append(('cvel', Plot2DCR1Vec()))
-        #print 'cf'
-        #self.plots.append(('cf', Plot2DCR1Vec(dolfin.project(cf, V=fgrad.function_space()))))
+        self.eq = lhs(eq), rhs(eq)
         
     def update(self, t, dt):
         """
@@ -107,15 +114,24 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.convection_scheme.gradient_reconstructor.reconstruct()
         
         # Update the convection blending factors
-        self.convection_scheme.update(t, dt, self.velocity_field)
+        vel = self.simulation.data['u_conv']
+        self.convection_scheme.update(t, dt, vel)
         
         # Solve the advection equation
         self.dt.assign(dt)
-        solve(self.lhs == self.rhs, self.colour_function, self.bc)
+        a, L = self.eq
+        dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
+        solve(a == L, self.colour_function, dirichlet_bcs)
+        
+        # Update the previous values for the next time step
+        self.prev2_colour_function.assign(self.prev_colour_function)
         self.prev_colour_function.assign(self.colour_function)
         
+        # Use second order backward time difference after the first time step
+        self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
+        
         # Compress interface
-        self.compress(t, dt)
+        #self.compress(t, dt)
     
     def compress(self, t, dt):
         """
@@ -132,7 +148,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         conFC = self.simulation.data['connectivity_FC']
         ndim = self.simulation.ndim
         
-        colour_func_vec = self.colour_function.vector()
+        colour_func_arr = self.colour_function.vector().get_local()
         colour_func_dofmap = self.convection_scheme.alpha_dofmap
         
         gradient_vec = self.convection_scheme.gradient_reconstructor.gradient.vector()
@@ -167,8 +183,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             i0, i1 = connected_cells
             
             # Find colour function in cells 0 and 1
-            c0 = colour_func_vec[colour_func_dofmap[i0]]
-            c1 = colour_func_vec[colour_func_dofmap[i1]]
+            c0 = colour_func_arr[colour_func_dofmap[i0]]
+            c1 = colour_func_arr[colour_func_dofmap[i1]]
             
             if abs(c0 - c1) < EPS:
                 # Skip areas of constant colour
@@ -209,8 +225,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         for _, _, iD, iC, gradient, normal, area in faces_to_flux:
             # Find updated colour function in D and C cells
-            cC = colour_func_vec[colour_func_dofmap[iC]]
-            cD = colour_func_vec[colour_func_dofmap[iD]]
+            cC = colour_func_arr[colour_func_dofmap[iC]]
+            cD = colour_func_arr[colour_func_dofmap[iD]]
             
             # Volumes of the two cells
             #vC = cell_info[iC].volume
@@ -238,6 +254,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
                 cDelta = max(cDelta, cC-1)
                 
             # Local sharpening of the colour function in D and C cells
-            colour_func_vec[colour_func_dofmap[iC]] -= cDelta
-            colour_func_vec[colour_func_dofmap[iD]] += cDelta
+            colour_func_arr[colour_func_dofmap[iC]] -= cDelta
+            colour_func_arr[colour_func_dofmap[iD]] += cDelta
+        
+        self.colour_function.vector().set_local(colour_func_arr)
          

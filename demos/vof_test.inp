@@ -10,9 +10,30 @@
 	},
 	
 	"convection": {
-		"c": {
-			"convection_scheme": "HRIC",
-			"HRIC_version": "HRIC"
-		}
-	}
+        "c": {
+            "convection_scheme": "HRIC",
+            "HRIC_version": "HRIC"
+        }
+    },
+	
+	"mesh": {
+        "type": "Rectangle",
+        "Nx": 64,
+        "Ny": 64,
+        "endx": 1.5,
+        "endy": 1.5
+    },
+	
+	"boundary_conditions": [
+        {
+            "name": "all",
+            "selector": "region",
+            "region_code": "True",
+            
+            "c": {
+                "type": "ConstantValue",
+                "value": 0
+            }
+        }
+    ]
 }

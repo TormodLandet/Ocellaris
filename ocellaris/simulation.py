@@ -107,7 +107,7 @@ class Plotting(object):
         """
         if not hasattr(plotter, 'plot'):
             # This is not a plotter but something that can be plotted
-            plotter = Plotter(plotter)
+            plotter = Plotter(self.simulation, plotter)
         
         self.plots[plot_name] = plotter
     

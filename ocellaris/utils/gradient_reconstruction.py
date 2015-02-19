@@ -29,8 +29,7 @@ class GradientReconstructor(object):
         
         # To be used by others accessing this class
         self.gradient = dolfin.Function(Vvec)
-        self.gradient_dofmap0 = Vvec.sub(0).dofmap().dofs()
-        self.gradient_dofmap1 = Vvec.sub(1).dofmap().dofs()
+        self.gradient_dofmaps = [Vvec.sub(d).dofmap().dofs() for d in range(ndim)] 
         
         # Connectivity info needed in calculations
         cell_info = self.simulation.data['cell_info']

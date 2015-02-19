@@ -4,7 +4,7 @@ from matplotlib.collections import PolyCollection
 import dolfin
 
 class Plot2DDG0Vec(object):
-    def __init__(self, func):
+    def __init__(self, simulation, func):
         """
         A plotter for DG0 functions in 2D
         """
