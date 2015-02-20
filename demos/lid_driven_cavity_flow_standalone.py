@@ -28,7 +28,13 @@ max_inner_iter = 25
 iter_Linf_norm_max = 1e-2
 df_dt = dolfin.Constant(dt)
 
-Re = 100
+relax = 0.5
+relax_df = dolfin.Constant(relax)
+min_inner_inner_iter = 1
+max_inner_inner_iter = 25
+conv_error_max = 1e-2
+
+Re = 1000
 umax = 1.0 # Velocity at lid
 kin_visc = 1/Re
 divergence_criterion = 10
@@ -47,7 +53,7 @@ mesh = dolfin.UnitSquareMesh(N, N)
 x = mesh.coordinates()
 
 # Grade mesh towards the walls
-if False:
+if True:
     x[:] = (x - 0.5) * 2
     x[:] = 0.5*(numpy.cos(numpy.pi*(x-1.) / 2.) + 1.)
 
@@ -295,12 +301,13 @@ def velocity_update():
     field from the pressure correction equation
     """
     c1 = time_coeffs[0]
+    
     for d in range(ndim):
         us = u_star_list[d]
         u_new = u_list[d]
         
         # Update the velocity
-        f = us - df_dt/(c1*rho) * p_hat.dx(d)
+        f = us - relax_df * df_dt/(c1*rho) * p_hat.dx(d)
         un = dolfin.project(f, Vu)
         u_new.assign(un)
         
@@ -312,7 +319,7 @@ def pressure_update():
     """
     Update the pressure
     """
-    p.vector()[:] = p.vector()[:] + p_hat.vector()[:]
+    p.vector()[:] = p.vector()[:] + relax * p_hat.vector()[:]
     
 @timeit
 def velocity_update_final():
@@ -476,13 +483,22 @@ while t+dt <= tmax + 1e-8:
     while inner_iter < min_inner_iter-1 or error > iter_Linf_norm_max:
         inner_iter += 1
         
-        if it < 3 and 0 < inner_iter < 5:
-            # The convection is not well extrapolated in the first time
-            # steps. Use the previous solution
+        # inner-inner iterations for the convecting velocity
+        errorCi = 0
+        inner_inner_iter = -1
+        while inner_inner_iter < min_inner_inner_iter or errorCi > conv_error_max:
+            inner_inner_iter += 1
+            momentum_prediction(t, dt)
+            
+            errorCi = sum(errornorm(u_star_list[d], u_conv_list[d]) for d in range(ndim))
+            print '            Inner-inner %d, errorC = %.3e' % (inner_inner_iter, errorCi)
             for d in range(ndim):
-                u_conv_list[d].assign(u_list[d])
+                u_conv_list[d].vector()[:] = relax*u_star_list[d].vector()[:] + (1-relax)*u_conv_list[d].vector()[:]
+            
+            if inner_inner_iter == max_inner_inner_iter and errorCi > conv_error_max:
+                print '            Max inner inner iter reached!'
+                break
         
-        momentum_prediction(t, dt)
         pressure_correction()
         velocity_update()
         pressure_update()

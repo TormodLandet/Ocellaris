@@ -4,7 +4,6 @@ The HRIC upwind/downwind blending sheme
 import numpy
 import dolfin
 from . import ConvectionScheme, register_convection_scheme
-import gc
 
 @register_convection_scheme('HRIC')
 class ConvectionSchemeHric2D(ConvectionScheme):
@@ -194,16 +193,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             assert 0.0 <= tilde_beta <= 1.0
             beta_arr[self.dofmap[fidx]] = tilde_beta
-            
-            if False:
-                print fidx, self.dofmap[fidx]
-                print connected_cells
-                print iaC, iaD, aC, aD
-                print normal
-                print tilde_beta
-                exit()
         
         self.blending_function.vector()[:] = beta_arr
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
-        #print 'HRIC alpha_face  %10.5f %10.5f,  Co_max = %.3f' % (beta_vec.min(), beta_vec.max(), Co_max)
-        

@@ -54,56 +54,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.convection_scheme.gradient_reconstructor.initialize()
         gradient = self.convection_scheme.gradient_reconstructor.gradient
         
+        # Setup the equation to solve
         dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
-        #self.eq = define_advection_problem(V, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
-        
-        self.setup_equation(normal, dirichlet_bcs, beta, cp)
+        vel = self.simulation.data['u_conv']
+        self.eq = define_advection_problem(V, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
         
         simulation.plotting.add_plot('c', self.colour_function)
         simulation.plotting.add_plot('c_grad', gradient)
         simulation.plotting.add_plot('c_beta', beta)
-        #import dolfin
-        #simulation.add_plot('cvel', dolfin.project(cvel, V=fgrad.function_space()))
-        #print 'cvel'
-        #self.plots.append(('cvel', Plot2DCR1Vec()))
-        #print 'cf'
-        #self.plots.append(('cf', Plot2DCR1Vec(dolfin.project(cf, V=fgrad.function_space()))))
-    
-    def setup_equation(self, normal, dirichlet_bcs, beta, cp):
-        from dolfin import TrialFunction, TestFunction, dx, ds, dS, inner, grad, lhs, rhs, jump
-        
-        # Create test and trial functions
-        V = self.simulation.data['Vc']
-        c = TrialFunction(V)
-        v = TestFunction(V)
-        
-        # Upstream and downstream normal velocities
-        vel = self.simulation.data['u_conv']
-        flux_nU = c*(inner(vel, normal) + abs(inner(vel, normal)))/2
-        flux_nD = c*(inner(vel, normal) - abs(inner(vel, normal)))/2
-
-        # Define the blended flux
-        # The blending factor beta is not DG, so beta('+') == beta('-')
-        b = beta('+')
-        flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
-        
-        # Compressive flux
-        #compr_fac = Constant(simulation.input['VOF'].get('compression_factor', 1.0))
-        #norm = lambda f: (f.sub(0)**2 + f.sub(1)**2)**0.5
-        #compr_vel = compr_fac * norm(vel) * gradient / (norm(gradient) + Constant(1e-6))
-        #cvelU = (inner(compr_vel, normal) + abs(inner(compr_vel, normal)))/2
-        #q = c * (1-cp)
-        #cflux = q('+')*cvelU('+') - q('-')*cvelU('-')
-        compr_vel = Constant((0.0, 0.0))
-        cflux = Constant(0.0)
-        
-        # Equation to solve
-        eq = (c-cp)/self.dt*v*dx \
-             - c*inner(vel, grad(v))*dx \
-             - c*(1-cp)*inner(compr_vel, grad(v))*dx \
-             + (flux + cflux)*jump(v)*dS \
-             + c*inner(vel, normal)*v*ds
-        self.eq = lhs(eq), rhs(eq)
         
     def update(self, t, dt):
         """
@@ -120,8 +78,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # Solve the advection equation
         self.dt.assign(dt)
         a, L = self.eq
-        dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
-        solve(a == L, self.colour_function, dirichlet_bcs)
+        solve(a == L, self.colour_function)
         
         # Update the previous values for the next time step
         self.prev2_colour_function.assign(self.prev_colour_function)
@@ -131,7 +88,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
         
         # Compress interface
-        #self.compress(t, dt)
+        # Not yet tested with FEniCS 1.5     self.compress(t, dt)
     
     def compress(self, t, dt):
         """
