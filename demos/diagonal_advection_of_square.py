@@ -56,7 +56,7 @@ setup_boundary_conditions(sim)
 # Initialize the convecting velocity field
 vel_func_space = dolfin.VectorFunctionSpace(mesh, "DG", 1)
 vel = dolfin.Function(vel_func_space)
-sim.data['u_conv'] = vel
+sim.data['u'] = vel
 
 # Initialize the VOF scheme
 multiphase_model = get_multi_phase_model('BlendedAlgebraicVOF')

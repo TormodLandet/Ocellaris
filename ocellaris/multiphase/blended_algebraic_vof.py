@@ -56,7 +56,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Setup the equation to solve
         dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
-        vel = self.simulation.data['u_conv']
+        vel = self.simulation.data['u']
         self.eq = define_advection_problem(V, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
         
         simulation.plotting.add_plot('c', self.colour_function)
@@ -72,7 +72,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.convection_scheme.gradient_reconstructor.reconstruct()
         
         # Update the convection blending factors
-        vel = self.simulation.data['u_conv']
+        vel = self.simulation.data['u']
         self.convection_scheme.update(t, dt, vel)
         
         # Solve the advection equation
