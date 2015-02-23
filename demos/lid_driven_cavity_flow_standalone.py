@@ -17,27 +17,22 @@ dolfin.set_log_level(dolfin.WARNING)
 
 # Mesh size and polynomial degree
 N = 32
-Pu = 2
+Pu = 1
 Pp = 1
+fspace = 'CG'
 
 # Time stepping
-dt = 0.05 # 1/(8*N)
-tmax = 5.0
-min_inner_iter = 1 # 3
-max_inner_iter = 25
-iter_Linf_norm_max = 1e-2
+dt = 0.01 # 1/(8*N)
+tmax = 20.0
+min_inner_iter = 1
+max_inner_iter = 3
+u_star_error_limit = 1e-2
 df_dt = dolfin.Constant(dt)
-
-relax = 0.5
-relax_df = dolfin.Constant(relax)
-min_inner_inner_iter = 1
-max_inner_inner_iter = 25
-conv_error_max = 1e-2
 
 Re = 1000
 umax = 1.0 # Velocity at lid
 kin_visc = 1/Re
-divergence_criterion = 10
+max_allowed_velocity = 10
 
 # Physical properties used in simulation
 rho = dolfin.Constant(1)
@@ -50,23 +45,23 @@ beta = dolfin.Constant(0.0)
 
 # Geometry and function spaces
 mesh = dolfin.UnitSquareMesh(N, N)
-x = mesh.coordinates()
 
 # Grade mesh towards the walls
 if True:
+    x = mesh.coordinates()
     x[:] = (x - 0.5) * 2
     x[:] = 0.5*(numpy.cos(numpy.pi*(x-1.) / 2.) + 1.)
 
 ndim = 2
-Vu = dolfin.FunctionSpace(mesh, 'DG', Pu)
-Vp = dolfin.FunctionSpace(mesh, 'DG', Pp)
+Vu = dolfin.FunctionSpace(mesh, fspace, Pu)
+Vp = dolfin.FunctionSpace(mesh, fspace, Pp)
 
 # Show dolfin 3D plots?
 PLOT = True
 
 ###########################################################################################
 
-def define_advection_problem(V, up, upp, u_conv, n, beta, time_coeffs, dt, penalty, dirichlet_bcs):
+def define_advection_problem(u, v, up, upp, u_conv, n, beta, time_coeffs, dt, penalty, dirichlet_bcs):
     """
     Define the advection problem
     
@@ -74,8 +69,12 @@ def define_advection_problem(V, up, upp, u_conv, n, beta, time_coeffs, dt, penal
      
     Returns the bilinear and linear forms
     """
-    u = dolfin.TrialFunction(V)
-    v = dolfin.TestFunction(V)
+    if fspace == 'CG':
+        # Continous Galerkin implementation 
+        c1, c2, c3 = time_coeffs 
+        eq = (c1*u + c2*up + c3*upp)/dt*v*dx + dot(u_conv, nabla_grad(u))*v*dx
+        a, L = dolfin.lhs(eq), dolfin.rhs(eq)
+        return a, L
     
     # Upstream and downstream normal velocities
     flux_nU = u*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
@@ -101,7 +100,7 @@ def define_advection_problem(V, up, upp, u_conv, n, beta, time_coeffs, dt, penal
     
     return a, L
 
-def define_poisson_problem(V, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
+def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
     """
     Define the Poisson problem for u in f.space V
     
@@ -111,8 +110,15 @@ def define_poisson_problem(V, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
     
     Returns the bilinear and linear forms
     """
-    u = dolfin.TrialFunction(V)
-    v = dolfin.TestFunction(V)
+    if fspace == 'CG':
+        # Continous Galerkin implementation 
+        a = dot(nabla_grad(v), nabla_grad(u))*dx
+        L = v*f/k*dx
+        # Enforce Neumann BCs weakly
+        for nbc in neumann_bcs:
+            L += v*nbc.value*nbc.ds
+        # FIXME: introduce k in the equation properly!!!!
+        return k*a, k*L
     
     # Interior
     a = dot(nabla_grad(v), nabla_grad(u))*dx
@@ -123,7 +129,7 @@ def define_poisson_problem(V, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
          - dot(avg(nabla_grad(u)), n('+'))*jump(v)*dS
 
     # Source term
-    L = -v*f/k*dx
+    L = v*f/k*dx
     
     # Enforce Dirichlet BCs weakly
     for dbc in dirichlet_bcs:
@@ -193,9 +199,8 @@ class NeumannBC(object):
     def __init__(self, value, ds):
         self.value = value
         self.ds = ds
-neumann_bcs_pres = [NeumannBC(dolfin.Constant(0), ds(1)),
-                    NeumannBC(dolfin.Constant(0), ds(2))]
-dirichlet_bcs_pres = []
+neumann_bcs_pres = [NeumannBC(dolfin.Constant(0), ds(1)), NeumannBC(dolfin.Constant(0), ds(2))]
+dirichlet_bcs_pres = [] #DirichletBC(Vu, dolfin.Constant(0), marker, 2, ds)]
 
 # Mesh parameters
 n = dolfin.FacetNormal(mesh)
@@ -206,24 +211,28 @@ time_coeffs = dolfin.Constant([1, -1, 0]) # First time step
 time_coeffs2 = dolfin.Constant([3/2, -2, 1/2]) # All later time steps
 
 # Define the momentum prediction equations
-penalty = dolfin.Constant(10000)/h
+penalty = dolfin.Constant(100)/h
 eqs_mom_pred = []
 for d in range(ndim):
+    trial = dolfin.TrialFunction(Vu)
+    test = dolfin.TestFunction(Vu)
     f = -1/rho*p.dx(d) + g[d]
-    a1, L1 = define_advection_problem(Vu, up_list[d], upp_list[d], u_conv_vec, n, beta, time_coeffs, df_dt, penalty, dirichlet_bcs_vel[d])
-    a2, L2 = define_poisson_problem(Vu, nu, f, n, penalty, dirichlet_bcs_vel[d], neumann_bcs_vel[d])
+    a1, L1 = define_advection_problem(trial, test, up_list[d], upp_list[d], u_conv_vec, n, beta, time_coeffs, df_dt, penalty, dirichlet_bcs_vel[d])
+    a2, L2 = define_poisson_problem(trial, test, nu, f, n, penalty, dirichlet_bcs_vel[d], neumann_bcs_vel[d])
     eq = a1+a2, L1+L2
     eqs_mom_pred.append(eq)
 
 # Define the pressure correction equation
-penalty = dolfin.Constant(10)/h
+penalty = dolfin.Constant(10000)/h
+trial = dolfin.TrialFunction(Vp)
+test = dolfin.TestFunction(Vp)
 f = time_coeffs[0]/df_dt*dolfin.nabla_div(u_star_vec)
-eq_pressure = define_poisson_problem(Vp, 1/rho, -f, n, penalty, dirichlet_bcs_pres, neumann_bcs_pres)
+eq_pressure = define_poisson_problem(trial, test, 1/rho, -f, n, penalty, dirichlet_bcs_pres, neumann_bcs_pres)
 
 ###########################################################################################
 
 # Timer function
-# A small decorator that stores the cummulative time spent in each 
+# A small decorator that stores the cummulative time spent in each
 # function that is wrapped by the decorator.
 # Functions are identified by their names
 def timeit(f):
@@ -262,7 +271,10 @@ def momentum_prediction(t, dt):
     for d in range(ndim):
         us = u_star_list[d]
         a, L = eqs_mom_pred[d]
-        dolfin.solve(a == L, us) #, dirichlet_bcs_vel[d])
+        if fspace == 'CG':
+            dolfin.solve(a == L, us, dirichlet_bcs_vel[d])
+        else:
+            dolfin.solve(a == L, us)
 
 @timeit
 def pressure_correction():
@@ -292,6 +304,10 @@ def pressure_correction():
     # Orthogonalize b with respect to the null space
     null_space.orthogonalize(b)
     
+    if fspace == 'CG':
+        for bc in dirichlet_bcs_pres:
+            bc.apply(A, b)
+    
     solver.solve(p_hat.vector(), b)
 
 @timeit
@@ -307,7 +323,7 @@ def velocity_update():
         u_new = u_list[d]
         
         # Update the velocity
-        f = us - relax_df * df_dt/(c1*rho) * p_hat.dx(d)
+        f = us - df_dt/(c1*rho) * p_hat.dx(d)
         un = dolfin.project(f, Vu)
         u_new.assign(un)
         
@@ -319,7 +335,7 @@ def pressure_update():
     """
     Update the pressure
     """
-    p.vector()[:] = p.vector()[:] + relax * p_hat.vector()[:]
+    p.vector()[:] = p.vector()[:] + p_hat.vector()[:]
     
 @timeit
 def velocity_update_final():
@@ -479,26 +495,11 @@ while t+dt <= tmax + 1e-8:
     update_convection(t, dt)
     
     error = 1e10
-    inner_iter = -1
-    while inner_iter < min_inner_iter-1 or error > iter_Linf_norm_max:
+    inner_iter = 0
+    while inner_iter < min_inner_iter or error > u_star_error_limit:
         inner_iter += 1
         
-        # inner-inner iterations for the convecting velocity
-        errorCi = 0
-        inner_inner_iter = -1
-        while inner_inner_iter < min_inner_inner_iter or errorCi > conv_error_max:
-            inner_inner_iter += 1
-            momentum_prediction(t, dt)
-            
-            errorCi = sum(errornorm(u_star_list[d], u_conv_list[d]) for d in range(ndim))
-            print '            Inner-inner %d, errorC = %.3e' % (inner_inner_iter, errorCi)
-            for d in range(ndim):
-                u_conv_list[d].vector()[:] = relax*u_star_list[d].vector()[:] + (1-relax)*u_conv_list[d].vector()[:]
-            
-            if inner_inner_iter == max_inner_inner_iter and errorCi > conv_error_max:
-                print '            Max inner inner iter reached!'
-                break
-        
+        momentum_prediction(t, dt)
         pressure_correction()
         velocity_update()
         pressure_update()
@@ -520,12 +521,14 @@ while t+dt <= tmax + 1e-8:
             break
     
     velocity_update_final()
-    plotit()
+    
+    if it % 10 == 1:
+        plotit()
     
     # Change to the second order time derivative for velocities
     time_coeffs.assign(time_coeffs2)
     
-    if maxvel > divergence_criterion:
+    if maxvel > max_allowed_velocity:
         print '\n\n ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !'
         print '\n    Diverging solution!'
         print '\n ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! \n'
@@ -550,8 +553,6 @@ if PLOT:
     dolfin.plot(u_list[1], title='u_y')
     dolfin.plot(p, title='p')
     dolfin.interactive()
-else:
-    raw_input('Press any key to quit')
 
 pyplot.show()
-raw_input('Press any key to quit2222')
+raw_input('Press enter to quit')
