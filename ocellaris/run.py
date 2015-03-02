@@ -4,7 +4,7 @@ import dolfin
 from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
-from .utils import timeit
+from .utils import timeit, run_debug_console, debug_console_hook
 
 def run_simulation(simulation):
     """
@@ -63,7 +63,10 @@ def run_simulation(simulation):
     simulation.log.info('{:-^40}'.format(' input end '))
     simulation.log.info("\nRunning simulation ...\n")
     t1 = time.time()
-
+    
+    # Setup the debug console to optionally run at the end of each timestep
+    simulation.add_post_timestep_hook(lambda report: debug_console_hook(simulation))
+    
     # Run the simulation 
     solver.run()
     
@@ -83,6 +86,9 @@ def run_simulation(simulation):
     
     if simulation.input.get('output', {}).get('plot_at_end', False):
         plot_at_end(simulation)
+    
+    if simulation.input.get('console_at_end', False):
+        run_debug_console(simulation)
 
 def load_mesh(simulation):
     """
@@ -107,11 +113,22 @@ def make_function_spaces(simulation):
     """
     Create function spaces for velocity and pressure
     """
+    # Get function space names
+    Vu_name = simulation.input['solver'].get('function_space_velocity', 'Lagrange')
+    Vp_name = simulation.input['solver'].get('function_space_pressure', 'Lagrange')
+    
+    # Make sure strings are not Python 2 unicode objects
+    Vu_name = str(Vu_name)
+    Vp_name = str(Vp_name)
+    
+    # Get function space polynomial degrees
     Pu = simulation.input['solver'].get('polynomial_degree_velocity', 1)
     Pp = simulation.input['solver'].get('polynomial_degree_pressure', 1)
+    
+    # Create the function spaces
     mesh = simulation.data['mesh']
-    Vu = dolfin.FunctionSpace(mesh, 'Discontinuous Lagrange', Pu)
-    Vp = dolfin.FunctionSpace(mesh, 'Discontinuous Lagrange', Pp)
+    Vu = dolfin.FunctionSpace(mesh, Vu_name, Pu)
+    Vp = dolfin.FunctionSpace(mesh, Vp_name, Pp)
     simulation.data['Vu'] = Vu
     simulation.data['Vp'] = Vp
 
