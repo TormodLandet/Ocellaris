@@ -50,7 +50,6 @@ class SolverIPCS(Solver):
         
         # Mesh parameters
         n = dolfin.FacetNormal(mesh)
-        h = dolfin.CellSize(mesh)
         
         # Physical properties
         rho = sim.data['rho']
@@ -69,27 +68,42 @@ class SolverIPCS(Solver):
         # Coefficients for u, up and upp 
         self.time_coeffs = dolfin.Constant([1, -1, 0]) # First time step
         
+        # Calculate geometrical factor used in the penalty
+        geom_fac = 0
+        for cell in dolfin.cells(mesh):
+            vol = cell.volume()
+            area = sum(cell.facet_area(i) for i in range(sim.ndim+1))
+            gf = area/vol
+            geom_fac = max(geom_fac, gf)
+        geom_fac *= 1.0
+        
         # Define the momentum prediction equations
-        penalty = dolfin.Constant(100.0)/h
+        Pu = Vu.ufl_element().degree()
+        penalty = dolfin.Constant((Pu + 1)*(Pu + sim.ndim)/sim.ndim * geom_fac)
         self.eqs_mom_pred = []
         for d in range(sim.ndim):
+            trial = dolfin.TrialFunction(Vu)
+            test = dolfin.TestFunction(Vu)
             beta = conv_schemes[d].blending_function
             f = -1/rho*p.dx(d) + g[d]
             dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
             neumann_bcs = self.simulation.data['neumann_bcs'].get('u%d' % d, [])
-            a1, L1 = define_advection_problem(Vu, upvec[d], uppvec[d], u_conv, 
-                                              n, beta, self.time_coeffs, self.dt,
+            a1, L1 = define_advection_problem(trial, test, upvec[d], uppvec[d],
+                                              u_conv, n, beta, self.time_coeffs, self.dt,
                                               dirichlet_bcs)
-            a2, L2 = define_poisson_problem(Vu, nu, f, n, penalty, dirichlet_bcs, neumann_bcs)
+            a2, L2 = define_poisson_problem(trial, test, nu, f, n, penalty, dirichlet_bcs, neumann_bcs)
             eq = a1+a2, L1+L2
             self.eqs_mom_pred.append(eq)
         
         # Define the pressure correction equation
-        penalty = dolfin.Constant(100.0)/h
-        f = self.time_coeffs[0]/self.dt*dolfin.nabla_div(u_star)
+        trial = dolfin.TrialFunction(Vp)
+        test = dolfin.TestFunction(Vp)
+        Pp = Vu.ufl_element().degree()
+        penalty = dolfin.Constant((Pp + 1)*(Pp + sim.ndim)/sim.ndim * geom_fac)
+        f = -self.time_coeffs[0]/self.dt * dolfin.nabla_div(u_star)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
-        self.eq_pressure = define_poisson_problem(Vp, 1/rho, -f, n, penalty, dirichlet_bcs, neumann_bcs)
+        self.eq_pressure = define_poisson_problem(trial, test, 1/rho, f, n, penalty, dirichlet_bcs, neumann_bcs)
     
     @timeit
     def update_convection(self, t, dt):
@@ -107,9 +121,9 @@ class SolverIPCS(Solver):
             uic.vector()[:] = 2*uip.vector()[:] - uipp.vector()[:]
             
             # Apply the Dirichlet boundary conditions
-            #dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
-            #for bc in dirichlet_bcs:
-            #    bc.apply(uic.vector())
+            dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
+            for bc in dirichlet_bcs:
+                bc.apply(uic.vector())
         
         # Update the convection blending factors
         for cs in self.convection_schemes:
@@ -122,11 +136,15 @@ class SolverIPCS(Solver):
         """
         for d in range(self.simulation.ndim):
             us = self.simulation.data['u_star%d' % d]
-            #dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
+            dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
             a, L = self.eqs_mom_pred[d]
             
             # Solve the advection equation
-            dolfin.solve(a == L, us)#, bcs)
+            family = us.element().family()
+            if family == 'Lagrange':
+                dolfin.solve(a == L, us, dirichlet_bcs)
+            elif family == 'Discontinuous Lagrange':
+                dolfin.solve(a == L, us)
     
     @timeit
     def pressure_correction(self):
@@ -145,6 +163,12 @@ class SolverIPCS(Solver):
         A = dolfin.assemble(a)
         b = dolfin.assemble(L)
         
+        # Apply strong boundary conditions
+        family = p_hat.element().family()
+        if family == 'Lagrange':
+            for dbc in dirichlet_bcs:
+                dbc.apply(A, b)
+        
         # Get an appropriate solver
         solver = dolfin.KrylovSolver(A, "gmres")
         
@@ -157,7 +181,7 @@ class SolverIPCS(Solver):
             # Create null space basis object and attach to Krylov solver
             null_space = dolfin.VectorSpaceBasis([null_vec])
             solver.set_nullspace(null_space)
-        
+            
             # Orthogonalize b with respect to the null space
             null_space.orthogonalize(b)
         
@@ -177,17 +201,16 @@ class SolverIPCS(Solver):
         for d in range(self.simulation.ndim):
             us = self.simulation.data['u_star%d' % d]
             u_new = self.simulation.data['u%d' % d]
-            bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
             
             # Update the velocity
             f = us - self.dt/(c1*rho) * p_hat.dx(d)
-            un = dolfin.project(f, Vu, bcs)
+            un = dolfin.project(f, Vu)
             u_new.assign(un)
             
             # Apply the Dirichlet boundary conditions
-            #dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
-            #for bc in dirichlet_bcs:
-            #    bc.apply(uic.vector())
+            dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
+            for bc in dirichlet_bcs:
+                bc.apply(u_new.vector())
     
     @timeit
     def pressure_update(self):
@@ -241,3 +264,5 @@ class SolverIPCS(Solver):
             self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
             
             self.simulation.end_timestep()
+            
+            dolfin.plot(self.simulation.data['u0'])
