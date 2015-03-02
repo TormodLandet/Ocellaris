@@ -1,5 +1,7 @@
 import sys
 import code
+import readline
+import rlcompleter
 
 def debug_console_hook(simulation):
     """
@@ -42,6 +44,10 @@ def run_debug_console(simulation):
     banner.append('\nPress Ctrl+D to continue running the simulation.'
                   '\nRunning exit() or quit() will stop Ocellaris.')
     banner.append('\n\n>>> from dolfin import *')
+    
+    # Setup tab completion
+    readline.set_completer(rlcompleter.Completer(debug_locals).complete)
+    readline.parse_and_bind("tab: complete")
     
     print '=== OCELLARIS CONSOLE === '*3
     code.interact('\n'.join(banner), local=debug_locals)
