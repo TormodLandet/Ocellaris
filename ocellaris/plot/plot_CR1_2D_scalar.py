@@ -6,11 +6,12 @@ import dolfin
 from ocellaris.utils import facet_dofmap
 
 class Plot2DCR1(object):
-    def __init__(self, simulation, func):
+    def __init__(self, simulation, func, **options):
         """
         A plotter for Crouzeix-Raviart functions in 2D
         """
         self.func = func
+        self.options = options
         
         # Get information about the underlying function space
         function_space = func.function_space()
@@ -63,12 +64,14 @@ class Plot2DCR1(object):
             scalars[i] = funcvals[self.dofmap[fidx]]
         
         radius = self.facet_length/8
+        cmap = self.options.get('cmap', 'Reds')
         
         plot_2d_CR1(self.verts, self.facet_midpoints, radius, scalars, filename,
                     xlim=(self.coords[:,0].min(), self.coords[:,0].max()),
-                    ylim=(self.coords[:,1].min(), self.coords[:,1].max())) 
+                    ylim=(self.coords[:,1].min(), self.coords[:,1].max()),
+                    cmap=cmap) 
     
-def plot_2d_CR1(vertices, facet_centroids, radius, scalars, filename, xlim, ylim):
+def plot_2d_CR1(vertices, facet_centroids, radius, scalars, filename, xlim, ylim, cmap):
     """
     Helper function to plot CR1 2D scalar results. 
     Use the Plot2DCR1 class for a nicer interface to this function
@@ -94,7 +97,7 @@ def plot_2d_CR1(vertices, facet_centroids, radius, scalars, filename, xlim, ylim
         vmax = 1
     
     # Plot the scalars with colors
-    patches = ax.scatter(facet_centroids[:,0], facet_centroids[:,1], s=area_px, c=scalars, cmap='Reds',
+    patches = ax.scatter(facet_centroids[:,0], facet_centroids[:,1], s=area_px, c=scalars, cmap=cmap,
                          vmin=vmin, vmax=vmax, linewidths=0)
     fig.colorbar(patches, ax=ax)
     fix_axes()

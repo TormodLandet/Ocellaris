@@ -4,11 +4,12 @@ from matplotlib.collections import PolyCollection
 import dolfin
 
 class Plot2DDG0Vec(object):
-    def __init__(self, simulation, func):
+    def __init__(self, simulation, func, **options):
         """
         A plotter for DG0 functions in 2D
         """
         self.func = func
+        self.options = options
         
         # Get information about the underlying function space
         function_space = func.function_space()

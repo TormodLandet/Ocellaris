@@ -8,6 +8,11 @@ from .utils import timeit
 
 class Simulation(object):
     def __init__(self):
+        """
+        Represents one Navier-Stokes simulation. The simulation 
+        connects the input file, geometry, mesh with the solver
+        and the result plotting and reporting tools     
+        """
         self.input = {}
         self.data = {}
         self.plotting = Plotting(self)
@@ -85,6 +90,11 @@ class Simulation(object):
             hook(report)
     
     def read_json_input_file(self, filename):
+        """
+        Read the input to an Ocellaris simulation from a JSON 
+        formated input file. The user will get an error if the
+        input file is malformed 
+        """
         with open(filename, 'rt') as inpf:
             inp = json.load(inpf, object_pairs_hook=collections.OrderedDict)
         assert inp['program'] == 'ocellaris'
@@ -101,15 +111,16 @@ class Plotting(object):
         self.simulation = simulation
         self.plots = {}
     
-    def add_plot(self, plot_name, plotter):
+    def add_plot(self, plot_name, plotter, **options):
         """
         Add a plot to the simulation
         """
         if not hasattr(plotter, 'plot'):
             # This is not a plotter but something that can be plotted
-            plotter = Plotter(self.simulation, plotter)
+            plotter = Plotter(self.simulation, plotter, **options)
         
         self.plots[plot_name] = plotter
+        return plotter
     
     def plot_all(self):
         """

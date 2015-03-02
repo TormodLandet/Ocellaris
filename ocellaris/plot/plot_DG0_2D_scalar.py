@@ -4,11 +4,12 @@ from matplotlib.collections import PolyCollection
 import dolfin
 
 class Plot2DDG0(object):
-    def __init__(self, simulation, func):
+    def __init__(self, simulation, func, **options):
         """
         A plotter for DG0 functions in 2D
         """
         self.func = func
+        self.options = options
         
         # Get information about the underlying function space
         function_space = func.function_space()
@@ -56,10 +57,12 @@ class Plot2DDG0(object):
             verts2 = self.verts
             vals2 = values
         
+        clim = self.options.get('clim', None)
+        
         plot_2d_DG0(verts2, vals2, filename,
                     xlim=(self.coords[:,0].min(), self.coords[:,0].max()),
                     ylim=(self.coords[:,1].min(), self.coords[:,1].max()),
-                    clim=(0, 1)) 
+                    clim=clim) 
     
 def plot_2d_DG0(vertices, values, filename, xlim, ylim, clim=None, cmap='Blues'):
     """

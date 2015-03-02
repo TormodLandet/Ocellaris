@@ -59,7 +59,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         vel = self.simulation.data['u']
         self.eq = define_advection_problem(V, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
         
-        simulation.plotting.add_plot('c', self.colour_function)
+        simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
         simulation.plotting.add_plot('c_grad', gradient)
         simulation.plotting.add_plot('c_beta', beta)
         
