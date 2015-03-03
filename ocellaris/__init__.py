@@ -20,6 +20,6 @@ def get_detailed_version():
         return version.strip()
 
 # Convenience imports for scripting
-from .plot import Plotter
+from .postprocess import Plotter
 from .simulation import Simulation
 from .run import run_simulation
