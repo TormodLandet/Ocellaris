@@ -2,7 +2,7 @@ import json
 import collections
 import time
 import dolfin
-from .plot import Plotter
+from .postprocess import Plotter
 from .utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .utils import timeit
 
@@ -85,6 +85,13 @@ class Simulation(object):
         self.reporting.report_timestep_value('tstime', newtime-self.prevtime)
         self.reporting.report_timestep_value('tottime', newtime-self.starttime)
         self.prevtime = newtime
+        
+        # Report the maximum velocity
+        vels = 0
+        for d in range(self.ndim):
+            vels += self.data['u'][d].vector().array()**2
+        vel_max = vels.max()**0.5
+        self.reporting.report_timestep_value('umax', vel_max)
         
         for hook in self._post_timestep_hooks:
             hook(report)
@@ -177,7 +184,7 @@ class Log(object):
     
     def set_log_level(self, log_level):
         """
-        Set the Ocillaris log level
+        Set the Ocellaris log level
         (not the dolfin log level!)
         """
         self.log_level = log_level

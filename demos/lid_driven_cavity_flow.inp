@@ -48,7 +48,7 @@
     
     "time": {
         "dt": 0.05,
-        "tmax": 10.0   
+        "tmax": 60.0   
     },
     
     "output": {
@@ -60,8 +60,8 @@
     "solver": {
         "type": "IPCS",
         "num_inner_iter": 3,
-        "function_space_velocity": "Lagrange",
-        "function_space_pressure": "Lagrange",
+        "function_space_velocity": "CG",
+        "function_space_pressure": "CG",
         "polynomial_degree_velocity": 2,
         "polynomial_degree_pressure": 1
     },
@@ -71,6 +71,23 @@
             "convection_scheme": "Upwind"
         }
     },
+    
+    "probes": [
+        {
+            "name": "u-vel center",
+            "type": "LineProbe",
+            "startpos": [0.5, 0],
+            "endpos": [0.5, 1],
+            "Npoints": 100,
+            "field": "u0",
+            "show_interval": 10,
+            "target_name": "Ghia et al",
+            "target_abcissa": [1.0, 0.9766, 0.9688, 0.9609, 0.9531, 0.8516, 0.7344, 0.6172, 0.5,
+                               0.4531, 0.2813, 0.1719, 0.1016, 0.0703, 0.0625, 0.0547, 0.0],
+            "target_ordinate": [1, 0.65928, 0.57492, 0.51117, 0.46604, 0.33304, 0.18719, 0.05702, -0.06080, -0.10648,
+                                -0.27805, -0.38289, -0.29730, -0.22220, -0.20196, -0.18109, 0]
+        }
+    ],
     
     "console_at_end": true
 }

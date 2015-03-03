@@ -4,6 +4,7 @@ import dolfin
 from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
+from .postprocess import setup_probes
 from .utils import timeit, run_debug_console, debug_console_hook
 
 def run_simulation(simulation):
@@ -54,6 +55,9 @@ def run_simulation(simulation):
     # Get the solver
     solver_name = simulation.input['solver']['type']
     solver = get_solver(solver_name)(simulation)
+    
+    # Setup postprocessing probes
+    setup_probes(simulation)
     
     # Print information about configuration parameters
     simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t1))
