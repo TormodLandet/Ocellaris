@@ -9,21 +9,22 @@ from collections import defaultdict
 import numpy
 from matplotlib import pyplot
 import dolfin
-from dolfin import dot, nabla_grad, avg, jump, dx, dS
+from dolfin import dot, nabla_grad, nabla_div, avg, jump, dx, dS
+from ocellaris.utils import debug_console_hook
 
 ###########################################################################################
 
 dolfin.set_log_level(dolfin.WARNING)
 
 # Mesh size and polynomial degree
-N = 32
-Pu = 1
+N = 64
+Pu = 2
 Pp = 1
-fspace = 'CG'
+rotational = False  
 
 # Time stepping
-dt = 0.01 # 1/(8*N)
-tmax = 20.0
+dt = 0.05 # 1/(8*N)
+tmax = 40.0
 min_inner_iter = 1
 max_inner_iter = 3
 u_star_error_limit = 1e-2
@@ -47,14 +48,14 @@ beta = dolfin.Constant(0.0)
 mesh = dolfin.UnitSquareMesh(N, N)
 
 # Grade mesh towards the walls
-if True:
+if False:
     x = mesh.coordinates()
     x[:] = (x - 0.5) * 2
     x[:] = 0.5*(numpy.cos(numpy.pi*(x-1.) / 2.) + 1.)
 
 ndim = 2
-Vu = dolfin.FunctionSpace(mesh, fspace, Pu)
-Vp = dolfin.FunctionSpace(mesh, fspace, Pp)
+Vu = dolfin.FunctionSpace(mesh, 'CG', Pu)
+Vp = dolfin.FunctionSpace(mesh, 'CG', Pp)
 
 # Show dolfin 3D plots?
 PLOT = True
@@ -69,35 +70,37 @@ def define_advection_problem(u, v, up, upp, u_conv, n, beta, time_coeffs, dt, pe
      
     Returns the bilinear and linear forms
     """
-    if fspace == 'CG':
+    family = u.element().family()
+    
+    if family == 'Lagrange':
         # Continous Galerkin implementation 
         c1, c2, c3 = time_coeffs 
         eq = (c1*u + c2*up + c3*upp)/dt*v*dx + dot(u_conv, nabla_grad(u))*v*dx
         a, L = dolfin.lhs(eq), dolfin.rhs(eq)
-        return a, L
-    
-    # Upstream and downstream normal velocities
-    flux_nU = u*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
-    flux_nD = u*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
-    
-    # Define the blended flux
-    # The blending factor beta is not DG, so beta('+') == beta('-')
-    b = beta('+')
-    flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
-    
-    # Equation to solve
-    c1, c2, c3 = time_coeffs 
-    eq = (c1*u + c2*up + c3*upp)/dt*v*dx \
-         - u*dot(u_conv, nabla_grad(v))*dx \
-         + flux*jump(v)*dS
-    
-    # Enforce Dirichlet BCs weakly
-    for dbc in dirichlet_bcs:
-        #eq += penalty*dot(u_conv, n)*v*(u - dbc.value)*dbc.ds
-        eq += dot(u_conv, n)*v*(u - dbc.value)*dbc.ds
-    
-    a, L = dolfin.lhs(eq), dolfin.rhs(eq)
-    
+
+    elif family == 'Discontinuous Lagrange':
+        # Upstream and downstream normal velocities
+        flux_nU = u*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
+        flux_nD = u*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
+        
+        # Define the blended flux
+        # The blending factor beta is not DG, so beta('+') == beta('-')
+        b = beta('+')
+        flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
+        
+        # Equation to solve
+        c1, c2, c3 = time_coeffs 
+        eq = (c1*u + c2*up + c3*upp)/dt*v*dx \
+             - u*dot(u_conv, nabla_grad(v))*dx \
+             + flux*jump(v)*dS
+        
+        # Enforce Dirichlet BCs weakly
+        for dbc in dirichlet_bcs:
+            #eq += penalty*dot(u_conv, n)*v*(u - dbc.value)*dbc.ds
+            eq += dot(u_conv, n)*v*(u - dbc.value)*dbc.ds
+        
+        a, L = dolfin.lhs(eq), dolfin.rhs(eq)
+        
     return a, L
 
 def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
@@ -110,46 +113,65 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
     
     Returns the bilinear and linear forms
     """
-    if fspace == 'CG':
+    family = u.element().family()
+    
+    if family == 'Lagrange':
         # Continous Galerkin implementation 
         a = dot(nabla_grad(v), nabla_grad(u))*dx
         L = v*f/k*dx
         # Enforce Neumann BCs weakly
         for nbc in neumann_bcs:
             L += v*nbc.value*nbc.ds
-        # FIXME: introduce k in the equation properly!!!!
-        return k*a, k*L
     
-    # Interior
-    a = dot(nabla_grad(v), nabla_grad(u))*dx
+    elif family == 'Discontinuous Lagrange':
+        # Discontinous Galerkin implementation (Symmetric Interior Penalty method)
+        # See  Epshteyn and Rivière, 2007:
+        # "Estimation of penalty parameters for symmetric interior penalty Galerkin methods"
+        a = k*dot(nabla_grad(u), nabla_grad(v))*dx
+        a -= avg(k*dot(n, nabla_grad(u)))*jump(v)*dS
+        a -= avg(k*dot(n, nabla_grad(v)))*jump(u)*dS
+        a += avg(penalty)*jump(u)*jump(v)*dS
+        L = f*v*dx
+        
+        for dbc in dirichlet_bcs:
+            a -= k*dot(n, nabla_grad(u))*v*dbc.ds
+            a -= k*dot(n, nabla_grad(v))*u*dbc.ds
+            a += penalty*u*v*dbc.ds
+            L += dbc.value*(penalty*v - k*dot(nabla_grad(v), n))*dbc.ds
+        
+        for nbc in neumann_bcs:
+            L += nbc.value*v*nbc.ds
+        
+        return a, L
     
-    # Interior facets
-    a += avg(penalty)*jump(u)*jump(v)*dS \
-         - dot(avg(nabla_grad(v)), n('+'))*jump(u)*dS \
-         - dot(avg(nabla_grad(u)), n('+'))*jump(v)*dS
-
-    # Source term
-    L = v*f/k*dx
+    elif family == 'Discontinuous Lagrange':
+        # Interior
+        a = dot(nabla_grad(v), nabla_grad(u))*dx
+        
+        # Interior facets
+        a += avg(penalty)*jump(u)*jump(v)*dS \
+             - dot(avg(nabla_grad(v)), n('+'))*jump(u)*dS \
+             - dot(avg(nabla_grad(u)), n('+'))*jump(v)*dS
     
-    # Enforce Dirichlet BCs weakly
-    for dbc in dirichlet_bcs:
-        # These terms penalises jumps in (u - uD) on ds
-        # where uD is the Dirichlet value on the boundary
-        a += penalty*u*v*dbc.ds \
-             - dot(nabla_grad(v), n)*u*dbc.ds \
-             - dot(nabla_grad(u), n)*v*dbc.ds
-        L += penalty*v*dbc.value*dbc.ds \
-             - dot(nabla_grad(v), n)*dbc.value*dbc.ds
-    
-    # Enforce Neumann BCs weakly
-    for nbc in neumann_bcs:
-        L += v*nbc.value*nbc.ds
+        # Source term
+        L = v*f/k*dx
+        
+        # Enforce Dirichlet BCs weakly
+        for dbc in dirichlet_bcs:
+            # These terms penalises jumps in (u - uD) on ds
+            # where uD is the Dirichlet value on the boundary
+            a += penalty*u*v*dbc.ds \
+                 - dot(nabla_grad(v), n)*u*dbc.ds \
+                 - dot(nabla_grad(u), n)*v*dbc.ds
+            L += penalty*v*dbc.value*dbc.ds \
+                 - dot(nabla_grad(v), n)*dbc.value*dbc.ds
+        
+        # Enforce Neumann BCs weakly
+        for nbc in neumann_bcs:
+            L += v*nbc.value*nbc.ds
     
     # FIXME: introduce k in the equation properly!!!!
-    a = k*a
-    L = k*L
-    
-    return a, L
+    return k*a, k*L
 
 ###########################################################################################
 
@@ -205,28 +227,44 @@ dirichlet_bcs_pres = [] #DirichletBC(Vu, dolfin.Constant(0), marker, 2, ds)]
 # Mesh parameters
 n = dolfin.FacetNormal(mesh)
 h = dolfin.CellSize(mesh)
+vol = dolfin.CellVolume(mesh)
+area = dolfin.FacetArea(mesh)
 
 # Coefficients for u, up and upp 
 time_coeffs = dolfin.Constant([1, -1, 0]) # First time step
 time_coeffs2 = dolfin.Constant([3/2, -2, 1/2]) # All later time steps
 
 # Define the momentum prediction equations
-penalty = dolfin.Constant(100)/h
+#penalty = dolfin.Constant(100)/h
+#penalty = (Pu +1)*(Pu + ndim)/ndim*2*area*(ndim + 1)/vol
+
+geom_fac = 0
+for cell in dolfin.cells(mesh):
+    vol = cell.volume()
+    area = sum(cell.facet_area(i) for i in range(ndim+1))
+    gf = area/vol
+    geom_fac = max(geom_fac, gf)
+geom_fac *= 1.0
+
+penalty = dolfin.Constant((Pu + 1)*(Pu + ndim)/ndim * geom_fac)
 eqs_mom_pred = []
 for d in range(ndim):
     trial = dolfin.TrialFunction(Vu)
     test = dolfin.TestFunction(Vu)
     f = -1/rho*p.dx(d) + g[d]
-    a1, L1 = define_advection_problem(trial, test, up_list[d], upp_list[d], u_conv_vec, n, beta, time_coeffs, df_dt, penalty, dirichlet_bcs_vel[d])
+    a1, L1 = define_advection_problem(trial, test, up_list[d], upp_list[d],
+                                      u_conv_vec, n, beta, time_coeffs, df_dt,
+                                      penalty, dirichlet_bcs_vel[d])
     a2, L2 = define_poisson_problem(trial, test, nu, f, n, penalty, dirichlet_bcs_vel[d], neumann_bcs_vel[d])
     eq = a1+a2, L1+L2
     eqs_mom_pred.append(eq)
 
 # Define the pressure correction equation
-penalty = dolfin.Constant(10000)/h
+#penalty = dolfin.Constant(10000)/h
+penalty = dolfin.Constant((Pp + 1)*(Pp + ndim)/ndim * geom_fac)
 trial = dolfin.TrialFunction(Vp)
 test = dolfin.TestFunction(Vp)
-f = time_coeffs[0]/df_dt*dolfin.nabla_div(u_star_vec)
+f = time_coeffs[0]/df_dt * nabla_div(u_star_vec)
 eq_pressure = define_poisson_problem(trial, test, 1/rho, -f, n, penalty, dirichlet_bcs_pres, neumann_bcs_pres)
 
 ###########################################################################################
@@ -260,8 +298,8 @@ def update_convection(t, dt):
         upp = upp_list[d]
         u_conv.assign(2*up - upp)
         
-        #for bc in dirichlet_bcs_vel[d]:
-        #    bc.apply(uic.vector())
+        for bc in dirichlet_bcs_vel[d]:
+            bc.apply(u_conv.vector())
 
 @timeit
 def momentum_prediction(t, dt):
@@ -271,7 +309,7 @@ def momentum_prediction(t, dt):
     for d in range(ndim):
         us = u_star_list[d]
         a, L = eqs_mom_pred[d]
-        if fspace == 'CG':
+        if us.element().family() == 'Lagrange':
             dolfin.solve(a == L, us, dirichlet_bcs_vel[d])
         else:
             dolfin.solve(a == L, us)
@@ -304,7 +342,7 @@ def pressure_correction():
     # Orthogonalize b with respect to the null space
     null_space.orthogonalize(b)
     
-    if fspace == 'CG':
+    if p_hat.element().family() == 'Lagrange':
         for bc in dirichlet_bcs_pres:
             bc.apply(A, b)
     
@@ -327,16 +365,21 @@ def velocity_update():
         un = dolfin.project(f, Vu)
         u_new.assign(un)
         
-        #for bc in dirichlet_bcs_vel[d]:
-        #    bc.apply(u_new.vector())
+        for bc in dirichlet_bcs_vel[d]:
+            bc.apply(u_new.vector())
 
 @timeit
 def pressure_update():
     """
     Update the pressure
     """
-    p.vector()[:] = p.vector()[:] + p_hat.vector()[:]
-    
+    if rotational:
+        f = p_hat - nu*nabla_div(u_star_vec)
+        ph = dolfin.project(f, Vp)
+    else:
+        ph = p_hat
+    p.vector()[:] = p.vector()[:] + ph.vector()[:]
+
 @timeit
 def velocity_update_final():
     """
@@ -352,11 +395,15 @@ def velocity_update_final():
 @timeit        
 def errornorm(u1, u2):
     """
-    The L-infinity error norm 
+    The L-infinity error norm of a vector valued function
     """
-    ua1 = u1.vector().array()
-    ua2 = u2.vector().array()
-    return abs(ua1 - ua2).max()
+    res = 0
+    for d in range(ndim):
+        a1 = u1[d].vector().array()
+        a2 = u2[d].vector().array()
+        err = numpy.abs(a1 - a2).max()  
+        res = max(res, err)
+    return res
 
 # Data from Ghia, Ghia and Shin (1982)
 ghia_x = [1.0, 0.9688, 0.9609, 0.9531, 0.9453, 0.9063, 0.8594, 0.8047, 0.5,
@@ -404,7 +451,7 @@ def plotit():
     to make quick and dirty static variables to hold the plot
     information in between calls 
     """
-    Nplots = 4
+    Nplots = 2
     if not hasattr(plotit, 'figs'):
         # This is the first call, lets set up the plots    
         pyplot.ion()
@@ -448,40 +495,50 @@ def plotit():
     plotit.axes[Q].set_ylabel('y [m]')
     
     Q += 1
-    plotit.lines[Q].set_ydata(vely)
-    plotit.lines[Q].set_xdata(posvec)
-    plotit.axes[Q].set_ylim(-0.5, 0.5)
-    plotit.axes[Q].set_xlim(0, 1)
-    plotit.axes[Q].set_title('Velocity in y at y=0.5')
-    plotit.axes[Q].set_ylabel('U [m/s]')
-    plotit.axes[Q].set_xlabel('y [m]')
+    if Q < Nplots:
+        plotit.lines[Q].set_ydata(vely)
+        plotit.lines[Q].set_xdata(posvec)
+        plotit.axes[Q].set_ylim(-0.6, 0.6)
+        plotit.axes[Q].set_xlim(0, 1)
+        plotit.axes[Q].set_title('Velocity in y at y=0.5')
+        plotit.axes[Q].set_ylabel('U [m/s]')
+        plotit.axes[Q].set_xlabel('y [m]')
     
     Q += 1
-    plotit.lines[Q].set_xdata(pres)
-    plotit.lines[Q].set_ydata(posvec)
-    plotit.axes[Q].set_xlim(-0.6, 0.6)
-    plotit.axes[Q].set_ylim(0, 1)
-    plotit.axes[Q].set_title('Pressure at x=0.5')
-    plotit.axes[Q].set_xlabel('P [Pa]')
-    plotit.axes[Q].set_ylabel('y [m]')
+    if Q < Nplots:
+        plotit.lines[Q].set_xdata(pres)
+        plotit.lines[Q].set_ydata(posvec)
+        plotit.axes[Q].set_xlim(-0.6, 0.6)
+        plotit.axes[Q].set_ylim(0, 1)
+        plotit.axes[Q].set_title('Pressure at x=0.5')
+        plotit.axes[Q].set_xlabel('P [Pa]')
+        plotit.axes[Q].set_ylabel('y [m]')
     
     Q += 1
-    tlist = list(plotit.lines[Q].get_xdata()) + [t]
-    ulist = list(plotit.lines[Q].get_ydata()) + [maxvel]
-    plotit.lines[Q].set_xdata(tlist)
-    plotit.lines[Q].set_ydata(ulist)
-    plotit.axes[Q].relim()
-    plotit.axes[Q].autoscale_view()
-    plotit.axes[Q].set_xlim(0, tmax)
-    plotit.axes[Q].set_title('Maximum velocity magnitude')
-    plotit.axes[Q].set_xlabel('t [s]')
-    plotit.axes[Q].set_ylabel('U [m/s]')
+    if Q < Nplots:
+        tlist = list(plotit.lines[Q].get_xdata()) + [t]
+        ulist = list(plotit.lines[Q].get_ydata()) + [maxvel]
+        plotit.lines[Q].set_xdata(tlist)
+        plotit.lines[Q].set_ydata(ulist)
+        plotit.axes[Q].relim()
+        plotit.axes[Q].autoscale_view()
+        plotit.axes[Q].set_xlim(0, tmax)
+        plotit.axes[Q].set_title('Maximum velocity magnitude')
+        plotit.axes[Q].set_xlabel('t [s]')
+        plotit.axes[Q].set_ylabel('U [m/s]')
     
     for fig in plotit.figs:
         fig.canvas.draw()
         fig.canvas.flush_events()
 
 ###########################################################################################
+
+def debug_console_hook_wrapper():
+    class Dummy():
+        pass
+    simulation = Dummy()
+    simulation.data = {k:v for k, v in globals().items() if k not in dolfin.__dict__}
+    debug_console_hook(simulation)
 
 # Run the simulation
 t_start = time.time()
@@ -509,9 +566,9 @@ while t+dt <= tmax + 1e-8:
         u1a = u_list[1].vector().array()
         maxvel = (u0a**2+u1a**2).max()**0.5
         print '        Inner iter %3d, max velocity %15.4e' % (inner_iter, maxvel),
-        error = sum(errornorm(u_list[d], u_star_list[d]) for d in range(ndim))
+        error = errornorm(u_list, u_star_list)
         print ' errornorm*: %10.3e' % error,
-        errorC = sum(errornorm(u_list[d], u_conv_list[d]) for d in range(ndim))
+        errorC = errornorm(u_list, u_conv_list)
         print ' errornormC: %10.3e' % errorC,
         errorG = ghia_error()
         print ' Ghia-err: %10.3e' % errorG
@@ -527,6 +584,8 @@ while t+dt <= tmax + 1e-8:
     
     # Change to the second order time derivative for velocities
     time_coeffs.assign(time_coeffs2)
+    
+    debug_console_hook_wrapper()
     
     if maxvel > max_allowed_velocity:
         print '\n\n ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! ! !'
@@ -547,12 +606,13 @@ print '%30s total time %10.3fs\n' % ('ALL', tottime)
 ###########################################################################################
 
 if PLOT:
-    dolfin.plot(marker, title='boundary')
+    #dolfin.plot(marker, title='boundary')
     dolfin.plot(u_vec, title='u')
-    dolfin.plot(u_list[0], title='u_x')
-    dolfin.plot(u_list[1], title='u_y')
-    dolfin.plot(p, title='p')
+    #dolfin.plot(u_list[0], title='u_x')
+    #dolfin.plot(u_list[1], title='u_y')
+    #dolfin.plot(p, title='p')
     dolfin.interactive()
 
+pyplot.ioff()
 pyplot.show()
-raw_input('Press enter to quit')
+#raw_input('Press enter to quit')
