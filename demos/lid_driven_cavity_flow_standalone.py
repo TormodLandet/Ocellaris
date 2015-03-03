@@ -117,11 +117,11 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
     
     if family == 'Lagrange':
         # Continous Galerkin implementation 
-        a = dot(nabla_grad(v), nabla_grad(u))*dx
-        L = v*f/k*dx
+        a = k*dot(nabla_grad(v), nabla_grad(u))*dx
+        L = v*f*dx
         # Enforce Neumann BCs weakly
         for nbc in neumann_bcs:
-            L += v*nbc.value*nbc.ds
+            L += k*v*nbc.value*nbc.ds
     
     elif family == 'Discontinuous Lagrange':
         # Discontinous Galerkin implementation (Symmetric Interior Penalty method)
@@ -141,37 +141,8 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
         
         for nbc in neumann_bcs:
             L += nbc.value*v*nbc.ds
-        
-        return a, L
     
-    elif family == 'Discontinuous Lagrange':
-        # Interior
-        a = dot(nabla_grad(v), nabla_grad(u))*dx
-        
-        # Interior facets
-        a += avg(penalty)*jump(u)*jump(v)*dS \
-             - dot(avg(nabla_grad(v)), n('+'))*jump(u)*dS \
-             - dot(avg(nabla_grad(u)), n('+'))*jump(v)*dS
-    
-        # Source term
-        L = v*f/k*dx
-        
-        # Enforce Dirichlet BCs weakly
-        for dbc in dirichlet_bcs:
-            # These terms penalises jumps in (u - uD) on ds
-            # where uD is the Dirichlet value on the boundary
-            a += penalty*u*v*dbc.ds \
-                 - dot(nabla_grad(v), n)*u*dbc.ds \
-                 - dot(nabla_grad(u), n)*v*dbc.ds
-            L += penalty*v*dbc.value*dbc.ds \
-                 - dot(nabla_grad(v), n)*dbc.value*dbc.ds
-        
-        # Enforce Neumann BCs weakly
-        for nbc in neumann_bcs:
-            L += v*nbc.value*nbc.ds
-    
-    # FIXME: introduce k in the equation properly!!!!
-    return k*a, k*L
+    return a, L
 
 ###########################################################################################
 
