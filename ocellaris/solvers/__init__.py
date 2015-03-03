@@ -34,6 +34,4 @@ def get_solver(name):
 class Solver(object):
     description = 'No description available'
 
-from .equations import define_advection_problem, define_poisson_problem
 from . import ipcs
-

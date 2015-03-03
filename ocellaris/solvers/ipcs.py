@@ -1,8 +1,9 @@
 from __future__ import division
 import dolfin
 from ocellaris.convection import get_convection_scheme
-from ocellaris.utils import report_error, timeit
-from . import Solver, register_solver, define_advection_problem, define_poisson_problem
+from ocellaris.utils import report_error, timeit, velocity_error_norm
+from . import Solver, register_solver
+from .ipcs_equations import define_advection_problem, define_poisson_problem
 
 @register_solver('IPCS')
 class SolverIPCS(Solver):
@@ -104,6 +105,10 @@ class SolverIPCS(Solver):
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
         self.eq_pressure = define_poisson_problem(trial, test, 1/rho, f, n, penalty, dirichlet_bcs, neumann_bcs)
+        
+        # For error norms in the convergence estimates
+        elem = uvec[0].element()
+        self.Vu_highp = dolfin.FunctionSpace(mesh, elem.family(), elem.degree() + 3)
     
     @timeit
     def update_convection(self, t, dt):
@@ -237,9 +242,10 @@ class SolverIPCS(Solver):
         """
         Run the simulation
         """
-        dt = self.simulation.input['time']['dt']
-        tmax = self.simulation.input['time']['tmax']
-        num_inner_iter = self.simulation.input['solver'].get('num_inner_iter', 1)
+        sim = self.simulation
+        dt = sim.input['time']['dt']
+        tmax = sim.input['time']['tmax']
+        num_inner_iter = sim.input['solver'].get('num_inner_iter', 1)
         assert dt > 0
         
         t = 0
@@ -252,17 +258,21 @@ class SolverIPCS(Solver):
             
             self.update_convection(t, dt)
             
-            for _ in xrange(num_inner_iter):
+            for iit in xrange(num_inner_iter):
                 self.momentum_prediction(t, dt)
                 self.pressure_correction()
                 self.velocity_update()
                 self.pressure_update()
+                
+                # Convergence estimates
+                Linfs = velocity_error_norm(sim.data['u'], sim.data['u_star'], self.Vu_highp, 'Linf')
+                Linfc = velocity_error_norm(sim.data['u'], sim.data['u_conv'], self.Vu_highp, 'Linf')
+                sim.log.info('  Inner iteration %3d - Linf* %10.3e - Linfc %10.3e' % (iit+1, Linfs, Linfc))
             
             self.velocity_update_final()
             
             # Change time coefficient to second order
             self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
             
-            self.simulation.end_timestep()
+            sim.end_timestep()
             
-            dolfin.plot(self.simulation.data['u0'])

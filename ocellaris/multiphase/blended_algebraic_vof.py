@@ -4,7 +4,7 @@ import dolfin
 from dolfin import Function, Constant, FacetNormal, solve
 from . import register_multi_phase_model, MultiPhaseModel 
 from ..convection import get_convection_scheme
-from ..solvers.equations import define_advection_problem
+from ..solvers.ipcs_equations import define_advection_problem
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
 class BlendedAlgebraicVofModel(MultiPhaseModel):
