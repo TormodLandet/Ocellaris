@@ -42,6 +42,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         alpha_arr = self.alpha_function.vector().get_local()
         beta_arr = self.blending_function.vector().get_local()
         
+        ndim = self.simulation.ndim
         conFC = self.simulation.data['connectivity_FC']
         facet_info = self.simulation.data['facet_info']
         cell_info = self.simulation.data['cell_info']
@@ -71,9 +72,10 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             ic0, ic1 = connected_cells
             
             # Velocity at the midpoint (do not care which side of the face)
-            ump = numpy.zeros(2, float)
-            velocity.eval(ump, finfo.midpoint)
-
+            ump = numpy.zeros(ndim, float)
+            for d in range(ndim):
+                velocity[d].eval(ump[d:], finfo.midpoint)
+            
             # Midpoint of local cells
             cell0_mp = cell_info[ic0].midpoint
             cell1_mp = cell_info[ic1].midpoint

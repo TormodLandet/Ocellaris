@@ -54,9 +54,10 @@ sim.data['Vc'] = dolfin.FunctionSpace(mesh, "DG", 0)
 setup_boundary_conditions(sim)
 
 # Initialize the convecting velocity field
-vel_func_space = dolfin.VectorFunctionSpace(mesh, "DG", 1)
-vel = dolfin.Function(vel_func_space)
-sim.data['u'] = vel
+vel_func_space = dolfin.FunctionSpace(mesh, "DG", 1)
+u0 = dolfin.Function(vel_func_space)
+u1 = dolfin.Function(vel_func_space)
+sim.data['u'] = dolfin.as_vector([u0, u1])
 
 # Initialize the VOF scheme
 multiphase_model = get_multi_phase_model('BlendedAlgebraicVOF')
@@ -113,10 +114,12 @@ for it in xrange(1, Nt):
     sim.new_timestep(it, t, dt)
 
     if t < VEL_TURN_TIME:
-        vel.assign(dolfin.Constant(VEL))
+        u0.vector()[:] = VEL[0]
+        u1.vector()[:] = VEL[1]
     else:
-        vel.assign(dolfin.Constant(-VEL))
-
+        u0.vector()[:] = -VEL[0]
+        u1.vector()[:] = -VEL[1]
+    
     vof.update(t, dt)
     
     if PLOT and it % PNG_OUTPUT_FREQUENCY == 0:

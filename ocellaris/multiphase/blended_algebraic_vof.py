@@ -55,9 +55,11 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         gradient = self.convection_scheme.gradient_reconstructor.gradient
         
         # Setup the equation to solve
+        trial = dolfin.TrialFunction(V)
+        test = dolfin.TestFunction(V)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
         vel = self.simulation.data['u']
-        self.eq = define_advection_problem(V, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
+        self.eq = define_advection_problem(trial, test, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
         
         simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
         simulation.plotting.add_plot('c_grad', gradient)
