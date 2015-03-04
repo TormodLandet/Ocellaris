@@ -188,6 +188,11 @@ class Log(object):
         (not the dolfin log level!)
         """
         self.log_level = log_level
+        
+    def warning(self, text):
+        "Log warning"
+        if self.log_level <= dolfin.WARNING:
+            print text
     
     def info(self, text):
         "Log info"
