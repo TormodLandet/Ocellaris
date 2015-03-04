@@ -50,7 +50,18 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
     
     Note the minus in front of the first term!
     
-    Returns the bilinear and linear forms
+    Arguments:
+        u: a TrialFunction
+        v: a TestFunction
+        k: the diffusion coefficient
+        f: the source term
+        n: should be FacetNormal(mesh)
+        penalty: the penalization of discontinuities and Dirichlet BCs
+        dirichlet_bcs: a list of OcellarisDirichletBC objects
+        neumann_bcs: a list of OcellarisNeumannBC objects
+    
+    Returns:
+        a, L: the bilinear and linear forms
     """
     family = u.element().family()
     
@@ -72,14 +83,39 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
         L = f*v*dx
         
         # Enforce Dirichlet BCs weakly
+        ds_penalty = penalty
         for dbc in dirichlet_bcs:
             a -= k*dot(n, nabla_grad(u))*v*dbc.ds()
             a -= k*dot(n, nabla_grad(v))*u*dbc.ds()
-            a += penalty*u*v*dbc.ds()
-            L += dbc.func()*(penalty*v - k*dot(nabla_grad(v), n))*dbc.ds()
+            a += ds_penalty*u*v*dbc.ds()
+            L += dbc.func()*(ds_penalty*v - k*dot(nabla_grad(v), n))*dbc.ds()
         
         # Enforce Neumann BCs weakly
         for nbc in neumann_bcs:
             L += nbc.func()*v*nbc.ds()
     
     return a, L
+
+def define_penalty(mesh, P, k_max, k_min):
+    """
+    Define the penalty parameter used in the Poisson equations
+    
+    Arguments:
+        mesh: the mesh used in the simulation
+        P: the polynomial degree of the unknown
+        k_max: the maximum diffusion coefficient
+        k_min: the minimum diffusion coefficient
+    """
+    ndim = mesh.geometry().dim()
+    
+    # Calculate geometrical factor used in the penalty
+    geom_fac = 0
+    for cell in dolfin.cells(mesh):
+        vol = cell.volume()
+        area = sum(cell.facet_area(i) for i in range(ndim + 1))
+        gf = area/vol
+        geom_fac = max(geom_fac, gf)
+    geom_fac *= 1.0
+    
+    penalty = 10 * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac
+    return dolfin.Constant(penalty)
