@@ -4,7 +4,8 @@ import time
 import dolfin
 from .postprocess import Plotter
 from .utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
-from .utils import timeit
+from .utils import timeit, report_error
+from sympy.functions.combinatorial import numbers
 
 class Simulation(object):
     def __init__(self):
@@ -13,13 +14,14 @@ class Simulation(object):
         connects the input file, geometry, mesh with the solver
         and the result plotting and reporting tools     
         """
-        self.input = {}
-        self.data = {}
+        self.input = Input(self)
+        self.data = {}        
         self.plotting = Plotting(self)
         self.reporting = Reporting(self)
         self.log = Log(self)
         self._pre_timestep_hooks = []
         self._post_timestep_hooks = []
+        self._post_simulation_hooks = []
         
         # Several parts of the code wants to know these things,
         # so we keep them in a central place
@@ -64,6 +66,12 @@ class Simulation(object):
         """
         self._post_timestep_hooks.append(hook)
     
+    def add_post_simulation_hook(self, hook):
+        """
+        Add a function that will run after the simulation is done
+        """
+        self._post_simulation_hooks.append(hook)
+    
     @timeit
     def new_timestep(self, timestep_number, t, dt):
         """
@@ -79,6 +87,10 @@ class Simulation(object):
     def end_timestep(self, report=True):
         """
         Called at the end of a time step
+        
+        Arguments:
+            report: True if something should be written to
+                console to summarise the last time step
         """
         # Report the time spent in this time step
         newtime = time.time()
@@ -96,18 +108,120 @@ class Simulation(object):
         for hook in self._post_timestep_hooks:
             hook(report)
     
-    def read_json_input_file(self, filename):
+    def end_simulation(self, success):
+        """
+        Report that  the simulation is done.
+        
+        Arguments:
+            success: True if nothing went wrong, False for
+            diverging solution and other problems
+        """
+        for hook in self._post_simulation_hooks:
+            hook(success)
+
+    
+class Input(dict):
+    UNDEFINED = object()
+    
+    def __init__(self, simulation):
+        """
+        Holds the input values provided by the user
+        """
+        self.simulation = simulation
+    
+    def read_json(self, filename):
         """
         Read the input to an Ocellaris simulation from a JSON 
         formated input file. The user will get an error if the
         input file is malformed 
         """
-        with open(filename, 'rt') as inpf:
-            inp = json.load(inpf, object_pairs_hook=collections.OrderedDict)
+        try:
+            with open(filename, 'rt') as inpf:
+                inp = json.load(inpf, object_pairs_hook=collections.OrderedDict)
+        except ValueError as e:
+            report_error('Error on input file', str(e))
+        
         assert inp['program'] == 'ocellaris'
         assert inp['version'] == 1.0
         assert inp['type'] == 'input'
-        self.input = inp
+        self.clear()
+        self.update(inp)
+        
+    def get_value(self, path, default_value=UNDEFINED, required_type='any'):
+        """
+        Get an input value by its path in the input dictionary
+        
+        Gives an error if there is no default value supplied
+        and the  input variable does not exist
+        
+        Arguments:
+            path: a list of path components or the "/" separated
+                path to the variable in the input dictionary
+            default_value: the value to return if the path does
+                not exist in the input dictionary
+            required_type: expected type of the variable. Giving 
+                type="any" does no type checking
+        
+        Returns:
+            The input value if it exist otherwise the default value
+        """
+        # Allow path to be a list or a "/" separated string
+        if isinstance(path, basestring):
+            pathstr = path
+            path = path.split('/')
+        else:
+            pathstr = '/'.join(path)
+        
+        d = self
+        for p in path:
+            if p not in d:
+                if default_value is self.UNDEFINED:
+                    report_error('Missing parameter on input file',
+                                 'Missing required input parameter:\n  %s' % pathstr)
+                else:
+                    return default_value
+            d = d[p]
+        
+        def check_isinstance(value, classes):
+            """
+            Give error if the input data is not of the required type
+            """
+            if not isinstance(value, classes):
+                report_error('Malformed data on input file',
+                             'Parameter %s should be of type %s,\nfound %r %r' % 
+                             (pathstr, required_type, value, type(value)))
+        
+        # Validate according to required data type
+        number = (int, long, float)
+        if required_type == 'bool':
+            check_isinstance(d, bool)
+        elif required_type == 'float':
+            check_isinstance(d, number)
+        elif required_type == 'int':
+            check_isinstance(d, int)
+        elif required_type == 'string':
+            check_isinstance(d, basestring)
+        elif required_type == 'list(float)':
+            check_isinstance(d, list)
+            for elem in d:
+                check_isinstance(elem, number)
+        elif required_type == 'list(dict)':
+            check_isinstance(d, list)
+            for elem in d:
+                check_isinstance(elem, dict)
+        elif required_type == 'any':
+            pass
+        else:
+            raise ValueError('Unknown required_type %s' % required_type)
+        return d
+    
+    def get_output_path(self, path, default_value=UNDEFINED):
+        """
+        Get the name of an output file
+        """
+        prefix = self.get_value('output/prefix', '')
+        filename = self.get_input(path, default_value)
+        return prefix + filename
 
 class Plotting(object):
     def __init__(self, simulation):
@@ -142,7 +256,7 @@ class Plotting(object):
         """
         sim = self.simulation
         name_template_dafault = 'fig/{name}_{timestep:07d}_{t:010.6f}{extra}.png'
-        name_template = sim.input.get('plots', {}).get('name_template', name_template_dafault)
+        name_template = sim.input.get_value('plots/name_template', name_template_dafault, 'string')
         filename = name_template.format(name=name, timestep=sim.timestep, t=sim.time, extra=extra)
         self.plots[name].plot(filename)
         

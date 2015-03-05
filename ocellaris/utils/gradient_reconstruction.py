@@ -5,7 +5,7 @@ from ocellaris.cpp import load_module
 class GradientReconstructor(object):
     def __init__(self, simulation, alpha_func, use_vertex_neighbours=True):
         """
-        Reconstructor for the gradient in each cell. Assumes DG0
+        Reconstructor for the gradient in each cell.
         
         See for example "An Introduction to Computational Fluid Dynamics -
         The Finite Volume Method" by Versteeg & Malalasekera (2007), 
@@ -16,11 +16,15 @@ class GradientReconstructor(object):
         self.mesh = alpha_func.function_space().mesh()
         self.use_vertex_neighbours = use_vertex_neighbours
         self.reconstruction_initialized = False
-        self.use_cpp = simulation.input.get('use_cpp_extensions', True)
+        self.use_cpp = simulation.input.get_value('use_cpp_extensions', True, 'bool')
     
     def initialize(self):
         """
-        Precompute least squares matrices
+        Initialize the gradient function and dofmap
+        
+        For DG0 fields we must also precompute the least squares matrices
+        needed to reconstruct gradients since the gradient of a constant
+        is zero in each cell so a FEM projection will not work
         """
         V = self.alpha_function.function_space()
         Vvec = dolfin.VectorFunctionSpace(self.mesh, 'DG', 0)
@@ -29,7 +33,12 @@ class GradientReconstructor(object):
         
         # To be used by others accessing this class
         self.gradient = dolfin.Function(Vvec)
-        self.gradient_dofmaps = [Vvec.sub(d).dofmap().dofs() for d in range(ndim)] 
+        self.gradient_dofmaps = [Vvec.sub(d).dofmap().dofs() for d in range(ndim)]
+        
+        if self.alpha_function.element().degree() > 0:
+            # We do not need the rest of the precomputed data for
+            # higher order functions
+            return
         
         # Connectivity info needed in calculations
         cell_info = self.simulation.data['cell_info']
@@ -99,32 +108,33 @@ class GradientReconstructor(object):
         TODO: handle boundary conditions for boundary cells,
               right now the boundary cell gradients are only
               influenced by the cell neighbours
-              
-        The following properties are accessible after reconstruction:
-         - gradient - array of (ncells, 2) values
-         - neighbour_minval - array of (ncells,) values
-         - neighbour_maxval - array of (ncells,) values
         """
         # Initialize the least squares gradient reconstruction matrices
+        # needed to calculate the gradient of a DG0 field
         if not self.reconstruction_initialized:
             self.initialize()
         
-        if not self.use_cpp:
-            # Pure Python version
-            reconstructor = _reconstruct_gradient 
+        if self.alpha_function.element().degree() > 0:
+            # We use projection for higher degrees
+            V = self.gradient.function_space()
+            dolfin.project(dolfin.nabla_grad(self.alpha_function), V, function=self.gradient)
         else:
-            # Faster C++ version
-            cpp_gradient_reconstruction = load_module('gradient_reconstruction')
-            reconstructor = cpp_gradient_reconstruction.reconstruct_gradient
-        
-        # Run the gradient reconstruction
-        reconstructor(self.alpha_function,
-                      self.num_neighbours,
-                      self.max_neighbours,
-                      self.neighbours, 
-                      self.lstsq_matrices,
-                      self.lstsq_inv_matrices,
-                      self.gradient)
+            if not self.use_cpp:
+                # Pure Python version
+                reconstructor = _reconstruct_gradient 
+            else:
+                # Faster C++ version
+                cpp_gradient_reconstruction = load_module('gradient_reconstruction')
+                reconstructor = cpp_gradient_reconstruction.reconstruct_gradient
+            
+            # Run the gradient reconstruction
+            reconstructor(self.alpha_function,
+                          self.num_neighbours,
+                          self.max_neighbours,
+                          self.neighbours, 
+                          self.lstsq_matrices,
+                          self.lstsq_inv_matrices,
+                          self.gradient)
 
 def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours, lstsq_matrices, lstsq_inv_matrices, gradient):
     """

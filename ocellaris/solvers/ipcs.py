@@ -61,7 +61,7 @@ class SolverIPCS(Solver):
         # Get convection schemes for the velocity
         conv_schemes = []
         for d in range(sim.ndim):
-            conv_scheme_name = sim.input['convection']['u']['convection_scheme']
+            conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', required_type='string')
             conv_scheme = get_convection_scheme(conv_scheme_name)(simulation, 'u%d' % d)
             conv_schemes.append(conv_scheme)
         self.convection_schemes = conv_schemes
@@ -249,10 +249,10 @@ class SolverIPCS(Solver):
         it = 0
         while True:
             # Get input values, these can possibly change over time
-            dt = sim.input['time']['dt']
-            tmax = sim.input['time']['tmax']
-            num_inner_iter = sim.input['solver'].get('num_inner_iter', 1)
-            allowable_error_inner = sim.input['solver'].get('allowable_error_inner', 1e100)
+            dt = sim.input.get_value('time/dt', required_type='float')
+            tmax = sim.input.get_value('time/tmax', required_type='float')
+            num_inner_iter = sim.input.get_value('solver/num_inner_iter', 1, required_type='int')
+            allowable_error_inner = sim.input.get_value('solver/allowable_error_inner', 1e100, required_type='float')
             
             # Check if the simulation is done
             if t+dt > tmax + 1e-8:
@@ -290,3 +290,6 @@ class SolverIPCS(Solver):
             
             # Postprocess this time step
             sim.end_timestep()
+        
+        # We are done
+        sim.end_simulation(success=True)

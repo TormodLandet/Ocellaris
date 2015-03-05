@@ -35,15 +35,19 @@ def setup_probes(simulation):
     """
     Install probes from a simulation input
     """
-    def hook(probe):
+    def hook_timestep(probe):
         return lambda report: probe.end_of_timestep()
     
-    probe_inputs = simulation.input.get('probes', [])
+    def hook_final(probe):
+        return lambda success: probe.end_of_simulation()
+    
+    probe_inputs = simulation.input.get_value('probes', [])
     for inp in probe_inputs:
         probe_type = inp['type']
         probe_class = get_probe(probe_type)
         probe = probe_class(simulation, inp)
-        simulation.add_post_timestep_hook(hook(probe))
+        simulation.add_post_timestep_hook(hook_timestep(probe))
+        simulation.add_post_simulation_hook(hook_final(probe))
 
 class Probe(object):
     def __init__(self, simulation, probe_input):
@@ -54,6 +58,9 @@ class Probe(object):
         self.input = probe_input
     
     def end_of_timestep(self):
+        pass
+    
+    def end_of_simulation(self, success):
         pass
 
 from .line_probe import LineProbe

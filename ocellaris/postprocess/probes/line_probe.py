@@ -1,3 +1,4 @@
+import os
 import numpy
 from matplotlib import pyplot
 from . import Probe, register_probe
@@ -15,6 +16,16 @@ class LineProbe(Probe):
         N = self.input['Npoints']
         self.field_name = self.input['field']
         self.field = simulation.data[self.field_name]
+        
+        # Should we write the data to a file
+        prefix = simulation.input.get_value('output/prefix', None)
+        file_name = self.input.get('file_name', '')
+        self.write_file = file_name is not None
+        if self.write_file:
+            self.file_name = prefix + file_name
+            self.write_interval = self.input.get('write_interval', 1)
+        
+        # Should we pop up a matplotlib window when running?
         self.show_interval = self.input.get('show_interval', 0)
         self.show = self.show_interval != 0
         
@@ -35,6 +46,14 @@ class LineProbe(Probe):
         self.xvec = numpy.linspace(startpos[0], endpos[0], N)
         self.yvec = numpy.linspace(startpos[1], endpos[1], N)
         self.zvec = numpy.linspace(startpos[2], endpos[2], N)
+        
+        if self.write_file:
+            self.output_file = open(self.file_name, 'wt')
+            self.output_file.write('# Ocellaris line probe of the %s field\n' % self.field_name)
+            self.output_file.write('# X = %s\n' % ' '.join('%15.5e' % x for x in self.xvec))
+            self.output_file.write('# Y = %s\n' % ' '.join('%15.5e' % y for y in self.yvec))
+            self.output_file.write('# Z = %s\n' % ' '.join('%15.5e' % z for z in self.zvec))
+            self.output_file.write('#     time |-- probe values --> \n')
         
         if self.show:
             pyplot.ion()
@@ -58,19 +77,26 @@ class LineProbe(Probe):
         update_plot = False 
         if self.show and (it == 1 or it % self.show_interval == 0):
             update_plot = True
+
+        # Should we update the file?
+        update_file = False
+        if self.write_file and (it == 1 or it % self.write_interval == 0):
+            update_file = True
         
-        if not update_plot:
+        # Do not do any postprocessing for non-requested time steps
+        if not (update_file or update_plot):
             return
         
+        # Get the value at the probe locations
         res = numpy.array([0.0])
         pos = numpy.array([0.0, 0.0, 0.0])
-        
         probe_values = numpy.zeros_like(self.xvec)
         for i in range(len(probe_values)):
             pos[:] = (self.xvec[i], self.yvec[i], self.zvec[i])
             self.field.eval(res, pos)
             probe_values[i] = res[0]
         
+        # For plotting, figure out which axis is the abcissa
         if self.xvec[0] != self.xvec[-1]:
             abcissa = self.xvec
             abcissa_label = 'x-pos'
@@ -81,6 +107,10 @@ class LineProbe(Probe):
             abcissa = self.zvec
             abcissa_label = 'z-pos'
         
+        if update_file:
+            self.output_file.write('%10.5f %s\n' % (self.simulation.time,
+                                   ' '.join('%15.5e' % v for v in probe_values)))
+        
         if update_plot:
             self.line.set_xdata(abcissa)
             self.line.set_ydata(probe_values)
@@ -89,3 +119,10 @@ class LineProbe(Probe):
             self.ax.autoscale_view()
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
+    
+    def end_of_simulation(self):
+        """
+        The simulation is done. Close the output file
+        """
+        if self.write_file:
+            self.output_file.close()

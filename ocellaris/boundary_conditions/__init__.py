@@ -13,7 +13,7 @@ class BoundaryRegion(object):
         self.index = index
         self.conditions = {}
         
-        inp = simulation.input['boundary_conditions'][index]
+        inp = simulation.input.get_value('boundary_conditions', required_type='list(dict)')[index]
         self.name = inp['name']
         self.selector_name = inp['selector']
         

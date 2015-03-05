@@ -19,10 +19,10 @@ def run_simulation(simulation):
                             'progress': dolfin.PROGRESS,
                             'debug': dolfin.DEBUG}
     # Ocellaris log level
-    log_level = simulation.input.get('output', {}).get('ocellaris_log_level', 'info')
+    log_level = simulation.input.get_value('output/ocellaris_log_level', 'info')
     simulation.log.set_log_level(available_log_levels[log_level])
     # Dolfin log level
-    df_log_level = simulation.input.get('output', {}).get('dolfin_log_level', 'warning')
+    df_log_level = simulation.input.get_value('output/dolfin_log_level', 'warning')
     dolfin.set_log_level(available_log_levels[df_log_level])
     
     simulation.log.info('Preparing simulation ...\n')
@@ -41,20 +41,21 @@ def run_simulation(simulation):
     setup_boundary_conditions(simulation)
     
     # Setup physical constants
-    g = simulation.input['physical_properties']['g']
+    g = simulation.input.get_value('physical_properties/g', required_type='list(float)')
     assert len(g) == simulation.ndim
     simulation.data['g'] = dolfin.Constant(g)
     
     # Get the density and viscosity properties from the multi phase model
-    multiphase_model_name = simulation.input.get('multiphase_model', 'SinglePhase')
+    multiphase_model_name = simulation.input.get_value('multiphase_model', 'SinglePhase', 'string')
     multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
     simulation.data['rho'] = multiphase_model.get_density()
     simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity()
     simulation.add_pre_timestep_hook(multiphase_model.update)
     
     # Get the solver
-    solver_name = simulation.input['solver']['type']
+    solver_name = simulation.input.get_value('solver/type', required_type='string')
     solver = get_solver(solver_name)(simulation)
+    simulation.data['solver'] = solver
     
     # Setup postprocessing probes
     setup_probes(simulation)
@@ -71,7 +72,7 @@ def run_simulation(simulation):
     # Setup the debug console to optionally run at the end of each timestep
     simulation.add_post_timestep_hook(lambda report: debug_console_hook(simulation))
     
-    # Run the simulation 
+    # Run the simulation
     solver.run()
     
     simulation.log.debug('\nGlobal simulation data at end of simulation:')
@@ -88,10 +89,10 @@ def run_simulation(simulation):
                             '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100))
     simulation.log.info('\nSimulation done in %.3f seconds' % tottime)
     
-    if simulation.input.get('output', {}).get('plot_at_end', False):
+    if simulation.input.get_value('output/plot_at_end', False, 'bool'):
         plot_at_end(simulation)
     
-    if simulation.input.get('console_at_end', False):
+    if simulation.input.get_value('console_at_end', False, 'bool'):
         run_debug_console(simulation)
 
 def load_mesh(simulation):
@@ -118,16 +119,16 @@ def make_function_spaces(simulation):
     Create function spaces for velocity and pressure
     """
     # Get function space names
-    Vu_name = simulation.input['solver'].get('function_space_velocity', 'Lagrange')
-    Vp_name = simulation.input['solver'].get('function_space_pressure', 'Lagrange')
+    Vu_name = simulation.input.get_value('solver/function_space_velocity', 'Lagrange', 'string')
+    Vp_name = simulation.input.get_value('solver/function_space_pressure', 'Lagrange', 'string')
     
     # Make sure strings are not Python 2 unicode objects
     Vu_name = str(Vu_name)
     Vp_name = str(Vp_name)
     
     # Get function space polynomial degrees
-    Pu = simulation.input['solver'].get('polynomial_degree_velocity', 1)
-    Pp = simulation.input['solver'].get('polynomial_degree_pressure', 1)
+    Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
+    Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
     
     # Create the function spaces
     mesh = simulation.data['mesh']
@@ -151,7 +152,7 @@ def setup_boundary_conditions(simulation):
     # boundary that they belong to. They also create boundary
     # condition objects that are later used in the eq. solvers
     boundary = []
-    for index, _ in enumerate(simulation.input['boundary_conditions']):
+    for index, _ in enumerate(simulation.input.get_value('boundary_conditions', required_type='list(dict)')):
         part = BoundaryRegion(simulation, marker, index)
         boundary.append(part)
     simulation.data['boundary'] = boundary

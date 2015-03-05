@@ -36,7 +36,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         simulation.data['c_pp'] = cpp
         
         # The convection blending function that counteracts numerical diffusion
-        scheme = get_convection_scheme(simulation.input['convection']['c'].get('convection_scheme', 'HRIC'))
+        scheme = get_convection_scheme(simulation.input.get_value('convection/c/convection_scheme', 'HRIC', 'string'))
         self.convection_scheme = scheme(simulation, 'c')
         beta = self.convection_scheme.blending_function
         
@@ -98,7 +98,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         """
         #self.simulation.plotting.plot('c', '_uncompr')
         
-        compr_fac = self.simulation.input.setdefault('VOF', {}).setdefault('compression_factor', 1.0)
+        compr_fac = self.simulation.input.get_value('VOF/compression_factor', 1.0, 'float')
         if compr_fac == 0:
             return
         

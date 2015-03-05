@@ -13,7 +13,7 @@ def main(inputfile):
     print
     
     sim = Simulation()
-    sim.read_json_input_file(inputfile)
+    sim.input.read_json(inputfile)
     run_simulation(sim)
     
     print '='*80
