@@ -1,4 +1,13 @@
+import dolfin
 from ocellaris import get_version, get_detailed_version, Simulation, run_simulation
+
+# Names for the available log levels in Dolfin and Ocellaris
+AVAILABLE_LOG_LEVELS = {'critical': dolfin.CRITICAL,
+                        'error': dolfin.ERROR,
+                        'warning': dolfin.WARNING,
+                        'info': dolfin.INFO,
+                        'progress': dolfin.PROGRESS,
+                        'debug': dolfin.DEBUG}
 
 def main(inputfile):
     """
@@ -7,6 +16,14 @@ def main(inputfile):
     sim = Simulation()
     sim.input.read_json(inputfile)
     sim.log.setup()
+    
+    # Set the Ocellaris log level
+    log_level = sim.input.get_value('output/ocellaris_log_level', 'info')
+    sim.log.set_log_level(AVAILABLE_LOG_LEVELS[log_level])
+    
+    # Set the Dolfin log level
+    df_log_level = sim.input.get_value('output/dolfin_log_level', 'warning')
+    dolfin.set_log_level(AVAILABLE_LOG_LEVELS[df_log_level])
     
     version = get_detailed_version() or get_version()
     

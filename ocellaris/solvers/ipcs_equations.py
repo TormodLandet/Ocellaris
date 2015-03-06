@@ -117,5 +117,5 @@ def define_penalty(mesh, P, k_max, k_min):
         geom_fac = max(geom_fac, gf)
     geom_fac *= 1.0
     
-    penalty = 10 * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac
-    return dolfin.Constant(penalty)
+    penalty = 100 * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac
+    return penalty

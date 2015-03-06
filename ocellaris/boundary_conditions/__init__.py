@@ -6,8 +6,16 @@ class BoundaryRegion(object):
         """
         Create boundary conditions for the given part
         
-        The index is the number of this part in the list of boundary
-        conditions dictionaries in the simulation input
+        This class reads the input for the boundary part with the given index
+        and creates boundary condition objects for each of the listed functions. 
+        
+        Arguments:
+            simulation: The simulation object
+            marker: a facet function used to mark the boundary
+            index: the number of this part in the list of boundary conditions
+                dictionaries in the simulation input. The mark in the marker
+                function will be this number plus one
+        
         """
         self.simulation = simulation
         self.index = index
@@ -93,6 +101,20 @@ def get_boundary_condition(name):
     
 class BoundaryCondition(object):
     description = 'No description available'
+    
+    def func(self):
+        """
+        Returns the value at the boundary for Dirichlet boundary conditions
+        and the normal derivative at the boundaru for Neumann bcs. 
+        """
+        raise NotImplementedError()
+    
+    def ds(self):
+        """
+        Returns the ds measure of the part of the boundary which this boundary
+        condition applies to
+        """
+        raise NotImplementedError()
 
 from . import dirichlet
 from . import neumann

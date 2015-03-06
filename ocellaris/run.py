@@ -11,20 +11,6 @@ def run_simulation(simulation):
     """
     Prepare and run a simulation
     """
-    # Set log levels
-    available_log_levels = {'critical': dolfin.CRITICAL,
-                            'error': dolfin.ERROR,
-                            'warning': dolfin.WARNING,
-                            'info': dolfin.INFO,
-                            'progress': dolfin.PROGRESS,
-                            'debug': dolfin.DEBUG}
-    # Ocellaris log level
-    log_level = simulation.input.get_value('output/ocellaris_log_level', 'info')
-    simulation.log.set_log_level(available_log_levels[log_level])
-    # Dolfin log level
-    df_log_level = simulation.input.get_value('output/dolfin_log_level', 'warning')
-    dolfin.set_log_level(available_log_levels[df_log_level])
-    
     simulation.log.info('Preparing simulation ...\n')
     t_start = time.time()
     
