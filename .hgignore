@@ -5,3 +5,4 @@ syntax: glob
 *.avi
 *.out
 results_*
+documentation/_build
