@@ -73,7 +73,7 @@ class Hooks(object):
     def __init__(self, simulation):
         """
         This class allows registering functions to run at
-        given times during the simulation, ie to update
+        given times during the simulation, e.g. to update
         some values for the next time step, report something
         after each time step or clean up after the simulation
         """
@@ -109,11 +109,10 @@ class Hooks(object):
         
     def simulation_started(self):
         """
-        Report that  the simulation is done.
+        Called by the solver when the simulation starts
         
-        Arguments:
-            success: True if nothing went wrong, False for
-            diverging solution and other problems
+        Will run all pre simulation hooks in the reverse
+        order they have been added
         """
         for hook in self._pre_simulation_hooks[::-1]:
             hook()
@@ -121,26 +120,32 @@ class Hooks(object):
     @timeit
     def new_timestep(self, timestep_number, t, dt):
         """
-        Called at the start of a new time step
+        Called by the solver at the beginning of a new time step
+        
+        Will run all pre timestep hooks in the reverse
+        order they have been added 
         """
         for hook in self._pre_timestep_hooks[::-1]:
             hook(timestep_number, t, dt)
     
     @timeit
-    def end_timestep(self, report=True):
+    def end_timestep(self):
         """
-        Called at the end of a time step
+        Called by the solver at the end of a time step
         
-        Arguments:
-            report: True if something should be written to
-                console to summarise the last time step
+        Will run all post timestep hooks in the reverse
+        order they have been added
         """
+        report = True
         for hook in self._post_timestep_hooks[::-1]:
             hook(report)
     
     def simulation_ended(self, success):
         """
-        Report that  the simulation is done.
+        Called by the solver when the simulation is done
+        
+        Will run all post simulation hooks in the reverse
+        order they have been added
         
         Arguments:
             success: True if nothing went wrong, False for
@@ -234,6 +239,8 @@ class Input(dict):
             check_isinstance(d, int)
         elif required_type == 'string':
             check_isinstance(d, basestring)
+            # SWIG does not like Python 2 Unicode objects
+            d = str(d)
         elif required_type == 'list(float)':
             check_isinstance(d, list)
             for elem in d:
@@ -309,7 +316,7 @@ class Reporting(object):
         self.timestep_xy_reports = {}
         
         # Setup reporting after each time step
-        rep = lambda report: self.print_timestep_report() if report else None
+        rep = lambda report: self.log_timestep_reports() if report else None
         self.simulation.hooks.add_post_timestep_hook(rep)
     
     def report_timestep_value(self, report_name, value):
@@ -321,16 +328,16 @@ class Reporting(object):
             self.timesteps.append(time)
         self.timestep_xy_reports.setdefault(report_name, []).append(value)
     
-    def print_timestep_report(self):
+    def log_timestep_reports(self):
         """
-        Plot all registered plotters
+        Write all reports for the finished time step to the log
         """
         info = []
         for report_name in sorted(self.timestep_xy_reports):
             value = self.timestep_xy_reports[report_name][-1]
             info.append('%s = %10g' % (report_name, value))
         it, t = self.simulation.timestep, self.simulation.time
-        self.simulation.log.info('Reports for timestep = %5d, time = %10.4f,' % (it, t) +
+        self.simulation.log.info('Reports for timestep = %5d, time = %10.4f, ' % (it, t) +
                                  ', '.join(info))
 
 class Log(object):

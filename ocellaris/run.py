@@ -112,10 +112,6 @@ def make_function_spaces(simulation):
     Vu_name = simulation.input.get_value('solver/function_space_velocity', 'Lagrange', 'string')
     Vp_name = simulation.input.get_value('solver/function_space_pressure', 'Lagrange', 'string')
     
-    # Make sure strings are not Python 2 unicode objects
-    Vu_name = str(Vu_name)
-    Vp_name = str(Vp_name)
-    
     # Get function space polynomial degrees
     Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
     Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
@@ -168,7 +164,13 @@ def summarise_simulation_after_running(simulation, t_start, success):
         simulation.log.info('  %30s total time %7.3fs for %5d runs, minimum runtime %7.3fs'
                             % (funcname, sum(durations), len(durations), min(durations)) +
                             '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100))
-    simulation.log.info('\nSimulation done in %.3f seconds (%.1f hours)' % (tottime, tottime/60**2))
+    
+    # Show the total duration
+    h = int(tottime/60**2)
+    m = int((tottime - h*60)/60)
+    s = tottime - h*60**2 - m*60
+    humantime = '%d hours %d minutes and %.2f seconds' % (h, m, s)
+    simulation.log.info('\nSimulation done in %.3f seconds (%s)' % (tottime, humantime))
 
 def plot_at_end(simulation):
     """
