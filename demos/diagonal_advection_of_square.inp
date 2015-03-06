@@ -18,8 +18,8 @@
 	
 	"mesh": {
         "type": "Rectangle",
-        "Nx": 64,
-        "Ny": 64,
+        "Nx": 32,
+        "Ny": 32,
         "endx": 1.5,
         "endy": 1.5
     },

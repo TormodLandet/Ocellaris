@@ -1,4 +1,3 @@
-import os
 import numpy
 from matplotlib import pyplot
 from . import Probe, register_probe
@@ -18,7 +17,7 @@ class LineProbe(Probe):
         self.field = simulation.data[self.field_name]
         
         # Should we write the data to a file
-        prefix = simulation.input.get_value('output/prefix', None)
+        prefix = simulation.input.get_value('output/prefix', None, 'string')
         file_name = self.input.get('file_name', '')
         self.write_file = file_name is not None
         if self.write_file:

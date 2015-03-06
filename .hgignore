@@ -4,4 +4,4 @@ syntax: glob
 *.png
 *.avi
 *.out
-*test_results*
+results_*
