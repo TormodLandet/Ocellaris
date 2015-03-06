@@ -26,6 +26,18 @@ class SolverIPCS(Solver):
         Vu = simulation.data['Vu']
         Vp = simulation.data['Vp']
         
+        # Solver for the velocity prediction
+        velocity_linear_solver = self.simulation.input.get_value('solver/u/solver', 'bicgstab', 'string')
+        velocity_preconditioner = self.simulation.input.get_value('solver/u/preconditioner', 'jacobi', 'string')
+        self.velocity_solver = dolfin.KrylovSolver(velocity_linear_solver, velocity_preconditioner)
+        self.velocity_solver.parameters['preconditioner']['structure'] = 'same_nonzero_pattern'
+        
+        # Make a solver for the pressure correction
+        pressure_linear_solver = self.simulation.input.get_value('solver/p/solver', 'gmres', 'string')
+        pressure_preconditioner = self.simulation.input.get_value('solver/p/preconditioner', 'hypre_amg', 'string')
+        self.pressure_solver = dolfin.KrylovSolver(pressure_linear_solver, pressure_preconditioner)
+        self.velocity_solver.parameters['preconditioner']['structure'] = 'same'
+        
         # Create velocity functions. Keep both component and vector forms
         uvec, upvec, uppvec, u_conv, u_star = [], [], [], [], []
         for d in range(sim.ndim):
@@ -104,6 +116,10 @@ class SolverIPCS(Solver):
         # For error norms in the convergence estimates
         elem = uvec[0].element()
         self.Vu_highp = dolfin.FunctionSpace(mesh, elem.family(), elem.degree() + 3)
+        
+        # Storage for preassembled matrices
+        self.Au = [None] * sim.ndim 
+        self.Ap = None
     
     @timeit
     def update_convection(self, t, dt):
@@ -118,7 +134,7 @@ class SolverIPCS(Solver):
             uic = data['u_conv%d' % d]
             uip =  data['up%d' % d]
             uipp = data['upp%d' % d]
-            uic.vector()[:] = 5/3*uip.vector()[:] - 2/3*uipp.vector()[:]
+            uic.vector()[:] = 1.5*uip.vector()[:] - 0.5*uipp.vector()[:]
             
             # Apply the Dirichlet boundary conditions
             if False:
@@ -140,15 +156,21 @@ class SolverIPCS(Solver):
             dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
             a, L = self.eqs_mom_pred[d]
             
+            # Assemble the A matrix only the first inner iteration
+            if self.inner_iteration == 1:
+                A = dolfin.assemble(a)
+                self.Au[d] = A
+            else:
+                A = self.Au[d]
+            b = dolfin.assemble(L)
+            
             # Solve the advection equation
             family = us.element().family()
             if family == 'Lagrange':
-                dolfin.solve(a == L, us, dirichlet_bcs)
-            elif family == 'Discontinuous Lagrange':
-                dolfin.solve(a == L, us)
-                
-                #for bc in dirichlet_bcs:
-                #    bc.apply(us.vector())
+                for dbc in dirichlet_bcs:
+                    dbc.apply(A, b)
+            
+            self.velocity_solver.solve(A, us.vector(), b)
     
     @timeit
     def pressure_correction(self):
@@ -163,8 +185,12 @@ class SolverIPCS(Solver):
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         a, L = self.eq_pressure
         
-        # Assemble matrix and vector
-        A = dolfin.assemble(a)
+        # Assemble the A matrix only the first inner iteration
+        if self.inner_iteration == 1:
+            A = dolfin.assemble(a)
+            self.Ap = A
+        else:
+            A = self.Ap
         b = dolfin.assemble(L)
         
         # Apply strong boundary conditions
@@ -172,9 +198,6 @@ class SolverIPCS(Solver):
         if family == 'Lagrange':
             for dbc in dirichlet_bcs:
                 dbc.apply(A, b)
-        
-        # Get an appropriate solver
-        solver = dolfin.KrylovSolver(A, "gmres")
         
         if not dirichlet_bcs:
             # Create vector that spans the null space
@@ -184,12 +207,12 @@ class SolverIPCS(Solver):
             
             # Create null space basis object and attach to Krylov solver
             null_space = dolfin.VectorSpaceBasis([null_vec])
-            solver.set_nullspace(null_space)
+            self.pressure_solver.set_nullspace(null_space)
             
             # Orthogonalize b with respect to the null space
             null_space.orthogonalize(b)
         
-        solver.solve(p_hat.vector(), b) 
+        self.pressure_solver.solve(A, p_hat.vector(), b)
     
     @timeit
     def velocity_update(self):
@@ -252,8 +275,8 @@ class SolverIPCS(Solver):
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
             tmax = sim.input.get_value('time/tmax', required_type='float')
-            num_inner_iter = sim.input.get_value('solver/num_inner_iter', 1, required_type='int')
-            allowable_error_inner = sim.input.get_value('solver/allowable_error_inner', 1e100, required_type='float')
+            num_inner_iter = sim.input.get_value('solver/num_inner_iter', 1, 'int')
+            allowable_error_inner = sim.input.get_value('solver/allowable_error_inner', 1e100, 'float')
             
             # Check if the simulation is done
             if t+dt > tmax + 1e-8:
@@ -268,18 +291,25 @@ class SolverIPCS(Solver):
             # Extrapolate the convecting velocity to the new time step
             self.update_convection(t, dt)
             
-            for iit in xrange(num_inner_iter):
+            for self.inner_iteration in xrange(1, num_inner_iter+1):
                 self.momentum_prediction(t, dt)
                 self.pressure_correction()
                 self.velocity_update()
                 self.pressure_update()
                 
-                # Convergence estimates
-                L2s = velocity_error_norm(sim.data['u'], sim.data['u_star'], self.Vu_highp, 'L2')
-                L2c = velocity_error_norm(sim.data['u'], sim.data['u_conv'], self.Vu_highp, 'L2')
+                # Convergence estimates in L2 norm
+                if sim.input.get_value('solver/calculate_L2_norms', False, 'bool'):
+                    L2s = velocity_error_norm(sim.data['u'], sim.data['u_star'], self.Vu_highp, 'L2')
+                    L2c = velocity_error_norm(sim.data['u'], sim.data['u_conv'], self.Vu_highp, 'L2')
+                    L2_info = '- L2* %10.3e - L2c %10.3e' % (L2s, L2c)
+                else:
+                    L2_info = ''
+                
+                # Convergence estimates in L_infinity norm
                 Linfs = velocity_error_norm(sim.data['u'], sim.data['u_star'], self.Vu_highp, 'Linf')
                 Linfc = velocity_error_norm(sim.data['u'], sim.data['u_conv'], self.Vu_highp, 'Linf')
-                sim.log.info('  Inner iteration %3d - Linf* %10.3e - Linfc %10.3e - L2* %10.3e - L2c %10.3e' % (iit+1, Linfs, Linfc, L2s, L2c))
+                sim.log.info('  Inner iteration %3d - Linf* %10.3e - Linfc %10.3e %s'
+                             % (self.inner_iteration, Linfs, Linfc, L2_info))
                 
                 if Linfs < allowable_error_inner:
                     break

@@ -48,12 +48,13 @@
     
     "time": {
         "dt": 0.01,
-        "tmax": 60.0   
+        "tmax": 60.0
     },
     
     "output": {
-        "prefix": "implAB_DG_",
-        "plot_at_end": true,
+        "prefix": "precond_DG_",
+        "log_name": "log.txt",
+        "plot_at_end": false,
         "dolfin_log_level": "warning",
         "ocellaris_log_level": "info"
     },
@@ -65,7 +66,16 @@
         "function_space_velocity": "DG",
         "function_space_pressure": "DG",
         "polynomial_degree_velocity": 2,
-        "polynomial_degree_pressure": 1
+        "polynomial_degree_pressure": 1,
+        "calculate_L2_norms": false,
+        "p": {
+            "solver": "gmres",
+            "preconditioner": "hypre_amg"
+        },
+        "u": {
+            "solver": "bicgstab",
+            "preconditioner": "bjacobi"
+        }
     },
     
     "convection": {
@@ -108,5 +118,5 @@
         }
     ],
     
-    "console_at_end": true
+    "console_at_end": false
 }
