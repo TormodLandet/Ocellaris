@@ -5,23 +5,20 @@ import dolfin
 from .postprocess import Plotter
 from .utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .utils import timeit, report_error
-from sympy.functions.combinatorial import numbers
 
 class Simulation(object):
     def __init__(self):
         """
-        Represents one Navier-Stokes simulation. The simulation 
-        connects the input file, geometry, mesh with the solver
-        and the result plotting and reporting tools     
+        Represents one Ocellaris simulation. The Simulation class 
+        connects the input file, geometry, mesh and more with the
+        solver and the result plotting and reporting tools     
         """
+        self.hooks = Hooks(self)
         self.input = Input(self)
         self.data = {}        
         self.plotting = Plotting(self)
         self.reporting = Reporting(self)
         self.log = Log(self)
-        self._pre_timestep_hooks = []
-        self._post_timestep_hooks = []
-        self._post_simulation_hooks = []
         
         # Several parts of the code wants to know these things,
         # so we keep them in a central place
@@ -32,10 +29,8 @@ class Simulation(object):
         
         # For timing the analysis
         self.prevtime = self.starttime = time.time()
-        
-        # Setup reporting
-        rep = lambda report: self.reporting.print_timestep_report() if report else None
-        self.add_post_timestep_hook(rep)
+        self.hooks.add_pre_timestep_hook(self._at_start_of_timestep)
+        self.hooks.add_post_timestep_hook(self._at_end_of_timestep)
     
     def set_mesh(self, mesh):
         """
@@ -53,6 +48,46 @@ class Simulation(object):
         init_connectivity(self)
         precompute_cell_data(self)
         precompute_facet_data(self)
+        
+    def _at_start_of_timestep(self, timestep_number, t, dt):
+        self.timestep = timestep_number
+        self.time = t
+        self.dt = dt
+    
+    def _at_end_of_timestep(self, report):
+        # Report the time spent in this time step
+        newtime = time.time()
+        self.reporting.report_timestep_value('tstime', newtime-self.prevtime)
+        self.reporting.report_timestep_value('tottime', newtime-self.starttime)
+        self.prevtime = newtime
+        
+        # Report the maximum velocity
+        vels = 0
+        for d in range(self.ndim):
+            vels += self.data['u'][d].vector().array()**2
+        vel_max = vels.max()**0.5
+        
+        self.reporting.report_timestep_value('umax', vel_max)
+
+class Hooks(object):
+    def __init__(self, simulation):
+        """
+        This class allows registering functions to run at
+        given times during the simulation, ie to update
+        some values for the next time step, report something
+        after each time step or clean up after the simulation
+        """
+        self.simulation = simulation
+        self._pre_simulation_hooks = []
+        self._pre_timestep_hooks = []
+        self._post_timestep_hooks = []
+        self._post_simulation_hooks = []
+    
+    def add_pre_simulation_hook(self, hook):
+        """
+        Add a function that will run before the simulation starts
+        """
+        self._pre_simulation_hooks.append(hook)
     
     def add_pre_timestep_hook(self, hook):
         """
@@ -71,17 +106,25 @@ class Simulation(object):
         Add a function that will run after the simulation is done
         """
         self._post_simulation_hooks.append(hook)
+        
+    def simulation_started(self):
+        """
+        Report that  the simulation is done.
+        
+        Arguments:
+            success: True if nothing went wrong, False for
+            diverging solution and other problems
+        """
+        for hook in self._pre_simulation_hooks[::-1]:
+            hook()
     
     @timeit
     def new_timestep(self, timestep_number, t, dt):
         """
         Called at the start of a new time step
         """
-        self.timestep = timestep_number
-        self.time = t
-        self.dt = dt
-        for hook in self._pre_timestep_hooks:
-            hook(t, dt)
+        for hook in self._pre_timestep_hooks[::-1]:
+            hook(timestep_number, t, dt)
     
     @timeit
     def end_timestep(self, report=True):
@@ -92,23 +135,10 @@ class Simulation(object):
             report: True if something should be written to
                 console to summarise the last time step
         """
-        # Report the time spent in this time step
-        newtime = time.time()
-        self.reporting.report_timestep_value('tstime', newtime-self.prevtime)
-        self.reporting.report_timestep_value('tottime', newtime-self.starttime)
-        self.prevtime = newtime
-        
-        # Report the maximum velocity
-        vels = 0
-        for d in range(self.ndim):
-            vels += self.data['u'][d].vector().array()**2
-        vel_max = vels.max()**0.5
-        self.reporting.report_timestep_value('umax', vel_max)
-        
-        for hook in self._post_timestep_hooks:
+        for hook in self._post_timestep_hooks[::-1]:
             hook(report)
     
-    def end_simulation(self, success):
+    def simulation_ended(self, success):
         """
         Report that  the simulation is done.
         
@@ -116,13 +146,16 @@ class Simulation(object):
             success: True if nothing went wrong, False for
             diverging solution and other problems
         """
-        for hook in self._post_simulation_hooks:
+        for hook in self._post_simulation_hooks[::-1]:
             hook(success)
 
-    
+class UndefinedParameter(object):
+    def __repr__(self):
+        "For Sphinx"
+        return '<UNDEFINED>'
+UNDEFINED = UndefinedParameter()
+
 class Input(dict):
-    UNDEFINED = object()
-    
     def __init__(self, simulation):
         """
         Holds the input values provided by the user
@@ -175,7 +208,7 @@ class Input(dict):
         d = self
         for p in path:
             if p not in d:
-                if default_value is self.UNDEFINED:
+                if default_value is UNDEFINED:
                     report_error('Missing parameter on input file',
                                  'Missing required input parameter:\n  %s' % pathstr)
                 else:
@@ -215,13 +248,18 @@ class Input(dict):
             raise ValueError('Unknown required_type %s' % required_type)
         return d
     
-    def get_output_path(self, path, default_value=UNDEFINED):
+    def get_output_file_path(self, path, default_value=UNDEFINED):
         """
         Get the name of an output file
+        
+        Automatically prefixes the file name with the output prefix
         """
         prefix = self.get_value('output/prefix', '')
-        filename = self.get_input(path, default_value)
-        return prefix + filename
+        filename = self.get_value(path, default_value, 'string')
+        if default_value is None and filename is None:
+            return None
+        else:
+            return prefix + filename
 
 class Plotting(object):
     def __init__(self, simulation):
@@ -269,6 +307,10 @@ class Reporting(object):
         self.simulation = simulation
         self.timesteps = []
         self.timestep_xy_reports = {}
+        
+        # Setup reporting after each time step
+        rep = lambda report: self.print_timestep_report() if report else None
+        self.simulation.hooks.add_post_timestep_hook(rep)
     
     def report_timestep_value(self, report_name, value):
         """
@@ -288,13 +330,24 @@ class Reporting(object):
             value = self.timestep_xy_reports[report_name][-1]
             info.append('%s = %10g' % (report_name, value))
         it, t = self.simulation.timestep, self.simulation.time
-        print 'Reports for timestep = %5d, time = %10.4f,' % (it, t),
-        print ', '.join(info)
+        self.simulation.log.info('Reports for timestep = %5d, time = %10.4f,' % (it, t) +
+                                 ', '.join(info))
 
 class Log(object):
     def __init__(self, simulation):
         self.simulation = simulation
         self.log_level = dolfin.INFO
+        self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation())
+        self.write_log = False
+    
+    def _write(self, message):
+        """
+        Internal helper to write message to
+        console and log file
+        """
+        if self.write_log:
+            self.log_file.write(message + '\n')
+        print message
     
     def set_log_level(self, log_level):
         """
@@ -303,17 +356,38 @@ class Log(object):
         """
         self.log_level = log_level
         
-    def warning(self, text):
-        "Log warning"
+    def warning(self, message=''):
+        "Log a warning message"
         if self.log_level <= dolfin.WARNING:
-            print text
+            self._write(message)
     
-    def info(self, text):
-        "Log info"
+    def info(self, message=''):
+        "Log an info message"
         if self.log_level <= dolfin.INFO:
-            print text
+            self._write(message)
     
-    def debug(self, text):
-        "Log debug"
+    def debug(self, message=''):
+        "Log a debug message"
         if self.log_level <= dolfin.DEBUG:
-            print text
+            self._write(message)
+    
+    def setup(self):
+        """
+        Setup logging to file if requested in the simulation input
+        """
+        log_name = self.simulation.input.get_output_file_path('output/log_name', None)
+        if log_name is None:
+            self.write_log = False
+        else:
+            self.write_log = True
+            self.log_file_name = log_name
+            self.log_file = open(self.log_file_name, 'wt')
+    
+    def end_of_simulation(self):
+        """
+        The simulation is done. Make sure the output
+        file is flushed, but keep it open in case 
+        some more output is coming
+        """
+        if self.write_log:
+            self.log_file.flush()

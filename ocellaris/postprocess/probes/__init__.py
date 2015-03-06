@@ -46,8 +46,8 @@ def setup_probes(simulation):
         probe_type = inp['type']
         probe_class = get_probe(probe_type)
         probe = probe_class(simulation, inp)
-        simulation.add_post_timestep_hook(hook_timestep(probe))
-        simulation.add_post_simulation_hook(hook_final(probe))
+        simulation.hooks.add_post_timestep_hook(hook_timestep(probe))
+        simulation.hooks.add_post_simulation_hook(hook_final(probe))
 
 class Probe(object):
     def __init__(self, simulation, probe_input):

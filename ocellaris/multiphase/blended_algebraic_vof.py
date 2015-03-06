@@ -65,7 +65,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         simulation.plotting.add_plot('c_grad', gradient)
         simulation.plotting.add_plot('c_beta', beta)
         
-    def update(self, t, dt):
+    def update(self, it, t, dt):
         """
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field

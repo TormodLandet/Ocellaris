@@ -245,6 +245,7 @@ class SolverIPCS(Solver):
         Run the simulation
         """
         sim = self.simulation        
+        sim.hooks.simulation_started()
         t = 0
         it = 0
         while True:
@@ -261,7 +262,7 @@ class SolverIPCS(Solver):
             # Advance one time step
             it += 1
             t += dt
-            self.simulation.new_timestep(it, t, dt)
+            self.simulation.hooks.new_timestep(it, t, dt)
             self.dt.assign(dt)
             
             # Extrapolate the convecting velocity to the new time step
@@ -289,7 +290,7 @@ class SolverIPCS(Solver):
             self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
             
             # Postprocess this time step
-            sim.end_timestep()
+            sim.hooks.end_timestep()
         
         # We are done
-        sim.end_simulation(success=True)
+        sim.hooks.simulation_ended(success=True)

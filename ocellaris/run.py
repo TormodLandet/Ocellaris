@@ -26,7 +26,7 @@ def run_simulation(simulation):
     dolfin.set_log_level(available_log_levels[df_log_level])
     
     simulation.log.info('Preparing simulation ...\n')
-    t1 = time.time()
+    t_start = time.time()
     
     # Load the mesh
     load_mesh(simulation)
@@ -50,7 +50,7 @@ def run_simulation(simulation):
     multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
     simulation.data['rho'] = multiphase_model.get_density()
     simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity()
-    simulation.add_pre_timestep_hook(multiphase_model.update)
+    simulation.hooks.add_pre_timestep_hook(multiphase_model.update)
     
     # Get the solver
     solver_name = simulation.input.get_value('solver/type', required_type='string')
@@ -61,33 +61,23 @@ def run_simulation(simulation):
     setup_probes(simulation)
     
     # Print information about configuration parameters
-    simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t1))
+    simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t_start))
     simulation.log.info('\nSimulation configuration:')
     simulation.log.info('{:-^40}'.format(' input begin '))
     simulation.log.info(json.dumps(simulation.input, indent=4))
     simulation.log.info('{:-^40}'.format(' input end '))
     simulation.log.info("\nRunning simulation ...\n")
-    t1 = time.time()
+    t_start = time.time()
     
     # Setup the debug console to optionally run at the end of each timestep
-    simulation.add_post_timestep_hook(lambda report: debug_console_hook(simulation))
+    simulation.hooks.add_post_timestep_hook(lambda report: debug_console_hook(simulation))
+    
+    # Setup the summary to show after the simulation
+    hook = lambda success: summarise_simulation_after_running(simulation, t_start, success)
+    simulation.hooks.add_post_simulation_hook(hook)
     
     # Run the simulation
     solver.run()
-    
-    simulation.log.debug('\nGlobal simulation data at end of simulation:')
-    for key, value in sorted(simulation.data.items()):
-        simulation.log.debug('%20s = %s' % (key, repr(type(value))[:57]))
-    
-    # Print the runtime of the functions timed with the @timeit decorator
-    simulation.log.info('\nSummary of time spent:')
-    tottime = time.time() - t1
-    for funcname in sorted(timeit.timings):
-        durations = timeit.timings[funcname]
-        simulation.log.info('  %30s total time %7.3fs for %5d runs, minimum runtime %7.3fs'
-                            % (funcname, sum(durations), len(durations), min(durations)) +
-                            '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100))
-    simulation.log.info('\nSimulation done in %.3f seconds' % tottime)
     
     if simulation.input.get_value('output/plot_at_end', False, 'bool'):
         plot_at_end(simulation)
@@ -161,6 +151,24 @@ def setup_boundary_conditions(simulation):
     # Create a boundary measure that is aware of the marked regions
     ds = dolfin.Measure('ds')[marker]
     simulation.data['ds'] = ds
+    
+def summarise_simulation_after_running(simulation, t_start, success):
+    """
+    Print a summary of the time spent on each part of the simulation
+    """
+    simulation.log.debug('\nGlobal simulation data at end of simulation:')
+    for key, value in sorted(simulation.data.items()):
+        simulation.log.debug('%20s = %s' % (key, repr(type(value))[:57]))
+    
+    # Print the runtime of the functions timed with the @timeit decorator
+    simulation.log.info('\nSummary of time spent:')
+    tottime = time.time() - t_start
+    for funcname in sorted(timeit.timings):
+        durations = timeit.timings[funcname]
+        simulation.log.info('  %30s total time %7.3fs for %5d runs, minimum runtime %7.3fs'
+                            % (funcname, sum(durations), len(durations), min(durations)) +
+                            '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100))
+    simulation.log.info('\nSimulation done in %.3f seconds (%.1f hours)' % (tottime, tottime/60**2))
 
 def plot_at_end(simulation):
     """

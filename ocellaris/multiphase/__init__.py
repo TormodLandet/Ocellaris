@@ -34,7 +34,7 @@ def get_multi_phase_model(name):
 class MultiPhaseModel(object):
     description = 'No description available'
     
-    def update(self, t, dt):
+    def update(self, it, t, dt):
         pass
 
 from . import single_phase

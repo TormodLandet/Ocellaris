@@ -1,23 +1,24 @@
-import time
 from ocellaris import get_version, get_detailed_version, Simulation, run_simulation
 
 def main(inputfile):
     """
     Run Ocellaris
     """
-    version = get_detailed_version() or get_version()
-    
-    print '='*80
-    print '                  Ocellaris   %s' % version 
-    print '='*80
-    print
-    
     sim = Simulation()
     sim.input.read_json(inputfile)
+    sim.log.setup()
+    
+    version = get_detailed_version() or get_version()
+    
+    sim.log.info('='*80)
+    sim.log.info('                  Ocellaris   %s' % version) 
+    sim.log.info('='*80)
+    sim.log.info()
+    
     run_simulation(sim)
     
-    print '='*80
-    print 'Ocellaris exiting successfully'
+    sim.log.info('='*80)
+    sim.log.info('Ocellaris finished successfully')
 
 if __name__ == '__main__':
     # Get command line arguments
