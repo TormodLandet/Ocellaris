@@ -153,9 +153,9 @@ def summarise_simulation_after_running(simulation, t_start, success):
     
     # Show the total duration
     h = int(tottime/60**2)
-    m = int((tottime - h*60)/60)
+    m = int((tottime - h*60**2)/60)
     s = tottime - h*60**2 - m*60
-    humantime = '%d hours %d minutes and %.2f seconds' % (h, m, s)
+    humantime = '%d hours %d minutes and %d seconds' % (h, m, s)
     simulation.log.info('\nSimulation done in %.3f seconds (%s)' % (tottime, humantime))
 
 def plot_at_end(simulation):
