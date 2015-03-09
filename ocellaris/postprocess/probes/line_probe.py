@@ -21,7 +21,10 @@ class LineProbe(Probe):
         file_name = self.input.get('file_name', '')
         self.write_file = file_name is not None
         if self.write_file:
-            self.file_name = prefix + file_name
+            if prefix is not None:
+                self.file_name = prefix + file_name
+            else:
+                self.file_name = file_name
             self.write_interval = self.input.get('write_interval', 1)
         
         # Should we pop up a matplotlib window when running?
