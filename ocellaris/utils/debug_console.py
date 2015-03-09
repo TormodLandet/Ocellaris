@@ -39,9 +39,11 @@ def run_debug_console(simulation):
     # Create a banner to show before the console
     banner.append('Available variables:')
     names = simulation.data.keys() + ['simulation']
-    for name in sorted(names):
-        banner.append(' - %s' % name)
-    banner.append('\nPress Ctrl+D to continue running the simulation.'
+    for i, name in enumerate(sorted(names)):
+        if i % 4 == 0:
+            banner[-1] += '\n'
+        banner[-1] += '  %-18s' % name
+    banner.append('\n\nPress Ctrl+D to continue running the simulation.'
                   '\nRunning exit() or quit() will stop Ocellaris.')
     banner.append('\n>>> from dolfin import *')
     
