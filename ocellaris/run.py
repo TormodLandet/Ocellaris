@@ -63,12 +63,22 @@ def run_simulation(simulation):
     simulation.hooks.add_post_simulation_hook(hook)
     
     # Run the simulation
-    solver.run()
+    try:
+        solver.run()
+        success = True
+    except Exception, e:
+        success = False
+        simulation.log.error('Got exception when running solver:\n%s' % str(e))
+        simulation.hooks.simulation_ended(success)
     
+    # Show dolfin plots?
     if simulation.input.get_value('output/plot_at_end', False, 'bool'):
         plot_at_end(simulation)
     
-    if simulation.input.get_value('console_at_end', False, 'bool'):
+    # Optionally show the console for debugging and ad-hoc posprocessing
+    console_at_end = simulation.input.get_value('console_at_end', False, 'bool')
+    console_on_error = simulation.input.get_value('console_on_error', False, 'bool')
+    if console_at_end  or (not success and console_on_error):
         run_debug_console(simulation)
 
 def load_mesh(simulation):
