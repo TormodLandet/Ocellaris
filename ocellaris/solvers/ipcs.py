@@ -11,6 +11,13 @@ PRECONDITIONER_U = 'additive_schwarz'
 SOLVER_P = 'minres'
 PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True}
+RELAXATION = 1.0
+
+# Implemented timestepping methods
+BDF = 'BDF'
+CRANK_NICOLSON = 'CN'
+TIMESTEPPING_METHODS = (BDF, CRANK_NICOLSON)
+
 
 @register_solver('IPCS')
 class SolverIPCS(Solver):
@@ -20,7 +27,89 @@ class SolverIPCS(Solver):
         scheme IPCS (Incremental Pressure Correction Scheme)
         """
         self.simulation = sim = simulation
+        Vu, Vp, up_list, upp_list, u_conv, u_star, p = self.create_functions()
+        self.read_input()
+        
+        # First time step timestepping coefficients
+        self.time_coeffs = dolfin.Constant([1, -1, 0])
+        
+        # Mesh parameters
         mesh = sim.data['mesh']
+        n = dolfin.FacetNormal(mesh)
+        
+        # Physical properties
+        rho = sim.data['rho']
+        nu = sim.data['nu']
+        g = sim.data['g']
+        self.dt = dolfin.Constant(1.0)
+        
+        # Get the type of elements used in the discretisation
+        family_u = up_list[0].element().family()
+        family_p = p.element().family()
+        
+        # Calculate SIPG penalties for the DG Poisson equation solver
+        Pu = Vu.ufl_element().degree()
+        k_u = k_u_max = k_u_min = nu
+        penalty_u = define_penalty(mesh, Pu, k_u_max, k_u_min)
+        Pp = Vp.ufl_element().degree()
+        k_p = k_p_max = k_p_min = 1/rho
+        penalty_p = define_penalty(mesh, Pp, k_p_max, k_p_min)
+        if 'Discontinuous Lagrange' in (family_u, family_p):
+            sim.log.info('\nDG SIPG penalties:\n  u: %.4e\n  p: %.4e' % (penalty_u, penalty_p))
+        
+        # Define the momentum prediction equations
+        penalty = dolfin.Constant(penalty_u)
+        self.eqs_mom_pred = []
+        for d in range(sim.ndim):
+            trial = dolfin.TrialFunction(Vu)
+            test = dolfin.TestFunction(Vu)
+            beta = self.convection_schemes[d].blending_function
+            f = -1/rho*p.dx(d) + g[d]
+            dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
+            neumann_bcs = self.simulation.data['neumann_bcs'].get('u%d' % d, [])
+            
+            # The convected velocity and the velocity in the viscous equation
+            if self.timestepping_method == BDF:
+                u_conv2 = u_visc = trial
+            elif self.timestepping_method == CRANK_NICOLSON:
+                u_conv2 = u_visc = (trial + up_list[d])/2.0
+            
+            a1, L1 = define_advection_problem(trial, test, up_list[d], upp_list[d],
+                                              u_conv, u_conv2, n, beta,
+                                              self.time_coeffs, self.dt, dirichlet_bcs)
+            a2, L2 = define_poisson_problem(u_visc, test, k_u, f, n, penalty,
+                                            dirichlet_bcs, neumann_bcs, family_u)
+            
+            eq = a1+a2, L1+L2
+            self.eqs_mom_pred.append(eq)
+        
+        # Define the pressure correction equation
+        penalty = dolfin.Constant(penalty_p)
+        trial = dolfin.TrialFunction(Vp)
+        test = dolfin.TestFunction(Vp)
+        f = -self.time_coeffs[0]/self.dt * dolfin.nabla_div(u_star)
+        dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
+        neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
+        self.eq_pressure = define_poisson_problem(trial, test, k_p, f, n, penalty,
+                                                  dirichlet_bcs, neumann_bcs, family_p)
+        
+        # For error norms in the convergence estimates
+        elem = sim.data['u0'].element()
+        self.Vu_highp = dolfin.FunctionSpace(mesh, elem.family(), elem.degree() + 3)
+        
+        # Storage for preassembled matrices
+        self.Au = [None] * sim.ndim 
+        self.Ap = None
+        
+        # Store number of iterations
+        self.niters_u = [None] * sim.ndim
+        self.niters_p = None
+    
+    def read_input(self):
+        """
+        Read the simulation input
+        """
+        sim = self.simulation
         
         # Test for PETSc
         if not dolfin.has_linear_algebra_backend("PETSc"):
@@ -28,10 +117,6 @@ class SolverIPCS(Solver):
                          'DOLFIN has not been configured with PETSc '
                          'which is needed by Ocellaris.')
         dolfin.parameters["linear_algebra_backend"] = "PETSc"
-        
-        # Function spaces
-        Vu = simulation.data['Vu']
-        Vp = simulation.data['Vp']
         
         # Solver for the velocity prediction
         velocity_solver_name = sim.input.get_value('solver/u/solver', SOLVER_U, 'string')
@@ -47,22 +132,52 @@ class SolverIPCS(Solver):
         self.pressure_solver = create_krylov_solver(pressure_solver_name, pressure_preconditioner,
                                                     [KRYLOV_PARAMETERS, pressure_solver_parameters])
         
+        # Get convection schemes for the velocity
+        conv_schemes = []
+        for d in range(sim.ndim):
+            conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', required_type='string')
+            conv_scheme = get_convection_scheme(conv_scheme_name)(sim, 'u%d' % d)
+            conv_schemes.append(conv_scheme)
+        self.convection_schemes = conv_schemes
+        
+        # Coefficients for u, up and upp
+        self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
+        if not self.timestepping_method in TIMESTEPPING_METHODS:
+            available_methods = '\n'.join(' - %s' % m for m in TIMESTEPPING_METHODS)
+            report_error('Unknown timestepping method', 
+                         'Timestepping method %s not recognised, please use one of:\n%s' %
+                         (self.timestepping_method, available_methods))
+        
+        # Optional relaxation
+        self.relaxation_value = sim.input.get_value('solver/relaxation', RELAXATION, 'float')
+        self.relaxation = dolfin.Constant(self.relaxation_value)
+    
+    def create_functions(self):
+        """
+        Create functions to hold solutions
+        """
+        sim = self.simulation
+        
+        # Function spaces
+        Vu = sim.data['Vu']
+        Vp = sim.data['Vp']
+        
         # Create velocity functions. Keep both component and vector forms
-        uvec, upvec, uppvec, u_conv, u_star = [], [], [], [], []
+        u_list, up_list, upp_list, u_conv, u_star = [], [], [], [], []
         for d in range(sim.ndim):
             sim.data['u%d' % d] = u = dolfin.Function(Vu)
             sim.data['up%d' % d] = up = dolfin.Function(Vu)
             sim.data['upp%d' % d] = upp = dolfin.Function(Vu)
             sim.data['u_conv%d' % d] = uc = dolfin.Function(Vu)
             sim.data['u_star%d' % d] = us = dolfin.Function(Vu)
-            uvec.append(u)
-            upvec.append(up)
-            uppvec.append(upp)
+            u_list.append(u)
+            up_list.append(up)
+            upp_list.append(upp)
             u_conv.append(uc)
             u_star.append(us)
-        sim.data['u'] = dolfin.as_vector(uvec)
-        sim.data['up'] = dolfin.as_vector(upvec)
-        sim.data['upp'] = dolfin.as_vector(uppvec)
+        sim.data['u'] = dolfin.as_vector(u_list)
+        sim.data['up'] = dolfin.as_vector(up_list)
+        sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['u_conv'] = u_conv = dolfin.as_vector(u_conv)
         sim.data['u_star'] = u_star = dolfin.as_vector(u_star)
         
@@ -70,74 +185,7 @@ class SolverIPCS(Solver):
         sim.data['p'] = p = dolfin.Function(Vp)
         sim.data['p_hat'] = dolfin.Function(Vp)
         
-        # Mesh parameters
-        n = dolfin.FacetNormal(mesh)
-        
-        # Physical properties
-        rho = sim.data['rho']
-        nu = sim.data['nu']
-        g = sim.data['g']
-        self.dt = dolfin.Constant(1.0)
-        
-        # Get convection schemes for the velocity
-        conv_schemes = []
-        for d in range(sim.ndim):
-            conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', required_type='string')
-            conv_scheme = get_convection_scheme(conv_scheme_name)(simulation, 'u%d' % d)
-            conv_schemes.append(conv_scheme)
-        self.convection_schemes = conv_schemes
-        
-        # Coefficients for u, up and upp 
-        self.time_coeffs = dolfin.Constant([1, -1, 0]) # First time step
-        self.relaxation_value = 1.0
-        self.relaxation = dolfin.Constant(self.relaxation_value)
-        
-        # Calculate SIPG penalties for elliptic DG solver
-        Pu = Vu.ufl_element().degree()
-        k_u = k_u_max = k_u_min = nu
-        penalty_u = define_penalty(mesh, Pu, k_u_max, k_u_min)
-        Pp = Vu.ufl_element().degree()
-        k_p = k_p_max = k_p_min = 1/rho
-        penalty_p = define_penalty(mesh, Pp, k_p_max, k_p_min)
-        sim.log.info('\nDG SIPG penalties:\n  u: %.4e\n  p: %.4e' % (penalty_u, penalty_p))
-        
-        # Define the momentum prediction equations
-        penalty = dolfin.Constant(penalty_u)
-        self.eqs_mom_pred = []
-        for d in range(sim.ndim):
-            trial = dolfin.TrialFunction(Vu)
-            test = dolfin.TestFunction(Vu)
-            beta = conv_schemes[d].blending_function
-            f = -1/rho*p.dx(d) + g[d]
-            dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
-            neumann_bcs = self.simulation.data['neumann_bcs'].get('u%d' % d, [])
-            a1, L1 = define_advection_problem(trial, test, upvec[d], uppvec[d],
-                                              u_conv, n, beta, self.time_coeffs, self.dt,
-                                              dirichlet_bcs)
-            a2, L2 = define_poisson_problem(trial, test, k_u, f, n, penalty, dirichlet_bcs, neumann_bcs)
-            eq = a1+a2, L1+L2
-            self.eqs_mom_pred.append(eq)
-        
-        # Define the pressure correction equation
-        trial = dolfin.TrialFunction(Vp)
-        test = dolfin.TestFunction(Vp)
-        penalty = dolfin.Constant(penalty_p)
-        f = -self.time_coeffs[0]/self.dt * dolfin.nabla_div(u_star)
-        dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
-        neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
-        self.eq_pressure = define_poisson_problem(trial, test, k_p, f, n, penalty, dirichlet_bcs, neumann_bcs)
-        
-        # For error norms in the convergence estimates
-        elem = uvec[0].element()
-        self.Vu_highp = dolfin.FunctionSpace(mesh, elem.family(), elem.degree() + 3)
-        
-        # Storage for preassembled matrices
-        self.Au = [None] * sim.ndim 
-        self.Ap = None
-        
-        # Store number of iterations
-        self.niters_u = [None] * sim.ndim
-        self.niters_p = None
+        return Vu, Vp, up_list, upp_list, u_conv, u_star, p
     
     @timeit
     def update_convection(self, t, dt):
@@ -154,10 +202,13 @@ class SolverIPCS(Solver):
             uip =  data['up%d' % d]
             uipp = data['upp%d' % d]
             
-            if timestep < 3:
-                uic.vector()[:] = uip.vector()[:]
-            else:
-                uic.vector()[:] = 2*uip.vector()[:] - uipp.vector()[:]
+            if self.timestepping_method == BDF:
+                if timestep < 3:
+                    uic.vector()[:] = uip.vector()[:]
+                else: 
+                    uic.vector()[:] = 2*uip.vector()[:] - uipp.vector()[:]
+            elif self.timestepping_method == CRANK_NICOLSON:
+                uic.vector()[:] = 1.5*uip.vector()[:] - 0.5*uipp.vector()[:]
             
             # Apply the Dirichlet boundary conditions
             if False:
@@ -345,7 +396,8 @@ class SolverIPCS(Solver):
             self.velocity_update_final()
             
             # Change time coefficient to second order
-            self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
+            if self.timestepping_method == BDF:
+                self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
             
             # Postprocess this time step
             sim.hooks.end_timestep()
