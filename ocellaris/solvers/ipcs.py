@@ -4,6 +4,7 @@ from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, velocity_error_norm, create_krylov_solver
 from . import Solver, register_solver
 from .ipcs_equations import define_advection_problem, define_poisson_problem, define_penalty
+from ufl.operators import nabla_div, nabla_grad, dot
 
 # Default values, can be changed in the input file
 SOLVER_U = 'gmres'
@@ -49,13 +50,22 @@ class SolverIPCS(Solver):
         
         # Calculate SIPG penalties for the DG Poisson equation solver
         Pu = Vu.ufl_element().degree()
-        k_u = k_u_max = k_u_min = nu
-        penalty_u = define_penalty(mesh, Pu, k_u_max, k_u_min)
         Pp = Vp.ufl_element().degree()
+        P = max(Pu, Pp)
+        k_u = k_u_max = k_u_min = nu
+        penalty_u = define_penalty(mesh, P, k_u_max, k_u_min)
         k_p = k_p_max = k_p_min = 1/rho
-        penalty_p = define_penalty(mesh, Pp, k_p_max, k_p_min)
+        penalty_p = define_penalty(mesh, P, k_p_max, k_p_min)
         if 'Discontinuous Lagrange' in (family_u, family_p):
             sim.log.info('\nDG SIPG penalties:\n  u: %.4e\n  p: %.4e' % (penalty_u, penalty_p))
+        
+        # The theta scheme coefficients for the time stepping
+        if self.timestepping_method == BDF:
+            theta = 1.0
+        elif self.timestepping_method == CRANK_NICOLSON:
+            theta = 0.5
+        T1 = dolfin.Constant(theta)
+        T2 = dolfin.Constant(1.0 - theta)
         
         # Define the momentum prediction equations
         penalty = dolfin.Constant(penalty_u)
@@ -64,21 +74,23 @@ class SolverIPCS(Solver):
             trial = dolfin.TrialFunction(Vu)
             test = dolfin.TestFunction(Vu)
             beta = self.convection_schemes[d].blending_function
-            f = -1/rho*p.dx(d) + g[d]
+            fp = -1/rho*p.dx(d) + g[d]
             dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
             neumann_bcs = self.simulation.data['neumann_bcs'].get('u%d' % d, [])
             
-            # The convected velocity and the velocity in the viscous equation
             if self.timestepping_method == BDF:
-                u_conv2 = u_visc = trial
+                uc = u_conv
+                fa = dolfin.Constant(0)
             elif self.timestepping_method == CRANK_NICOLSON:
-                u_conv2 = u_visc = (trial + up_list[d])/2.0
+                theta = dolfin.Constant(0.5)
+                uc = theta*u_conv
+                fa = -theta*dot(uc, nabla_grad(up_list[d]))
+                fp = fp/T1 + T2/T1*nabla_div(k_u*nabla_grad(up_list[d]))
             
-            a1, L1 = define_advection_problem(trial, test, up_list[d], upp_list[d],
-                                              u_conv, u_conv2, n, beta,
-                                              self.time_coeffs, self.dt, dirichlet_bcs)
-            a2, L2 = define_poisson_problem(u_visc, test, k_u, f, n, penalty,
-                                            dirichlet_bcs, neumann_bcs, family_u)
+            a1, L1 = define_advection_problem(trial, test, up_list[d], upp_list[d], uc, fa,
+                                              n, beta, self.time_coeffs, self.dt, dirichlet_bcs)
+            a2, L2 = define_poisson_problem(trial, test, k_u, fp, n, penalty,
+                                            dirichlet_bcs, neumann_bcs)
             
             eq = a1+a2, L1+L2
             self.eqs_mom_pred.append(eq)
@@ -91,7 +103,7 @@ class SolverIPCS(Solver):
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
         self.eq_pressure = define_poisson_problem(trial, test, k_p, f, n, penalty,
-                                                  dirichlet_bcs, neumann_bcs, family_p)
+                                                  dirichlet_bcs, neumann_bcs)
         
         # For error norms in the convergence estimates
         elem = sim.data['u0'].element()
@@ -168,6 +180,7 @@ class SolverIPCS(Solver):
             sim.data['u%d' % d] = u = dolfin.Function(Vu)
             sim.data['up%d' % d] = up = dolfin.Function(Vu)
             sim.data['upp%d' % d] = upp = dolfin.Function(Vu)
+            sim.data['uppp%d' % d] = dolfin.Function(Vu)
             sim.data['u_conv%d' % d] = uc = dolfin.Function(Vu)
             sim.data['u_star%d' % d] = us = dolfin.Function(Vu)
             u_list.append(u)
@@ -201,14 +214,23 @@ class SolverIPCS(Solver):
             uic = data['u_conv%d' % d]
             uip =  data['up%d' % d]
             uipp = data['upp%d' % d]
+            uippp = data['uppp%d' % d]
             
-            if self.timestepping_method == BDF:
-                if timestep < 3:
-                    uic.vector()[:] = uip.vector()[:]
-                else: 
-                    uic.vector()[:] = 2*uip.vector()[:] - uipp.vector()[:]
+            if timestep == 1:
+                uic.vector()[:] = uip.vector()[:]
+            elif self.timestepping_method == BDF:
+                uic.vector()[:] = 2.0*uip.vector()[:] - 1.0*uipp.vector()[:]
             elif self.timestepping_method == CRANK_NICOLSON:
-                uic.vector()[:] = 1.5*uip.vector()[:] - 0.5*uipp.vector()[:]
+                # These seem to give exactly the same results
+                # Ingram (2013) claims that the first has better stability properties
+                # in "A new linearly extrapolated Crank-Nicolson time-stepping scheme 
+                # for the Navier-Stokes equations" 
+                
+                # Ingram's Crank-Nicolson extrapolation method
+                uic.vector()[:] = uip.vector()[:] + 0.5*uipp.vector()[:] - 0.5*uippp.vector()[:]
+                
+                # Standard Crank-Nicolson linear extrapolation method
+                #uic.vector()[:] = 1.5*uip.vector()[:] - 0.5*uipp.vector()[:]
             
             # Apply the Dirichlet boundary conditions
             if False:
@@ -334,6 +356,8 @@ class SolverIPCS(Solver):
             u_new = self.simulation.data['u%d' % d]
             up = self.simulation.data['up%d' % d]
             upp = self.simulation.data['upp%d' % d]
+            uppp = self.simulation.data['uppp%d' % d]
+            uppp.vector()[:] = upp.vector()[:]
             upp.vector()[:] = up.vector()[:]
             up.vector()[:] = u_new.vector()[:]
     
@@ -343,8 +367,8 @@ class SolverIPCS(Solver):
         """
         sim = self.simulation        
         sim.hooks.simulation_started()
-        t = 0
-        it = 0
+        t = sim.time
+        it = sim.timestep
         while True:
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
@@ -379,7 +403,7 @@ class SolverIPCS(Solver):
                 else:
                     L2_info = ''
                     
-                # Solver information
+                # Solver informationand the velocity in the viscous equation
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
