@@ -3,10 +3,9 @@
 	"type": "input",
 	"version": 1.0,
 	
-	"multiphase_model": "BlendedAlgebraicVOF",
-	
-	"VOF": {
-		"compression_factor": 0.0
+	"multiphase_solver": {
+	   "type": "BlendedAlgebraicVOF",
+	   "compression_factor": 0.0
 	},
 	
 	"convection": {

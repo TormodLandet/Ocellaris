@@ -6,10 +6,10 @@ from ocellaris import Simulation
 from ocellaris.run import load_mesh, setup_boundary_conditions
 
 thisdir = os.path.dirname(os.path.abspath(__file__))
-inpfile = os.path.join(thisdir, 'vof_test.inp')
+inpfile = os.path.join(thisdir, 'diagonal_advection_of_square.inp')
 
 sim = Simulation()
-sim.read_json_input_file(inpfile)
+sim.input.read_json(inpfile)
 
 VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
@@ -22,10 +22,10 @@ PLOT = False
 PNG_OUTPUT_FREQUENCY = 10
 PLOT_INTERPOLATED = False
 
-Nx = sim.input['mesh']['Nx']
-Ny = sim.input['mesh']['Ny']
-xmax = sim.input['mesh']['endx']
-ymax = sim.input['mesh']['endy'] 
+Nx = sim.input.get_value('mesh/Nx', required_type='int')
+Ny = sim.input.get_value('mesh/Ny', required_type='int')
+xmax = sim.input.get_value('mesh/endx', required_type='float')
+ymax = sim.input.get_value('mesh/endy', required_type='float') 
 hx = xmax / Nx
 hy = ymax / Ny
 print 'CFL ~', (TMAX/Nt)/hx*VEL[0], (TMAX/Nt)/hy*VEL[1]
@@ -106,12 +106,13 @@ print json.dumps(sim.input, indent=4)
 sim.plotting.plot_all()
 
 postprocess(vof.colour_function, 0.0)
-sim.reporting.print_timestep_report()
+sim.hooks.simulation_started()
+sim.reporting.log_timestep_reports()
 
 for it in xrange(1, Nt):
     t = t_vec[it]
     dt = dt_vec[it-1]
-    sim.new_timestep(it, t, dt)
+    sim.hooks.new_timestep(it, t, dt)
 
     if t < VEL_TURN_TIME:
         u0.vector()[:] = VEL[0]
@@ -120,16 +121,18 @@ for it in xrange(1, Nt):
         u0.vector()[:] = -VEL[0]
         u1.vector()[:] = -VEL[1]
     
-    vof.update(t, dt)
+    vof.update(it, t, dt)
     
     if PLOT and it % PNG_OUTPUT_FREQUENCY == 0:
         sim.plotting.plot_all()
     
     postprocess(vof.colour_function, t)
-    sim.end_timestep()
+    sim.hooks.end_timestep()
     
     if it == TS_MAX:
         break
+
+sim.hooks.simulation_ended(success=True)
 
 ###############################################################################
 # Visualisation

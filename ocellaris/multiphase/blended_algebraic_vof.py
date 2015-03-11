@@ -26,7 +26,6 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.mesh = simulation.data['mesh']
         
         # Define function space and solution function
-        # This should be moved externally?
         V = simulation.data['Vc']
         self.colour_function = c = Function(V)
         self.prev_colour_function = cp = Function(V)
@@ -59,7 +58,9 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         test = dolfin.TestFunction(V)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
         vel = self.simulation.data['u']
-        self.eq = define_advection_problem(trial, test, cp, cpp, vel, normal, beta, self.time_coeffs, self.dt, dirichlet_bcs)
+        f = dolfin.Constant(0.0)
+        self.eq = define_advection_problem(trial, test, cp, cpp, vel, f, normal, beta,
+                                           self.time_coeffs, self.dt, dirichlet_bcs)
         
         simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
         simulation.plotting.add_plot('c_grad', gradient)
@@ -98,7 +99,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         """
         #self.simulation.plotting.plot('c', '_uncompr')
         
-        compr_fac = self.simulation.input.get_value('VOF/compression_factor', 1.0, 'float')
+        compr_fac = self.simulation.input.get_value('multiphase_solver/compression_factor', 0.0, 'float')
         if compr_fac == 0:
             return
         
