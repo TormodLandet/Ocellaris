@@ -35,7 +35,10 @@ def main(inputfile):
     run_simulation(sim)
     
     sim.log.info('='*80)
-    sim.log.info('Ocellaris finished successfully')
+    if sim.success:
+        sim.log.info('Ocellaris finished successfully')
+    else:
+        sim.log.info('Ocellaris finished with errors')
 
 if __name__ == '__main__':
     # Get command line arguments

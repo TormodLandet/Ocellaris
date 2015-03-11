@@ -151,6 +151,7 @@ class Hooks(object):
             success: True if nothing went wrong, False for
             diverging solution and other problems
         """
+        self.simulation.success = success
         for hook in self._post_simulation_hooks[::-1]:
             hook(success)
 
@@ -362,7 +363,12 @@ class Log(object):
         (not the dolfin log level!)
         """
         self.log_level = log_level
-        
+    
+    def error(self, message):
+        "Log an error message"
+        if self.log_level <= dolfin.ERROR:
+            self._write(message)
+    
     def warning(self, message=''):
         "Log a warning message"
         if self.log_level <= dolfin.WARNING:
