@@ -4,7 +4,7 @@ from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, velocity_error_norm, create_krylov_solver
 from . import Solver, register_solver
 from .ipcs_equations import define_advection_problem, define_poisson_problem, define_penalty
-from ufl.operators import nabla_div, nabla_grad, dot
+from dolfin import nabla_div, nabla_grad, dot
 
 # Default values, can be changed in the input file
 SOLVER_U = 'gmres'
@@ -99,7 +99,7 @@ class SolverIPCS(Solver):
         penalty = dolfin.Constant(penalty_p)
         trial = dolfin.TrialFunction(Vp)
         test = dolfin.TestFunction(Vp)
-        f = -self.time_coeffs[0]/self.dt * dolfin.nabla_div(u_star)
+        f = -self.time_coeffs[0]/self.dt * nabla_div(u_star)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
         self.eq_pressure = define_poisson_problem(trial, test, k_p, f, n, penalty,
