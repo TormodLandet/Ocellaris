@@ -14,6 +14,10 @@ finte element calculations.
 Ocellaris is named after the `Amphiprion Ocellaris <http://en.wikipedia.org/wiki/Ocellaris_clownfish>`_
 clownfish and is written as part of a PhD project at the University of Oslo.
 
+.. image:: http://trlandet.bitbucket.org/ocellaris/_static/ocellaris_mesh_521.png
+    :align: center
+    :alt: Picture of Ocellaris
+
 Installation and running
 ------------------------
 
