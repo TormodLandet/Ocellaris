@@ -117,12 +117,11 @@ class RegionSelector(dolfin.SubDomain):
         Set the code to be used in the .map() method for periodic
         boundary conditions.
         
-        It the code contains a newline it must be the core
-        of the function and also include a return statement,
-        otherwise it is assumed to be an expression
+        The code must assign to the 'y' variable
         """
         self.map_func = RunnablePythonString(self.simulation, code_string,
-                                             'map code for %s' % region_name)
+                                             'map code for %s' % region_name,
+                                             var_name='y')
     
     def inside(self, x, on_boundary):
         """

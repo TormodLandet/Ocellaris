@@ -9,6 +9,8 @@ from math import *
 from numpy import *
 from dolfin import *
 
+__all__ = ['RunnablePythonString', 'CodedExpression']
+
 class RunnablePythonString(object):
     def __init__(self, simulation, code_string, description, var_name=None):
         """
@@ -25,28 +27,34 @@ class RunnablePythonString(object):
         self.simulation = simulation
         self.description = description
         self.var_name = var_name
-        multiline = self._validate_code(code_string)
+        needs_exec = self._validate_code(code_string)
         
         filename = '<input-file-code %s>' % description
-        self.code = compile(code_string, filename, 'exec' if multiline else 'eval')
-        self.is_multiline = multiline
+        self.code = compile(code_string, filename, 'exec' if needs_exec else 'eval')
+        self.needs_exec = needs_exec
     
     def _validate_code(self, code_string):
         """
         Check that the code is either a single expression or a valid
         multiline expression that defines the variable varname 
         """
-        lines = code_string.split('\n')
-        multiline = len(lines) > 1
+        # Does this code define the variable, var_name = ...
+        # or assign to an element, var_name[i] = ... ?
+        if self.var_name is not None:
+            vardef = r'.*(^|\s)%s(\[\w\])?\s*=' % self.var_name
+            has_vardef = re.match(vardef, code_string) is not None
+        else:
+            has_vardef = False
         
-        if multiline and self.var_name is not None:
-            vardef = r'.*(^|\s)%s\s*=' % self.var_name
-            if re.match(vardef, code_string) is None:
-                report_error('Invalid: %s' % self.description,
-                             'Multi line expression must define the variable "%s"'
-                             % self.var_name)
+        multiline = '\n' in code_string
+        needs_exec = multiline or has_vardef
         
-        return multiline
+        if needs_exec and self.var_name is not None and not has_vardef:
+            report_error('Invalid: %s' % self.description,
+                         'Multi line expression must define the variable "%s"'
+                         % self.var_name)
+        
+        return needs_exec
     
     def run(self, **kwargs):
         """
@@ -61,7 +69,7 @@ class RunnablePythonString(object):
         # Make sure the keyword arguments accessible
         locals().update(kwargs)
         
-        if self.is_multiline:
+        if self.needs_exec:
             exec(self.code)
             if self.var_name is not None:
                 # The code defined a variable. Return it
@@ -72,3 +80,17 @@ class RunnablePythonString(object):
         else:
             # Return the result of evaluating the expression
             return eval(self.code)
+
+class CodedExpression(dolfin.Expression):
+    def __init__(self, simulation, code_string, description):
+        """
+        This Expression sub-class just runs the given
+        RunnablePythonString object to evaluate at a
+        point
+        """
+        super(CodedExpression, self).__init__()
+        self.runnable = RunnablePythonString(simulation, code_string, description, 'values')
+    
+    def eval(self, values, x):
+        self.runnable.run(values=values, x=x)
+
