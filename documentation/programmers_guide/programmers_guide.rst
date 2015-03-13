@@ -22,7 +22,7 @@ of the code. Everyone who wants to look at the input or access the calculated
 solution must do this through the simulation class.
 
 The main function will now read the input file given by the user on the command
-line by running the :meth:`ocellaris.simulation.Input.input.read_json` method.
+line by running the :meth:`ocellaris.simulation.Input.input.read_yaml` method.
 The code will also set up logging / console output and print a banner unless
 the user has set the log level so high that INFO messages will not be printed.
 

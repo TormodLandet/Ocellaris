@@ -14,9 +14,11 @@ finte element calculations.
 Ocellaris is named after the `Amphiprion Ocellaris <http://en.wikipedia.org/wiki/Ocellaris_clownfish>`_
 clownfish and is written as part of a PhD project at the University of Oslo.
 
-.. image:: http://trlandet.bitbucket.org/ocellaris/_static/ocellaris_mesh_521.png
+.. figure:: http://trlandet.bitbucket.org/ocellaris/_static/ocellaris_mesh_521.png
     :align: center
     :alt: Picture of Ocellaris
+    
+    `About this image <http://trlandet.bitbucket.org/ocellaris/logo.html>`_
 
 Installation and running
 ------------------------
@@ -27,10 +29,16 @@ Python package and the FEniCS and SciPy packages in the Python PATH (dolfin/nump
 
   python -m ocellaris INPUTFILE.INP
   
-Ocellaris currently supports Python 2 only, not Python 3. 
+To test the code there are some demos in the ``demos/`` directory. Complete input files are provided
+for several of the normal benchmark cases like lid driven cavity flow and the Taylor-Green vortex. More
+information can be found in the documentation which also contains a description of the input file format.
 
-To test the code there are some demos in the ``demos/`` directory. A complete input file is provided
-for the well known lid driven cavity flow test case. More information can be found in the documentation.
+Please feel free to test Ocellaris, but plese keep in mind:
+
+- Ocellaris is in a state of constant development and does not have a stable API or input file format
+- Ocellaris is currently only being tested on one CPU. FEniCS scales to many thousands of CPUs, but
+  scaling and speed of the solvers are not a priority at the moment
+- Ocellaris supports Python 2 only, not Python 3
 
 Documentation
 -------------

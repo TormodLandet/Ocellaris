@@ -1,6 +1,19 @@
 ocellaris:
     type: input
     version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2015-02-13
+    description: |
+        Implements the lid driven cavity flow test case. This benchmark case
+        has no analytical solution, but is a nice way to test the solver in
+        presence of viscous shear and discontinuities.
+        
+        Comparison data is included. This is from the paper by V. Ghia, 
+        K.N. Ghia and C.T. Shin: "High-Re solutions for incompressible flow
+        using the Navier-Stokes equations and a multi-grid method" in 
+        J.Comp.Phys., v.48, 1982, pp.387-411. 
 
 physical_properties:
     g: [0, 0]

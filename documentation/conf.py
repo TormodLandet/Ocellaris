@@ -20,6 +20,9 @@ import os
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #sys.path.insert(0, os.path.abspath('.'))
 
+# REMOVE this when the FEniCS module includes Sphinx >= 1.3
+sys.path.insert(0, '/mn/anatu/ansatte-u6/tormodla/.local/lib/python2.7/site-packages')
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -31,6 +34,7 @@ import os
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
+    'sphinxcontrib.napoleon'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

@@ -16,6 +16,11 @@
    user_guide/user_guide
    theory/theory
    programmers_guide/programmers_guide
+   
+.. toctree::
+   :hidden:
+
+   logo
 
 .. not used currently ...
 
