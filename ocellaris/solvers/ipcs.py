@@ -143,6 +143,7 @@ class SolverIPCS(Solver):
         velocity_solver_parameters = sim.input.get_value('solver/u/parameters', {}, 'dict')
         self.velocity_solver = create_krylov_solver(velocity_solver_name, velocity_preconditioner,
                                                     [KRYLOV_PARAMETERS, velocity_solver_parameters])
+        self.velocity_solver.parameters['preconditioner']['structure'] = 'same_nonzero_pattern'
         
         # Make a solver for the pressure correction
         pressure_solver_name = sim.input.get_value('solver/p/solver', SOLVER_P, 'string')
@@ -150,6 +151,7 @@ class SolverIPCS(Solver):
         pressure_solver_parameters = sim.input.get_value('solver/p/parameters', {}, 'dict')
         self.pressure_solver = create_krylov_solver(pressure_solver_name, pressure_preconditioner,
                                                     [KRYLOV_PARAMETERS, pressure_solver_parameters])
+        self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
         
         # Get convection schemes for the velocity
         conv_schemes = []

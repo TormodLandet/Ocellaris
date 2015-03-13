@@ -1,5 +1,4 @@
-import time
-import collections
+import sys, time, collections, traceback
 import yaml
 import dolfin
 from .multiphase import get_multi_phase_model
@@ -88,7 +87,11 @@ def run_simulation(simulation):
         success = True
     except Exception, e:
         success = False
+        simulation.log.error('=== EXCEPTION =='*5)
+        tb = traceback.format_tb(sys.exc_info()[2])
+        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
         simulation.log.error('Got exception when running solver:\n%s' % str(e))
+        simulation.log.error('=== EXCEPTION =='*5)
         simulation.hooks.simulation_ended(success)
     
     # Show dolfin plots?
@@ -189,7 +192,7 @@ def setup_function_spaces(simulation):
         # Get the function space name and polynomial degree
         Vc_name = simulation.input.get_value('multiphase_solver/function_space_colour',
                                              'Discontinuous Lagrange', 'string')
-        Pc = simulation.input.get_value('solver/polynomial_degree_colour', 0, 'int')
+        Pc = simulation.input.get_value('multiphase_solver/polynomial_degree_colour', 0, 'int')
         
         # Create and store function space
         Vc = dolfin.FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
