@@ -81,16 +81,40 @@ class RunnablePythonString(object):
             # Return the result of evaluating the expression
             return eval(self.code)
 
-class CodedExpression(dolfin.Expression):
-    def __init__(self, simulation, code_string, description):
-        """
-        This Expression sub-class just runs the given
-        RunnablePythonString object to evaluate at a
-        point
-        """
-        super(CodedExpression, self).__init__()
-        self.runnable = RunnablePythonString(simulation, code_string, description, 'values')
+def CodedExpression(simulation, code_string, description, value_shape=()):
+    """
+    This Expression sub-class factory creates objects that run the given
+    RunnablePythonString object when asked to evaluate
+    """
+    # I guess dolfin overloads __new__ in some strange way ???
+    # This type of thing should really be unnecessary ...
+    if value_shape == ():
+        expr = CodedExpression0()
+    elif value_shape == (2,):
+        expr = CodedExpression2()
+    elif value_shape == (3,):
+        expr = CodedExpression2()
     
-    def eval(self, values, x):
-        self.runnable.run(values=values, x=x)
+    expr.runnable = RunnablePythonString(simulation, code_string, description, 'value')
+    return expr
 
+# This is just stupid ...
+class CodedExpression0(dolfin.Expression):
+    def eval(self, value, x):
+        self.runnable.run(value=value, x=x)
+
+# This is just more stupid ...
+class CodedExpression2(dolfin.Expression):
+    def eval(self, value, x):
+        self.runnable.run(value=value, x=x)
+    
+    def value_shape(self):
+        return (2,)
+
+# This is just more and more stupid ...
+class CodedExpression3(dolfin.Expression):
+    def eval(self, value, x):
+        self.runnable.run(value=value, x=x)
+
+    def value_shape(self):
+        return (3,)

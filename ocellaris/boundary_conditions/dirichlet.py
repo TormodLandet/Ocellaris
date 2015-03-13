@@ -1,5 +1,8 @@
 import dolfin
 from . import register_boundary_condition, BoundaryCondition
+from ocellaris.utils import CodedExpression
+from sympy.parsing.maxima import var_name
+
 
 class OcellarisDirichletBC(dolfin.DirichletBC):
     def __init__(self, simulation, V, value, subdomain_marker, subdomain_id):
@@ -27,7 +30,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
 
 
 @register_boundary_condition('ConstantValue')
-class DirichletBoundary(BoundaryCondition):
+class ConstantDirichletBoundary(BoundaryCondition):
     description = 'A prescribed constant value Dirichlet condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
@@ -59,3 +62,74 @@ class DirichletBoundary(BoundaryCondition):
         bcs.setdefault(var_name, []).append(bc)
         
         self.simulation.log.info('    Constant value %r for %s' % (value, var_name))
+
+
+@register_boundary_condition('CodedValue')
+class CodedDirichletBoundary(BoundaryCondition):
+    description = 'A coded Dirichlet condition'
+    
+    def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
+        """
+        Dirichlet condition with coded value
+        """
+        self.simulation = simulation
+        self.func_space = simulation.data['V%s' % var_name]
+        
+        # Make a dolfin Expression object that runs the code string
+        code = inp_dict['code']
+        
+        if isinstance(code, list):
+            assert len(code) == simulation.ndim
+            for d in range(simulation.ndim):
+                name = '%s%d' % (var_name, d)
+                description = 'coded value boundary condition for %s' % name
+                expr = CodedExpression(simulation, code[0], description)
+                self.register_dirichlet_condition(name, expr, subdomains, subdomain_id)
+        else:
+            description = 'coded value boundary condition for %s' % var_name
+            expr = CodedExpression(simulation, code, description)
+            self.register_dirichlet_condition(var_name, expr, subdomains, subdomain_id)
+    
+    def register_dirichlet_condition(self, var_name, expr, subdomains, subdomain_id):
+        """
+        Store the boundary condition for use in the solver
+        """
+        bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
+        bcs = self.simulation.data['dirichlet_bcs']
+        bcs.setdefault(var_name, []).append(bc)
+        self.simulation.log.info('    Coded value for %s' % var_name)
+
+
+@register_boundary_condition('CppCodedValue')
+class CppCodedDirichletBoundary(BoundaryCondition):
+    description = 'A C++ coded Dirichlet condition'
+    
+    def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
+        """
+        Dirichlet condition with C++ coded value
+        """
+        self.simulation = simulation
+        self.func_space = simulation.data['V%s' % var_name]
+        
+        # Make a dolfin Expression object that runs the code string
+        code = inp_dict['cpp_code']
+        
+        if isinstance(code, list):
+            assert len(code) == simulation.ndim
+            for d in range(simulation.ndim):
+                name = '%s%d' % (var_name, d)
+                expr = dolfin.Expression(code[d])
+                self.register_dirichlet_condition(name, expr, subdomains, subdomain_id)
+        else:
+            expr = dolfin.Expression(code)
+            self.register_dirichlet_condition(var_name, expr, subdomains, subdomain_id)
+    
+    def register_dirichlet_condition(self, var_name, expr, subdomains, subdomain_id):
+        """
+        Store the boundary condition for use in the solver
+        """
+        bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
+        bcs = self.simulation.data['dirichlet_bcs']
+        bcs.setdefault(var_name, []).append(bc)
+        self.simulation.log.info('    C++ coded value for %s' % var_name)
+
