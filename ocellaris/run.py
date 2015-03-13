@@ -16,11 +16,11 @@ def run_simulation(simulation):
     t_start = time.time()
     
     # Load the mesh. The mesh determines if we are in 2D or 3D
-    load_mesh(simulation)
+    mesh_facet_regions = load_mesh(simulation)
     
     # Mark the boundaries of the domain with separate marks
     # for each regions Creates a new "ds" measure
-    mark_boundaries(simulation)
+    mark_boundaries(simulation, mesh_facet_regions)
     
     # Load the periodic boundary conditions. This must 
     # be done before creating the function spaces as
@@ -108,24 +108,45 @@ def run_simulation(simulation):
 def load_mesh(simulation):
     """
     Get the mesh from the simulation input
+    
+    Returns the facet regions contained in the mesh data
+    or None if these do not exist
     """
     inp = simulation.input
-    mesh_type = inp['mesh']['type']
+    mesh_type = inp.get_value('mesh/type', required_type='string')
     
     if mesh_type == 'Rectangle':
-        startx = inp['mesh'].get('startx', 0)
-        starty = inp['mesh'].get('starty', 0)
-        endx = inp['mesh'].get('endx', 1)
-        endy = inp['mesh'].get('endy', 1)
-        Nx = int(inp['mesh']['Nx'])
-        Ny = int(inp['mesh']['Ny'])
-        diagonal = inp['mesh'].get('diagonal', 'left/right')
+        startx = inp.get_value('mesh/startx', 0, 'float')
+        starty = inp.get_value('mesh/starty', 0, 'float')
+        endx = inp.get_value('mesh/endx', 1, 'float')
+        endy = inp.get_value('mesh/endy', 1, 'float')
+        Nx = inp.get_value('mesh/Nx', required_type='int')
+        Ny = inp.get_value('mesh/Ny', required_type='int')
+        diagonal = inp.get_value('mesh/diagonal', 'left/right', required_type='string')
         mesh = dolfin.RectangleMesh(startx, starty, endx, endy, Nx, Ny, diagonal)
+        mesh_facet_regions = None
+    
+    elif mesh_type == 'XML':
+        mesh_file = inp.get_value('mesh/mesh_file', required_type='string')
+        facet_region_file = inp.get_value('mesh/facet_region_file', None, required_type='string')
+        
+        # Load the mesh from file
+        pth = inp.get_input_file_path(mesh_file)
+        mesh = dolfin.Mesh(pth)
+        
+        # Load the facet regions if available
+        if facet_region_file is not None:
+            pth = inp.get_input_file_path(facet_region_file)
+            mesh_facet_regions = dolfin.MeshFunction('size_t', mesh, pth)
+        else:
+            mesh_facet_regions = None
     
     simulation.set_mesh(mesh)
+    
+    return mesh_facet_regions
 
 
-def mark_boundaries(simulation):
+def mark_boundaries(simulation, mesh_facet_regions):
     """
     Mark the boundaries of the mesh with different numbers to be able to
     apply different boundary conditions to different regions 
@@ -138,7 +159,7 @@ def mark_boundaries(simulation):
     # condition objects that are later used in the eq. solvers
     boundary = []
     for index, _ in enumerate(simulation.input.get_value('boundary_conditions', required_type='list(dict)')):
-        part = BoundaryRegion(simulation, marker, index)
+        part = BoundaryRegion(simulation, marker, index, mesh_facet_regions)
         boundary.append(part)
     simulation.data['boundary'] = boundary
     simulation.data['boundary_marker'] = marker

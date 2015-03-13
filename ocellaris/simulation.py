@@ -1,5 +1,4 @@
-import collections
-import time
+import os, collections, time
 import yaml
 import dolfin
 from .postprocess import Plotter
@@ -175,7 +174,7 @@ class Input(collections.OrderedDict):
         super(Input, self).__init__()
         self.simulation = simulation
     
-    def read_yaml(self, filename):
+    def read_yaml(self, file_name):
         """
         Read the input to an Ocellaris simulation from a YAML 
         formated input file. The user will get an error if the
@@ -183,7 +182,7 @@ class Input(collections.OrderedDict):
         """
         self._setup_yaml()
         try:
-            with open(filename, 'rt') as inpf:
+            with open(file_name, 'rt') as inpf:
                 inp = yaml.load(inpf)
         except ValueError as e:
             report_error('Error on input file', str(e))
@@ -194,7 +193,8 @@ class Input(collections.OrderedDict):
         
         self.clear()
         self.update(inp)
-        
+        self.file_name = file_name
+    
     def get_value(self, path, default_value=UNDEFINED, required_type='any'):
         """
         Get an input value by its path in the input dictionary
@@ -289,6 +289,26 @@ class Input(collections.OrderedDict):
         else:
             return prefix + filename
         
+    def get_input_file_path(self, file_name):
+        """
+        Serch first relative to the current working dir and then
+        relative to the input file dir
+        """
+        # Check if the path is absolute or relative to the
+        # working directory
+        if os.path.exists(file_name):
+            return file_name
+        print 'does not exist:', file_name
+        
+        # Check if the path is relative to the inouf file dir
+        inp_file_dir = os.path.dirname(self.file_name)
+        pth2 = os.path.join(inp_file_dir, file_name)
+        if os.path.exists(pth2):
+            return pth2
+        print 'does not exist:', pth2
+        
+        report_error('File not found', 'The specified file "%s" was not found' % file_name)
+    
     def _setup_yaml(self):
         """
         Make PyYaml load and store keys in dictionaries 

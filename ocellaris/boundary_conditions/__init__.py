@@ -2,7 +2,7 @@ import dolfin
 from ocellaris.utils import report_error, RunnablePythonString
 
 class BoundaryRegion(object):
-    def __init__(self, simulation, marker, index):
+    def __init__(self, simulation, marker, index, mesh_facet_regions):
         """
         Create boundary conditions for the given part
         
@@ -42,12 +42,27 @@ class BoundaryRegion(object):
                              % (self.name, code_string) +
                              '\n\nThe error was "%s"' % e +
                              '\n\nDid you remember that x is an array?')
+        
+        elif self.selector_name == 'mesh_facet_region':
+            # Find all facets with the given numbers and update the Ocellaris
+            # facet marker function. The Ocellaris region number will not in
+            # general be the same as the mesh facet region number
+            array_mesh = mesh_facet_regions.array()
+            array_ocellaris = marker.array() 
+            region_numbers = inp['mesh_facet_regions']
+            for num in region_numbers:
+                simulation.log.info('Applying boundary region number %d to mesh '
+                                    'facet region number %d' %  (self.mark_id, num))
+                array_ocellaris[array_mesh == num] = self.mark_id
+            marker.set_values(array_ocellaris)
+        
         else:
             report_error('Error: unknown boundary selector',
                          'Boundary condition for boundary "%s" has '
                          'selector="%s". This selector is not implemented.'
                          '\n\nImplemented selectors:\n\n'
-                         ' - region'
+                         ' - region\n'
+                         ' - mesh_facet_region'
                          % (self.name, self.selector_name))
     
     def create_periodic_boundary_conditions(self):
