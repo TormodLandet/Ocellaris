@@ -1,6 +1,6 @@
-import json
 import collections
 import time
+import yaml
 import dolfin
 from .postprocess import Plotter
 from .utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
@@ -26,6 +26,11 @@ class Simulation(object):
         self.timestep = 0
         self.time = 0.0
         self.dt = 0.0
+        
+        # These will be filled out when ocellaris.run is setting up
+        # the solver. Included here for documentation purposes only
+        self.solver = None
+        self.multi_phase_model = None
         
         # For timing the analysis
         self.prevtime = self.starttime = time.time()
@@ -161,28 +166,32 @@ class UndefinedParameter(object):
         return '<UNDEFINED>'
 UNDEFINED = UndefinedParameter()
 
-class Input(dict):
+
+class Input(collections.OrderedDict):
     def __init__(self, simulation):
         """
         Holds the input values provided by the user
         """
+        super(Input, self).__init__()
         self.simulation = simulation
     
-    def read_json(self, filename):
+    def read_yaml(self, filename):
         """
-        Read the input to an Ocellaris simulation from a JSON 
+        Read the input to an Ocellaris simulation from a YAML 
         formated input file. The user will get an error if the
         input file is malformed 
         """
+        self._setup_yaml()
         try:
             with open(filename, 'rt') as inpf:
-                inp = json.load(inpf, object_pairs_hook=collections.OrderedDict)
+                inp = yaml.load(inpf)
         except ValueError as e:
             report_error('Error on input file', str(e))
         
-        assert inp['program'] == 'ocellaris'
-        assert inp['version'] == 1.0
-        assert inp['type'] == 'input'
+        assert 'ocellaris' in inp
+        assert inp['ocellaris']['type'] == 'input'
+        assert inp['ocellaris']['version'] == 1.0
+        
         self.clear()
         self.update(inp)
         
@@ -232,6 +241,7 @@ class Input(dict):
         
         # Validate according to required data type
         number = (int, long, float)
+        dict_types = (dict, collections.OrderedDict)
         if required_type == 'bool':
             check_isinstance(d, bool)
         elif required_type == 'float':
@@ -242,6 +252,16 @@ class Input(dict):
             check_isinstance(d, basestring)
             # SWIG does not like Python 2 Unicode objects
             d = str(d)
+        elif required_type == 'dict(string:dict)':
+            check_isinstance(d, dict_types)
+            for key, val in d.items():
+                check_isinstance(key, basestring)
+                check_isinstance(val, dict_types)
+        elif required_type == 'dict(string:list)':
+            check_isinstance(d, dict_types)
+            for key, val in d.items():
+                check_isinstance(key, basestring)
+                check_isinstance(val, list)
         elif required_type == 'list(float)':
             check_isinstance(d, list)
             for elem in d:
@@ -249,7 +269,7 @@ class Input(dict):
         elif required_type == 'list(dict)':
             check_isinstance(d, list)
             for elem in d:
-                check_isinstance(elem, dict)
+                check_isinstance(elem, dict_types)
         elif required_type == 'any':
             pass
         else:
@@ -268,6 +288,23 @@ class Input(dict):
             return None
         else:
             return prefix + filename
+        
+    def _setup_yaml(self):
+        """
+        Make PyYaml load and store keys in dictionaries 
+        ordered like they were on the input file
+        """
+        _mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
+    
+        def dict_representer(dumper, data):
+            return dumper.represent_dict(data.iteritems())
+    
+        def dict_constructor(loader, node):
+            return collections.OrderedDict(loader.construct_pairs(node))
+    
+        yaml.add_representer(collections.OrderedDict, dict_representer)
+        yaml.add_constructor(_mapping_tag, dict_constructor)
+
 
 class Plotting(object):
     def __init__(self, simulation):
@@ -305,7 +342,8 @@ class Plotting(object):
         name_template = sim.input.get_value('plots/name_template', name_template_dafault, 'string')
         filename = name_template.format(name=name, timestep=sim.timestep, t=sim.time, extra=extra)
         self.plots[name].plot(filename)
-        
+
+
 class Reporting(object):
     def __init__(self, simulation):
         """
@@ -340,6 +378,7 @@ class Reporting(object):
         it, t = self.simulation.timestep, self.simulation.time
         self.simulation.log.info('Reports for timestep = %5d, time = %10.4f, ' % (it, t) +
                                  ', '.join(info))
+
 
 class Log(object):
     def __init__(self, simulation):

@@ -48,13 +48,18 @@ class SolverIPCS(Solver):
         family_u = up_list[0].element().family()
         family_p = p.element().family()
         
+        # Bounds on the diffusion coefficients for SIPG penalty calculation
+        mpm = simulation.multi_phase_model
+        nu_max, nu_min = mpm.get_laminar_kinematic_viscosity_range()
+        rho_max, rho_min = mpm.get_density_range()
+        
         # Calculate SIPG penalties for the DG Poisson equation solver
         Pu = Vu.ufl_element().degree()
         Pp = Vp.ufl_element().degree()
         P = max(Pu, Pp)
-        k_u = k_u_max = k_u_min = nu
+        k_u, k_u_max, k_u_min = nu, nu_max, nu_min
         penalty_u = define_penalty(mesh, P, k_u_max, k_u_min)
-        k_p = k_p_max = k_p_min = 1/rho
+        k_p, k_p_max, k_p_min = 1/rho, 1/rho_min, 1/rho_max
         penalty_p = define_penalty(mesh, P, k_p_max, k_p_min)
         if 'Discontinuous Lagrange' in (family_u, family_p):
             sim.log.info('\nDG SIPG penalties:\n  u: %.4e\n  p: %.4e' % (penalty_u, penalty_p))
@@ -107,7 +112,9 @@ class SolverIPCS(Solver):
         
         # For error norms in the convergence estimates
         elem = sim.data['u0'].element()
-        self.Vu_highp = dolfin.FunctionSpace(mesh, elem.family(), elem.degree() + 3)
+        cd = simulation.data['constrained_domain']
+        self.Vu_highp = dolfin.FunctionSpace(mesh, elem.family(), elem.degree() + 3,
+                                             constrained_domain=cd)
         
         # Storage for preassembled matrices
         self.Au = [None] * sim.ndim 

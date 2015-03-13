@@ -1,11 +1,13 @@
 import time
-import json
+import collections
+import yaml
 import dolfin
 from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
 from .postprocess import setup_probes
-from .utils import timeit, run_debug_console, debug_console_hook
+from .utils import timeit, run_debug_console, debug_console_hook, report_error
+from ocellaris.utils.code_runner import RunnablePythonString
 
 def run_simulation(simulation):
     """
@@ -14,12 +16,21 @@ def run_simulation(simulation):
     simulation.log.info('Preparing simulation ...\n')
     t_start = time.time()
     
-    # Load the mesh
+    # Load the mesh. The mesh determines if we are in 2D or 3D
     load_mesh(simulation)
     
-    # Create function spaces. This must be done
-    # early as it is needed by the DirichletBC
-    make_function_spaces(simulation)
+    # Mark the boundaries of the domain with separate marks
+    # for each regions Creates a new "ds" measure
+    mark_boundaries(simulation)
+    
+    # Load the periodic boundary conditions. This must 
+    # be done before creating the function spaces as
+    # they depend on the periodic constrained domain
+    setup_periodic_domain(simulation)
+    
+    # Create function spaces. This must be done before
+    # creating Dirichlet boundary conditions
+    setup_function_spaces(simulation)
     
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs
@@ -32,25 +43,34 @@ def run_simulation(simulation):
     simulation.data['g'] = dolfin.Constant(g)
     
     # Get the density and viscosity properties from the multi phase model
-    multiphase_model_name = simulation.input.get_value('multiphase_model', 'SinglePhase', 'string')
+    multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
     multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
     simulation.data['rho'] = multiphase_model.get_density()
     simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity()
+    simulation.multi_phase_model = multiphase_model
     simulation.hooks.add_pre_timestep_hook(multiphase_model.update)
     
     # Get the solver
     solver_name = simulation.input.get_value('solver/type', required_type='string')
     solver = get_solver(solver_name)(simulation)
-    simulation.data['solver'] = solver
+    simulation.solver = solver
     
     # Setup postprocessing probes
     setup_probes(simulation)
+    
+    # Initialise the fields
+    setup_initial_conditions(simulation)
+    
+    # Setup any hooks that may be present on the input file
+    setup_hooks(simulation) 
     
     # Print information about configuration parameters
     simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t_start))
     simulation.log.info('\nSimulation configuration:')
     simulation.log.info('{:-^40}'.format(' input begin '))
-    simulation.log.info(json.dumps(simulation.input, indent=4))
+    
+    inp = collections.OrderedDict(simulation.input.items())
+    simulation.log.info(yaml.dump(inp, indent=4))
     simulation.log.info('{:-^40}'.format(' input end '))
     simulation.log.info("\nRunning simulation ...\n")
     t_start = time.time()
@@ -81,6 +101,7 @@ def run_simulation(simulation):
     if console_at_end  or (not success and console_on_error):
         run_debug_console(simulation)
 
+
 def load_mesh(simulation):
     """
     Get the mesh from the simulation input
@@ -100,36 +121,15 @@ def load_mesh(simulation):
     
     simulation.set_mesh(mesh)
 
-def make_function_spaces(simulation):
-    """
-    Create function spaces for velocity and pressure
-    """
-    # Get function space names
-    Vu_name = simulation.input.get_value('solver/function_space_velocity', 'Lagrange', 'string')
-    Vp_name = simulation.input.get_value('solver/function_space_pressure', 'Lagrange', 'string')
-    
-    # Get function space polynomial degrees
-    Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
-    Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
-    
-    # Create the function spaces
-    mesh = simulation.data['mesh']
-    Vu = dolfin.FunctionSpace(mesh, Vu_name, Pu)
-    Vp = dolfin.FunctionSpace(mesh, Vp_name, Pp)
-    simulation.data['Vu'] = Vu
-    simulation.data['Vp'] = Vp
 
-def setup_boundary_conditions(simulation):
+def mark_boundaries(simulation):
     """
-    Setup boundary conditions based on the simulation input
+    Mark the boundaries of the mesh with different numbers to be able to
+    apply different boundary conditions to different regions 
     """
     # Create a function to mark the external facets
     marker = dolfin.FacetFunction("size_t", simulation.data['mesh'])
     
-    # Make dicts to gather Dirichlet and Neumann boundary conditions
-    simulation.data['dirichlet_bcs'] = {}
-    simulation.data['neumann_bcs'] = {}
-     
     # Create boundary regions and let them mark the part of the
     # boundary that they belong to. They also create boundary
     # condition objects that are later used in the eq. solvers
@@ -143,7 +143,145 @@ def setup_boundary_conditions(simulation):
     # Create a boundary measure that is aware of the marked regions
     ds = dolfin.Measure('ds')[marker]
     simulation.data['ds'] = ds
+
+
+def setup_periodic_domain(simulation):
+    """
+    We need to create a constrained domain in case there are periodic 
+    boundary conditions.
+    """
+    # This will be overwritten if there are periodic boundary conditions
+    simulation.data['constrained_domain'] = None
     
+    for region in simulation.data['boundary']:
+        region.create_periodic_boundary_conditions()
+
+
+def setup_function_spaces(simulation):
+    """
+    Create function spaces for velocity and pressure
+    """
+    # Get function space names
+    Vu_name = simulation.input.get_value('solver/function_space_velocity', 'Lagrange', 'string')
+    Vp_name = simulation.input.get_value('solver/function_space_pressure', 'Lagrange', 'string')
+    
+    # Get function space polynomial degrees
+    Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
+    Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
+    
+    # Get the constraine ddomain
+    cd = simulation.data['constrained_domain']
+    if cd is None:
+        simulation.log.info('Creating function spaces')
+    else:
+        simulation.log.info('Creating function spaces with periodic boundaries')
+    
+    # Create the function spaces
+    mesh = simulation.data['mesh']
+    Vu = dolfin.FunctionSpace(mesh, Vu_name, Pu, constrained_domain=cd)
+    Vp = dolfin.FunctionSpace(mesh, Vp_name, Pp, constrained_domain=cd)
+    simulation.data['Vu'] = Vu
+    simulation.data['Vp'] = Vp
+    
+    # Setup colour function if it is needed in the simulation
+    multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
+    if multiphase_model_name != 'SinglePhase':
+        # Get the function space name and polynomial degree
+        Vc_name = simulation.input.get_value('multiphase_solver/function_space_colour',
+                                             'Discontinuous Lagrange', 'string')
+        Pc = simulation.input.get_value('solver/polynomial_degree_colour', 0, 'int')
+        
+        # Create and store function space
+        Vc = dolfin.FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
+        simulation.data['Vc'] = Vc
+
+
+def setup_boundary_conditions(simulation):
+    """
+    Setup boundary conditions based on the simulation input
+    """
+    # Make dicts to gather Dirichlet and Neumann boundary conditions
+    simulation.data['dirichlet_bcs'] = {}
+    simulation.data['neumann_bcs'] = {}
+    
+    for region in simulation.data['boundary']:
+        region.create_boundary_conditions()
+
+
+def setup_initial_conditions(simulation):
+    """
+    Setup the initial values for the fields
+    """
+    ic = simulation.input.get_value('initial_conditions', {}, 'dict(string:dict)')
+    for name, info in ic.items():
+        name = str(name)
+        
+        if not 'p' in name:
+            report_error('Invalid initial condition',
+                         'You have given initial conditions for %r but this does '
+                         'not seem to be a previous or pressure field.\n\n'
+                         'Valid names: up0, up1, ... , p, cp, ...' % name)
+        
+        if not 'cpp_code' in info:
+            report_error('Invalid initial condition',
+                         'You have not given "cpp_code" for %r' % name)
+        
+        cpp_code = str(info['cpp_code'])
+        
+        if not name in simulation.data:
+            report_error('Invalid initial condition',
+                         'You have given initial conditions for %r but this does '
+                         'not seem to be an existing field.' % name)
+        
+        func = simulation.data[name]
+        V = func.function_space()
+        
+        available_vars = {'t': simulation.time}
+        for k, v in simulation.data.items():
+            if isinstance(v, (float, int, long)):
+                available_vars[k] = v
+            if isinstance(v, dolfin.Constant) and v.ufl_shape == ():
+                available_vars[k] = v
+        
+        try:
+            expr = dolfin.Expression(cpp_code, **available_vars)
+            dolfin.project(expr, V=V, function=func)
+        except Exception as e:
+            report_error('Error in C++ code',
+                         'The C++ code for initial conditions for %r does not compile.\n'
+                         '\nCode:\n%s'
+                         '\n\nError:\n%s' % (name, cpp_code, str(e)))
+
+def setup_hooks(simulation):
+    """
+    Install the hooks that are given on the input file
+    """
+    hooks = simulation.input.get_value('hooks', {}, 'dict(string:list)')
+    
+    def make_hook_from_code_string(code_string, description):
+        runnable = RunnablePythonString(simulation, code_string, description)
+        def hook(*args, **kwargs):
+            runnable.run()
+        return hook
+    
+    hook_types = [('post_timestep', simulation.hooks.add_post_timestep_hook)]
+    
+    for hook_name, register_hook in hook_types:
+        for hook_info in hooks.get(hook_name, []):
+            name = hook_info.get('name', 'unnamed')
+            enabled = hook_info.get('enabled', True)
+            description = '%s hook "%s"' % (hook_name, name)
+            
+            if not enabled:
+                simulation.log.info('Skipping disabled %s' % description)
+                continue
+            
+            code_string = hook_info['code']
+            hook = make_hook_from_code_string(code_string, description)
+            register_hook(hook)
+            simulation.log.info('Registering %s' % description)
+
+
 def summarise_simulation_after_running(simulation, t_start, success):
     """
     Print a summary of the time spent on each part of the simulation
@@ -167,6 +305,7 @@ def summarise_simulation_after_running(simulation, t_start, success):
     s = tottime - h*60**2 - m*60
     humantime = '%d hours %d minutes and %d seconds' % (h, m, s)
     simulation.log.info('\nSimulation done in %.3f seconds (%s)' % (tottime, humantime))
+
 
 def plot_at_end(simulation):
     """

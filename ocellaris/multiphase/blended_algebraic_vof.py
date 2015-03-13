@@ -16,11 +16,13 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         convection scheme in the advection of the colour function
         that ensures a sharp interface.
         
-        * The mesh should be the same as is used for the velocities
         * The convection scheme should be the name of a convection
           scheme that is tailored for advection of the colour 
           function, i.e "HRIC", "MHRIC", "RHRIC" etc, 
         * The velocity field should be divergence free
+        
+        The colour function is unity when rho=rho0 and nu=nu0 and
+        zero when rho=rho1 and nu=nu1
         """
         self.simulation = simulation
         self.mesh = simulation.data['mesh']
@@ -31,12 +33,28 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.prev_colour_function = cp = Function(V)
         self.prev2_colour_function = cpp = Function(V)
         simulation.data['c'] = c
-        simulation.data['c_p'] = cp
-        simulation.data['c_pp'] = cpp
+        simulation.data['cp'] = cp
+        simulation.data['cpp'] = cpp
+        
+        # Get the physical properties
+        self.rho0 = self.simulation.input.get_value('physical_properties/rho0', required_type='float')
+        self.rho1 = self.simulation.input.get_value('physical_properties/rho1', required_type='float')
+        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
+        self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
         
         # The convection blending function that counteracts numerical diffusion
         scheme = get_convection_scheme(simulation.input.get_value('convection/c/convection_scheme', 'HRIC', 'string'))
         self.convection_scheme = scheme(simulation, 'c')
+        
+        # Create the equations when the simulation starts
+        self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start)
+    
+    def on_simulation_start(self):
+        """
+        This runs when the simulation starts. It does not run in __init__
+        since the solver needs the density and viscosity we define, and
+        we need the velocity that is defined by the solver
+        """
         beta = self.convection_scheme.blending_function
         
         # The time step (real value to be supplied later)
@@ -54,18 +72,51 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         gradient = self.convection_scheme.gradient_reconstructor.gradient
         
         # Setup the equation to solve
+        V = self.simulation.data['Vc']
+        cp = self.simulation.data['cp']
+        cpp = self.simulation.data['cpp']
         trial = dolfin.TrialFunction(V)
         test = dolfin.TestFunction(V)
-        dirichlet_bcs = self.simulation.data['dirichlet_bcs']['c']
+        dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('c', [])
         vel = self.simulation.data['u']
         f = dolfin.Constant(0.0)
         self.eq = define_advection_problem(trial, test, cp, cpp, vel, f, normal, beta,
                                            self.time_coeffs, self.dt, dirichlet_bcs)
         
-        simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
-        simulation.plotting.add_plot('c_grad', gradient)
-        simulation.plotting.add_plot('c_beta', beta)
+        self.simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
+        self.simulation.plotting.add_plot('c_grad', gradient)
+        self.simulation.plotting.add_plot('c_beta', beta)
         
+    def get_density(self):
+        """
+        Calculate the blended density function as a weighted sum of
+        rho0 and rho1. The colour function is unity when rho=rho0
+        and zero when rho=rho1
+        """
+        return dolfin.Constant(self.rho0)*self.colour_function + \
+               dolfin.Constant(self.rho1)*(1 - self.colour_function)
+    
+    def get_laminar_kinematic_viscosity(self):
+        """
+        Calculate the blended kinematic viscosity function as a weighted
+        sum of nu0 and nu1. The colour function is unity when nu=nu0 and
+        zero when nu=nu1
+        """
+        return dolfin.Constant(self.nu0)*self.colour_function + \
+               dolfin.Constant(self.nu1)*(1 - self.colour_function)
+    
+    def get_density_range(self):
+        """
+        Return the maximum and minimum densities
+        """
+        return min(self.rho0, self.rho1), max(self.rho0, self.rho1) 
+               
+    def get_laminar_kinematic_viscosity_range(self):
+        """
+        Return the maximum and minimum kinematic viscosities
+        """
+        return min(self.nu0, self.nu1), max(self.nu0, self.nu1)
+    
     def update(self, it, t, dt):
         """
         Update the VOF field by advecting it for a time dt

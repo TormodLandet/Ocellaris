@@ -7,11 +7,25 @@ class SinglePhaseScheme(MultiPhaseModel):
     
     def __init__(self, simulation):
         self.simulation = simulation
+        self.rho0 = self.simulation.input.get_value('physical_properties/rho0', required_type='float')
+        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
     
     def get_density(self):
-        rho0 = self.simulation.input.get_value('physical_properties/rho0', required_type='float')
-        return dolfin.Constant(rho0)
+        return dolfin.Constant(self.rho0)
 
     def get_laminar_kinematic_viscosity(self):
-        nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
-        return dolfin.Constant(nu0)
+        return dolfin.Constant(self.nu0)
+    
+    def get_density_range(self):
+        """
+        The minimum and maximum fluid densities
+        These will be identical for single phase flows
+        """
+        return self.rho0, self.rho0
+    
+    def get_laminar_kinematic_viscosity_range(self):
+        """
+        The minimum and maximum laminar kinematic viscosities
+        These will be identical for single phase flows
+        """
+        return self.nu0, self.nu0

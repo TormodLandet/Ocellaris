@@ -1,38 +1,27 @@
-{
-	"program": "ocellaris",
-	"type": "input",
-	"version": 1.0,
-	
-	"multiphase_solver": {
-	   "type": "BlendedAlgebraicVOF",
-	   "compression_factor": 0.0
-	},
-	
-	"convection": {
-        "c": {
-            "convection_scheme": "HRIC",
-            "HRIC_version": "HRIC"
-        }
-    },
-	
-	"mesh": {
-        "type": "Rectangle",
-        "Nx": 32,
-        "Ny": 32,
-        "endx": 1.5,
-        "endy": 1.5
-    },
-	
-	"boundary_conditions": [
-        {
-            "name": "all",
-            "selector": "region",
-            "region_code": "True",
-            
-            "c": {
-                "type": "ConstantValue",
-                "value": 0
-            }
-        }
-    ]
-}
+ocellaris:
+    type: input
+    version: 1.0
+
+multiphase_solver:
+    type: BlendedAlgebraicVOF
+    compression_factor: 0.0
+
+convection:
+    c:
+        convection_scheme: HRIC
+        HRIC_version: HRIC
+
+mesh:
+    type: Rectangle
+    Nx: 32
+    Ny: 32
+    endx: 1.5
+    endy: 1.5
+
+boundary_conditions:
+-   name: all
+    selector: region
+    region_code: 'on_boundary and True'
+    c:
+        type: ConstantValue
+        value: 0

@@ -9,12 +9,13 @@ AVAILABLE_LOG_LEVELS = {'critical': dolfin.CRITICAL,
                         'progress': dolfin.PROGRESS,
                         'debug': dolfin.DEBUG}
 
+
 def main(inputfile):
     """
     Run Ocellaris
     """
     sim = Simulation()
-    sim.input.read_json(inputfile)
+    sim.input.read_yaml(inputfile)
     sim.log.setup()
     
     # Set the Ocellaris log level
@@ -40,13 +41,14 @@ def main(inputfile):
     else:
         sim.log.info('Ocellaris finished with errors')
 
+
 if __name__ == '__main__':
     # Get command line arguments
     import argparse
     parser = argparse.ArgumentParser(prog='ocellaris',
                                      description='Discontinuous Galerkin Navier-Stokes solver')
     parser.add_argument('inputfile', help='Name of file containing simulation '
-                        'configuration on the Ocellaris json input format')
+                        'configuration on the Ocellaris YAML input format')
     args = parser.parse_args()
     
     # Run Ocellaris

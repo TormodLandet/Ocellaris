@@ -58,7 +58,8 @@ class ConvectionScheme(object):
         self.mesh = self.alpha_function_space.mesh()
         
         # Function space for the convection blending function
-        self.function_space = dolfin.FunctionSpace(self.mesh, "CR", 1)
+        cd = simulation.data['constrained_domain']
+        self.function_space = dolfin.FunctionSpace(self.mesh, "CR", 1, constrained_domain=cd)
         self.blending_function = dolfin.Function(self.function_space)
         
         # Dofmaps

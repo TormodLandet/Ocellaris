@@ -1,0 +1,83 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2015-03-13
+    description: |
+        Implements the Taylor-Green vortex test case. This benchmark case
+        with purely periodic boundary conditions has an analytical solution
+        in both space and time with the incompressible Navier-Stokes equations
+
+physical_properties:
+    g: [0, 0]
+    nu0: 0.001
+    rho0: 1.0
+
+mesh:
+    type: Rectangle
+    Nx: 64
+    Ny: 64
+    endx: 2
+    endy: 2
+    
+boundary_conditions:
+-   name: left and bottom    
+    selector: region
+    inside_code: |
+        inside = bool((near(x[0], 0) or near(x[1], 0)) and 
+                      (not ((near(x[0], 0) and near(x[1], 2)) or 
+                      (near(x[0], 2) and near(x[1], 0)))) and on_boundary)
+    map_code: |
+        if near(x[0], 2) and near(x[1], 2):
+            y[0] = x[0] - 2.0
+            y[1] = x[1] - 2.0
+        elif near(x[0], 2):
+            y[0] = x[0] - 2.0
+            y[1] = x[1]
+        else:
+            y[0] = x[0]
+            y[1] = x[1] - 2.0
+
+initial_conditions:
+    up0:
+        cpp_code: -sin(pi*x[1])*cos(pi*x[0])*exp(-2.*pi*pi*nu*t)
+    up1:
+        cpp_code: sin(pi*x[0])*cos(pi*x[1])*exp(-2.*pi*pi*nu*t)
+    p:
+        cpp_code: -(cos(2*pi*x[0])+cos(2*pi*x[1]))*exp(-4.*pi*pi*nu*t)/4.
+
+time:
+    dt: 0.01
+    tmax: 20.0
+
+output:
+    prefix: taylor_green
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+
+solver:
+    type: IPCS
+    num_inner_iter: 20
+    allowable_error_inner: 5.0e-3
+    polynomial_degree_pressure: 1
+    polynomial_degree_velocity: 2
+    function_space_pressure: CG
+    function_space_velocity: CG
+    timestepping_method: BDF
+
+convection:
+    u:
+        convection_scheme: Upwind
+
+hooks:
+    post_timestep:
+    -   name: plot at end
+        code: |
+            if timestep % 10 == 0:
+                dolfin.plot(u0)
+
+console_at_end: false
+console_on_error: true

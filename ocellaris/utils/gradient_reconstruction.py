@@ -27,7 +27,8 @@ class GradientReconstructor(object):
         is zero in each cell so a FEM projection will not work
         """
         V = self.alpha_function.function_space()
-        Vvec = dolfin.VectorFunctionSpace(self.mesh, 'DG', 0)
+        cd = self.simulation.data['constrained_domain']
+        Vvec = dolfin.VectorFunctionSpace(self.mesh, 'DG', 0, constrained_domain=cd)
         ndim = V.cell().topological_dimension()
         ncells = self.mesh.num_cells()
         

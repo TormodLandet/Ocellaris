@@ -1,4 +1,5 @@
 import os
+import collections
 import numpy
 import dolfin
 from ocellaris.multiphase import get_multi_phase_model
@@ -9,7 +10,7 @@ thisdir = os.path.dirname(os.path.abspath(__file__))
 inpfile = os.path.join(thisdir, 'diagonal_advection_of_square.inp')
 
 sim = Simulation()
-sim.input.read_json(inpfile)
+sim.input.read_yaml(inpfile)
 
 VEL = numpy.array([1.0, 1.0], float)
 VEL_TURN_TIME = 0.5
@@ -99,8 +100,9 @@ vof.colour_function.assign(c0)
 vof.convection_scheme.gradient_reconstructor.reconstruct()
     
 # Dump input data
-import json
-print json.dumps(sim.input, indent=4)
+import yaml
+inp = collections.OrderedDict(sim.input.items())
+print yaml.dump(inp, indent=4)
 
 # Make png frames of the evolution of the colour function
 sim.plotting.plot_all()
