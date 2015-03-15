@@ -7,7 +7,7 @@ exit of objects in ocean waves with accurate capturing of the force on the objec
 behaviour of the free surface.
 
 Ocellaris is implemented in Python and C++ with FEniCS_ as the backend for numerics, mesh and 
-finte element calculations.
+finite element calculations.
 
 .. _FEniCS: http://fenicsproject.org/
 
@@ -33,7 +33,7 @@ To test the code there are some demos in the ``demos/`` directory. Complete inpu
 for several of the normal benchmark cases like lid driven cavity flow and the Taylor-Green vortex. More
 information can be found in the documentation which also contains a description of the input file format.
 
-Please feel free to test Ocellaris, but plese keep in mind:
+Please feel free to test Ocellaris, but please keep in mind:
 
 - Ocellaris is in a state of constant development and does not have a stable API or input file format
 - Ocellaris is currently only being tested on one CPU. FEniCS scales to many thousands of CPUs, but
