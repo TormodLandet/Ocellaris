@@ -7,7 +7,7 @@ class SinglePhaseScheme(MultiPhaseModel):
     
     def __init__(self, simulation):
         self.simulation = simulation
-        self.rho0 = self.simulation.input.get_value('physical_properties/rho0', required_type='float')
+        self.rho0 = self.simulation.input.get_value('physical_properties/rho0', 1.0, 'float')
         self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
     
     def get_density(self):

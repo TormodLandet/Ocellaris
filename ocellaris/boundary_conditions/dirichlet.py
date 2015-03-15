@@ -38,7 +38,12 @@ class ConstantDirichletBoundary(BoundaryCondition):
         Dirichlet condition with constant value
         """
         self.simulation = simulation
-        self.func_space = simulation.data['V%s' % var_name] 
+        if var_name[-1].isdigit():
+            # A var_name like "u0" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name[:-1]] 
+        else:
+            # A var_name like "u" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name]
         
         value = inp_dict['value']
         if isinstance(value, list):
@@ -73,7 +78,12 @@ class CodedDirichletBoundary(BoundaryCondition):
         Dirichlet condition with coded value
         """
         self.simulation = simulation
-        self.func_space = simulation.data['V%s' % var_name]
+        if var_name[-1].isdigit():
+            # A var_name like "u0" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name[:-1]] 
+        else:
+            # A var_name like "u" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name]
         
         # Make a dolfin Expression object that runs the code string
         code = inp_dict['code']

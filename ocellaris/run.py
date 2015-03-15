@@ -37,7 +37,8 @@ def run_simulation(simulation):
     setup_boundary_conditions(simulation)
     
     # Setup physical constants
-    g = simulation.input.get_value('physical_properties/g', required_type='list(float)')
+    ndim = simulation.ndim
+    g = simulation.input.get_value('physical_properties/g', [0]*ndim, required_type='list(float)')
     assert len(g) == simulation.ndim
     simulation.data['g'] = dolfin.Constant(g)
     
@@ -288,7 +289,8 @@ def setup_hooks(simulation):
             runnable.run()
         return hook
     
-    hook_types = [('post_timestep', simulation.hooks.add_post_timestep_hook)]
+    hook_types = [('post_timestep', simulation.hooks.add_post_timestep_hook),
+                  ('pre_timestep', simulation.hooks.add_pre_timestep_hook)]
     
     for hook_name, register_hook in hook_types:
         for hook_info in hooks.get(hook_name, []):

@@ -27,16 +27,20 @@ mesh:
 
 boundary_conditions:
 -   name: walls    
-    selector: region
-    inside_code: on_boundary and True
+    selector: code
+    inside_code: on_boundary
     u:
-        type: ConstantValue
-        value: [0, 0]
+        #type: ConstantValue
+        #value: [0, 0]
+        type: CppCodedValue
+        cpp_code:
+        -   '0.0'
+        -   '0.0'
     p:
         type: ConstantGradient
         value: 0
 -   name: lid
-    selector: region
+    selector: code
     inside_code: on_boundary and x[1] >= 1.0 - 1e-8
     u:
         type: ConstantValue

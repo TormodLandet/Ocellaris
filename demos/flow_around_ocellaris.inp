@@ -1,0 +1,93 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2015-03-13
+    description: |
+        Flow around an Ocellaris clownfish
+
+physical_properties:
+    g: [0, 0]
+    nu0: 0.1
+    rho0: 1.0
+
+mesh:
+    type: XML
+    mesh_file: datafiles/ocellaris_mesh.xml.gz
+    facet_region_file: datafiles/ocellaris_facet_regions.xml.gz
+
+boundary_conditions:
+-   name: Top and bottom
+    selector: mesh_facet_region
+    mesh_facet_regions: [2, 4]
+    u1:
+        type: ConstantValue
+        value: 0
+    p:
+        type: ConstantGradient
+        value: 0
+
+-   name: The Ocellaris Clownfish
+    selector: mesh_facet_region
+    mesh_facet_regions: [5]
+    u:
+        type: ConstantValue
+        value: [0, 0]
+    p:
+        type: ConstantGradient
+        value: 0
+
+-   name: Inlet
+    selector: mesh_facet_region
+    mesh_facet_regions: [1]
+    u0:
+        type: CodedValue
+        code: value[0] = min(1, t)
+    u1:
+        type: ConstantValue
+        value: 0
+    p:
+        type: ConstantGradient
+        value: 0
+
+-   name: Outlet
+    selector: mesh_facet_region
+    mesh_facet_regions: [3]
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantValue
+        value: 0  
+    p:
+        type: ConstantValue
+        value: 0
+
+time:
+    dt: 0.01
+    tmax: 20.0
+
+output:
+    prefix: flow_around_ocellaris_CG
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+
+solver:
+    type: IPCS
+    num_inner_iter: 20
+    allowable_error_inner: 5.0e-3
+    polynomial_degree_pressure: 1
+    polynomial_degree_velocity: 2
+    function_space_pressure: CG
+    function_space_velocity: CG
+    timestepping_method: BDF
+
+convection:
+    u:
+        convection_scheme: Upwind
+
+console_at_end: true
+console_on_error: true

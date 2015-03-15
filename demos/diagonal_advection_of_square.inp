@@ -20,8 +20,8 @@ mesh:
 
 boundary_conditions:
 -   name: all
-    selector: region
-    region_code: 'on_boundary and True'
+    selector: code
+    region_code: on_boundary
     c:
         type: ConstantValue
         value: 0

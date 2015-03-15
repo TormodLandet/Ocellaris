@@ -298,14 +298,14 @@ class Input(collections.OrderedDict):
         # working directory
         if os.path.exists(file_name):
             return file_name
-        print 'does not exist:', file_name
+        self.simulation.log.debug('File does not exist: %s' % file_name)
         
         # Check if the path is relative to the inouf file dir
         inp_file_dir = os.path.dirname(self.file_name)
         pth2 = os.path.join(inp_file_dir, file_name)
         if os.path.exists(pth2):
             return pth2
-        print 'does not exist:', pth2
+        self.simulation.log.debug('File does not exist: %s' % pth2)
         
         report_error('File not found', 'The specified file "%s" was not found' % file_name)
     

@@ -30,7 +30,7 @@ class BoundaryRegion(object):
         self.mark_id = index + 1
         
         # Mark the region of the boundary covered by this boundary condition
-        if self.selector_name == 'region':
+        if self.selector_name == 'code':
             self.selector = RegionSelector(simulation)
             code_string = inp['inside_code']
             self.selector.set_inside_code(code_string, self.name)
@@ -61,7 +61,7 @@ class BoundaryRegion(object):
                          'Boundary condition for boundary "%s" has '
                          'selector="%s". This selector is not implemented.'
                          '\n\nImplemented selectors:\n\n'
-                         ' - region\n'
+                         ' - code\n'
                          ' - mesh_facet_region'
                          % (self.name, self.selector_name))
     
