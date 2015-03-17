@@ -9,6 +9,36 @@ trusting the results.
 .. contents:: :local:
 
 
+Running Ocellaris
+-----------------
+
+Ocellaris is typically run from the command line with the name of an input file
+as the first argument:
+
+.. code-block:: sh
+
+    python -m ocellaris taylor-green.inp
+    
+You can optionally override parameters given on the input file:
+
+.. code-block:: sh
+
+    python -m ocellaris taylor-green.inp \
+        --set-input time/dt=0.1 \
+        --set-input 'solver/velocity_function_space="CG"'  
+
+You can see a summary of the command line options by running:
+
+.. code-block:: sh
+
+    python -m ocellaris --help
+    
+Ocellaris will normally create a log file with the information that is also 
+shown on screen. This will contain a listing of the input after modification
+by the ``--set-input`` command line flag so that you can be sure to know
+exactly what you did run when you look back on an old simulation.
+
+
 Tutorial on creating an input file
 ----------------------------------
 
