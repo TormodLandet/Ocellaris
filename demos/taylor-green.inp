@@ -78,7 +78,7 @@ output:
 
 solver:
     type: IPCS
-    num_inner_iter: 20
+    num_inner_iter: 2
     allowable_error_inner: 5.0e-3
     polynomial_degree_pressure: 1
     polynomial_degree_velocity: 2
@@ -94,8 +94,14 @@ hooks:
     post_timestep:
     -   name: plot at end
         code: |
+            errors_u0 = hook_data.setdefault('errors_u0', [])
             if timestep % 10 == 0:
-                dolfin.plot(u0)
+                e = Expression('-sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)', t=t, nu=nu)
+                ue = interpolate(e, Vu)
+                err = norm(u0.vector() - ue.vector())/norm(ue)
+                errors_u0.append(error)
+                print errors_u0
+                print 'ERROR-SUM-u0', sum(errors_u0)
 
-console_at_end: false
-console_on_error: true
+#console_at_end: false
+#console_on_error: true

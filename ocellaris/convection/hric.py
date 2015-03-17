@@ -31,7 +31,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
           Il-Ryong Park, Kwang-Soo Kim, Jin Kim and Suak-Ho Van
         """
         super(ConvectionSchemeHric2D, self).__init__(simulation, func_name)
-        self.variant = simulation.input.get('convection', {}).get(func_name, {}).get('HRIC_version', 'HRIC')
+        self.variant = simulation.input.get_value('convection/%s/HRIC_version' % func_name, 'HRIC')
     
     def update(self, t, dt, velocity):
         """
@@ -43,6 +43,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         beta_arr = self.blending_function.vector().get_local()
         
         ndim = self.simulation.ndim
+        polydeg = self.alpha_function.element().degree()
         conFC = self.simulation.data['connectivity_FC']
         facet_info = self.simulation.data['facet_info']
         cell_info = self.simulation.data['cell_info']
@@ -98,8 +99,14 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 #nminC, nmaxC = nmin1, nmax1
             
             # Find alpha in D and C cells
-            aD = alpha_arr[self.alpha_dofmap[iaD]]
-            aC = alpha_arr[self.alpha_dofmap[iaC]]
+            if polydeg == 0:
+                aD = alpha_arr[self.alpha_dofmap[iaD]]
+                aC = alpha_arr[self.alpha_dofmap[iaC]]
+            elif polydeg == 1:
+                res = numpy.zeros(2)
+                self.alpha_function.eval(res[0:], cell_info[iaD].midpoint)
+                self.alpha_function.eval(res[1:], cell_info[iaC].midpoint)
+                aD, aC = res
             
             if abs(aC - aD) < EPS:
                 # No change in this area, use upstream value
@@ -110,6 +117,11 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             gdofs  = [dm[iaC] for dm in gradient_dofmaps]
             gC = [gradient_arr[gd] for gd in gdofs]
             len_gC2 = numpy.dot(gC, gC)
+            
+            if len_gC2 == 0:
+                # No change in this area, use upstream value
+                beta_arr[self.dofmap[fidx]] = 0.0
+                continue
             
             # Upstream value
             # See Ubbink's PhD (1997) equations 4.21 and 4.22

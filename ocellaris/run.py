@@ -285,8 +285,9 @@ def setup_hooks(simulation):
     
     def make_hook_from_code_string(code_string, description):
         runnable = RunnablePythonString(simulation, code_string, description)
+        hook_data = {}
         def hook(*args, **kwargs):
-            runnable.run()
+            runnable.run(hook_data=hook_data)
         return hook
     
     hook_types = [('post_timestep', simulation.hooks.add_post_timestep_hook),
