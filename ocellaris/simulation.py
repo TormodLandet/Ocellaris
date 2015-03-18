@@ -127,6 +127,7 @@ class Hooks(object):
                 hook()
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                raise
     
     @timeit
     def new_timestep(self, timestep_number, t, dt):
@@ -142,6 +143,7 @@ class Hooks(object):
                 hook(timestep_number, t, dt)
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                raise
     
     @timeit
     def end_timestep(self):
@@ -156,6 +158,7 @@ class Hooks(object):
                 hook()
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                raise
         self.simulation._at_end_of_timestep()
     
     def simulation_ended(self, success):
@@ -175,6 +178,7 @@ class Hooks(object):
                 hook(success)
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                raise
     
     def show_hook_info(self):
         """
@@ -355,6 +359,10 @@ class Input(collections.OrderedDict):
     
         yaml.add_representer(collections.OrderedDict, dict_representer)
         yaml.add_constructor(_mapping_tag, dict_constructor)
+        
+    def __str__(self):
+        inp = collections.OrderedDict(self.items())
+        return yaml.dump(inp, indent=4)
 
 
 class Plotting(object):
@@ -431,16 +439,23 @@ class Reporting(object):
 
 
 class Log(object):
+    # Names for the available log levels in Dolfin and Ocellaris
+    AVAILABLE_LOG_LEVELS = {'critical': dolfin.CRITICAL,
+                            'error': dolfin.ERROR,
+                            'warning': dolfin.WARNING,
+                            'info': dolfin.INFO,
+                            'progress': dolfin.PROGRESS,
+                            'debug': dolfin.DEBUG}
+    
     def __init__(self, simulation):
         self.simulation = simulation
         self.log_level = dolfin.INFO
         self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation(), 'Flush log file')
         self.write_log = False
     
-    def _write(self, message):
+    def write(self, message):
         """
-        Internal helper to write message to
-        console and log file
+        Write a message to the log without checking the log level
         """
         if self.write_log:
             self.log_file.write(message + '\n')
@@ -456,22 +471,22 @@ class Log(object):
     def error(self, message):
         "Log an error message"
         if self.log_level <= dolfin.ERROR:
-            self._write(message)
+            self.write(message)
     
     def warning(self, message=''):
         "Log a warning message"
         if self.log_level <= dolfin.WARNING:
-            self._write(message)
+            self.write(message)
     
     def info(self, message=''):
         "Log an info message"
         if self.log_level <= dolfin.INFO:
-            self._write(message)
+            self.write(message)
     
     def debug(self, message=''):
         "Log a debug message"
         if self.log_level <= dolfin.DEBUG:
-            self._write(message)
+            self.write(message)
     
     def setup(self):
         """
@@ -484,6 +499,14 @@ class Log(object):
             self.write_log = True
             self.log_file_name = log_name
             self.log_file = open(self.log_file_name, 'wt')
+        
+        # Set the Ocellaris log level
+        log_level = self.simulation.input.get_value('output/ocellaris_log_level', 'info')
+        self.simulation.log.set_log_level(self.AVAILABLE_LOG_LEVELS[log_level])
+        
+        # Set the Dolfin log level
+        df_log_level = self.simulation.input.get_value('output/dolfin_log_level', 'warning')
+        dolfin.set_log_level(self.AVAILABLE_LOG_LEVELS[df_log_level])
     
     def end_of_simulation(self):
         """

@@ -8,10 +8,13 @@ from .postprocess import setup_probes
 from .utils import timeit, run_debug_console, debug_console_hook, report_error, ocellaris_project
 from ocellaris.utils.code_runner import RunnablePythonString
 
-def run_simulation(simulation):
+def run_simulation(simulation, setup_logging=True):
     """
     Prepare and run a simulation
     """
+    if setup_logging:
+        simulation.log.setup()
+    
     simulation.log.info('Preparing simulation ...\n')
     t_start = time.time()
     
@@ -80,8 +83,7 @@ def run_simulation(simulation):
     simulation.log.info('\nSimulation configuration when starting the solver:')
     simulation.log.info('\n{:-^80}'.format(' configuration begin '))
     
-    inp = collections.OrderedDict(simulation.input.items())
-    simulation.log.info(yaml.dump(inp, indent=4))
+    simulation.log.info(str(simulation.input))
     simulation.log.info('{:-^80}'.format(' configuration end '))
     simulation.log.info("\nCurrent time: %s" % time.strftime('%Y-%m-%d %H:%M:%S'))
     simulation.log.info("\nRunning simulation ...\n")

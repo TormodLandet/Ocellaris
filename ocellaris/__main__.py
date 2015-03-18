@@ -1,14 +1,4 @@
-import dolfin
 from ocellaris import get_version, get_detailed_version, Simulation, run_simulation
-
-# Names for the available log levels in Dolfin and Ocellaris
-AVAILABLE_LOG_LEVELS = {'critical': dolfin.CRITICAL,
-                        'error': dolfin.ERROR,
-                        'warning': dolfin.WARNING,
-                        'info': dolfin.INFO,
-                        'progress': dolfin.PROGRESS,
-                        'debug': dolfin.DEBUG}
-
 
 def main(inputfile, input_override):
     """
@@ -24,22 +14,15 @@ def main(inputfile, input_override):
     # Setup logging before we start printing anything
     sim.log.setup()
     
-    # Set the Ocellaris log level
-    log_level = sim.input.get_value('output/ocellaris_log_level', 'info')
-    sim.log.set_log_level(AVAILABLE_LOG_LEVELS[log_level])
-    
-    # Set the Dolfin log level
-    df_log_level = sim.input.get_value('output/dolfin_log_level', 'warning')
-    dolfin.set_log_level(AVAILABLE_LOG_LEVELS[df_log_level])
-    
+    # Print banner with Ocellaris version number 
     version = get_detailed_version() or get_version()
-    
     sim.log.info('='*80)
     sim.log.info('                  Ocellaris   %s' % version) 
     sim.log.info('='*80)
     sim.log.info()
     
-    run_simulation(sim)
+    # Run setup and run the Ocellaris simulation time loop
+    run_simulation(sim, setup_logging=False)
     
     sim.log.info('='*80)
     if sim.success:
