@@ -1,3 +1,11 @@
+try:
+    import dolfin #@UnusedImport
+except ImportError:
+    print '\n    ERROR: Could not import dolfin!\n'
+    print '    Make sure FEniCS is properly installed\n'
+    print '    Exiting due to error\n'
+    exit()
+
 _VERSION = '0.1'
 def get_version():
     """
