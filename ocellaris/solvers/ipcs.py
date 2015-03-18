@@ -108,7 +108,7 @@ class SolverIPCS(Solver):
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
         self.eq_pressure = define_poisson_problem(trial, test, k_p, f, n, penalty,
-                                                  dirichlet_bcs, neumann_bcs)
+                                                  dirichlet_bcs, neumann_bcs, q=p)
         
         # For error norms in the convergence estimates
         elem = sim.data['u0'].element()
@@ -287,6 +287,7 @@ class SolverIPCS(Solver):
         of the pressure, by providing the nullspace to the solver
         """
         p_hat = self.simulation.data['p_hat']
+        p = self.simulation.data['p']
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         a, L = self.eq_pressure
         
@@ -317,7 +318,12 @@ class SolverIPCS(Solver):
             # Orthogonalize b with respect to the null space
             null_space.orthogonalize(b)
         
+        # Make sure the initial guess given to the Krylov solver is sane
+        p_hat.vector()[:] = p.vector()[:]
+        # Solve for p^{n+1} and put the answer into p_hat
         self.niters_p = self.pressure_solver.solve(A, p_hat.vector(), b)
+        # Calculate p_hat by subtracting p^*
+        p_hat.vector()[:] -= p.vector()[:]
     
     @timeit
     def velocity_update(self):

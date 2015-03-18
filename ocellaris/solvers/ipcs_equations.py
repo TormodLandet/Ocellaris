@@ -40,13 +40,15 @@ def define_advection_problem(u, v, up, upp, u_conv1, f, n, beta, time_coeffs, dt
     a, L = dolfin.lhs(eq), dolfin.rhs(eq)    
     return a, L
 
-def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
+def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q=None):
     """
-    Define the Poisson problem for u in f.space V
+    Define the Poisson problem for u
     
-        - div(k*grad(u)) = f
+        - div(k*grad(u - q)) = f
     
-    Note the minus in front of the first term!
+    Note the minus in front of the first term! The known value q does
+    not have to be given. If it is it will be included in the linear
+    form that is returned.
     
     Arguments:
         u: a TrialFunction
@@ -57,6 +59,7 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
         penalty: the penalization of discontinuities and Dirichlet BCs
         dirichlet_bcs: a list of OcellarisDirichletBC objects
         neumann_bcs: a list of OcellarisNeumannBC objects
+        q: a known function 
     
     Returns:
         a, L: the bilinear and linear forms
@@ -67,10 +70,6 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
         # Continous Galerkin implementation 
         eq = k*dot(nabla_grad(v), nabla_grad(u))*dx
         eq -= v*f*dx
-        
-        # Enforce Neumann BCs weakly
-        for nbc in neumann_bcs:
-            eq -= k*v*nbc.func()*nbc.ds()
     
     elif family == 'Discontinuous Lagrange':
         # Discontinous Galerkin implementation (Symmetric Interior Penalty method)
@@ -88,9 +87,14 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs):
             eq += ds_penalty*u*v*dbc.ds()
             eq -= dbc.func()*(ds_penalty*v - k*dot(nabla_grad(v), n))*dbc.ds()
         
-        # Enforce Neumann BCs weakly
+    # Enforce Neumann BCs weakly
+    for nbc in neumann_bcs:
+        eq -= nbc.func()*v*nbc.ds()
+            
+    if q is not None:
+        eq -= k*dot(nabla_grad(q), nabla_grad(v))*dx
         for nbc in neumann_bcs:
-            eq -= nbc.func()*v*nbc.ds()
+            eq += dot(nabla_grad(q), n)*v*nbc.ds()
     
     a, L = dolfin.lhs(eq), dolfin.rhs(eq)
     return a, L
