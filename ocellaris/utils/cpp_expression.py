@@ -24,7 +24,10 @@ def get_vars(simulation):
     Make a dictionary of variables to send to the C++ expression. Returns the
     time "t" and any scalar quantity in simulation.data
     """
-    available_vars = {'t': simulation.time, 'it': simulation.timestep}
+    available_vars = {'t': simulation.time,
+                      'dt': simulation.dt,
+                      'it': simulation.timestep,
+                      'ndim': simulation.ndim}
     for name, value in simulation.data.items():
         if isinstance(value, (float, int, long)):
             available_vars[name] = value
@@ -72,8 +75,8 @@ def OcellarisCppExpression(simulation, cpp_code, description, update=False):
         # scalar quantities
         available_vars = get_vars(simulation)
         for name, value in available_vars.items():
-            if hasattr(expression, name):
-                setattr(expression, name, value)
+            if name in expression.user_parameters:
+                expression.user_parameters[name] = value
     
     # Create the expression
     expression = make_expression(simulation, cpp_code, description)

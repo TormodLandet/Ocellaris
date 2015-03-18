@@ -375,9 +375,8 @@ component boundary conditions.
 Coded boundary conditions
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-An example of coded boundary conditions can be the following which applies the
-analytical Taylor-Green vortex solution to a rectangle mesh with side lengths
-2.0 in each direction:
+An example of coded boundary conditions can be seen in the the following which
+applies the analytical Taylor-Green vortex solution as Dirichlet conditions:
 
 .. code-block:: yaml
 
@@ -395,9 +394,35 @@ analytical Taylor-Green vortex solution to a rectangle mesh with side lengths
             code: value[0] = -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4.*pi*pi*nu*t)/4
 
 Notice that there is a list of two code blocks for the velocity. Both are
-evaluated as scalar fields and must assign to the zeroth component of the value
-list that is provided by FEniCS in order to set the Dirichlet value at the
-boundary. 
+evaluated as scalar fields and must assign to the zeroth component of the
+:code:`value[]` array that is provided by FEniCS in order to set the Dirichlet
+value at the boundary.
+
+Boundary conditions can also be written in C++. If you write the boundary
+conditions in C++ instead of Python it will normally be *significantly faster*.
+
+The same example as above would be:
+
+.. code-block:: yaml
+
+    boundary_conditions:
+    -   name: walls
+        selector: code
+        inside_code: on_boundary
+        u:
+            type: CppCodedValue
+            cpp_code:
+            -   -sin(pi*x[1]) * cos(pi*x[0]) * exp(-2*pi*pi*nu*t)
+            -    sin(pi*x[0]) * cos(pi*x[1]) * exp(-2*pi*pi*nu*t)
+        p:
+            type: CppCodedValue
+            cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4.*pi*pi*nu*t)/4
+
+Note that there is no assignment to the :code:`value[]` array. All math
+functions from ``<cmath>`` are available as well as scalars like the time "t",
+the timestep "dt", time index "it" and number of geometrical dimensions "ndim".
+For single phase simulations "nu" and "rho" are also available.
+
 
 Periodic boundary conditions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
