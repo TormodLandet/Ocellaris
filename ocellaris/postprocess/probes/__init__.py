@@ -36,7 +36,7 @@ def setup_probes(simulation):
     Install probes from a simulation input
     """
     def hook_timestep(probe):
-        return lambda report: probe.end_of_timestep()
+        return lambda: probe.end_of_timestep()
     
     def hook_final(probe):
         return lambda success: probe.end_of_simulation()

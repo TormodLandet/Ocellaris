@@ -5,7 +5,7 @@ from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
 from .postprocess import setup_probes
-from .utils import timeit, run_debug_console, debug_console_hook, report_error
+from .utils import timeit, run_debug_console, debug_console_hook, report_error, ocellaris_project
 from ocellaris.utils.code_runner import RunnablePythonString
 
 def run_simulation(simulation):
@@ -31,11 +31,6 @@ def run_simulation(simulation):
     # creating Dirichlet boundary conditions
     setup_function_spaces(simulation)
     
-    # Load the boundary conditions. This must be done
-    # before creating the solver as the solver needs
-    # the Neumann conditions to define weak forms
-    setup_boundary_conditions(simulation)
-    
     # Setup physical constants
     ndim = simulation.ndim
     g = simulation.input.get_value('physical_properties/g', [0]*ndim, required_type='list(float)')
@@ -48,7 +43,11 @@ def run_simulation(simulation):
     simulation.data['rho'] = multiphase_model.get_density()
     simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity()
     simulation.multi_phase_model = multiphase_model
-    simulation.hooks.add_pre_timestep_hook(multiphase_model.update)
+    
+    # Load the boundary conditions. This must be done
+    # before creating the solver as the solver needs
+    # the Neumann conditions to define weak forms
+    setup_boundary_conditions(simulation)
     
     # Get the solver
     solver_name = simulation.input.get_value('solver/type', required_type='string')
@@ -76,7 +75,7 @@ def run_simulation(simulation):
     t_start = time.time()
     
     # Setup the debug console to optionally run at the end of each timestep
-    simulation.hooks.add_post_timestep_hook(lambda report: debug_console_hook(simulation))
+    simulation.hooks.add_post_timestep_hook(lambda: debug_console_hook(simulation))
     
     # Setup the summary to show after the simulation
     hook = lambda success: summarise_simulation_after_running(simulation, t_start, success)
@@ -117,6 +116,8 @@ def load_mesh(simulation):
     mesh_type = inp.get_value('mesh/type', required_type='string')
     
     if mesh_type == 'Rectangle':
+        simulation.log.info('Creating rectangular mesh')
+        
         startx = inp.get_value('mesh/startx', 0, 'float')
         starty = inp.get_value('mesh/starty', 0, 'float')
         endx = inp.get_value('mesh/endx', 1, 'float')
@@ -124,10 +125,13 @@ def load_mesh(simulation):
         Nx = inp.get_value('mesh/Nx', required_type='int')
         Ny = inp.get_value('mesh/Ny', required_type='int')
         diagonal = inp.get_value('mesh/diagonal', 'left/right', required_type='string')
+        
         mesh = dolfin.RectangleMesh(startx, starty, endx, endy, Nx, Ny, diagonal)
         mesh_facet_regions = None
     
     elif mesh_type == 'XML':
+        simulation.log.info('Creating mesh from XML file')
+        
         mesh_file = inp.get_value('mesh/mesh_file', required_type='string')
         facet_region_file = inp.get_value('mesh/facet_region_file', None, required_type='string')
         
@@ -152,6 +156,8 @@ def mark_boundaries(simulation, mesh_facet_regions):
     Mark the boundaries of the mesh with different numbers to be able to
     apply different boundary conditions to different regions 
     """
+    simulation.log.info('Creating boundary regions')
+    
     # Create a function to mark the external facets
     marker = dolfin.FacetFunction("size_t", simulation.data['mesh'])
     
@@ -175,6 +181,8 @@ def setup_periodic_domain(simulation):
     We need to create a constrained domain in case there are periodic 
     boundary conditions.
     """
+    simulation.log.info('Creating periodic boundary conditions (if specified)')
+    
     # This will be overwritten if there are periodic boundary conditions
     simulation.data['constrained_domain'] = None
     
@@ -197,7 +205,7 @@ def setup_function_spaces(simulation):
     # Get the constraine ddomain
     cd = simulation.data['constrained_domain']
     if cd is None:
-        simulation.log.info('Creating function spaces')
+        simulation.log.info('Creating function spaces without periodic boundaries (none found)')
     else:
         simulation.log.info('Creating function spaces with periodic boundaries')
     
@@ -225,6 +233,8 @@ def setup_boundary_conditions(simulation):
     """
     Setup boundary conditions based on the simulation input
     """
+    simulation.log.info('Creating boundary conditions')
+    
     # Make dicts to gather Dirichlet and Neumann boundary conditions
     simulation.data['dirichlet_bcs'] = {}
     simulation.data['neumann_bcs'] = {}
@@ -237,6 +247,8 @@ def setup_initial_conditions(simulation):
     """
     Setup the initial values for the fields
     """
+    simulation.log.info('Creating initial conditions')
+    
     ic = simulation.input.get_value('initial_conditions', {}, 'dict(string:dict)')
     for name, info in ic.items():
         name = str(name)
@@ -260,27 +272,18 @@ def setup_initial_conditions(simulation):
         
         func = simulation.data[name]
         V = func.function_space()
+        description = 'initial conditions for %r' % name
         
-        available_vars = {'t': simulation.time}
-        for k, v in simulation.data.items():
-            if isinstance(v, (float, int, long)):
-                available_vars[k] = v
-            if isinstance(v, dolfin.Constant) and v.ufl_shape == ():
-                available_vars[k] = v
-        
-        try:
-            expr = dolfin.Expression(cpp_code, **available_vars)
-            dolfin.project(expr, V=V, function=func)
-        except Exception as e:
-            report_error('Error in C++ code',
-                         'The C++ code for initial conditions for %r does not compile.\n'
-                         '\nCode:\n%s'
-                         '\n\nError:\n%s' % (name, cpp_code, str(e)))
+        # Project into the function
+        ocellaris_project(simulation, cpp_code, description, V, func)
+
 
 def setup_hooks(simulation):
     """
     Install the hooks that are given on the input file
     """
+    simulation.log.info('Registering user-defined hooks')
+    
     hooks = simulation.input.get_value('hooks', {}, 'dict(string:list)')
     
     def make_hook_from_code_string(code_string, description):

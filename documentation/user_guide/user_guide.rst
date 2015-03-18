@@ -9,6 +9,25 @@ trusting the results.
 .. contents:: :local:
 
 
+Installing Ocellaris
+--------------------
+
+Ocellaris is a Python package and it contains no modules that must be compiled
+before running. Before running Ocellaris you must ensure that the ocellaris
+Python package is in the Python search path. This can be done by installing
+the package directory to a ``site-packages`` directory that is already in the
+Python search path, or setting the ``PYTHONPATH`` environmental variable to
+contain the directory where the ``ocellaris`` Python package is found (a Python
+package == directory containing an ``__init__.py`` file).
+
+You must also ensure that FEniCS is installed. If you can run ``import ocellaris``
+inside Python then Ocellaris should be working..
+
+Ocellaris will eventually be available on PYPI for installarion through the
+``pip``, command but currently you must download the package manually from 
+`the Ocellaris Bitbucket <https://bitbucket.org/trlandet/ocellaris/src>`_.
+
+
 Running Ocellaris
 -----------------
 

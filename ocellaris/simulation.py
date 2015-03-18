@@ -33,8 +33,6 @@ class Simulation(object):
         
         # For timing the analysis
         self.prevtime = self.starttime = time.time()
-        self.hooks.add_pre_timestep_hook(self._at_start_of_timestep)
-        self.hooks.add_post_timestep_hook(self._at_end_of_timestep)
     
     def set_mesh(self, mesh):
         """
@@ -58,7 +56,7 @@ class Simulation(object):
         self.time = t
         self.dt = dt
     
-    def _at_end_of_timestep(self, report):
+    def _at_end_of_timestep(self):
         # Report the time spent in this time step
         newtime = time.time()
         self.reporting.report_timestep_value('tstime', newtime-self.prevtime)
@@ -129,6 +127,7 @@ class Hooks(object):
         Will run all pre timestep hooks in the reverse
         order they have been added 
         """
+        self.simulation._at_start_of_timestep(timestep_number, t, dt)
         for hook in self._pre_timestep_hooks[::-1]:
             hook(timestep_number, t, dt)
     
@@ -140,9 +139,9 @@ class Hooks(object):
         Will run all post timestep hooks in the reverse
         order they have been added
         """
-        report = True
         for hook in self._post_timestep_hooks[::-1]:
-            hook(report)
+            hook()
+        self.simulation._at_end_of_timestep()
     
     def simulation_ended(self, success):
         """
@@ -375,8 +374,7 @@ class Reporting(object):
         self.timestep_xy_reports = {}
         
         # Setup reporting after each time step
-        rep = lambda report: self.log_timestep_reports() if report else None
-        self.simulation.hooks.add_post_timestep_hook(rep)
+        self.simulation.hooks.add_post_timestep_hook(self.log_timestep_reports)
     
     def report_timestep_value(self, report_name, value):
         """

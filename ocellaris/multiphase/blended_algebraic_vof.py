@@ -48,6 +48,9 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Create the equations when the simulation starts
         self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start)
+        
+        # Update the rho and nu fields before each time step
+        simulation.hooks.add_pre_timestep_hook(self.update)
     
     def on_simulation_start(self):
         """

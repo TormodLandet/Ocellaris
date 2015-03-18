@@ -1,7 +1,6 @@
 import dolfin
 from . import register_boundary_condition, BoundaryCondition
-from ocellaris.utils import CodedExpression
-from sympy.parsing.maxima import var_name
+from ocellaris.utils import CodedExpression, OcellarisCppExpression
 
 
 class OcellarisDirichletBC(dolfin.DirichletBC):
@@ -120,6 +119,7 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         """
         self.simulation = simulation
         self.func_space = simulation.data['V%s' % var_name]
+        self.expressions = []
         
         # Make a dolfin Expression object that runs the code string
         code = inp_dict['cpp_code']
@@ -128,18 +128,18 @@ class CppCodedDirichletBoundary(BoundaryCondition):
             assert len(code) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
-                expr = dolfin.Expression(code[d])
-                self.register_dirichlet_condition(name, expr, subdomains, subdomain_id)
+                self.register_dirichlet_condition(name, code[d], subdomains, subdomain_id)
         else:
-            expr = dolfin.Expression(code)
-            self.register_dirichlet_condition(var_name, expr, subdomains, subdomain_id)
+            self.register_dirichlet_condition(var_name, code, subdomains, subdomain_id)
     
-    def register_dirichlet_condition(self, var_name, expr, subdomains, subdomain_id):
+    def register_dirichlet_condition(self, var_name, cpp_code, subdomains, subdomain_id):
         """
         Store the boundary condition for use in the solver
         """
+        description = 'boundary condititon for %s' % var_name
+        expr = OcellarisCppExpression(self.simulation, cpp_code, description, update=True)
         bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
+        self.expressions.append(expr)
         self.simulation.log.info('    C++ coded value for %s' % var_name)
-
