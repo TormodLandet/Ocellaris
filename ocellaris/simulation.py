@@ -85,30 +85,36 @@ class Hooks(object):
         self._post_timestep_hooks = []
         self._post_simulation_hooks = []
     
-    def add_pre_simulation_hook(self, hook):
+    # ------------------------------------------
+    # Hook adders:
+    
+    def add_pre_simulation_hook(self, hook, description):
         """
         Add a function that will run before the simulation starts
         """
-        self._pre_simulation_hooks.append(hook)
+        self._pre_simulation_hooks.append((hook, description))
     
-    def add_pre_timestep_hook(self, hook):
+    def add_pre_timestep_hook(self, hook, description):
         """
         Add a function that will run before the solver in each time step
         """
-        self._pre_timestep_hooks.append(hook)
-        
-    def add_post_timestep_hook(self, hook):
+        self._pre_timestep_hooks.append((hook, description))
+    
+    def add_post_timestep_hook(self, hook, description):
         """
         Add a function that will run after the solver in each time step
         """
-        self._post_timestep_hooks.append(hook)
+        self._post_timestep_hooks.append((hook, description))
     
-    def add_post_simulation_hook(self, hook):
+    def add_post_simulation_hook(self, hook, description):
         """
         Add a function that will run after the simulation is done
         """
-        self._post_simulation_hooks.append(hook)
+        self._post_simulation_hooks.append((hook, description))
         
+    # ------------------------------------------
+    # Hook runners:
+    
     def simulation_started(self):
         """
         Called by the solver when the simulation starts
@@ -116,8 +122,11 @@ class Hooks(object):
         Will run all pre simulation hooks in the reverse
         order they have been added
         """
-        for hook in self._pre_simulation_hooks[::-1]:
-            hook()
+        for hook, description in self._pre_simulation_hooks[::-1]:
+            try:
+                hook()
+            except:
+                self.simulation.log.error('Got exception in hook: %s' % description)
     
     @timeit
     def new_timestep(self, timestep_number, t, dt):
@@ -128,8 +137,11 @@ class Hooks(object):
         order they have been added 
         """
         self.simulation._at_start_of_timestep(timestep_number, t, dt)
-        for hook in self._pre_timestep_hooks[::-1]:
-            hook(timestep_number, t, dt)
+        for hook, description in self._pre_timestep_hooks[::-1]:
+            try:
+                hook(timestep_number, t, dt)
+            except:
+                self.simulation.log.error('Got exception in hook: %s' % description)
     
     @timeit
     def end_timestep(self):
@@ -139,8 +151,11 @@ class Hooks(object):
         Will run all post timestep hooks in the reverse
         order they have been added
         """
-        for hook in self._post_timestep_hooks[::-1]:
-            hook()
+        for hook, description in self._post_timestep_hooks[::-1]:
+            try:
+                hook()
+            except:
+                self.simulation.log.error('Got exception in hook: %s' % description)
         self.simulation._at_end_of_timestep()
     
     def simulation_ended(self, success):
@@ -155,8 +170,25 @@ class Hooks(object):
             diverging solution and other problems
         """
         self.simulation.success = success
-        for hook in self._post_simulation_hooks[::-1]:
-            hook(success)
+        for hook, description in self._post_simulation_hooks[::-1]:
+            try:
+                hook(success)
+            except:
+                self.simulation.log.error('Got exception in hook: %s' % description)
+    
+    def show_hook_info(self):
+        """
+        Show all registered hooks
+        """
+        show = self.simulation.log.info
+        show('\nRegistered hooks:')
+        for hook_type, hooks in [('Pre-simulation', self._pre_simulation_hooks),
+                                 ('Pre-timestep', self._pre_timestep_hooks),
+                                 ('Post-timestep:', self._post_timestep_hooks),
+                                 ('Post-simulation', self._post_simulation_hooks)]:
+            show('    %s:' % hook_type)
+            for _hook, description in hooks[::-1]:
+                show('        - %s' % description)
 
 class UndefinedParameter(object):
     def __repr__(self):
@@ -374,7 +406,7 @@ class Reporting(object):
         self.timestep_xy_reports = {}
         
         # Setup reporting after each time step
-        self.simulation.hooks.add_post_timestep_hook(self.log_timestep_reports)
+        self.simulation.hooks.add_post_timestep_hook(self.log_timestep_reports, 'Reporting after each time step')
     
     def report_timestep_value(self, report_name, value):
         """
@@ -402,7 +434,7 @@ class Log(object):
     def __init__(self, simulation):
         self.simulation = simulation
         self.log_level = dolfin.INFO
-        self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation())
+        self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation(), 'Flush log file')
         self.write_log = False
     
     def _write(self, message):

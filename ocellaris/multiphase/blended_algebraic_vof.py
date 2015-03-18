@@ -47,10 +47,10 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.convection_scheme = scheme(simulation, 'c')
         
         # Create the equations when the simulation starts
-        self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start)
+        self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
         
         # Update the rho and nu fields before each time step
-        simulation.hooks.add_pre_timestep_hook(self.update)
+        simulation.hooks.add_pre_timestep_hook(self.update, 'BlendedAlgebraicVofModel - update colour field')
     
     def on_simulation_start(self):
         """

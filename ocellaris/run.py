@@ -61,25 +61,31 @@ def run_simulation(simulation):
     setup_initial_conditions(simulation)
     
     # Setup any hooks that may be present on the input file
-    setup_hooks(simulation) 
-    
-    # Print information about configuration parameters
-    simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t_start))
-    simulation.log.info('\nSimulation configuration:')
-    simulation.log.info('{:-^40}'.format(' input begin '))
-    
-    inp = collections.OrderedDict(simulation.input.items())
-    simulation.log.info(yaml.dump(inp, indent=4))
-    simulation.log.info('{:-^40}'.format(' input end '))
-    simulation.log.info("\nRunning simulation ...\n")
-    t_start = time.time()
+    setup_hooks(simulation)
     
     # Setup the debug console to optionally run at the end of each timestep
-    simulation.hooks.add_post_timestep_hook(lambda: debug_console_hook(simulation))
+    simulation.hooks.add_post_timestep_hook(lambda: debug_console_hook(simulation), 'Debug console')
     
     # Setup the summary to show after the simulation
     hook = lambda success: summarise_simulation_after_running(simulation, t_start, success)
-    simulation.hooks.add_post_simulation_hook(hook)
+    simulation.hooks.add_post_simulation_hook(hook, 'Summarise simulation')
+    
+    # Show time spent setting up the solver
+    simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t_start))
+    
+    # Show all registered hooks
+    simulation.hooks.show_hook_info()
+    
+    # Print information about configuration parameters
+    simulation.log.info('\nSimulation configuration when starting the solver:')
+    simulation.log.info('\n{:-^80}'.format(' configuration begin '))
+    
+    inp = collections.OrderedDict(simulation.input.items())
+    simulation.log.info(yaml.dump(inp, indent=4))
+    simulation.log.info('{:-^80}'.format(' configuration end '))
+    simulation.log.info("\nCurrent time: %s" % time.strftime('%Y-%m-%d %H:%M:%S'))
+    simulation.log.info("\nRunning simulation ...\n")
+    t_start = time.time()
     
     # Run the simulation
     try:
@@ -273,6 +279,7 @@ def setup_initial_conditions(simulation):
         func = simulation.data[name]
         V = func.function_space()
         description = 'initial conditions for %r' % name
+        simulation.log.info('    C++ %s' % description)
         
         # Project into the function
         ocellaris_project(simulation, cpp_code, description, V, func)
@@ -308,8 +315,8 @@ def setup_hooks(simulation):
             
             code_string = hook_info['code']
             hook = make_hook_from_code_string(code_string, description)
-            register_hook(hook)
-            simulation.log.info('Registering %s' % description)
+            register_hook(hook, 'User defined hook "%s"' % name)
+            simulation.log.info('    ' + description)
 
 
 def summarise_simulation_after_running(simulation, t_start, success):
@@ -335,6 +342,8 @@ def summarise_simulation_after_running(simulation, t_start, success):
     s = tottime - h*60**2 - m*60
     humantime = '%d hours %d minutes and %d seconds' % (h, m, s)
     simulation.log.info('\nSimulation done in %.3f seconds (%s)' % (tottime, humantime))
+    
+    simulation.log.info("\nCurrent time: %s" % time.strftime('%Y-%m-%d %H:%M:%S'))
 
 
 def plot_at_end(simulation):

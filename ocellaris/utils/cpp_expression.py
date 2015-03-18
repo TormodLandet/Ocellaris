@@ -80,6 +80,6 @@ def OcellarisCppExpression(simulation, cpp_code, description, update=False):
     
     # Return the expression. Optionally register an update each time step
     if update:
-        simulation.hooks.add_pre_timestep_hook(updater)
+        simulation.hooks.add_pre_timestep_hook(updater, 'Update C++ expression "%s"' % description)
     
     return expression
