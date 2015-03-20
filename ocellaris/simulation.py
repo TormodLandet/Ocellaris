@@ -287,6 +287,10 @@ class Input(collections.OrderedDict):
             check_isinstance(d, basestring)
             # SWIG does not like Python 2 Unicode objects
             d = str(d)
+        elif required_type == 'dict(string:any)':
+            check_isinstance(d, dict_types)
+            for key, val in d.items():
+                check_isinstance(key, basestring)
         elif required_type == 'dict(string:dict)':
             check_isinstance(d, dict_types)
             for key, val in d.items():

@@ -2,11 +2,11 @@
 import dolfin
 from dolfin import dot, nabla_grad, avg, jump, dx, dS
 
-def define_advection_problem(u, v, up, upp, u_conv1, f, n, beta, time_coeffs, dt, dirichlet_bcs):
+def define_advection_problem(u, v, up, upp, u_conv, f, n, beta, time_coeffs, dt, dirichlet_bcs):
     """
     Define the advection problem
     
-     d/dt(u) + u_conv1 ⋅ grad(u) = f
+     d/dt(u) + u_conv ⋅ grad(u) = f
      
     Returns the bilinear and linear forms
     """
@@ -15,12 +15,12 @@ def define_advection_problem(u, v, up, upp, u_conv1, f, n, beta, time_coeffs, dt
     if family == 'Lagrange':
         # Continous Galerkin implementation 
         c1, c2, c3 = time_coeffs 
-        eq = (c1*u + c2*up + c3*upp)/dt*v*dx + dot(u_conv1, nabla_grad(u))*v*dx - f*v*dx
+        eq = (c1*u + c2*up + c3*upp)/dt*v*dx + dot(u_conv, nabla_grad(u))*v*dx - f*v*dx
     
     elif family == 'Discontinuous Lagrange':
         # Upstream and downstream normal velocities
-        flux_nU = u*(dot(u_conv1, n) + abs(dot(u_conv1, n)))/2
-        flux_nD = u*(dot(u_conv1, n) - abs(dot(u_conv1, n)))/2
+        flux_nU = u*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
+        flux_nD = u*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
         
         # Define the blended flux
         # The blending factor beta is not DG, so beta('+') == beta('-')
@@ -30,12 +30,12 @@ def define_advection_problem(u, v, up, upp, u_conv1, f, n, beta, time_coeffs, dt
         # Equation to solve
         c1, c2, c3 = time_coeffs 
         eq = (c1*u + c2*up + c3*upp)/dt*v*dx \
-             - u*dot(u_conv1, nabla_grad(v))*dx \
+             - u*dot(u_conv, nabla_grad(v))*dx \
              + flux*jump(v)*dS  - f*v*dx
         
         # Enforce Dirichlet BCs weakly
         for dbc in dirichlet_bcs:
-            eq += dot(u_conv1, n)*v*(u - dbc.func())*dbc.ds()
+            eq += dot(u_conv, n)*v*(u - dbc.func())*dbc.ds()
         
     a, L = dolfin.lhs(eq), dolfin.rhs(eq)    
     return a, L

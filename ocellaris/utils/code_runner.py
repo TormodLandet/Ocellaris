@@ -42,7 +42,7 @@ class RunnablePythonString(object):
         # or assign to an element, var_name[i] = ... ?
         if self.var_name is not None:
             vardef = r'.*(^|\s)%s(\[\w\])?\s*=' % self.var_name
-            has_vardef = re.match(vardef, code_string) is not None
+            has_vardef = re.search(vardef, code_string) is not None
         else:
             has_vardef = False
         
@@ -65,6 +65,8 @@ class RunnablePythonString(object):
         simulation = self.simulation
         t = time = simulation.time
         it = timestep = simulation.timestep
+        dt = simulation.dt
+        ndim = simulation.ndim
         
         # Make sure the keyword arguments accessible
         locals().update(kwargs)
