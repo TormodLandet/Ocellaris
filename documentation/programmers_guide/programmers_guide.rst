@@ -1,10 +1,16 @@
 Programmers guide
 =================
 
-This page contains some pointers on how to understand the Ocellaris code.   
+This documentation shows the API of the main classes and gives information 
+about scripting Ocellaris. You can also find help to understand the main
+code base if you want to help further develop Ocellaris.   
 
-.. contents:: :local:
+.. toctree::
 
+    simulation
+    boundary_conditions
+    solver
+    scripting_and_interactive_console
 
 A brief introduction
 --------------------
@@ -48,98 +54,14 @@ actions are performed here:
 - Run the solver
 - Report how long each part of the simulation took
 
+A simplified replification of the above in a script would be:
 
-Simulation classes
-------------------
+.. code-block:: python
 
-The simulation classes holds the simulation data (velocity, pressure, function 
-spaces, mesh etc) and is also responsible for most utility functionality such
-as plugins (hooks), logging, reporting, plotting and input file handling. 
+    from ocellaris import Simulation, run_simulation
 
-.. autoclass:: ocellaris.Simulation
+    sim = Simulation()
+    sim.input.read_yaml('template.inp')
+    run_simulation(sim)
 
-    .. attribute:: input
-        :annotation:
-        
-        An :class:`ocellaris.simulation.Input` object that holds the input from
-        the input file provided by the user
-    
-    .. attribute:: hooks
-        :annotation:
-        
-        An :class:`ocellaris.simulation.Hooks` object that keeps track of
-        functions that should run at certain times during the simulation
-
-    .. attribute:: plotting
-        :annotation:
-        
-        An :class:`ocellaris.simulation.Plotting` object that helps creating 
-        plots of the solution while the simulation is running
-
-    .. attribute:: reporting
-        :annotation:
-        
-        An :class:`ocellaris.simulation.Reporting` object that helps report
-        summary values each time step
-
-    .. attribute:: log
-        :annotation:
-        
-        An :class:`ocellaris.simulation.Log` object that helps with logging
-        messages to screen while the simulation is running
-
-.. autoclass:: ocellaris.simulation.Input
-
-.. autoclass:: ocellaris.simulation.Hooks
-
-.. autoclass:: ocellaris.simulation.Plotting
-
-.. autoclass:: ocellaris.simulation.Reporting
-
-.. autoclass:: ocellaris.simulation.Log
-
-
-Boundary conditions
--------------------
-
-The boundary condition code will both identify regions of the boundary given by
-the user in the input file and create boundary condition objects for each 
-function (velocity, pressure ...) in this region.
-
-.. autoclass:: ocellaris.boundary_conditions.BoundaryRegion
-
-.. autoclass:: ocellaris.boundary_conditions.BoundaryCondition
-
-
-The solver
-----------
-
-The solver uses the simulation classes and runs a time loop to solve the time
-dependent Navier-Stokes equations.
-
-.. autoclass:: ocellaris.solvers.ipcs.SolverIPCS
-
-
-.. _sec-interactive-console:
-
-Interactive console
--------------------
-
-At the end of each time step Ocellaris will optionally open an interactive
-console so that you can inspect the internal state of the simulation. To
-access this pres :kbd:`d` then :kbd:`Enter` ("d" for debug). At the end of the
-next time step the console should open and you will have full access to the
-internal variables. The variables are listed so that you can get a head start
-
-If you press :kbd:`Ctrl+d` inside the interactive console Ocellaris will
-continue running the time loop. If you type ``exit()`` or  ``quit()`` you will
-stop Ocellaris and return to the command line immediately. 
-
-It is also possible to specify that the console should open at the end of the
-simulation. If you want this put the following on the input file:
-
-.. code-block:: javascript
-
-    "console_at_end": true
-
-This can be very useful for ad-hoc postprocessing of the simulation results.
+Read more about scripting in the scripting section

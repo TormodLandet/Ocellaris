@@ -12,7 +12,7 @@ metadata:
 
 physical_properties:
     g: [0, 0]
-    nu0: 0.001
+    nu0: 0.01
     rho0: 1.0
 
 mesh:
@@ -50,13 +50,13 @@ boundary_conditions:
     selector: code
     inside_code: on_boundary
     u:
-        type: CodedValue
-        code:
-        -   value[0] = -sin(pi*x[1]) * cos(pi*x[0]) * exp(-2*pi*pi*nu*t)
-        -   value[0] =  sin(pi*x[0]) * cos(pi*x[1]) * exp(-2*pi*pi*nu*t)
+        type: CppCodedValue
+        cpp_code:
+        -   -sin(pi*x[1]) * cos(pi*x[0]) * exp(-2*pi*pi*nu*t)
+        -    sin(pi*x[0]) * cos(pi*x[1]) * exp(-2*pi*pi*nu*t)
     p:
-        type: CodedValue
-        code: value[0] = -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4.*pi*pi*nu*t)/4
+        type: CppCodedValue
+        cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4.*pi*pi*nu*t)/4
 
 initial_conditions:
     up0:
@@ -67,8 +67,8 @@ initial_conditions:
         cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*t)/4
 
 time:
-    dt: 0.01
-    tmax: 20.0
+    dt: 0.001
+    tmax: 1.0
 
 output:
     prefix: taylor_green
@@ -78,7 +78,7 @@ output:
 
 solver:
     type: IPCS
-    num_inner_iter: 2
+    num_inner_iter: 10
     allowable_error_inner: 5.0e-3
     polynomial_degree_pressure: 1
     polynomial_degree_velocity: 2
@@ -92,15 +92,15 @@ convection:
 
 hooks:
     post_timestep:
-    -   name: plot at end
+    -   name: calculate Taylor-Green error
         code: |
             errors_u0 = hook_data.setdefault('errors_u0', [])
-            if timestep % 10 == 0:
+            if it == 1 or it % 1 == 0:
                 e = Expression('-sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)', t=t, nu=nu)
                 ue = interpolate(e, Vu)
                 err = norm(u0.vector() - ue.vector())/norm(ue)
-                errors_u0.append(error)
-                print errors_u0
+                errors_u0.append(err)
+                #print errors_u0
                 print 'ERROR-SUM-u0', sum(errors_u0)
 
 #console_at_end: false

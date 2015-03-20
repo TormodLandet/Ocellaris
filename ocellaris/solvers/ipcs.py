@@ -11,9 +11,9 @@ SOLVER_U = 'gmres'
 PRECONDITIONER_U = 'additive_schwarz'
 SOLVER_P = 'minres'
 PRECONDITIONER_P = 'hypre_amg'
-KRYLOV_PARAMETERS = {'nonzero_initial_guess': True} 
-                     #'relative_tolerance': 1e-10,
-                     #'absolute_tolerance': 1e-15}
+KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
+                     'relative_tolerance': 1e-10,
+                     'absolute_tolerance': 1e-15}
 
 # Implemented timestepping methods
 BDF = 'BDF'
