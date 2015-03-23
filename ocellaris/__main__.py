@@ -22,7 +22,7 @@ def main(inputfile, input_override):
     sim.log.info()
     
     # Run setup and run the Ocellaris simulation time loop
-    run_simulation(sim, setup_logging=False)
+    run_simulation(sim, setup_logging=False, catch_exceptions=True)
     
     sim.log.info('='*80)
     if sim.success:

@@ -8,7 +8,7 @@ from .postprocess import setup_probes
 from .utils import timeit, run_debug_console, debug_console_hook, report_error, ocellaris_project
 from ocellaris.utils.code_runner import RunnablePythonString
 
-def run_simulation(simulation, setup_logging=True):
+def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     """
     Prepare and run a simulation
     """
@@ -101,6 +101,8 @@ def run_simulation(simulation, setup_logging=True):
         simulation.log.error('Got exception when running solver:\n%s' % str(e))
         simulation.log.error('=== EXCEPTION =='*5)
         simulation.hooks.simulation_ended(success)
+        if not catch_exceptions:
+            raise
     
     # Show dolfin plots?
     if simulation.input.get_value('output/plot_at_end', False, 'bool'):
