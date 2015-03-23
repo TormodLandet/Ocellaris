@@ -100,23 +100,21 @@ def CodedExpression(simulation, code_string, description, value_shape=()):
     expr.runnable = RunnablePythonString(simulation, code_string, description, 'value')
     return expr
 
-# This is just stupid ...
+# We need to subclass once per value_shape() for some reason
 class CodedExpression0(dolfin.Expression):
-    def eval(self, value, x):
-        self.runnable.run(value=value, x=x)
+    def eval_cell(self, value, x, ufc_cell):
+        self.runnable.run(value=value, x=x, ufc_cell=ufc_cell)
 
-# This is just more stupid ...
 class CodedExpression2(dolfin.Expression):
-    def eval(self, value, x):
-        self.runnable.run(value=value, x=x)
+    def eval_cell(self, value, x, ufc_cell):
+        self.runnable.run(value=value, x=x, ufc_cell=ufc_cell)
     
     def value_shape(self):
         return (2,)
 
-# This is just more and more stupid ...
 class CodedExpression3(dolfin.Expression):
-    def eval(self, value, x):
-        self.runnable.run(value=value, x=x)
+    def eval_cell(self, value, x, ufc_cell):
+        self.runnable.run(value=value, x=x, ufc_cell=ufc_cell)
 
     def value_shape(self):
         return (3,)

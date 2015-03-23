@@ -119,7 +119,6 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         """
         self.simulation = simulation
         self.func_space = simulation.data['V%s' % var_name]
-        self.expressions = []
         
         # Make a dolfin Expression object that runs the code string
         code = inp_dict['cpp_code']
@@ -141,5 +140,4 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
-        self.expressions.append(expr)
         self.simulation.log.info('    C++ coded value for %s' % var_name)
