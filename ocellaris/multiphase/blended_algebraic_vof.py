@@ -51,6 +51,9 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'BlendedAlgebraicVofModel - update colour field')
+        
+        # Report divergence of the velocity field after each time step
+        simulation.hooks.add_post_timestep_hook(self.report_divergence, 'BlendedAlgebraicVofModel - report velocity divergence')
     
     def on_simulation_start(self):
         """
@@ -146,6 +149,20 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Compress interface
         # Not yet tested with FEniCS 1.5     self.compress(t, dt)
+    
+    def report_divergence(self):
+        """
+        It is vitally important that the velocity field is divergence free.
+        We report the divergence in the function space of the colour function
+        so that this can be checked
+        """
+        vel = self.simulation.data['u']
+        
+        for fspace_name in ('Vc', 'Vu', 'Vp'):
+            V = self.simulation.data[fspace_name]
+            div_u = dolfin.project(dolfin.nabla_div(vel), V)
+            maxdiv = abs(div_u.vector().array()).max()
+            self.simulation.reporting.report_timestep_value('max(div(u)|%s)' % fspace_name, maxdiv)
     
     def compress(self, t, dt):
         """
