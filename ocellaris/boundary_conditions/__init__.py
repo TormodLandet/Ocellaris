@@ -199,3 +199,4 @@ class BoundaryCondition(object):
 
 from . import dirichlet
 from . import neumann
+from . import wall
