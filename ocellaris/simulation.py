@@ -68,8 +68,11 @@ class Simulation(object):
         for d in range(self.ndim):
             vels += self.data['u'][d].vector().array()**2
         vel_max = vels.max()**0.5
-        
         self.reporting.report_timestep_value('umax', vel_max)
+        
+        # Write timestep report
+        self.reporting.log_timestep_reports()
+
 
 class Hooks(object):
     def __init__(self, simulation):
@@ -193,6 +196,7 @@ class Hooks(object):
             show('    %s:' % hook_type)
             for _hook, description in hooks[::-1]:
                 show('        - %s' % description)
+
 
 class UndefinedParameter(object):
     def __repr__(self):
@@ -416,9 +420,6 @@ class Reporting(object):
         self.simulation = simulation
         self.timesteps = []
         self.timestep_xy_reports = {}
-        
-        # Setup reporting after each time step
-        self.simulation.hooks.add_post_timestep_hook(self.log_timestep_reports, 'Reporting after each time step')
     
     def report_timestep_value(self, report_name, value):
         """
