@@ -17,8 +17,15 @@ def debug_console_hook(simulation):
     has_input = lambda: sys.stdin in select.select([sys.stdin], [], [], 0)[0]
     while has_input(): 
         line = sys.stdin.readline()
-        if line.strip().lower() == 'd':
+        command = line.strip().lower()
+        if command == 'd':
+            # d == "debug" -> start the debug console
             return run_debug_console(simulation)
+        elif command == 's':
+            # s == "stop" -> stop the simulation
+            simulation.log.info('\nCommand line action:\n  Setting simulation '
+                                'control parameter tmax to %r\n' % simulation.time)
+            simulation.input['time']['tmax'] = simulation.time
 
 def run_debug_console(simulation):
     """
