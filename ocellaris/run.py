@@ -17,6 +17,10 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     
     simulation.log.info('Preparing simulation ...\n')
     t_start = time.time()
+     
+    # Make time and timestep available in expressions for the initial conditions etc
+    simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
+    simulation.dt = simulation.input.get_value('time/dt', required_type='float')
     
     # Load the mesh. The mesh determines if we are in 2D or 3D
     mesh_facet_regions = load_mesh(simulation)
