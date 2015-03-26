@@ -71,7 +71,7 @@ def OcellarisCppExpression(simulation, cpp_code, description, update=False):
         """
         Called by simulation.hooks on the start of each time step
         """
-        # Update the expression with new values of time an similar
+        # Update the expression with new values of time and similar
         # scalar quantities
         available_vars = get_vars(simulation)
         for name, value in available_vars.items():
