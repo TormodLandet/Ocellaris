@@ -57,6 +57,7 @@ class SolverIPCS(Solver):
         # Storage for preassembled matrices
         self.Au = [None]*sim.ndim
         self.Ap = None
+        self.pressure_null_space = None
         
         # Store number of iterations
         self.niters_u = [None] * sim.ndim
@@ -170,12 +171,6 @@ class SolverIPCS(Solver):
                 
                 # Standard Crank-Nicolson linear extrapolation method
                 uic.vector()[:] = 1.5*uip.vector()[:] - 0.5*uipp.vector()[:]
-            
-            # Apply the Dirichlet boundary conditions
-            if False:
-                dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
-                for bc in dirichlet_bcs:
-                    bc.apply(uic.vector())
         
         # Update the convection blending factors
         for cs in self.convection_schemes:
@@ -239,17 +234,18 @@ class SolverIPCS(Solver):
                 dbc.apply(A, b)
         
         if not dirichlet_bcs:
-            # Create vector that spans the null space
-            null_vec = dolfin.Vector(p_hat.vector())
-            null_vec[:] = 1
-            null_vec *= 1/null_vec.norm("l2")
-            
-            # Create null space basis object and attach to Krylov solver
-            null_space = dolfin.VectorSpaceBasis([null_vec])
-            self.pressure_solver.set_nullspace(null_space)
+            if self.pressure_null_space is None:
+                # Create vector that spans the null space
+                null_vec = dolfin.Vector(p_hat.vector())
+                null_vec[:] = 1
+                null_vec *= 1/null_vec.norm("l2")
+                
+                # Create null space basis object and attach to Krylov solver
+                self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
+                self.pressure_solver.set_nullspace(self.pressure_null_space)
             
             # Orthogonalize b with respect to the null space
-            null_space.orthogonalize(b)
+            self.pressure_null_space.orthogonalize(b)
         
         # Make sure the initial guess given to the Krylov solver is sane
         p_hat.vector()[:] = p.vector()[:]
@@ -277,7 +273,7 @@ class SolverIPCS(Solver):
             # Update the velocity
             f = -dt/(c1*rho) * p_hat.dx(d)
             dolfin.project(f, Vu, function=u_new)
-            u_new.vector()[:] += us.vector()[:]
+            u_new.vector().axpy(1, us.vector())
             
             # Apply the Dirichlet boundary conditions
             family = u_new.element().family()

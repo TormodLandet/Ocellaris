@@ -1,3 +1,4 @@
+# encoding: utf-8
 from __future__ import division
 import numpy
 import dolfin
@@ -85,8 +86,11 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         test = dolfin.TestFunction(V)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('c', [])
         vel = self.simulation.data['u']
+        r = dolfin.Constant(1.0)
         f = dolfin.Constant(0.0)
-        self.eq = define_advection_problem(trial, test, cp, cpp, vel, f, normal, beta,
+        
+        # Define:   ∂/∂t(α) +  ∇⋅(α u) = 0
+        self.eq = define_advection_problem(trial, test, cp, cpp, vel, r, f, normal, beta,
                                            self.time_coeffs, self.dt, dirichlet_bcs)
         
         self.simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
@@ -122,6 +126,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         Return the maximum and minimum kinematic viscosities
         """
         return min(self.nu0, self.nu1), max(self.nu0, self.nu1)
+    
+    def get_laminar_dynamic_viscosity_range(self):
+        """
+        The minimum and maximum laminar dynamic viscosities
+        """
+        mu0 = self.nu0*self.rho0
+        mu1 = self.nu1*self.rho1
+        return min(mu0, mu1), max(mu0, mu1)
     
     def update(self, it, t, dt):
         """

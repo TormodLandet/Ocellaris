@@ -29,3 +29,11 @@ class SinglePhaseScheme(MultiPhaseModel):
         These will be identical for single phase flows
         """
         return self.nu0, self.nu0
+    
+    def get_laminar_dynamic_viscosity_range(self):
+        """
+        The minimum and maximum laminar dynamic viscosities
+        These will be identical for single phase flows
+        """
+        mu = self.nu0*self.rho0
+        return mu, mu

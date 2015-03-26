@@ -25,12 +25,13 @@ class MomentumPredictionEquation(object):
         rho = simulation.data['rho']
         nu = simulation.data['nu']
         g = simulation.data['g']
+        mu = rho*nu
         
         if up.element().family() == 'Discontinuous Lagrange':
             # Bounds on the diffusion coefficients for SIPG penalty calculation
             mpm = simulation.multi_phase_model
-            nu_max, nu_min = mpm.get_laminar_kinematic_viscosity_range()
-            k_u_max, k_u_min = nu_max, nu_min
+            mu_max, mu_min = mpm.get_laminar_dynamic_viscosity_range()
+            k_u_max, k_u_min = mu_max, mu_min
             
             # Calculate SIPG penalties for the DG Poisson equation solver
             P = Vu.ufl_element().degree()
@@ -43,13 +44,16 @@ class MomentumPredictionEquation(object):
         trial = dolfin.TrialFunction(Vu)
         test = dolfin.TestFunction(Vu)
         
-        fp = -1/rho*p.dx(d) + g[d]
+        fp = -p.dx(d) + rho*g[d]
         dirichlet_bcs = simulation.data['dirichlet_bcs'].get('u%d' % d, [])
         neumann_bcs = simulation.data['neumann_bcs'].get('u%d' % d, [])
         
-        # Use the stress divergence form of the diffusion term
         if simulation.input.get_value('solver/use_stress_divergence_form', True, 'bool'):
-            diff_u_expl = u_conv.dx(d)
+            # Use the stress divergence form of the diffusion term
+            #   Using u_conv here is unstable with BDF (oscillations)
+            #   Using the previous time step values gives 2nd order
+            #   convergence on periodic Taylor-Green test case
+            diff_u_expl = simulation.data['up'].dx(d)
         else:
             diff_u_expl = None
         
@@ -59,12 +63,15 @@ class MomentumPredictionEquation(object):
         elif timestepping_method == CRANK_NICOLSON:
             theta = dolfin.Constant(0.5)
             uc = theta*u_conv
-            fa = -dot(uc, nabla_grad(up[d]))
+            fa = -nabla_div(rho*uc*up)
             fp = fp/theta + nabla_div(nu*nabla_grad(up))
         
-        a1, L1 = define_advection_problem(trial, test, up, upp, uc, fa,
+        # Define:   ∂/∂t(ρ u) +  ∇⋅(ρ u u_conv) = f_a = 0 + CN-terms
+        a1, L1 = define_advection_problem(trial, test, up, upp, uc, rho, fa,
                                           n, beta, time_coeffs, dt, dirichlet_bcs)
-        a2, L2 = define_poisson_problem(trial, test, nu, fp, n, penalty,
+        
+        # Define:   -∇⋅μ[(∇u) + (∇u_expl)^T] = f_p = - ∇p + ρg  + CN-terms 
+        a2, L2 = define_poisson_problem(trial, test, mu, fp, n, penalty,
                                         dirichlet_bcs, neumann_bcs, diff_u_expl=diff_u_expl)
         
         self.form_lhs = a1+a2
@@ -115,6 +122,8 @@ class PressureCorrectionEquation(object):
         f = -time_coeffs[0]/dt * nabla_div(u_star)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
+        
+        # Define:   -∇⋅[1/ρ (∇p_hat)] = - γ_1/Δt ∇⋅u_star    
         a, L = define_poisson_problem(trial, test, 1/rho, f, n, penalty,
                                       dirichlet_bcs, neumann_bcs, q=p)
         self.form_lhs = a
@@ -127,11 +136,11 @@ class PressureCorrectionEquation(object):
         return dolfin.assemble(self.form_rhs)
 
 
-def define_advection_problem(u, v, up, upp, u_conv, f, n, beta, time_coeffs, dt, dirichlet_bcs):
+def define_advection_problem(u, v, up, upp, u_conv, r, f, n, beta, time_coeffs, dt, dirichlet_bcs):
     """
     Define the advection problem
     
-     d/dt(u) + u_conv ⋅ grad(u) = f
+     ∂/∂t(r u) +  ∇⋅(r u u_conv) = f
      
     Returns the bilinear and linear forms
     """
@@ -140,7 +149,7 @@ def define_advection_problem(u, v, up, upp, u_conv, f, n, beta, time_coeffs, dt,
     if family == 'Lagrange':
         # Continous Galerkin implementation 
         c1, c2, c3 = time_coeffs 
-        eq = (c1*u + c2*up + c3*upp)/dt*v*dx + dot(u_conv, nabla_grad(u))*v*dx - f*v*dx
+        eq = r*(c1*u + c2*up + c3*upp)/dt*v*dx + nabla_div(r*u*u_conv)*v*dx - f*v*dx
     
     elif family == 'Discontinuous Lagrange':
         # Upstream and downstream normal velocities
@@ -162,15 +171,23 @@ def define_advection_problem(u, v, up, upp, u_conv, f, n, beta, time_coeffs, dt,
         for dbc in dirichlet_bcs:
             eq += dot(u_conv, n)*v*(u - dbc.func())*dbc.ds()
         
-    a, L = dolfin.lhs(eq), dolfin.rhs(eq)    
+    a, L = dolfin.system(eq)    
     return a, L
 
 
 def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q=None, diff_u_expl=None):
     """
-    Define the Poisson problem for u
+    Define the Poisson problem for u:
     
-        - div(k*grad(u - q)) = f
+        - ∇⋅(k∇u) = f
+    
+    or (if given q):
+    
+        - ∇⋅(k ∇(u - q)) = f
+        
+    or (if given vector diff_u_expl = ∂(u_expl)/∂x_i): 
+    
+         -∇⋅μ[(∇u) + (∇u_expl)^T] = f
     
     Note the minus in front of the first term! The known value q does
     not have to be given. If it is it will be included in the linear
@@ -185,7 +202,7 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q
         penalty: the penalization of discontinuities and Dirichlet BCs
         dirichlet_bcs: a list of OcellarisDirichletBC objects
         neumann_bcs: a list of OcellarisNeumannBC objects
-        q: a known function
+        q: a known function (with the *same boundary conditions* as u) 
         diff_u_expl: The velocity to use in the additional term in the
             stress divergence form of the viscous term in the momentum
             equations. Should be either u_expl.dx(i) or None
@@ -215,16 +232,14 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q
             eq -= k*dot(n, nabla_grad(v))*u*dbc.ds()
             eq += ds_penalty*u*v*dbc.ds()
             eq -= dbc.func()*(ds_penalty*v - k*dot(nabla_grad(v), n))*dbc.ds()
-        
-    # Enforce Neumann BCs weakly
-    for nbc in neumann_bcs:
-        eq -= nbc.func()*v*nbc.ds() # TODO: is this missing a "k"?
     
-    # Extra terms in rhs due to q != 0       
     if q is not None:
+        # Extra terms in rhs if q != 0
         eq -= k*dot(nabla_grad(q), nabla_grad(v))*dx
+    else:
+        # Enforce Neumann BCs weakly. These are canceled by ∂q/∂n if q != 0
         for nbc in neumann_bcs:
-            eq += dot(nabla_grad(q), n)*v*nbc.ds()
+            eq -= nbc.func()*v*nbc.ds() # TODO: is this missing a "k"?
     
     # Extra terms in rhs due to special treatment of diffusive term in mom.eq
     if diff_u_expl is not None:
@@ -232,7 +247,7 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q
         for nbc in neumann_bcs:
             pass # TODO: include the boundary terms on the Neumann interfaces!
     
-    a, L = dolfin.lhs(eq), dolfin.rhs(eq)
+    a, L = dolfin.system(eq)
     return a, L
 
 
