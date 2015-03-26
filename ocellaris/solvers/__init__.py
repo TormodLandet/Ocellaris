@@ -34,4 +34,8 @@ def get_solver(name):
 class Solver(object):
     description = 'No description available'
 
+# Timestepping methods
+BDF = 'BDF'
+CRANK_NICOLSON = 'CN'
+
 from . import ipcs

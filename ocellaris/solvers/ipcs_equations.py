@@ -1,6 +1,131 @@
 # encoding: utf8
 import dolfin
-from dolfin import dot, nabla_grad, avg, jump, dx, dS
+from dolfin import dot, nabla_grad, nabla_div, avg, jump, dx, dS
+from . import BDF, CRANK_NICOLSON
+
+
+class MomentumPredictionEquation(object):
+    def __init__(self, simulation, d, beta, timestepping_method):
+        """
+        Define the momentum prediction equation for velocity component d.
+        For DG "beta" is the convection blending factor (not used for CG)
+        """
+        self.simulation = simulation
+        mesh = simulation.data['mesh']
+        n = dolfin.FacetNormal(mesh)
+        time_coeffs = simulation.data['time_coeffs']
+        dt = simulation.data['dt']
+        
+        Vu = simulation.data['Vu']
+        u_conv = simulation.data['u_conv']
+        up = simulation.data['up%d' % d]
+        upp = simulation.data['upp%d' % d]
+        p = simulation.data['p']
+        
+        rho = simulation.data['rho']
+        nu = simulation.data['nu']
+        g = simulation.data['g']
+        
+        if up.element().family() == 'Discontinuous Lagrange':
+            # Bounds on the diffusion coefficients for SIPG penalty calculation
+            mpm = simulation.multi_phase_model
+            nu_max, nu_min = mpm.get_laminar_kinematic_viscosity_range()
+            k_u_max, k_u_min = nu_max, nu_min
+            
+            # Calculate SIPG penalties for the DG Poisson equation solver
+            P = Vu.ufl_element().degree()
+            penalty = define_penalty(mesh, P, k_u_max, k_u_min)
+            simulation.log.info('\nDG SIPG penalties u%d:  %.4e' % (d, penalty))
+            penalty = dolfin.Constant(penalty)
+        else:
+            penalty = None
+        
+        trial = dolfin.TrialFunction(Vu)
+        test = dolfin.TestFunction(Vu)
+        
+        fp = -1/rho*p.dx(d) + g[d]
+        dirichlet_bcs = simulation.data['dirichlet_bcs'].get('u%d' % d, [])
+        neumann_bcs = simulation.data['neumann_bcs'].get('u%d' % d, [])
+        
+        # Use the stress divergence form of the diffusion term
+        if simulation.input.get_value('solver/use_stress_divergence_form', True, 'bool'):
+            diff_u_expl = u_conv.dx(d)
+        else:
+            diff_u_expl = None
+        
+        if timestepping_method == BDF:
+            uc = u_conv
+            fa = dolfin.Constant(0)
+        elif timestepping_method == CRANK_NICOLSON:
+            theta = dolfin.Constant(0.5)
+            uc = theta*u_conv
+            fa = -dot(uc, nabla_grad(up[d]))
+            fp = fp/theta + nabla_div(nu*nabla_grad(up))
+        
+        a1, L1 = define_advection_problem(trial, test, up, upp, uc, fa,
+                                          n, beta, time_coeffs, dt, dirichlet_bcs)
+        a2, L2 = define_poisson_problem(trial, test, nu, fp, n, penalty,
+                                        dirichlet_bcs, neumann_bcs, diff_u_expl=diff_u_expl)
+        
+        self.form_lhs = a1+a2
+        self.form_rhs = L1+L2
+    
+    def assemble_lhs(self):
+        return dolfin.assemble(self.form_lhs)
+
+    def assemble_rhs(self):
+        return dolfin.assemble(self.form_rhs)
+
+
+class PressureCorrectionEquation(object):
+    def __init__(self, simulation):
+        """
+        Define the pressure correction equation
+        """
+        self.simulation = simulation
+        mesh = simulation.data['mesh']
+        n = dolfin.FacetNormal(mesh)
+        time_coeffs = simulation.data['time_coeffs']
+        dt = simulation.data['dt']
+        rho = simulation.data['rho']
+        
+        Vu = simulation.data['Vu']
+        Vp = simulation.data['Vp']
+        u_star = simulation.data['u_star']
+        p = simulation.data['p']
+        
+        if p.element().family() == 'Discontinuous Lagrange':
+            # Bounds on the diffusion coefficients for SIPG penalty calculation
+            mpm = simulation.multi_phase_model
+            rho_max, rho_min = mpm.get_density_range()
+            k_p_max, k_p_min = 1/rho_min, 1/rho_max
+            
+            # Calculate SIPG penalties for the DG Poisson equation solver
+            Pu = Vu.ufl_element().degree()
+            Pp = Vp.ufl_element().degree()
+            P = max(Pu, Pp)
+            penalty = define_penalty(mesh, P, k_p_max, k_p_min)
+            simulation.log.info('\nDG SIPG penalties p:\n   p: %.4e' % penalty)
+            penalty = dolfin.Constant(penalty)
+        else:
+            penalty = None
+        
+        trial = dolfin.TrialFunction(Vp)
+        test = dolfin.TestFunction(Vp)
+        f = -time_coeffs[0]/dt * nabla_div(u_star)
+        dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
+        neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
+        a, L = define_poisson_problem(trial, test, 1/rho, f, n, penalty,
+                                      dirichlet_bcs, neumann_bcs, q=p)
+        self.form_lhs = a
+        self.form_rhs = L
+    
+    def assemble_lhs(self):
+        return dolfin.assemble(self.form_lhs)
+
+    def assemble_rhs(self):
+        return dolfin.assemble(self.form_rhs)
+
 
 def define_advection_problem(u, v, up, upp, u_conv, f, n, beta, time_coeffs, dt, dirichlet_bcs):
     """
@@ -40,7 +165,8 @@ def define_advection_problem(u, v, up, upp, u_conv, f, n, beta, time_coeffs, dt,
     a, L = dolfin.lhs(eq), dolfin.rhs(eq)    
     return a, L
 
-def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q=None):
+
+def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q=None, diff_u_expl=None):
     """
     Define the Poisson problem for u
     
@@ -59,7 +185,10 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q
         penalty: the penalization of discontinuities and Dirichlet BCs
         dirichlet_bcs: a list of OcellarisDirichletBC objects
         neumann_bcs: a list of OcellarisNeumannBC objects
-        q: a known function 
+        q: a known function
+        diff_u_expl: The velocity to use in the additional term in the
+            stress divergence form of the viscous term in the momentum
+            equations. Should be either u_expl.dx(i) or None
     
     Returns:
         a, L: the bilinear and linear forms
@@ -89,15 +218,23 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q
         
     # Enforce Neumann BCs weakly
     for nbc in neumann_bcs:
-        eq -= nbc.func()*v*nbc.ds()
-            
+        eq -= nbc.func()*v*nbc.ds() # TODO: is this missing a "k"?
+    
+    # Extra terms in rhs due to q != 0       
     if q is not None:
         eq -= k*dot(nabla_grad(q), nabla_grad(v))*dx
         for nbc in neumann_bcs:
             eq += dot(nabla_grad(q), n)*v*nbc.ds()
     
+    # Extra terms in rhs due to special treatment of diffusive term in mom.eq
+    if diff_u_expl is not None:
+        eq += k*dot(nabla_grad(v), diff_u_expl)*dx
+        for nbc in neumann_bcs:
+            pass # TODO: include the boundary terms on the Neumann interfaces!
+    
     a, L = dolfin.lhs(eq), dolfin.rhs(eq)
     return a, L
+
 
 def define_penalty(mesh, P, k_max, k_min):
     """
