@@ -85,7 +85,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         trial = dolfin.TrialFunction(V)
         test = dolfin.TestFunction(V)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('c', [])
-        vel = self.simulation.data['u']
+        vel = dolfin.Constant([0.0, 0.0]) # self.simulation.data['up']
         r = dolfin.Constant(1.0)
         f = dolfin.Constant(0.0)
         

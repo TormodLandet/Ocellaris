@@ -114,6 +114,10 @@ class Input(collections.OrderedDict):
             check_isinstance(d, list)
             for elem in d:
                 check_isinstance(elem, number)
+        elif required_type == 'list(string)':
+            check_isinstance(d, list)
+            for elem in d:
+                check_isinstance(elem, basestring)
         elif required_type == 'list(dict)':
             check_isinstance(d, list)
             for elem in d:
