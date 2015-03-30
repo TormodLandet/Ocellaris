@@ -139,7 +139,7 @@ def load_mesh(simulation):
         endy = inp.get_value('mesh/endy', 1, 'float')
         Nx = inp.get_value('mesh/Nx', required_type='int')
         Ny = inp.get_value('mesh/Ny', required_type='int')
-        diagonal = inp.get_value('mesh/diagonal', 'left/right', required_type='string')
+        diagonal = inp.get_value('mesh/diagonal', 'right', required_type='string')
         
         mesh = dolfin.RectangleMesh(startx, starty, endx, endy, Nx, Ny, diagonal)
         mesh_facet_regions = None
@@ -309,8 +309,10 @@ def setup_hooks(simulation):
             runnable.run(hook_data=hook_data)
         return hook
     
-    hook_types = [('post_timestep', simulation.hooks.add_post_timestep_hook),
-                  ('pre_timestep', simulation.hooks.add_pre_timestep_hook)]
+    hook_types = [('pre-simulation', simulation.hooks.add_pre_simulation_hook),
+                  ('post-simulation', simulation.hooks.add_post_simulation_hook),
+                  ('pre_timestep', simulation.hooks.add_pre_timestep_hook),
+                  ('post_timestep', simulation.hooks.add_post_timestep_hook)]
     
     for hook_name, register_hook in hook_types:
         for hook_info in hooks.get(hook_name, []):
