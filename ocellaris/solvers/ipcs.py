@@ -1,10 +1,10 @@
 from __future__ import division
 import dolfin
 from ocellaris.convection import get_convection_scheme
-from ocellaris.utils import report_error, timeit, velocity_error_norm, create_krylov_solver
+from ocellaris.utils import report_error, timeit, create_krylov_solver
 from . import Solver, register_solver, BDF, CRANK_NICOLSON
-from .ipcs_equations import MomentumPredictionEquation, PressureCorrectionEquation
-from dolfin import nabla_div, nabla_grad, dot
+from .ipcs_equations import MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation
+
 
 # Default values, can be changed in the input file
 SOLVER_U = 'gmres'
@@ -17,6 +17,7 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
 
 # Implemented timestepping methods
 TIMESTEPPING_METHODS = (BDF, CRANK_NICOLSON)
+
 
 @register_solver('IPCS')
 class SolverIPCS(Solver):
@@ -47,21 +48,22 @@ class SolverIPCS(Solver):
         # Define the pressure correction equation
         self.eq_pressure = PressureCorrectionEquation(simulation)
         
-        # For error norms in the convergence estimates
-        elem = sim.data['u0'].element()
-        cd = simulation.data['constrained_domain']
-        mesh = sim.data['mesh']
-        self.Vu_highp = dolfin.FunctionSpace(mesh, elem.family(), elem.degree() + 3,
-                                             constrained_domain=cd)
+        # Define the velocity update equations
+        self.eqs_vel_upd = []
+        for d in range(sim.ndim):
+            eq = VelocityUpdateEquation(simulation, d)
+            self.eqs_vel_upd.append(eq)
         
         # Storage for preassembled matrices
         self.Au = [None]*sim.ndim
         self.Ap = None
+        self.Au_upd = None
         self.pressure_null_space = None
         
         # Store number of iterations
         self.niters_u = [None] * sim.ndim
         self.niters_p = None
+        self.niters_u_upd = [None] * sim.ndim
     
     def read_input(self):
         """
@@ -90,6 +92,13 @@ class SolverIPCS(Solver):
         self.pressure_solver = create_krylov_solver(pressure_solver_name, pressure_preconditioner,
                                                     [KRYLOV_PARAMETERS, pressure_solver_parameters])
         self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
+        
+        # Make a solver for the velocity update
+        u_upd_solver_name = sim.input.get_value('solver/u_upd/solver', SOLVER_U, 'string')
+        u_upd_preconditioner = sim.input.get_value('solver/u_upd/preconditioner', PRECONDITIONER_U, 'string')
+        u_upd_solver_parameters = sim.input.get_value('solver/u_upd/parameters', {}, 'dict(string:any)')
+        self.u_upd_solver = create_krylov_solver(u_upd_solver_name, u_upd_preconditioner,
+                                                 [KRYLOV_PARAMETERS, u_upd_solver_parameters])
         
         # Get convection schemes for the velocity
         conv_schemes = []
@@ -134,11 +143,12 @@ class SolverIPCS(Solver):
         sim.data['u'] = dolfin.as_vector(u_list)
         sim.data['up'] = dolfin.as_vector(up_list)
         sim.data['upp'] = dolfin.as_vector(upp_list)
-        sim.data['u_conv'] = u_conv = dolfin.as_vector(u_conv)
-        sim.data['u_star'] = u_star = dolfin.as_vector(u_star)
+        sim.data['u_conv'] = dolfin.as_vector(u_conv)
+        sim.data['u_star'] = dolfin.as_vector(u_star)
+        self.u_tmp = dolfin.Function(Vu)
         
         # Create pressure function
-        sim.data['p'] = p = dolfin.Function(Vp)
+        sim.data['p'] = dolfin.Function(Vp)
         sim.data['p_hat'] = dolfin.Function(Vp)
     
     @timeit
@@ -183,8 +193,11 @@ class SolverIPCS(Solver):
         """
         Solve the momentum prediction equation
         """
+        err = 0.0
         for d in range(self.simulation.ndim):
             us = self.simulation.data['u_star%d' % d]
+            self.u_tmp.vector()[:] = us.vector()
+            
             dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
             eq = self.eqs_mom_pred[d]
             
@@ -205,6 +218,10 @@ class SolverIPCS(Solver):
                     dbc.apply(A, b)
             
             self.niters_u[d] = self.velocity_solver.solve(A, us.vector(), b)
+            
+            self.u_tmp.vector().axpy(-1, us.vector())
+            err += self.u_tmp.vector().norm('l2')
+        return err
     
     @timeit
     def pressure_correction(self):
@@ -215,7 +232,6 @@ class SolverIPCS(Solver):
         for the pressure by taking out the nullspace, a constant shift
         of the pressure, by providing the nullspace to the solver
         """
-        p_hat = self.simulation.data['p_hat']
         p = self.simulation.data['p']
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         
@@ -228,7 +244,7 @@ class SolverIPCS(Solver):
         b = self.eq_pressure.assemble_rhs()
         
         # Apply strong boundary conditions
-        family = p_hat.element().family()
+        family = p.element().family()
         if family == 'Lagrange':
             for dbc in dirichlet_bcs:
                 dbc.apply(A, b)
@@ -236,7 +252,7 @@ class SolverIPCS(Solver):
         if not dirichlet_bcs:
             if self.pressure_null_space is None:
                 # Create vector that spans the null space
-                null_vec = dolfin.Vector(p_hat.vector())
+                null_vec = dolfin.Vector(p.vector())
                 null_vec[:] = 1
                 null_vec *= 1/null_vec.norm("l2")
                 
@@ -247,33 +263,34 @@ class SolverIPCS(Solver):
             # Orthogonalize b with respect to the null space
             self.pressure_null_space.orthogonalize(b)
         
-        # Make sure the initial guess given to the Krylov solver is sane
-        p_hat.vector()[:] = p.vector()[:]
-        # Solve for p^{n+1} and put the answer into p_hat
-        self.niters_p = self.pressure_solver.solve(A, p_hat.vector(), b)
-        # Calculate p_hat by subtracting p^*
-        p_hat.vector()[:] = p_hat.vector()[:] - p.vector()[:]
+        # Temporarily store the old pressure
+        p_hat = self.simulation.data['p_hat']
+        p_hat.vector().zero()
+        p_hat.vector().axpy(-1, p.vector())
+        
+        # Solve for new pressure
+        self.niters_p = self.pressure_solver.solve(A, p.vector(), b)
+        
+        # Calculate p_hat = p_new - p_old 
+        p_hat.vector().axpy(1, p.vector())
+        
+        return p_hat.vector().norm('l2')
     
     @timeit
     def velocity_update(self):
         """
-        Update the velocity estimates with the updated pressure
+        Update the velocity predictions with the updated pressure
         field from the pressure correction equation
-        """
-        rho = self.simulation.data['rho']
-        p_hat = self.simulation.data['p_hat']
-        Vu = self.simulation.data['Vu']
-        c1 = self.simulation.data['time_coeffs'][0]
-        dt = self.simulation.data['dt']
-        
+        """    
         for d in range(self.simulation.ndim):
-            us = self.simulation.data['u_star%d' % d]
-            u_new = self.simulation.data['u%d' % d]
+            eq = self.eqs_vel_upd[d]
             
-            # Update the velocity
-            f = -dt/(c1*rho) * p_hat.dx(d)
-            dolfin.project(f, Vu, function=u_new)
-            u_new.vector().axpy(1, us.vector())
+            if self.Au_upd is None:
+                self.Au_upd = eq.assemble_lhs()
+            
+            A = self.Au_upd
+            b = eq.assemble_rhs()
+            u_new = self.simulation.data['u%d' % d]
             
             # Apply the Dirichlet boundary conditions
             family = u_new.element().family()
@@ -281,30 +298,9 @@ class SolverIPCS(Solver):
                 # Apply strong boundary conditions
                 dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
                 for bc in dirichlet_bcs:
-                    bc.apply(u_new.vector())
-    
-    @timeit
-    def pressure_update(self):
-        """
-        Update the pressure at the end of an inner iteration
-        """
-        p_hat = self.simulation.data['p_hat']
-        p = self.simulation.data['p']
-        p.vector()[:] = p.vector()[:] + p_hat.vector()[:] 
-    
-    @timeit
-    def velocity_update_final(self):
-        """
-        Update the velocities at the end of the time step
-        """
-        for d in range(self.simulation.ndim):
-            u_new = self.simulation.data['u%d' % d]
-            up = self.simulation.data['up%d' % d]
-            upp = self.simulation.data['upp%d' % d]
-            uppp = self.simulation.data['uppp%d' % d]
-            uppp.vector()[:] = upp.vector()[:]
-            upp.vector()[:] = up.vector()[:]
-            up.vector()[:] = u_new.vector()[:]
+                    bc.apply(A, b)
+            
+            self.niters_u_upd[d] = self.u_upd_solver.solve(A, u_new.vector(), b)
     
     def run(self):
         """
@@ -351,35 +347,33 @@ class SolverIPCS(Solver):
             
             # Run inner iterations
             for self.inner_iteration in xrange(1, num_inner_iter+1):
-                self.momentum_prediction(t, dt)
-                self.pressure_correction()
-                self.velocity_update()
-                self.pressure_update()
+                err_u_star = self.momentum_prediction(t, dt)
+                err_p = self.pressure_correction()
                 
-                # Calculate convergence estimates in L2 norm (slow)
-                if sim.input.get_value('solver/calculate_L2_norms', False, 'bool'):
-                    L2s = velocity_error_norm(sim.data['u'], sim.data['u_star'], self.Vu_highp, 'L2')
-                    L2c = velocity_error_norm(sim.data['u'], sim.data['u_conv'], self.Vu_highp, 'L2')
-                    L2_info = ' - L2* %10.3e - L2c %10.3e' % (L2s, L2c)
-                else:
-                    L2_info = ''
-                    
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
                 
-                # Convergence estimates in L_infinity norm
-                Linfs = velocity_error_norm(sim.data['u'], sim.data['u_star'], self.Vu_highp, 'Linf')
-                Linfc = velocity_error_norm(sim.data['u'], sim.data['u_conv'], self.Vu_highp, 'Linf') 
-                sim.log.info('  Inner iteration %3d - Linf* %10.3e - Linfc %10.3e%s%s'
-                             % (self.inner_iteration, Linfs, Linfc, L2_info, solver_info))
+                # Convergence estimates
+                sim.log.info('  Inner iteration %3d - Linf* %10.3e - Linfp %10.3e%s'
+                             % (self.inner_iteration, err_u_star, err_p, solver_info) + 
+                             '  u0max %10.3e' % abs(sim.data['u_star0'].vector().array()).max())
                 
-                if Linfs < allowable_error_inner:
+                if err_u_star < allowable_error_inner:
                     break
             
+            self.velocity_update()
+            
             # Move u -> up, up -> upp and prepare for the next time step
-            self.velocity_update_final()
+            for d in range(self.simulation.ndim):
+                u_new = self.simulation.data['u%d' % d]
+                up = self.simulation.data['up%d' % d]
+                upp = self.simulation.data['upp%d' % d]
+                uppp = self.simulation.data['uppp%d' % d]
+                uppp.assign(upp)
+                upp.assign(up)
+                up.assign(u_new)
             
             # Change time coefficient to second order
             if self.timestepping_method == BDF:

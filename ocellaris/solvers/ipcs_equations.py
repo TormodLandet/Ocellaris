@@ -66,7 +66,7 @@ class MomentumPredictionEquation(object):
             fa = -nabla_div(rho*uc*up)
             fp = fp/theta + nabla_div(nu*nabla_grad(up))
         
-        # Define:   ∂/∂t(ρ u) +  ∇⋅(ρ u u_conv) = f_a = 0 + CN-terms
+        # Define:   ∂/∂t(ρ u) +  ∇⋅(ρ u ⊗ u_conv) = f_a = 0 + CN-terms
         a1, L1 = define_advection_problem(trial, test, up, upp, uc, rho, fa,
                                           n, beta, time_coeffs, dt, dirichlet_bcs)
         
@@ -136,11 +136,39 @@ class PressureCorrectionEquation(object):
         return dolfin.assemble(self.form_rhs)
 
 
+class VelocityUpdateEquation(object):
+    def __init__(self, simulation, d):
+        """
+        Define the velocity update equation for velocity component d.
+        """
+        self.simulation = simulation
+        
+        rho = simulation.data['rho']
+        c0 = simulation.data['time_coeffs'][0]
+        dt = simulation.data['dt']
+        
+        Vu = simulation.data['Vu']
+        us = simulation.data['u_star%d' % d]
+        p_hat = simulation.data['p_hat']
+        
+        u = dolfin.TrialFunction(Vu)
+        v = dolfin.TestFunction(Vu)
+        
+        self.form_lhs = u*v*dx
+        self.form_rhs = us*v*dx - dt/(c0*rho)*p_hat.dx(d)*v*dx
+    
+    def assemble_lhs(self):
+        return dolfin.assemble(self.form_lhs)
+
+    def assemble_rhs(self):
+        return dolfin.assemble(self.form_rhs)
+
+
 def define_advection_problem(u, v, up, upp, u_conv, r, f, n, beta, time_coeffs, dt, dirichlet_bcs):
     """
     Define the advection problem
     
-     ∂/∂t(r u) +  ∇⋅(r u u_conv) = f
+     ∂/∂t(r u) +  ∇⋅(r u ⊗ u_conv) = f
      
     Returns the bilinear and linear forms
     """
