@@ -4,6 +4,11 @@ from dolfin import dot, nabla_grad, nabla_div, avg, jump, dx, dS
 from . import BDF, CRANK_NICOLSON
 
 
+# Default values, can be changed in the input file
+PENALTY_BOOST = 2
+STRESS_DIVERGENCE = True
+
+
 class MomentumPredictionEquation(object):
     def __init__(self, simulation, d, beta, timestepping_method):
         """
@@ -35,7 +40,8 @@ class MomentumPredictionEquation(object):
             
             # Calculate SIPG penalties for the DG Poisson equation solver
             P = Vu.ufl_element().degree()
-            penalty = define_penalty(mesh, P, k_u_max, k_u_min)
+            boost_factor = simulation.input.get_value('solver/u/penalty_boost_factor', PENALTY_BOOST, 'float')
+            penalty = define_penalty(mesh, P, k_u_max, k_u_min, boost_factor)
             simulation.log.info('\nDG SIPG penalties u%d:  %.4e' % (d, penalty))
             penalty = dolfin.Constant(penalty)
         else:
@@ -48,30 +54,28 @@ class MomentumPredictionEquation(object):
         dirichlet_bcs = simulation.data['dirichlet_bcs'].get('u%d' % d, [])
         neumann_bcs = simulation.data['neumann_bcs'].get('u%d' % d, [])
         
-        if simulation.input.get_value('solver/use_stress_divergence_form', True, 'bool'):
+        if simulation.input.get_value('solver/use_stress_divergence_form', STRESS_DIVERGENCE, 'bool'):
             # Use the stress divergence form of the diffusion term
             #   Using u_conv here is unstable with BDF (oscillations)
             #   Using the previous time step values gives 2nd order
-            #   convergence on periodic Taylor-Green test case
+            #   convergence on the periodic Taylor-Green test case
             diff_u_expl = simulation.data['up'].dx(d)
         else:
             diff_u_expl = None
         
         if timestepping_method == BDF:
-            uc = u_conv
-            fa = dolfin.Constant(0)
+            thetas = dolfin.Constant([1.0, 0.0, 0.0])
+            q = None
         elif timestepping_method == CRANK_NICOLSON:
-            theta = dolfin.Constant(0.5)
-            uc = theta*u_conv
-            fa = -nabla_div(rho*uc*up)
-            fp = fp/theta + nabla_div(nu*nabla_grad(up))
+            thetas = dolfin.Constant([0.5, 0.5, 0.0])
+            q = up
         
         # Define:   ∂/∂t(ρ u) +  ∇⋅(ρ u ⊗ u_conv) = f_a = 0 + CN-terms
-        a1, L1 = define_advection_problem(trial, test, up, upp, uc, rho, fa,
-                                          n, beta, time_coeffs, dt, dirichlet_bcs)
+        a1, L1 = define_advection_problem(trial, test, up, upp, u_conv, rho, n, beta,
+                                          time_coeffs, thetas, dt, dirichlet_bcs)
         
         # Define:   -∇⋅μ[(∇u) + (∇u_expl)^T] = f_p = - ∇p + ρg  + CN-terms 
-        a2, L2 = define_poisson_problem(trial, test, mu, fp, n, penalty,
+        a2, L2 = define_poisson_problem(trial, test, mu, fp, n, thetas, q, penalty,
                                         dirichlet_bcs, neumann_bcs, diff_u_expl=diff_u_expl)
         
         self.form_lhs = a1+a2
@@ -111,8 +115,9 @@ class PressureCorrectionEquation(object):
             Pu = Vu.ufl_element().degree()
             Pp = Vp.ufl_element().degree()
             P = max(Pu, Pp)
-            penalty = define_penalty(mesh, P, k_p_max, k_p_min)
-            simulation.log.info('\nDG SIPG penalties p:\n   p: %.4e' % penalty)
+            boost_factor = simulation.input.get_value('solver/p/penalty_boost_factor', PENALTY_BOOST, 'float')
+            penalty = define_penalty(mesh, P, k_p_max, k_p_min, boost_factor)
+            simulation.log.info('\nDG SIPG penalties p:\n   %.4e' % penalty)
             penalty = dolfin.Constant(penalty)
         else:
             penalty = None
@@ -120,12 +125,14 @@ class PressureCorrectionEquation(object):
         trial = dolfin.TrialFunction(Vp)
         test = dolfin.TestFunction(Vp)
         f = -time_coeffs[0]/dt * nabla_div(u_star)
+        k = 1/rho
+        thetas = dolfin.Constant([1.0, -1.0])
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
         
         # Define:   -∇⋅[1/ρ (∇p_hat)] = - γ_1/Δt ∇⋅u_star    
-        a, L = define_poisson_problem(trial, test, 1/rho, f, n, penalty,
-                                      dirichlet_bcs, neumann_bcs, q=p)
+        a, L = define_poisson_problem(trial, test, k, f, n, thetas, p,
+                                      penalty, dirichlet_bcs, neumann_bcs)
         self.form_lhs = a
         self.form_rhs = L
     
@@ -164,62 +171,75 @@ class VelocityUpdateEquation(object):
         return dolfin.assemble(self.form_rhs)
 
 
-def define_advection_problem(u, v, up, upp, u_conv, r, f, n, beta, time_coeffs, dt, dirichlet_bcs):
+def define_advection_problem(u, v, up, upp, u_conv, r, n, beta, time_coeffs, thetas, dt, dirichlet_bcs):
     """
     Define the advection problem
     
-     ∂/∂t(r u) +  ∇⋅(r u ⊗ u_conv) = f
-     
+        ∂/∂t(r u) +  ∇⋅(r U u_conv) = 0
+    
+    Where
+    
+        ∂u/∂t = γ1 u + γ2 up + γ3 upp
+        γ1, γ2, γ3 = time_coeffs
+        
+        U = ϴ1 u + ϴ2 up + ϴ3 upp
+        ϴ1, ϴ2, ϴ3 = thetas
+        
+        u = velocity component
+        u_conv = velocity vector
+        r = scalar (density)
+    
     Returns the bilinear and linear forms
     """
     family = u.element().family()
     
+    t1, t2, t3 = thetas
+    U = t1*u + t2*up + t3*upp
+    
     if family == 'Lagrange':
         # Continous Galerkin implementation 
-        c1, c2, c3 = time_coeffs 
-        eq = r*(c1*u + c2*up + c3*upp)/dt*v*dx + nabla_div(r*u*u_conv)*v*dx - f*v*dx
+        c1, c2, c3 = time_coeffs
+        eq = r*(c1*u + c2*up + c3*upp)/dt*v*dx + nabla_div(r*U*u_conv)*v*dx
     
     elif family == 'Discontinuous Lagrange':
         # Upstream and downstream normal velocities
-        flux_nU = u*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
-        flux_nD = u*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
+        flux_nU = r*U*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
+        flux_nD = r*U*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
         
         # Define the blended flux
         # The blending factor beta is not DG, so beta('+') == beta('-')
         b = beta('+')
         flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
         
-        # Equation to solve
+        # Equaqtion to solve
         c1, c2, c3 = time_coeffs 
-        eq = (c1*u + c2*up + c3*upp)/dt*v*dx \
-             - u*dot(u_conv, nabla_grad(v))*dx \
-             + flux*jump(v)*dS  - f*v*dx
+        eq = r*(c1*u + c2*up + c3*upp)/dt*v*dx \
+             - dot(r*U*u_conv, nabla_grad(v))*dx \
+             + flux*jump(v)*dS
         
         # Enforce Dirichlet BCs weakly
         for dbc in dirichlet_bcs:
-            eq += dot(u_conv, n)*v*(u - dbc.func())*dbc.ds()
-        
+            eq += r*v*(u - dbc.func())*dbc.ds()
+    
     a, L = dolfin.system(eq)    
     return a, L
 
 
-def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q=None, diff_u_expl=None):
+def define_poisson_problem(u, v, k, f, n, thetas, q, penalty, dirichlet_bcs, neumann_bcs, diff_u_expl=None):
     """
     Define the Poisson problem for u:
     
-        - ∇⋅(k∇u) = f
+        - ∇⋅(k∇U) = f
     
-    or (if given q):
-    
-        - ∇⋅(k ∇(u - q)) = f
-        
     or (if given vector diff_u_expl = ∂(u_expl)/∂x_i): 
     
-         -∇⋅μ[(∇u) + (∇u_expl)^T] = f
+        -∇⋅k[(∇U) + (∇u_expl)^T] = f
     
-    Note the minus in front of the first term! The known value q does
-    not have to be given. If it is it will be included in the linear
-    form that is returned.
+    where
+    
+        U = ϴ1 u + ϴ2 q
+    
+    Note the minus in front of the laplacian!
     
     Arguments:
         u: a TrialFunction
@@ -227,10 +247,11 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q
         k: the diffusion coefficient
         f: the source term
         n: should be FacetNormal(mesh)
+        q: a known function (with the *same boundary conditions* as u)
+        thetas: constant factors
         penalty: the penalization of discontinuities and Dirichlet BCs
         dirichlet_bcs: a list of OcellarisDirichletBC objects
         neumann_bcs: a list of OcellarisNeumannBC objects
-        q: a known function (with the *same boundary conditions* as u) 
         diff_u_expl: The velocity to use in the additional term in the
             stress divergence form of the viscous term in the momentum
             equations. Should be either u_expl.dx(i) or None
@@ -239,47 +260,46 @@ def define_poisson_problem(u, v, k, f, n, penalty, dirichlet_bcs, neumann_bcs, q
         a, L: the bilinear and linear forms
     """
     family = u.element().family()
+    t1, t2 = thetas[0], thetas[1]
     
-    if family == 'Lagrange':
-        # Continous Galerkin implementation 
-        eq = k*dot(nabla_grad(v), nabla_grad(u))*dx
-        eq -= v*f*dx
+    if q is None:
+        q = dolfin.Constant(0.0)
     
-    elif family == 'Discontinuous Lagrange':
-        # Discontinous Galerkin implementation (Symmetric Interior Penalty method)
-        eq = k*dot(nabla_grad(u), nabla_grad(v))*dx
-        eq -= avg(k*dot(n, nabla_grad(u)))*jump(v)*dS
-        eq -= avg(k*dot(n, nabla_grad(v)))*jump(u)*dS
+    U = t1*u + t2*q
+    
+    # Continuous Galerkin implementation of the Laplacian 
+    eq = t1*k*dot(nabla_grad(U), nabla_grad(v))*dx - v*f*dx
+    
+    # Enforce Neumann BCs weakly. These are canceled by ∂q/∂n if ϴ1 + ϴ2 = 0
+    for nbc in neumann_bcs:
+        eq -= (t1 + t2)*k*nbc.func()*v*nbc.ds()
+        
+    # Extra terms in rhs due to special treatment of diffusive term in mom.eq
+    if diff_u_expl is not None:
+        eq += k*dot(diff_u_expl, nabla_grad(v))*dx
+        for nbc in neumann_bcs:
+            pass # TODO: include the boundary terms on the Neumann interfaces!
+        
+    if family == 'Discontinuous Lagrange':
+        # Discontinous Galerkin implementation additional interior jump 
+        # terms for the Symmetric Interior Penalty method
+        eq -= avg(k*dot(n, nabla_grad(U)))*jump(v)*dS
+        eq -= avg(k*dot(n, nabla_grad(v)))*jump(U)*dS
         eq += avg(penalty)*jump(u)*jump(v)*dS
-        eq -= f*v*dx
         
         # Enforce Dirichlet BCs weakly
         ds_penalty = dolfin.Constant(penalty*2)
         for dbc in dirichlet_bcs:
             eq -= k*dot(n, nabla_grad(u))*v*dbc.ds()
             eq -= k*dot(n, nabla_grad(v))*u*dbc.ds()
-            eq += ds_penalty*u*v*dbc.ds()
-            eq -= dbc.func()*(ds_penalty*v - k*dot(nabla_grad(v), n))*dbc.ds()
-    
-    if q is not None:
-        # Extra terms in rhs if q != 0
-        eq -= k*dot(nabla_grad(q), nabla_grad(v))*dx
-    else:
-        # Enforce Neumann BCs weakly. These are canceled by ∂q/∂n if q != 0
-        for nbc in neumann_bcs:
-            eq -= nbc.func()*v*nbc.ds() # TODO: is this missing a "k"?
-    
-    # Extra terms in rhs due to special treatment of diffusive term in mom.eq
-    if diff_u_expl is not None:
-        eq += k*dot(nabla_grad(v), diff_u_expl)*dx
-        for nbc in neumann_bcs:
-            pass # TODO: include the boundary terms on the Neumann interfaces!
+            eq += ds_penalty*(u - dbc.func())*v*dbc.ds()
+            eq += k*dot(nabla_grad(v), n)*dbc.func()*dbc.ds()
     
     a, L = dolfin.system(eq)
     return a, L
 
 
-def define_penalty(mesh, P, k_max, k_min):
+def define_penalty(mesh, P, k_max, k_min, boost_factor):
     """
     Define the penalty parameter used in the Poisson equations
     
@@ -288,8 +308,10 @@ def define_penalty(mesh, P, k_max, k_min):
         P: the polynomial degree of the unknown
         k_max: the maximum diffusion coefficient
         k_min: the minimum diffusion coefficient
+        boost_factor: the penalty is multiplied by this factor
     """
     ndim = mesh.geometry().dim()
+    h = mesh.hmin()
     
     # Calculate geometrical factor used in the penalty
     geom_fac = 0
@@ -300,5 +322,5 @@ def define_penalty(mesh, P, k_max, k_min):
         geom_fac = max(geom_fac, gf)
     geom_fac *= 1.0
     
-    penalty = 300 * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac
+    penalty = boost_factor * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac / h
     return penalty
