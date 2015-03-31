@@ -128,6 +128,27 @@ class Input(collections.OrderedDict):
             raise ValueError('Unknown required_type %s' % required_type)
         return d
     
+    def set_value(self, path, value):
+        """
+        Set an input value by its path in the input dictionary
+        
+        Arguments:
+            path: a list of path components or the "/" separated
+                path to the variable in the input dictionary
+            value: the value to set
+        
+        """
+        # Allow path to be a list or a "/" separated string
+        if isinstance(path, basestring):
+            path = path.split('/')
+        
+        d = self
+        for p in path[:-1]:
+            if p not in d:
+                d[p] = {}
+            d = d[p]
+        d[path[-1]] = value
+    
     def get_output_file_path(self, path, default_value=UNDEFINED):
         """
         Get the name of an output file
