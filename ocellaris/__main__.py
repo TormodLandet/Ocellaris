@@ -90,7 +90,7 @@ if __name__ == '__main__':
                                      description='Discontinuous Galerkin Navier-Stokes solver')
     parser.add_argument('inputfile', help='Name of file containing simulation '
                         'configuration on the Ocellaris YAML input format')
-    parser.add_argument('--set-input', action='append', help='Set an inpup key. Can be added several '
+    parser.add_argument('--set-input', '-i', action='append', help='Set an inpup key. Can be added several '
                         'times to set multiple input keys. Example: --set-input time/dt=0.1')
     
     args = parser.parse_args()
