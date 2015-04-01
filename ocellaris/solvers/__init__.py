@@ -39,3 +39,4 @@ BDF = 'BDF'
 CRANK_NICOLSON = 'CN'
 
 from . import ipcs
+from . import coupled

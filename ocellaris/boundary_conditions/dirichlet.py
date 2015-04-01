@@ -13,6 +13,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         super(OcellarisDirichletBC, self).__init__(V, value, subdomain_marker, subdomain_id, method='geometric')
         self.simulation = simulation
         self._value = value
+        self.subdomain_marker = subdomain_marker
         self.subdomain_id = subdomain_id
         
     def func(self):
@@ -26,6 +27,14 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         Returns the ds measure of the subdomain
         """
         return self.simulation.data['ds'](self.subdomain_id)
+    
+    def copy_and_change_function_space(self, V):
+        """
+        Return a copy with a new function space. Used when converting from
+        BCs for a segregated solver (default) to BCs for a coupled solver  
+        """
+        return OcellarisDirichletBC(self.simulation, V, self._value,
+                                    self.subdomain_marker, self.subdomain_id)
 
 
 @register_boundary_condition('ConstantValue')

@@ -217,7 +217,7 @@ def setup_function_spaces(simulation):
     Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
     Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
     
-    # Get the constraine ddomain
+    # Get the constrained domain
     cd = simulation.data['constrained_domain']
     if cd is None:
         simulation.log.info('Creating function spaces without periodic boundaries (none found)')
