@@ -5,5 +5,4 @@ from .cpp_expression import OcellarisCppExpression, ocellaris_project
 from .gradient_reconstruction import GradientReconstructor
 from .dofmap import facet_dofmap
 from .debug_console import debug_console_hook, run_debug_console
-from .norms import velocity_error_norm
-from .krylov import create_krylov_solver
+from .linear_solvers import make_linear_solver, linear_solver_from_input

@@ -1,7 +1,7 @@
 from __future__ import division
 import dolfin
 from ocellaris.convection import get_convection_scheme
-from ocellaris.utils import report_error, timeit, create_krylov_solver
+from ocellaris.utils import report_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, CRANK_NICOLSON
 from .ipcs_equations import MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation
 
@@ -78,27 +78,14 @@ class SolverIPCS(Solver):
                          'which is needed by Ocellaris.')
         dolfin.parameters["linear_algebra_backend"] = "PETSc"
         
-        # Solver for the velocity prediction
-        velocity_solver_name = sim.input.get_value('solver/u/solver', SOLVER_U, 'string')
-        velocity_preconditioner = sim.input.get_value('solver/u/preconditioner', PRECONDITIONER_U, 'string')
-        velocity_solver_parameters = sim.input.get_value('solver/u/parameters', {}, 'dict(string:any)')
-        self.velocity_solver = create_krylov_solver(velocity_solver_name, velocity_preconditioner,
-                                                    [KRYLOV_PARAMETERS, velocity_solver_parameters])
-        
-        # Make a solver for the pressure correction
-        pressure_solver_name = sim.input.get_value('solver/p/solver', SOLVER_P, 'string')
-        pressure_preconditioner = sim.input.get_value('solver/p/preconditioner', PRECONDITIONER_P, 'string')
-        pressure_solver_parameters = sim.input.get_value('solver/p/parameters', {}, 'dict(string:any)')
-        self.pressure_solver = create_krylov_solver(pressure_solver_name, pressure_preconditioner,
-                                                    [KRYLOV_PARAMETERS, pressure_solver_parameters])
+        # Create linear solvers
+        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u', SOLVER_U,
+                                                        PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
+        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p', SOLVER_P,
+                                                        PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
         self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
-        
-        # Make a solver for the velocity update
-        u_upd_solver_name = sim.input.get_value('solver/u_upd/solver', SOLVER_U, 'string')
-        u_upd_preconditioner = sim.input.get_value('solver/u_upd/preconditioner', PRECONDITIONER_U, 'string')
-        u_upd_solver_parameters = sim.input.get_value('solver/u_upd/parameters', {}, 'dict(string:any)')
-        self.u_upd_solver = create_krylov_solver(u_upd_solver_name, u_upd_preconditioner,
-                                                 [KRYLOV_PARAMETERS, u_upd_solver_parameters])
+        self.u_upd_solver = linear_solver_from_input(self.simulation, 'solver/u_upd', SOLVER_U,
+                                                     PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
         
         # Get convection schemes for the velocity
         conv_schemes = []
