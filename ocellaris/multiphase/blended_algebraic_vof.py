@@ -85,13 +85,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         trial = dolfin.TrialFunction(V)
         test = dolfin.TestFunction(V)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('c', [])
-        vel = dolfin.Constant([0.0, 0.0]) # self.simulation.data['up']
-        r = dolfin.Constant(1.0)
-        f = dolfin.Constant(0.0)
         
-        # Define:   ∂/∂t(α) +  ∇⋅(α u) = 0
-        self.eq = define_advection_problem(trial, test, cp, cpp, vel, r, f, normal, beta,
-                                           self.time_coeffs, self.dt, dirichlet_bcs)
+        vel = self.simulation.data['up']
+        r = dolfin.Constant(1.0)
+        thetas = dolfin.Constant([1.0, 0.0, 0.0])
+        
+        # Define:   ∂c/∂t +  ∇⋅(c u) = 0
+        self.eq = define_advection_problem(trial, test, cp, cpp, vel, r, normal, beta,
+                                           self.time_coeffs, thetas, self.dt, dirichlet_bcs)
         
         self.simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
         self.simulation.plotting.add_plot('c_grad', gradient)
@@ -143,14 +144,28 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # Reconstruct the gradient
         self.convection_scheme.gradient_reconstructor.reconstruct()
         
+        # Get a divergence free convecting velocity
+        vel = self.divergence_free_velocity()
+        
         # Update the convection blending factors
-        vel = self.simulation.data['u']
         self.convection_scheme.update(t, dt, vel)
         
         # Solve the advection equation
         self.dt.assign(dt)
         a, L = self.eq
         solve(a == L, self.colour_function)
+        
+        # Report total mass balance and divergence
+        div_u = dolfin.project(dolfin.nabla_div(vel), self.simulation.data['Vc'])
+        maxdiv = abs(div_u.vector().array()).max()
+        sum_c = dolfin.assemble(self.colour_function*dolfin.dx)
+        arr_c = self.colour_function.vector().array()
+        min_c = arr_c.min()
+        max_c = arr_c.max()
+        self.simulation.reporting.report_timestep_value('max(div(u_adv_c))', maxdiv)
+        self.simulation.reporting.report_timestep_value('sum(c)', sum_c)
+        self.simulation.reporting.report_timestep_value('min(c)', min_c)
+        self.simulation.reporting.report_timestep_value('max(c)', max_c)
         
         # Update the previous values for the next time step
         self.prev2_colour_function.assign(self.prev_colour_function)
@@ -160,7 +175,62 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
         
         # Compress interface
-        # Not yet tested with FEniCS 1.5     self.compress(t, dt)
+        # Not yet tested with FEniCS 1.5!
+        # self.compress(t, dt)
+    
+    def divergence_free_velocity(self):
+        """
+        Make the advecting velocity field divergence free in the Vc space
+        
+        This is unfinished, untested code!
+        """
+        return self.simulation.data['up'] 
+    
+        from dolfin import nabla_div, nabla_grad, dot, dx
+        
+        # Get the advecting velocity field in CR1
+        vel = self.advecting_velocity
+        dolfin.project(self.simulation.data['up'], self.Vadv, function=vel)
+        
+        # Define equation that makes the advecting velocity divergence free
+        # by using the Helmholtz-Hodge decomposition
+        Vc = self.simulation.data['Vc']
+        u = dolfin.TrialFunction(self.Vh)
+        v = dolfin.TestFunction(self.Vh)
+        div_u = dolfin.Function(Vc)
+        
+        eq = dot(nabla_grad(u), nabla_grad(v))*dx - div_u*v*dx
+        a, L = dolfin.system(eq)
+        
+        phi = Function(self.Vh)
+        solver = dolfin.KrylovSolver('minres', 'hypre_amg')
+        
+        # Remove null space from solution of phi
+        null_vec = dolfin.Vector(phi.vector())
+        null_vec[:] = 1
+        null_vec *= 1/null_vec.norm("l2")
+        null_space = dolfin.VectorSpaceBasis([null_vec])
+        solver.set_nullspace(null_space)
+        
+        for i in range(10):
+            dolfin.project(nabla_div(vel), Vc, function=div_u)
+            
+            A, b = dolfin.assemble_system(a, L)
+            null_space.orthogonalize(b)
+            
+            # Update the velocity field
+            if self.simulation.timestep == 1 and abs(div_u.vector().array()).max() == 0:
+                phi.vector().zero()
+            else:
+                solver.solve(A, phi.vector(), b)
+            
+            correction = dolfin.project(nabla_grad(phi), self.Vadv)
+            vel.vector().axpy(0.7, correction.vector())
+            
+            print 'Helmholtz-Hodge ts %5d it %3d divmax %15.3e' % (self.simulation.timestep, i+1, 
+                                                                   abs(div_u.vector().array()).max())
+        
+        return vel
     
     def report_divergence(self):
         """
