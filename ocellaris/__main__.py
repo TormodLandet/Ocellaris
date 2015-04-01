@@ -68,6 +68,8 @@ def override_input_variables(simulation, input_override):
             
             # Extract the sub-dictionary (or list)
             idx = conv_path_element(elem)
+            if not idx in d:
+                d[idx] = {}
             d = d[idx]
         
         # Convert value to Python object

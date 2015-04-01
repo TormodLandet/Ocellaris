@@ -8,8 +8,8 @@ from . import Solver, register_solver, BDF, CRANK_NICOLSON
 
 
 # Default values, can be changed in the input file
-SOLVER = 'umfpack'
-LU_PARAMETERS = {'same_nonzero_pattern': True}
+SOLVER = 'petsc'
+LU_PARAMETERS = {}
 
 # Implemented timestepping methods
 TIMESTEPPING_METHODS = (BDF,)
@@ -50,8 +50,13 @@ class SolverIPCS(Solver):
         sim = self.simulation
         
         # Solver for the coupled system
-        self.coupled_solver = linear_solver_from_input(self.simulation, 'solver/coupled',
-                                                       'lu', None, SOLVER, LU_PARAMETERS)
+        self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu', 
+                                                       None, SOLVER, LU_PARAMETERS)
+        
+        if isinstance(self.coupled_solver, dolfin.KrylovSolver):
+            sim.log.warning('WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
+        else:
+            self.coupled_solver.parameters['same_nonzero_pattern'] = True
         
         # Coefficients for u, up and upp
         self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
@@ -110,7 +115,6 @@ class SolverIPCS(Solver):
         sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['u_conv'] = dolfin.as_vector(u_conv)
         sim.data['coupled'] = dolfin.Function
-        
         
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
