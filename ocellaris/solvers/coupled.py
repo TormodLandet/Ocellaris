@@ -1,10 +1,11 @@
 # encoding: utf8
 from __future__ import division
 import dolfin
-from dolfin import dx, div, grad, dot
+from dolfin import dx, div, grad, dot, jump, avg, dS
 from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, CRANK_NICOLSON
+from .ipcs_equations import define_penalty
 
 
 # Default values, can be changed in the input file
@@ -16,7 +17,7 @@ TIMESTEPPING_METHODS = (BDF,)
 
 
 @register_solver('Coupled')
-class SolverIPCS(Solver):
+class SolverCoupled(Solver):
     def __init__(self, simulation):
         """
         A Navier-Stokes solver based on the pressure-velocity splitting
@@ -43,29 +44,6 @@ class SolverIPCS(Solver):
         # Store number of iterations
         self.niters = None
     
-    def read_input(self):
-        """
-        Read the simulation input
-        """
-        sim = self.simulation
-        
-        # Solver for the coupled system
-        self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu', 
-                                                       None, SOLVER, LU_PARAMETERS)
-        
-        if isinstance(self.coupled_solver, dolfin.KrylovSolver):
-            sim.log.warning('WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
-        else:
-            self.coupled_solver.parameters['same_nonzero_pattern'] = True
-        
-        # Coefficients for u, up and upp
-        self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
-        if not self.timestepping_method in TIMESTEPPING_METHODS:
-            available_methods = '\n'.join(' - %s' % m for m in TIMESTEPPING_METHODS)
-            report_error('Unknown timestepping method', 
-                         'Timestepping method %s not recognised, please use one of:\n%s' %
-                         (self.timestepping_method, available_methods))
-    
     def create_functions(self):
         """
         Create functions to hold solutions
@@ -75,31 +53,28 @@ class SolverIPCS(Solver):
         # Function spaces
         Vu = sim.data['Vu']
         Vp = sim.data['Vp']
+        Vl = dolfin.FunctionSpace(sim.data['mesh'], "R", 0)
+        self.vel_is_discontinuous = True #Vu.ufl_element().family() == 'Discontinuous Lagrange'
         
+        # Create coupled mixed function space and mixed function to hold results
         if sim.ndim == 2:
-            self.Vcoupled = Vu * Vu * Vp
-            self.coupled_func = dolfin.Function(self.Vcoupled)
-            
-            self.subspaces = [self.Vcoupled.sub(0).sub(0), self.Vcoupled.sub(0).sub(1),
+            self.Vcoupled = Vu * Vu * Vp * Vl
+            self.subspaces = [self.Vcoupled.sub(0).sub(0).sub(0),
+                              self.Vcoupled.sub(0).sub(0).sub(1),
+                              self.Vcoupled.sub(0).sub(1),
                               self.Vcoupled.sub(1)]
-            #self.subspace_vectors = [self.coupled_func.sub(0)[0].vector(),
-            #                         self.coupled_func.sub(0)[1].vector(),
-            #                         self.coupled_func.sub(1).vector()]
-            self.subspace_names = 'u0 u1 p'.split()
+            self.subspace_names = 'u0 u1 p l'.split()
         
         else:
-            self.Vcoupled = Vu * Vu * Vu * Vp
-            self.coupled_func = dolfin.Function(self.Vcoupled)
-            
-            self.subspaces = [self.Vcoupled.sub(0).sub(0), self.Vcoupled.sub(0).sub(1),
-                              self.Vcoupled.sub(0).sub(2), self.Vcoupled.sub(1)]
-            #self.subspace_vectors = [self.coupled_func.sub(0)[0].vector(),
-            #                         self.coupled_func.sub(0)[1].vector(),
-            #                         self.coupled_func.sub(0)[2].vector(),
-            #                         self.coupled_func.sub(1).vector()]
-            self.subspace_names = 'u0 u1 u2 p'.split()
+            self.Vcoupled = Vu * Vu * Vu * Vp * Vl  
+            self.subspaces = [self.Vcoupled.sub(0).sub(0).sub(0),
+                              self.Vcoupled.sub(0).sub(0).sub(1),
+                              self.Vcoupled.sub(0).sub(0).sub(2),
+                              self.Vcoupled.sub(0).sub(0).sub(1),
+                              self.Vcoupled.sub(1)]
+            self.subspace_names = 'u0 u1 u2 p l'.split()
         
-        # Create velocity functions. Keep both component and vector forms
+        # Create segregated velocity functions on component and vector form
         u_list, up_list, upp_list, u_conv = [], [], [], []
         for d in range(sim.ndim):
             sim.data['u%d' % d] = u = dolfin.Function(Vu)
@@ -114,59 +89,216 @@ class SolverIPCS(Solver):
         sim.data['up'] = dolfin.as_vector(up_list)
         sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['u_conv'] = dolfin.as_vector(u_conv)
-        sim.data['coupled'] = dolfin.Function
+        sim.data['coupled'] = self.coupled_func = dolfin.Function(self.Vcoupled)
         
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
+    
+    def read_input(self):
+        """
+        Read the simulation input
+        """
+        sim = self.simulation
         
+        # Solver for the coupled system
+        self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu', 
+                                                       None, SOLVER, LU_PARAMETERS)
+        
+        if isinstance(self.coupled_solver, dolfin.KrylovSolver):
+            sim.log.warning('WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
+        else:
+            self.coupled_solver.parameters['same_nonzero_pattern'] = True
+            
+        # Get convection schemes for the velocity
+        if self.vel_is_discontinuous:
+            conv_schemes = []
+            conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', 'Upwind', 'string')
+            for d in range(sim.ndim):
+                conv_scheme = get_convection_scheme(conv_scheme_name)(sim, 'u%d' % d)
+                conv_schemes.append(conv_scheme)
+            self.convection_schemes = conv_schemes
+        
+        # Coefficients for u, up and upp
+        self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
+        if not self.timestepping_method in TIMESTEPPING_METHODS:
+            available_methods = '\n'.join(' - %s' % m for m in TIMESTEPPING_METHODS)
+            report_error('Unknown timestepping method', 
+                         'Timestepping method %s not recognised, please use one of:\n%s' %
+                         (self.timestepping_method, available_methods))
+    
     def define_coupled_equation(self):
         """
         Setup the coupled Navier-Stokes equation
         """
-        u, p = dolfin.TrialFunctions(self.Vcoupled)
-        v, q = dolfin.TestFunctions(self.Vcoupled)
+        uc = dolfin.TrialFunction(self.Vcoupled)
+        vc = dolfin.TestFunction(self.Vcoupled)
         
-        c1, c2, c3 = self.simulation.data['time_coeffs']
-        dt = self.simulation.data['dt']
-        u_conv = self.simulation.data['u_conv']
-        u_expl = self.simulation.data['up']
-        g = self.simulation.data['g']
-        rho = self.simulation.data['rho']
-        nu = self.simulation.data['nu']
+        # Unpack the coupled trial and test functions
+        ulist = []; vlist = []
+        ndim = self.simulation.ndim
+        for d in range(ndim):
+            ulist.append(uc[d])
+            vlist.append(vc[d])
+        u = dolfin.as_vector(ulist)
+        v = dolfin.as_vector(vlist)
+        p = uc[ndim]
+        q = vc[ndim]
+        lm_trial = uc[ndim+1]
+        lm_test = vc[ndim+1]
+        
+        sim = self.simulation
+        c1, c2, c3 = sim.data['time_coeffs']
+        dt = sim.data['dt']
+        u_conv = sim.data['u_conv']
+        g = sim.data['g']
+        rho = sim.data['rho']
+        nu = sim.data['nu']
         mu = rho*nu
+        mesh = sim.data['mesh']
+        n = dolfin.FacetNormal(mesh)
         
-        div, grad = dolfin.nabla_div, dolfin.nabla_grad
-        
-        # Divergence free criterion
-        # ∇⋅u = 0
-        eq = -div(u)*q*dx
+        # Lagrange multiplicator to remove the pressure null space
+        # ∫ p dx = 0
+        eq = (p*lm_test + q*lm_trial)*dx
         
         # Momentum equations
-        for d in range(self.simulation.ndim):
-            up = self.simulation.data['up%d' % d]
-            upp = self.simulation.data['upp%d' % d]
+        for d in range(sim.ndim):
+            up = sim.data['up%d' % d]
+            upp = sim.data['upp%d' % d]
             
-            # Time derivative
-            # ∂u/∂t
-            eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
+            if not self.vel_is_discontinuous:
+                # Weak form of the Navier-Stokes eq. with continuous elements
+                
+                # Divergence free criterion
+                # ∇⋅u = 0
+                eq += u[d].dx(d)*q*dx
+                
+                # Time derivative
+                # ∂u/∂t
+                eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
+                
+                # Convection
+                # ∇⋅(ρ u ⊗ u_conv)
+                eq += div(rho*u[d]*u_conv)*v[d]*dx
+                
+                # Diffusion
+                # -∇⋅μ[(∇u) + (∇u_expl)^T]
+                eq += mu*dot(grad(u[d]), grad(v[d]))*dx
+                eq += mu*dot(u.dx(d), grad(v[d]))*dx
+                
+                # Pressure
+                # ∇p
+                eq -= v[d].dx(d)*p*dx
+                
+                # Body force (gravity)
+                # ρ g
+                eq -= rho*g[d]*v[d]*dx
             
-            # Convection
-            # ∇⋅(ρ u ⊗ u_conv)
-            eq += div(rho*u[d]*u_conv)*v[d]*dx
-            #eq += rho*v[d]*dot(u_conv, grad(u[d]))*dx
-            
-            # Diffusion
-            # -∇⋅μ[(∇u) + (∇u_expl)^T]
-            eq += mu*dot(grad(u[d]), grad(v[d]))*dx
-            eq += mu*dot(u_expl.dx(d), grad(v[d]))*dx
-            
-            # Pressure
-            # ∇p
-            eq -= v[d].dx(d)*p*dx
-            
-            # Body force (gravity)
-            # ρ g
-            eq -= rho*g[d]*v[d]*dx
+            else:
+                # Weak form of the Navier-Stokes eq. with discontinuous elements
+                
+                # Divergence free criterion
+                # ∇⋅u = 0
+                eq += u[d].dx(d)*q*dx
+                eq -= avg(q)*jump(u[d])*n('+')[d]*dS
+                
+                # Time derivative
+                # ∂u/∂t
+                eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
+                
+                # Define the convective flux
+                flux_type = 'Blended'
+                if flux_type == 'Blended':
+                    # Upstream and downstream normal velocities
+                    flux_nU = rho*u[d]*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
+                    flux_nD = rho*u[d]*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
+                    
+                    # Define the blended flux
+                    # The blending factor beta is not DG, so beta('+') == beta('-')
+                    b = self.convection_schemes[d].blending_function('+')
+                    flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
+                    flux = flux_nU('+') - flux_nU('-')
+                
+                elif flux_type == 'Upwind':
+                    # Pure upwind flux
+                    flux_nU = rho*u[d]*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
+                    flux = flux_nU('+') - flux_nU('-')
+                
+                elif flux_type == 'Local Lax-Friedrich':
+                    # Local Lax-Friedrich flux
+                    uflmax = lambda a, b: dolfin.conditional(dolfin.gt(a, b), a, b)
+                    uflmag = lambda a: dolfin.sqrt(dolfin.inner(a, a))
+                    C = 1.2*uflmax(uflmag(rho('+')*u_conv('+')), uflmag(rho('-')*u_conv('-')))
+                    flux = avg(rho*u[d]*u_conv) + C/2*jump(u[d])*n('+')
+                    flux = dot(flux, n('+'))
+                
+                # Convection
+                # ∇⋅(ρ u ⊗ u_conv)
+                eq -= dot(rho*u[d]*u_conv, grad(v[d]))*dx
+                eq += flux*jump(v[d])*dS
+                
+                # Calculate SIPG penalty 
+                mpm = sim.multi_phase_model
+                mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
+                P = sim.data['Vu'].ufl_element().degree()
+                fpenalty = define_penalty(mesh, P, mu_max, mu_min, boost_factor=5)
+                sim.log.info('\nDG SIPG penalties u%d:  %.4e' % (d, fpenalty))
+                penalty = dolfin.Constant(fpenalty)
+                
+                # Diffusion:
+                # -∇⋅μ[(∇u) + (∇u)^T]
+                eq += mu*dot(grad(u[d]), grad(v[d]))*dx
+                eq += mu*dot(u.dx(d), grad(v[d]))*dx
+                
+                # Symmetric Interior Penalty method for -∇⋅μ∇u
+                eq -= avg(dot(n, mu*grad(u[d])))*jump(v[d])*dS
+                eq -= avg(dot(n, mu*grad(v[d])))*jump(u[d])*dS
+                
+                # Symmetric Interior Penalty method for -∇⋅μ(∇u)^T
+                eq -= avg(dot(n, mu*u.dx(d)))*jump(v[d])*dS
+                eq -= avg(dot(n, mu*v.dx(d)))*jump(u[d])*dS
+                
+                # Symmetric Interior Penalty coercivity term
+                eq += avg(penalty)*jump(u[d])*jump(v[d])*dS
+                
+                # Pressure
+                # ∇p
+                eq -= p*v[d].dx(d)*dx
+                eq += avg(p)*jump(v[d])*n[d]('+')*dS
+                
+                # Body force (gravity)
+                # ρ g
+                eq -= rho*g[d]*v[d]*dx
+                
+                # Dirichlet boundary
+                dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
+                ds_penalty = dolfin.Constant(penalty*10)
+                for dbc in dirichlet_bcs:
+                    # Divergence weak Dirichlet
+                    eq += q*(u[d] - dbc.func())*n[d]*dbc.ds()
+                    
+                    # Convection weak Dirichlet
+                    dflux = rho*(u[d] - dbc.func())*dot(u_conv, n)
+                    eq += dflux*v[d]*dbc.ds()
+                    
+                    # SIPG for -∇⋅μ∇u 
+                    eq -= mu*dot(n, grad(u[d]))*v[d]*dbc.ds()
+                    eq -= mu*dot(n, grad(v[d]))*u[d]*dbc.ds()
+                    eq += mu*dot(n, grad(v[d]))*dbc.func()*dbc.ds()
+                    
+                    # SIPG for -∇⋅μ(∇u)^2
+                    eq -= mu*dot(n, u.dx(d))*v[d]*dbc.ds()
+                    eq -= mu*dot(n, v.dx(d))*u[d]*dbc.ds()
+                    eq += mu*dot(n, v.dx(d))*dbc.func()*dbc.ds()
+                    
+                    # SIPG weak Dirichlet
+                    eq += ds_penalty*(u[d] - dbc.func())*v[d]*dbc.ds()
+                    
+                    # Pressure
+                    eq += p*v[d]*n[d]*dbc.ds()
+                
+                if d == 1:
+                    print 'Penalty:', fpenalty, 'Flux:', flux_type
         
         self.eq_coupled = dolfin.system(eq)
     
@@ -176,6 +308,10 @@ class SolverIPCS(Solver):
         """
         coupled_dirichlet_bcs = []
         for i, name in enumerate(self.subspace_names):
+            if self.vel_is_discontinuous and name.startswith('u'):
+                # Use weak BCs if the velocity is DG
+                continue
+            
             V = self.subspaces[i]
             bcs = self.simulation.data['dirichlet_bcs'].get(name, [])
             for bc in bcs:
@@ -223,7 +359,9 @@ class SolverIPCS(Solver):
         self.coupled_solver.solve(A, self.coupled_func.vector(), b)
         
         # Copy the data from the coupled solution vector and to the individual components
-        u, p = self.coupled_func.split(True)
+        up, _ = self.coupled_func.split()
+        u, p = up.split(True)
+        
         funcs = list(u.split(True)) + [p]
         for name, func in zip(self.subspace_names, funcs):
             self.simulation.data[name].vector()[:] = func.vector()
