@@ -38,5 +38,10 @@ class Solver(object):
 BDF = 'BDF'
 CRANK_NICOLSON = 'CN'
 
+# Flux types
+BLENDED = 'Blended'
+UPWIND = 'Upwind'
+LOCAL_LAX_FRIEDRICH = 'Local Lax-Friedrich'
+
 from . import ipcs
 from . import coupled

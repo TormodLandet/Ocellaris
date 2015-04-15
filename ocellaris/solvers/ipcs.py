@@ -89,8 +89,8 @@ class SolverIPCS(Solver):
         
         # Get convection schemes for the velocity
         conv_schemes = []
+        conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', 'Upwind', 'string')
         for d in range(sim.ndim):
-            conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', 'Upwind', 'string')
             conv_scheme = get_convection_scheme(conv_scheme_name)(sim, 'u%d' % d)
             conv_schemes.append(conv_scheme)
         self.convection_schemes = conv_schemes

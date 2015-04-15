@@ -4,7 +4,7 @@ import dolfin
 from dolfin import dx, div, grad, dot, jump, avg, dS
 from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, CRANK_NICOLSON
+from . import Solver, register_solver, BDF, BLENDED, UPWIND, LOCAL_LAX_FRIEDRICH
 from .ipcs_equations import define_penalty
 
 
@@ -54,8 +54,9 @@ class SolverCoupled(Solver):
         Vu = sim.data['Vu']
         Vp = sim.data['Vp']
         Vl = dolfin.FunctionSpace(sim.data['mesh'], "R", 0)
-        self.vel_is_discontinuous = True #Vu.ufl_element().family() == 'Discontinuous Lagrange'
-        
+        Vu_family = Vu.ufl_element().family()
+        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
+            
         # Create coupled mixed function space and mixed function to hold results
         if sim.ndim == 2:
             self.Vcoupled = Vu * Vu * Vp * Vl
@@ -104,13 +105,16 @@ class SolverCoupled(Solver):
         self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu', 
                                                        None, SOLVER, LU_PARAMETERS)
         
+        # Give warning if using iterative solver
         if isinstance(self.coupled_solver, dolfin.KrylovSolver):
             sim.log.warning('WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
         else:
             self.coupled_solver.parameters['same_nonzero_pattern'] = True
-            
-        # Get convection schemes for the velocity
-        if self.vel_is_discontinuous:
+        
+        # Get flux type for the velocity
+        self.flux_type = sim.input.get_value('convection/u/flux_type', BLENDED, 'string')
+        if self.vel_is_discontinuous and self.flux_type == BLENDED:
+            # Get convection blending scheme
             conv_schemes = []
             conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', 'Upwind', 'string')
             for d in range(sim.ndim):
@@ -157,6 +161,9 @@ class SolverCoupled(Solver):
         mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
         
+        # Include (∇u)^T term?
+        sd = dolfin.Constant(1.0)
+        
         # Lagrange multiplicator to remove the pressure null space
         # ∫ p dx = 0
         eq = (p*lm_test + q*lm_trial)*dx
@@ -182,9 +189,9 @@ class SolverCoupled(Solver):
                 eq += div(rho*u[d]*u_conv)*v[d]*dx
                 
                 # Diffusion
-                # -∇⋅μ[(∇u) + (∇u_expl)^T]
+                # -∇⋅μ[(∇u) + (∇u)^T]
                 eq += mu*dot(grad(u[d]), grad(v[d]))*dx
-                eq += mu*dot(u.dx(d), grad(v[d]))*dx
+                eq += sd*mu*dot(u.dx(d), grad(v[d]))*dx
                 
                 # Pressure
                 # ∇p
@@ -200,66 +207,80 @@ class SolverCoupled(Solver):
                 # Divergence free criterion
                 # ∇⋅u = 0
                 eq += u[d].dx(d)*q*dx
-                eq -= avg(q)*jump(u[d])*n('+')[d]*dS
+                eq += avg(q)*jump(u[d])*n[d]('+')*dS
                 
                 # Time derivative
                 # ∂u/∂t
                 eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
                 
                 # Define the convective flux
-                flux_type = 'Blended'
-                if flux_type == 'Blended':
-                    # Upstream and downstream normal velocities
-                    flux_nU = rho*u[d]*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
-                    flux_nD = rho*u[d]*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
+                # f = ρ u ⊗ u_conv
+                def calc_flux(ui, uc):
+                    if self.flux_type == BLENDED:
+                        # Upstream and downstream normal velocities
+                        flux_nU = rho*ui*(dot(uc, n) + abs(dot(uc, n)))/2
+                        flux_nD = rho*ui*(dot(uc, n) - abs(dot(uc, n)))/2
+                        
+                        # Define the blended flux
+                        # The blending factor beta is not DG, so beta('+') == beta('-')
+                        b = self.convection_schemes[d].blending_function('+')
+                        flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
+                        flux = flux_nU('+') - flux_nU('-')
                     
-                    # Define the blended flux
-                    # The blending factor beta is not DG, so beta('+') == beta('-')
-                    b = self.convection_schemes[d].blending_function('+')
-                    flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
-                    flux = flux_nU('+') - flux_nU('-')
-                
-                elif flux_type == 'Upwind':
-                    # Pure upwind flux
-                    flux_nU = rho*u[d]*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
-                    flux = flux_nU('+') - flux_nU('-')
-                
-                elif flux_type == 'Local Lax-Friedrich':
-                    # Local Lax-Friedrich flux
-                    uflmax = lambda a, b: dolfin.conditional(dolfin.gt(a, b), a, b)
-                    uflmag = lambda a: dolfin.sqrt(dolfin.inner(a, a))
-                    C = 1.2*uflmax(uflmag(rho('+')*u_conv('+')), uflmag(rho('-')*u_conv('-')))
-                    flux = avg(rho*u[d]*u_conv) + C/2*jump(u[d])*n('+')
-                    flux = dot(flux, n('+'))
+                    elif self.flux_type == UPWIND:
+                        # Pure upwind flux
+                        flux_nU = rho*ui*(dot(uc, n) + abs(dot(uc, n)))/2
+                        flux = flux_nU('+') - flux_nU('-')
+                    
+                    elif self.flux_type == LOCAL_LAX_FRIEDRICH:
+                        # Local Lax-Friedrich flux
+                        uflmax = lambda a, b: dolfin.conditional(dolfin.gt(a, b), a, b)
+                        uflmag = lambda a: dolfin.sqrt(dolfin.inner(a, a))
+                        C = 1.2*uflmax(uflmag(rho('+')*uc('+')), uflmag(rho('-')*uc('-')))
+                        flux = avg(rho*ui*uc) + C/2*jump(ui)*n('+')
+                        flux = dot(flux, n('+'))
+                    return flux
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
-                eq -= dot(rho*u[d]*u_conv, grad(v[d]))*dx
-                eq += flux*jump(v[d])*dS
+                if True:
+                    # Implicit convection
+                    flux = calc_flux(u[d], u_conv)
+                    eq -= dot(rho*u[d]*u_conv, grad(v[d]))*dx
+                    eq += flux*jump(v[d])*dS
+                else:
+                    # Explicit convection
+                    for fac, uc in ((2, sim.data['up']), (-1, sim.data['upp'])):
+                        flux = calc_flux(uc[d], uc)
+                        eq -= fac*dot(rho*uc[d]*uc, grad(v[d]))*dx
+                        eq += fac*flux*jump(v[d])*dS
                 
                 # Calculate SIPG penalty 
                 mpm = sim.multi_phase_model
                 mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
                 P = sim.data['Vu'].ufl_element().degree()
-                fpenalty = define_penalty(mesh, P, mu_max, mu_min, boost_factor=5)
-                sim.log.info('\nDG SIPG penalties u%d:  %.4e' % (d, fpenalty))
-                penalty = dolfin.Constant(fpenalty)
+                penalty1 = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=2.0)
+                penalty2 = define_penalty(mesh, P, mu_min, mu_max, boost_factor=30, exponent=2.0)
+                #penalty = 3*mu_max*(P+1)*(P + ndim)/mesh.hmin()
+                sim.log.info('\nDG SIPG penalties u%d:  %.4e  %.4e' % (d, penalty1, penalty2))
+                penalty_dS = dolfin.Constant(penalty1)
+                penalty_ds = dolfin.Constant(penalty2)
                 
                 # Diffusion:
                 # -∇⋅μ[(∇u) + (∇u)^T]
                 eq += mu*dot(grad(u[d]), grad(v[d]))*dx
-                eq += mu*dot(u.dx(d), grad(v[d]))*dx
+                eq += sd*mu*dot(u.dx(d), grad(v[d]))*dx
                 
                 # Symmetric Interior Penalty method for -∇⋅μ∇u
                 eq -= avg(dot(n, mu*grad(u[d])))*jump(v[d])*dS
                 eq -= avg(dot(n, mu*grad(v[d])))*jump(u[d])*dS
                 
                 # Symmetric Interior Penalty method for -∇⋅μ(∇u)^T
-                eq -= avg(dot(n, mu*u.dx(d)))*jump(v[d])*dS
-                eq -= avg(dot(n, mu*v.dx(d)))*jump(u[d])*dS
+                eq -= sd*avg(dot(n, mu*u.dx(d)))*jump(v[d])*dS
+                eq -= sd*avg(dot(n, mu*v.dx(d)))*jump(u[d])*dS
                 
                 # Symmetric Interior Penalty coercivity term
-                eq += avg(penalty)*jump(u[d])*jump(v[d])*dS
+                eq += penalty_dS*jump(u[d])*jump(v[d])*dS
                 
                 # Pressure
                 # ∇p
@@ -272,33 +293,29 @@ class SolverCoupled(Solver):
                 
                 # Dirichlet boundary
                 dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
-                ds_penalty = dolfin.Constant(penalty*10)
                 for dbc in dirichlet_bcs:
-                    # Divergence weak Dirichlet
+                    # Divergence free criterion
                     eq += q*(u[d] - dbc.func())*n[d]*dbc.ds()
-                    
-                    # Convection weak Dirichlet
-                    dflux = rho*(u[d] - dbc.func())*dot(u_conv, n)
-                    eq += dflux*v[d]*dbc.ds()
                     
                     # SIPG for -∇⋅μ∇u 
                     eq -= mu*dot(n, grad(u[d]))*v[d]*dbc.ds()
                     eq -= mu*dot(n, grad(v[d]))*u[d]*dbc.ds()
                     eq += mu*dot(n, grad(v[d]))*dbc.func()*dbc.ds()
                     
-                    # SIPG for -∇⋅μ(∇u)^2
-                    eq -= mu*dot(n, u.dx(d))*v[d]*dbc.ds()
-                    eq -= mu*dot(n, v.dx(d))*u[d]*dbc.ds()
-                    eq += mu*dot(n, v.dx(d))*dbc.func()*dbc.ds()
+                    # SIPG for -∇⋅μ(∇u)^T
+                    eq -= sd*mu*dot(n, u.dx(d))*v[d]*dbc.ds()
+                    eq -= sd*mu*dot(n, v.dx(d))*u[d]*dbc.ds()
+                    eq += sd*mu*dot(n, v.dx(d))*dbc.func()*dbc.ds()
                     
-                    # SIPG weak Dirichlet
-                    eq += ds_penalty*(u[d] - dbc.func())*v[d]*dbc.ds()
+                    # Weak Dirichlet
+                    parts = (penalty_ds + abs(rho*dot(n, u_conv)))
+                    eq += parts*(u[d] - dbc.func())*v[d]*dbc.ds()
                     
                     # Pressure
                     eq += p*v[d]*n[d]*dbc.ds()
                 
                 if d == 1:
-                    print 'Penalty:', fpenalty, 'Flux:', flux_type
+                    print 'Penalty:', penalty1, penalty2, 'Flux:', self.flux_type
         
         self.eq_coupled = dolfin.system(eq)
     
