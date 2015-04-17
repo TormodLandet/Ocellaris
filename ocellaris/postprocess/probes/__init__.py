@@ -64,4 +64,5 @@ class Probe(object):
     def end_of_simulation(self, success):
         pass
 
-from .line_probe import LineProbe
+from . import line_probe
+from . import iso_surface
