@@ -2,6 +2,7 @@ import sys
 import code
 import readline
 import rlcompleter
+import cProfile, pstats
 
 def debug_console_hook(simulation):
     """
@@ -34,8 +35,31 @@ def debug_console_hook(simulation):
             simulation.log.info('\nCommand line action:\n  Setting simulation '
                                 'control parameter tmax to %r\n' % simulation.time)
             simulation.input['time']['tmax'] = simulation.time
+        
+        elif command.startswith('prof'):
+            # Run the profiler
+            num_timesteps = int(command.split()[1])
+            simulation._profile_after_n_timesteps = num_timesteps+1
+            simulation._profile_object = cProfile.Profile()
+            simulation._profile_object.enable()
+            simulation.log.info('\nCommand line action:\n  Starting profile')
+            
+    
+    if hasattr(simulation, '_profile_after_n_timesteps'):
+        simulation._profile_after_n_timesteps -= 1
+        simulation.log.info('Profile will start after %d time steps' % simulation._profile_after_n_timesteps)
+        if simulation._profile_after_n_timesteps == 0:
+            simulation._profile_object.disable()
+            stats = pstats.Stats(simulation._profile_object)
+            stats.strip_dirs()
+            stats.sort_stats('cumulative')
+            stats.print_stats(30)
+            print 'Saving cProfile trace to "prof.out"'
+            stats.dump_stats('prof.out')
+            del simulation._profile_after_n_timesteps
+            del simulation._profile_object
 
-def run_debug_console(simulation):
+def run_debug_console(simulation, show_banner=True):
     """
     Run a debug console with some useful variables available
     """
@@ -69,6 +93,9 @@ def run_debug_console(simulation):
     # Setup tab completion
     readline.set_completer(rlcompleter.Completer(debug_locals).complete)
     readline.parse_and_bind("tab: complete")
+    
+    if not show_banner:
+        banner = []
     
     print '=== OCELLARIS CONSOLE === '*3
     banner.append('\n>>> from dolfin import *')

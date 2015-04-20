@@ -1,5 +1,5 @@
 import re
-from . import report_error
+from . import report_error, run_debug_console
 
 # Some imports that are useful in the code to be run
 # Note the order. Dolfin overwrites NumPy which overwrites 
