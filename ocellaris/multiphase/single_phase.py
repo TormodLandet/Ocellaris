@@ -10,10 +10,16 @@ class SinglePhaseScheme(MultiPhaseModel):
         self.rho0 = self.simulation.input.get_value('physical_properties/rho0', 1.0, 'float')
         self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
     
-    def get_density(self):
+    def get_density(self, k):
+        """
+        Get flud density function at timestep t^{n+k}
+        """
         return dolfin.Constant(self.rho0)
 
-    def get_laminar_kinematic_viscosity(self):
+    def get_laminar_kinematic_viscosity(self, k):
+        """
+        Get flud kinematic viscosity function at timestep t^{n+k}
+        """
         return dolfin.Constant(self.nu0)
     
     def get_density_range(self):

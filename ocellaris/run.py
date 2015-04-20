@@ -47,9 +47,15 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     # Get the density and viscosity properties from the multi phase model
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
     multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
-    simulation.data['rho'] = multiphase_model.get_density()
-    simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity()
+    simulation.data['rho'] = multiphase_model.get_density(0)
+    simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity(0)
     simulation.multi_phase_model = multiphase_model
+    
+    # Previous and forcasted values of the fluid parameters
+    simulation.data['rho_old'] = multiphase_model.get_density(-1)
+    simulation.data['rho_star'] = multiphase_model.get_density(1)
+    simulation.data['nu_old'] = multiphase_model.get_laminar_kinematic_viscosity(-1)
+    simulation.data['nu_star'] = multiphase_model.get_laminar_kinematic_viscosity(1)
     
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs

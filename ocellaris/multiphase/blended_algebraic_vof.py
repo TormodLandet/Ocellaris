@@ -30,12 +30,10 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Define function space and solution function
         V = simulation.data['Vc']
-        self.colour_function = c = Function(V)
-        self.prev_colour_function = cp = Function(V)
-        self.prev2_colour_function = cpp = Function(V)
-        simulation.data['c'] = c
-        simulation.data['cp'] = cp
-        simulation.data['cpp'] = cpp
+        simulation.data['c'] = Function(V)
+        simulation.data['cp'] = Function(V)
+        simulation.data['cpp'] = Function(V)
+        simulation.data['c_star']= Function(V)
         
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value('physical_properties/rho0', required_type='float')
@@ -46,6 +44,11 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # The convection blending function that counteracts numerical diffusion
         scheme = get_convection_scheme(simulation.input.get_value('convection/c/convection_scheme', 'HRIC', 'string'))
         self.convection_scheme = scheme(simulation, 'c')
+        self.convection_scheme_star = scheme(simulation, 'c_star')
+        
+        self.need_gradient = True
+        if scheme == 'Upwind':
+            self.need_gradient = False
         
         # Create the equations when the simulation starts
         self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
@@ -69,52 +72,106 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Use first order backward time difference on the first time step
         # Coefficients for u, up and upp 
-        self.time_coeffs = dolfin.Constant([1, -1, 0])
+        self.time_coeffs = Constant([1, -1, 0])
+        self.extrapolation_coeffs = [1, 0]
         
         # The normal on each face
         normal = FacetNormal(self.mesh)
         
-        # Reconstruct the gradient from the colour function DG0 field
-        self.convection_scheme.gradient_reconstructor.initialize()
-        gradient = self.convection_scheme.gradient_reconstructor.gradient
-        
         # Setup the equation to solve
         V = self.simulation.data['Vc']
+        c = self.simulation.data['c']
         cp = self.simulation.data['cp']
         cpp = self.simulation.data['cpp']
+        c_star = self.simulation.data['c_star']
         trial = dolfin.TrialFunction(V)
         test = dolfin.TestFunction(V)
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('c', [])
         
-        vel = self.simulation.data['up']
-        r = dolfin.Constant(1.0)
-        thetas = dolfin.Constant([1.0, 0.0, 0.0])
+        # Make sure the convection scheme has something usefull in the first iteration
+        c_star.assign(c)
         
-        # Define:   ∂c/∂t +  ∇⋅(c u) = 0
+        # Define equation for advection of the colour function
+        #    ∂c/∂t +  ∇⋅(c u) = 0
+        
+        # At the previous time step (known advecting velocity "up")   
+        vel = self.simulation.data['up']
+        r = Constant(1.0)
+        thetas = Constant([1.0, 0.0, 0.0])
         self.eq = define_advection_problem(trial, test, cp, cpp, vel, r, normal, beta,
                                            self.time_coeffs, thetas, self.dt, dirichlet_bcs)
         
-        self.simulation.plotting.add_plot('c', self.colour_function, clim=(0, 1))
-        self.simulation.plotting.add_plot('c_grad', gradient)
+        # At the next time step (extrapolated advecting velocity)
+        Vu = self.simulation.data['Vu']
+        if self.simulation.ndim == 2:
+            u_conv0 = dolfin.Function(Vu)
+            u_conv1 = dolfin.Function(Vu)
+            self.u_conv_comps = [u_conv0, u_conv1]
+            self.u_conv = dolfin.as_vector(self.u_conv_comps)
+        self.eq_star = define_advection_problem(trial, test, c, cp, self.u_conv, r, normal, beta,
+                                                self.time_coeffs, thetas, self.dt, dirichlet_bcs)
+        
+        # Add some debugging plots to show results in 2D
+        self.div_u_Vc = dolfin.Function(V)
+        self.simulation.plotting.add_plot('c', c, clim=(0, 1))
+        self.simulation.plotting.add_plot('div(u)|Vc', self.div_u_Vc)
+        
         self.simulation.plotting.add_plot('c_beta', beta)
         
-    def get_density(self):
+        if self.need_gradient:
+            # Reconstruct the gradient from the colour function DG0 field
+            self.convection_scheme.gradient_reconstructor.initialize()
+            gradient = self.convection_scheme.gradient_reconstructor.gradient
+            self.simulation.plotting.add_plot('c_grad', gradient)
+        
+        # Move this!
+        self.umag = dolfin.Function(V)
+        self.simulation.plotting.add_plot('p', self.simulation.data['p'])
+        self.simulation.plotting.add_plot('mag(u)', self.umag)
+        
+    def get_colour_function(self, k, force_boundedness=True, sharp_interface=False, force_steady=False):
+        """
+        Return the colour function on timestep t^{n+k}
+        """
+        if k == 0:
+            c = self.simulation.data['cp']
+        elif k == -1:
+            c = self.simulation.data['cpp']
+        elif k == 1:
+            c = self.simulation.data['c_star']
+        
+        if force_steady:
+            c = self.simulation.data['c']
+        
+        if force_boundedness:
+            c = dolfin.max_value(dolfin.min_value(c, Constant(1.0)), Constant(0.0))
+        
+        if sharp_interface:
+            c = dolfin.conditional(dolfin.ge(c, 0.5), Constant(1.0), Constant(0.0))
+        
+        return c
+    
+    def get_density(self, k):
         """
         Calculate the blended density function as a weighted sum of
         rho0 and rho1. The colour function is unity when rho=rho0
         and zero when rho=rho1
+        
+        Return the function as defined on timestep t^{n+k}
         """
-        return dolfin.Constant(self.rho0)*self.colour_function + \
-               dolfin.Constant(self.rho1)*(1 - self.colour_function)
+        c = self.get_colour_function(k)
+        return Constant(self.rho0)*c + Constant(self.rho1)*(1 - c)
     
-    def get_laminar_kinematic_viscosity(self):
+    def get_laminar_kinematic_viscosity(self, k):
         """
         Calculate the blended kinematic viscosity function as a weighted
         sum of nu0 and nu1. The colour function is unity when nu=nu0 and
         zero when nu=nu1
+        
+        Return the function as defined on timestep t^{n+k}
         """
-        return dolfin.Constant(self.nu0)*self.colour_function + \
-               dolfin.Constant(self.nu1)*(1 - self.colour_function)
+        c = self.get_colour_function(k)
+        return Constant(self.nu0)*c + Constant(self.nu1)*(1 - c)
     
     def get_density_range(self):
         """
@@ -141,25 +198,49 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field
         """
-        # Reconstruct the gradient
-        self.convection_scheme.gradient_reconstructor.reconstruct()
+        if self.need_gradient:
+            # Reconstruct the gradients
+            self.convection_scheme.gradient_reconstructor.reconstruct()
+            self.convection_scheme_star.gradient_reconstructor.reconstruct()
         
-        # Get a divergence free convecting velocity
-        vel = self.divergence_free_velocity()
+        # Update the extrapolated convecting velocity
+        e1, e2 = self.extrapolation_coeffs
+        for d, uci in enumerate(self.u_conv_comps):
+            uciv = uci.vector() 
+            uciv.zero()
+            uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
+            uciv.axpy(e2, self.simulation.data['up%d' % d].vector())
         
         # Update the convection blending factors
+        vel = self.simulation.data['up']
         self.convection_scheme.update(t, dt, vel)
+        self.convection_scheme_star.update(t, dt, self.u_conv)
         
-        # Solve the advection equation
+        # Solve the advection equations for the colour field
         self.dt.assign(dt)
+        c = self.simulation.data['c'] 
         a, L = self.eq
-        solve(a == L, self.colour_function)
+        solve(a == L, c)
+        
+        # Solve the advection equations for the extrapolated colour field
+        c_star = self.simulation.data['c_star']
+        a, L = self.eq_star
+        solve(a == L, c_star)
+        
+        # Ensure boundedness
+        for field in (c_star, c):
+            break
+            a = field.vector().array()
+            a[a>1] = 1
+            a[a<0] = 0
+            field.vector()[:] = a
         
         # Report total mass balance and divergence
-        div_u = dolfin.project(dolfin.nabla_div(vel), self.simulation.data['Vc'])
-        maxdiv = abs(div_u.vector().array()).max()
-        sum_c = dolfin.assemble(self.colour_function*dolfin.dx)
-        arr_c = self.colour_function.vector().array()
+        dolfin.project(dolfin.nabla_div(vel), self.simulation.data['Vc'], function=self.div_u_Vc)
+        dolfin.project(dolfin.sqrt(dolfin.dot(vel, vel)), self.simulation.data['Vc'], function=self.umag)
+        maxdiv = abs(self.div_u_Vc.vector().array()).max()
+        sum_c = dolfin.assemble(c*dolfin.dx)
+        arr_c = c.vector().array()
         min_c = arr_c.min()
         max_c = arr_c.max()
         self.simulation.reporting.report_timestep_value('max(div(u_adv_c))', maxdiv)
@@ -168,11 +249,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.simulation.reporting.report_timestep_value('max(c)', max_c)
         
         # Update the previous values for the next time step
-        self.prev2_colour_function.assign(self.prev_colour_function)
-        self.prev_colour_function.assign(self.colour_function)
+        cp = self.simulation.data['cp']
+        cpp = self.simulation.data['cpp']
+        cpp.assign(cp)
+        cp.assign(c)
         
         # Use second order backward time difference after the first time step
-        self.time_coeffs.assign(dolfin.Constant([3/2, -2, 1/2]))
+        self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
+        self.extrapolation_coeffs = [2, -1]
         
         # Compress interface
         # Not yet tested with FEniCS 1.5!
