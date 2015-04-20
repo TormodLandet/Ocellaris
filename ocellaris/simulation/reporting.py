@@ -59,7 +59,7 @@ class Reporting(object):
             ordinate = self.timestep_xy_reports[report_name]
             
             if len(abscissa) != len(ordinate):
-                report_error('Marlformed report data: "%s"' % report_name,
+                report_error('Malformed report data: "%s"' % report_name,
                              'Length of t is %d while report is %d' %
                              (len(abscissa), len(ordinate)))
             

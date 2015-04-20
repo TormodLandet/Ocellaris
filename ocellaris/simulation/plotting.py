@@ -1,3 +1,4 @@
+import os
 from ocellaris.postprocess import Plotter
 
 
@@ -33,7 +34,17 @@ class Plotting(object):
         Plot the plotter with the given name
         """
         sim = self.simulation
-        name_template_dafault = 'fig/{name}_{timestep:07d}_{t:010.6f}{extra}.png'
+        
+        # Get the figure directory
+        output_prefix = sim.input.get_value('output/prefix', '', 'string')
+        figdir = output_prefix + '_plots'
+        if not os.path.isdir(figdir):
+            os.mkdir(figdir)
+        
+        # Get the file name
+        name_template_dafault = '{figdir}/{name}_{timestep:07d}_{t:010.6f}{extra}.png'
         name_template = sim.input.get_value('plots/name_template', name_template_dafault, 'string')
-        filename = name_template.format(name=name, timestep=sim.timestep, t=sim.time, extra=extra)
+        filename = name_template.format(figdir=figdir, name=name, timestep=sim.timestep, t=sim.time, extra=extra)
+        
+        # Create the image
         self.plots[name].plot(filename)
