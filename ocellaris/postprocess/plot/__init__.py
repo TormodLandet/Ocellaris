@@ -3,6 +3,7 @@ from .plot_DG1_2D_scalar import Plot2DDG1
 from .plot_DG0_2D_vector import Plot2DDG0Vec
 from .plot_CR1_2D_scalar import Plot2DCR1
 from .plot_CR1_2D_vector import Plot2DCR1Vec
+from .plot_FacetExprDG0_2D_scalar import PlotFacetExpressionDG0
 
 def Plotter(simulation, dolfin_function, *args, **kwargs):
     """
@@ -32,6 +33,8 @@ def Plotter(simulation, dolfin_function, *args, **kwargs):
         return Plot2DCR1(simulation, dolfin_function, *args, **kwargs)
     elif function_type == ('Crouzeix-Raviart', 1, 2, 2):
         return Plot2DCR1Vec(simulation, dolfin_function, *args, **kwargs)
+    elif function_type == ('FacetExpressionDG0', 0, 2, 0):
+        return PlotFacetExpressionDG0(simulation, dolfin_function, *args, **kwargs)
     else:
         msg1 = 'No plotters for "%s" of order %d in %dD with %d sub spaces' % function_type
         msg2 = 'Cannot plot "%s" of order %d in %dD with %d sub spaces' % function_type
