@@ -8,14 +8,19 @@ def Plotter(simulation, dolfin_function, *args, **kwargs):
     """
     Factory function for plotting
     """
-    # Get information about the underlying function space
-    function_space = dolfin_function.function_space()
-    element = function_space.ufl_element()
-    cell = function_space.cell()
+    if hasattr(dolfin_function, 'ocellaris_cpp_expression_type'):
+        family = dolfin_function.ocellaris_cpp_expression_type
+        ndim = dolfin_function.mesh.geometry().dim()
+        function_type = (family, 0, ndim, 0)
+    else:
+        # Get information about the underlying function space
+        function_space = dolfin_function.function_space()
+        element = function_space.ufl_element()
+        cell = function_space.cell()
     
-    # Dispatch to the correct implementation class
-    # TODO: make a registry here or ask the plotting classes if they support the function?
-    function_type = (element.family(), element.degree(), cell.topological_dimension(), function_space.num_sub_spaces()) 
+        # Dispatch to the correct implementation class
+        # TODO: make a registry here or ask the plotting classes if they support the function?
+        function_type = (element.family(), element.degree(), cell.topological_dimension(), function_space.num_sub_spaces()) 
     
     if function_type == ('Discontinuous Lagrange', 0, 2, 0):
         return Plot2DDG0(simulation, dolfin_function, *args, **kwargs)

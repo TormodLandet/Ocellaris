@@ -1,14 +1,15 @@
 import dolfin
 
-def FacetExpressionDG0(V):
+def FacetExpressionDG0(mesh):
     """
     Create a facet function that can be evaluated on facets in 
     ds and dS integrals
     """
-    facet_data = dolfin.FacetFunctionDouble(V.mesh())
+    facet_data = dolfin.FacetFunctionDouble(mesh)
     f = dolfin.Expression(code)
-    f.mesh = V.mesh()
+    f.mesh = mesh
     f.facet_data = facet_data
+    f.ocellaris_cpp_expression_type = 'FacetExpressionDG0'
     return f
 
 code = '''
@@ -32,8 +33,8 @@ public:
     void eval(Array<double>& values, const Array<double>& x,
               const ufc::cell& ufc_cell) const
     {
-        dolfin_assert(facet_data);
-        dolfin_assert(ufc_cell.geometric_dimension == _mesh.geometry().dim());
+        assert(facet_data);
+        assert(ufc_cell.geometric_dimension == (*mesh).geometry().dim());
 
         if (ufc_cell.local_facet >= 0)
         {
@@ -63,7 +64,7 @@ if __name__ == '__main__':
     mesh = dolfin.UnitSquareMesh(2, 2)
     V = dolfin.FunctionSpace(mesh, 'CG', 1)
 
-    func = FacetExpressionDG0(V)
+    func = FacetExpressionDG0(mesh)
     func2 = dolfin.FacetArea(mesh)
 
     # Make func into a facet area function
