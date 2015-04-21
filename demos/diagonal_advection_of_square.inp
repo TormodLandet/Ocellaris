@@ -17,11 +17,21 @@ mesh:
     Ny: 32
     endx: 1.5
     endy: 1.5
+    diagonal: left/right
 
 boundary_conditions:
 -   name: all
     selector: code
-    region_code: on_boundary
+    inside_code: on_boundary
     c:
         type: ConstantValue
         value: 0
+
+output:
+    prefix: diagonal_advection_of_square
+
+physical_properties:
+    rho0: 1.0
+    nu0: 1.0
+    rho1: 1.0
+    nu1: 1.0

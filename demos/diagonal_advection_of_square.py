@@ -4,7 +4,7 @@ import numpy
 import dolfin
 from ocellaris.multiphase import get_multi_phase_model
 from ocellaris import Simulation
-from ocellaris.run import load_mesh, setup_boundary_conditions
+from ocellaris.run import load_mesh, setup_boundary_conditions, mark_boundaries
 
 thisdir = os.path.dirname(os.path.abspath(__file__))
 inpfile = os.path.join(thisdir, 'diagonal_advection_of_square.inp')
@@ -20,8 +20,9 @@ Nt = 1000
 TS_MAX = 200000
 
 PLOT = False
-PNG_OUTPUT_FREQUENCY = 10
+PNG_OUTPUT_FREQUENCY = 1
 PLOT_INTERPOLATED = False
+FIELDS_TO_PLOT = 'c c_beta c_grad'.split()
 
 Nx = sim.input.get_value('mesh/Nx', required_type='int')
 Ny = sim.input.get_value('mesh/Ny', required_type='int')
@@ -49,16 +50,20 @@ cexpr = CField()
 dolfin.set_log_level(dolfin.WARNING)
 
 # Prepare simulation
-load_mesh(sim)
+mesh_facet_regions = load_mesh(sim)
+mark_boundaries(sim, mesh_facet_regions)
+sim.data['constrained_domain'] = None
 mesh = sim.data['mesh']
 sim.data['Vc'] = dolfin.FunctionSpace(mesh, "DG", 0)
 setup_boundary_conditions(sim)
 
 # Initialize the convecting velocity field
-vel_func_space = dolfin.FunctionSpace(mesh, "DG", 1)
-u0 = dolfin.Function(vel_func_space)
-u1 = dolfin.Function(vel_func_space)
-sim.data['u'] = dolfin.as_vector([u0, u1])
+sim.data['Vu'] = dolfin.FunctionSpace(mesh, "DG", 1)
+u0 = dolfin.Function(sim.data['Vu'])
+u1 = dolfin.Function(sim.data['Vu'])
+sim.data['u'] = sim.data['up'] = dolfin.as_vector([u0, u1])
+sim.data['Vp'] = sim.data['Vc']
+sim.data['p'] = dolfin.Function(sim.data['Vp'])
 
 # Initialize the VOF scheme
 multiphase_model = get_multi_phase_model('BlendedAlgebraicVOF')
@@ -73,19 +78,11 @@ c0 = dolfin.interpolate(cexpr, sim.data['Vc'])
 def postprocess(cfunc, t):
     cvec = cfunc.vector().array()
     
-    csum = dolfin.assemble(cfunc*dolfin.dx)
-    cmax = cvec.max()
-    cmin = cvec.min()
-    
     cexpr.t = t
     target = dolfin.interpolate(cexpr, sim.data['Vc']).vector().array()
     error = ((target - cvec)**2).sum() *  60*60/(Nx*Ny)
     
-    sim.reporting.report_timestep_value('csum', csum)
-    sim.reporting.report_timestep_value('cmin', cmin)
-    sim.reporting.report_timestep_value('cmax', cmax)
     sim.reporting.report_timestep_value('error', error)
-        
 
 ###############################################################################
 # Time loop
@@ -93,10 +90,10 @@ def postprocess(cfunc, t):
 t_vec = numpy.linspace(0, TMAX, Nt)
 dt_vec = t_vec[1:] - t_vec[:-1]
 
-vof.prev_colour_function.assign(c0)
+sim.data['cp'].assign(c0)
 
 # Not needed, but nice to have for visualization of the 0th time step
-vof.colour_function.assign(c0)
+sim.data['c'].assign(c0)
 vof.convection_scheme.gradient_reconstructor.reconstruct()
     
 # Dump input data
@@ -104,10 +101,7 @@ import yaml
 inp = collections.OrderedDict(sim.input.items())
 print yaml.dump(inp, indent=4)
 
-# Make png frames of the evolution of the colour function
-sim.plotting.plot_all()
-
-postprocess(vof.colour_function, 0.0)
+postprocess(sim.data['c'], 0.0)
 sim.hooks.simulation_started()
 sim.reporting.log_timestep_reports()
 
@@ -123,12 +117,11 @@ for it in xrange(1, Nt):
         u0.vector()[:] = -VEL[0]
         u1.vector()[:] = -VEL[1]
     
-    vof.update(it, t, dt)
-    
     if PLOT and it % PNG_OUTPUT_FREQUENCY == 0:
-        sim.plotting.plot_all()
+        for field in FIELDS_TO_PLOT:
+            sim.plotting.plot(field)
     
-    postprocess(vof.colour_function, t)
+    postprocess(sim.data['c'], t)
     sim.hooks.end_timestep()
     
     if it == TS_MAX:
