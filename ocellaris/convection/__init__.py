@@ -1,6 +1,6 @@
 import numpy
 import dolfin
-from ocellaris.utils import report_error, GradientReconstructor, facet_dofmap
+from ocellaris.utils import report_error, GradientReconstructor, facet_dofmap, FacetExpressionDG0
 
 _CONVECTION_SCHEMES = {}
 
@@ -55,16 +55,13 @@ class ConvectionScheme(object):
         self.simulation = simulation
         self.alpha_function = simulation.data[func_name]
         self.alpha_function_space = self.alpha_function.function_space()
-        self.mesh = self.alpha_function_space.mesh()
-        
-        # Function space for the convection blending function
-        cd = simulation.data['constrained_domain']
-        self.function_space = dolfin.FunctionSpace(self.mesh, "CR", 1, constrained_domain=cd)
-        self.blending_function = dolfin.Function(self.function_space)
-        
-        # Dofmaps
         self.alpha_dofmap = self.alpha_function_space.dofmap().dofs()
-        self.dofmap = facet_dofmap(self.function_space)
+        
+        # Blending function
+        self.mesh = self.alpha_function_space.mesh()
+        self.blending_function = FacetExpressionDG0(self.mesh)
+        for facet in dolfin.facets(self.mesh):
+            self.blending_function.facet_data[facet.index()] = 0.0
         
         # Mesh size
         self.ncells = self.mesh.num_cells()
