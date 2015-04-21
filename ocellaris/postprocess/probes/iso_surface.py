@@ -46,7 +46,6 @@ class IsoSurface(Probe):
             self.fig = pyplot.figure()
             self.ax = self.fig.add_subplot(111)
             self.ax.set_title('Iso surface %s' % name)
-            self.line, = self.ax.plot([], [], 'ko')
     
     def end_of_timestep(self):
         """
@@ -79,12 +78,11 @@ class IsoSurface(Probe):
                 self.output_file.write(' '.join('%10.5f' % pos[2] for pos in surface) + '\n')
         
         if update_plot:
-            xvals, yvals = [], []
+            self.ax.clear()
             for surface in surfaces:
-                xvals.extend(pos[0] for pos in surface)
-                yvals.extend(pos[1] for pos in surface)
-            self.line.set_xdata(xvals)
-            self.line.set_ydata(yvals)
+                xvals = [pos[0] for pos in surface]
+                yvals = [pos[1] for pos in surface]
+                self.ax.plot(xvals, yvals)
             self.ax.set_xlabel('x')
             self.ax.set_ylabel('y')
             self.ax.relim()
@@ -113,7 +111,7 @@ def get_iso_surfaces(simulation, field, value):
     all_values = field.compute_vertex_values()
     
     # Find the crossing points where the contour crosses a facet
-    crossing_points = []
+    crossing_points = {}
     for facet in dolfin.facets(mesh):
         vertex_coords = []
         vertex_values = []
@@ -134,12 +132,54 @@ def get_iso_surfaces(simulation, field, value):
         x = (1 - fac)*vertex_coords[0][0] + fac*vertex_coords[1][0]
         y = (1 - fac)*vertex_coords[0][1] + fac*vertex_coords[1][1]
         z = (1 - fac)*vertex_coords[0][2] + fac*vertex_coords[1][2]
-        crossing_points.append((facet.index(), x, y, z))
-        
-    # Create continous contour lines
+        crossing_points[facet.index()] = (x, y, z)
+    
+    # Get facet-facet connectivity via cells
+    conFC = simulation.data['connectivity_FC']
+    conCF = simulation.data['connectivity_CF']
+    
+    # Find facet to facet connections
+    connections = {}
+    for facet_id in crossing_points:
+        for cell_id in conFC(facet_id):
+            for facet_neighbour_id in conCF(cell_id):
+                if facet_neighbour_id != facet_id and facet_neighbour_id in crossing_points:
+                    connections.setdefault(facet_id, []).append(facet_neighbour_id)
+    
+    # Make continous contour lines
+    # Find end points of contour lines and start with these
+    end_points = [facet_id for facet_id, neighbours in connections.items() if len(neighbours) == 1]
+    contours_from_endpoints = contour_lines_from_endpoints(end_points, crossing_points, connections)
+    
+    # Include crossing points without neighbours or joined circles without end points
+    other_points = crossing_points.keys()
+    contours_from_singles_and_loops = contour_lines_from_endpoints(other_points, crossing_points, connections)
+    
+    assert len(crossing_points) == 0
+    return contours_from_endpoints + contours_from_singles_and_loops
+
+def contour_lines_from_endpoints(endpoints, crossing_points, connections):
+    """
+    Given facet ids of endpoints, follow the contour line and create contours
+    
+    """
     contours = []
-    for fidx, x, y, z in crossing_points:
-        # Just make a new contour line per point for now
-        contours.append([(x, y, z)])
+    for endpoint in endpoints:
+        if not endpoint in crossing_points:
+            # This has been taken by the other end
+            continue
+        
+        # Make a new contour line
+        contour = [crossing_points.pop(endpoint)]
+        
+        # Loop over neighbours to the end of the contour
+        queue = list(connections[endpoint])
+        while queue:
+            facet_id = queue.pop()
+            if facet_id in crossing_points:
+                contour.append(crossing_points.pop(facet_id))
+                queue.extend(connections[facet_id])
+        
+        contours.append(contour)
     
     return contours
