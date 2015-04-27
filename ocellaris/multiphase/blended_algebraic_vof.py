@@ -104,11 +104,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         if self.need_extrapolation:
             # At the next time step (extrapolated advecting velocity)
             Vu = self.simulation.data['Vu']
-            if self.simulation.ndim == 2:
-                u_conv0 = dolfin.Function(Vu)
-                u_conv1 = dolfin.Function(Vu)
-                self.u_conv_comps = [u_conv0, u_conv1]
-                self.u_conv = dolfin.as_vector(self.u_conv_comps)
+            self.u_conv_comps = [dolfin.Function(Vu) for _ in range(self.simulation.ndim)]
+            self.u_conv = dolfin.as_vector(self.u_conv_comps)
             beta_star = self.convection_scheme_star.blending_function
             self.eq_star = define_advection_problem(trial, test, c, cp, self.u_conv, r, normal, beta_star,
                                                     self.time_coeffs, thetas, self.dt, dirichlet_bcs)
@@ -123,22 +120,19 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             gradient = self.convection_scheme.gradient_reconstructor.gradient
             self.simulation.plotting.add_plot('c_grad', gradient)
     
-    def get_colour_function(self, k, force_boundedness=True, sharp_interface=False, force_steady=False):
+    def get_colour_function(self, k, force_boundedness=False, sharp_interface=False, force_steady=False):
         """
         Return the colour function on timestep t^{n+k}
         """
-        need_extrapolation = False
         if k == 0:
             c = self.simulation.data['cp']
         elif k == -1:
             c = self.simulation.data['cpp']
         elif k == 1:
             c = self.simulation.data['c_star']
-            need_extrapolation = True
         
         if force_steady:
             c = self.simulation.data['c']
-            need_extrapolation = False
         
         if force_boundedness:
             c = dolfin.max_value(dolfin.min_value(c, Constant(1.0)), Constant(0.0))
@@ -146,7 +140,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         if sharp_interface:
             c = dolfin.conditional(dolfin.ge(c, 0.5), Constant(1.0), Constant(0.0))
             
-        if need_extrapolation:
+        if k == 1 and not force_steady:
             self.need_extrapolation = True
         
         return c
@@ -198,6 +192,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field
         """
+        self.dt.assign(dt)
+        
         if self.need_gradient:
             # Reconstruct the gradients
             self.convection_scheme.gradient_reconstructor.reconstruct()
@@ -207,11 +203,17 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         vel = self.simulation.data['up']
         self.convection_scheme.update(t, dt, vel)
         
+        # Get the functions
+        c = self.simulation.data['c']
+        cp = self.simulation.data['cp']
+        cpp = self.simulation.data['cpp']
+        
         # Solve the advection equations for the colour field
-        self.dt.assign(dt)
-        c = self.simulation.data['c'] 
-        a, L = self.eq
-        solve(a == L, c)
+        if it == 1:
+            c.assign(self.simulation.data['cp'])
+        else: 
+            a, L = self.eq
+            solve(a == L, c)
         
         if self.need_extrapolation:
             # Update the extrapolated convecting velocity
@@ -221,14 +223,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
                 uciv.zero()
                 uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
                 uciv.axpy(e2, self.simulation.data['up%d' % d].vector())
-                
+            
             # Update the convection blending factors
             self.convection_scheme_star.update(t, dt, self.u_conv)
             
             # Solve the advection equations for the extrapolated colour field
             c_star = self.simulation.data['c_star']
-            a, L = self.eq_star
-            solve(a == L, c_star)
+            a_star, L_star = self.eq_star
+            solve(a_star == L_star, c_star)
         
         # Report total mass balance and divergence
         sum_c = dolfin.assemble(c*dolfin.dx)
@@ -240,8 +242,6 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.simulation.reporting.report_timestep_value('max(c)', max_c)
         
         # Update the previous values for the next time step
-        cp = self.simulation.data['cp']
-        cpp = self.simulation.data['cpp']
         cpp.assign(cp)
         cp.assign(c)
         
