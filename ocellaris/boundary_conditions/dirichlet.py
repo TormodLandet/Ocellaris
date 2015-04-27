@@ -35,6 +35,9 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         """
         return OcellarisDirichletBC(self.simulation, V, self._value,
                                     self.subdomain_marker, self.subdomain_id)
+    
+    def __repr__(self):
+        return '<OcellarisDirichletBC on subdomain %d>' % self.subdomain_id
 
 
 @register_boundary_condition('ConstantValue')

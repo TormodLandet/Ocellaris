@@ -24,6 +24,9 @@ class OcellarisNeumannBC(object):
         Returns the ds measure of the subdomain
         """
         return self.simulation.data['ds'](self.subdomain_id)
+    
+    def __repr__(self):
+        return '<OcellarisNeumannBC on subdomain %d>' % self.subdomain_id
 
 
 @register_boundary_condition('ConstantGradient')
