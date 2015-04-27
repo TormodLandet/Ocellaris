@@ -117,7 +117,7 @@ def define_convenience_functions(simulation):
     def plot_all():
         for name in fields:
             field = simulation.data[name]
-            dolfin.plot(field, title=name)
+            dolfin.plot(field, title=name, tag=name)
         dolfin.interactive()
     funcs['plot_all'] = plot_all
     
