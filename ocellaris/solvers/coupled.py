@@ -1,11 +1,11 @@
 # encoding: utf8
 from __future__ import division
 import dolfin
-from dolfin import dx, div, grad, dot, jump, avg, dS
+from dolfin import dx, div, grad, dot, jump, avg, ds, dS, Constant
 from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, BLENDED, UPWIND, LOCAL_LAX_FRIEDRICH
-from .ipcs_equations import define_penalty
+from . import Solver, register_solver, BDF, BDM, UPWIND
+from .dg_helpers import define_penalty, bdm_projection
 
 
 # Default values, can be changed in the input file
@@ -14,6 +14,9 @@ LU_PARAMETERS = {}
 
 # Implemented timestepping methods
 TIMESTEPPING_METHODS = (BDF,)
+
+# Use the stress divergence form of the viscous term
+STRESS_DIVERGENCE = True
 
 
 @register_solver('Coupled')
@@ -28,12 +31,12 @@ class SolverCoupled(Solver):
         self.read_input()
         
         # First time step timestepping coefficients
-        sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
+        sim.data['time_coeffs'] = Constant([1, -1, 0])
         self.is_first_timestep = True
         
         # Solver control parameters
-        sim.data['dt'] = dolfin.Constant(simulation.dt)
-        self.is_single_phase = isinstance(sim.data['rho'], dolfin.Constant)
+        sim.data['dt'] = Constant(simulation.dt)
+        self.is_single_phase = isinstance(sim.data['rho'], Constant)
         
         # Get the BCs for the coupled function space
         self.dirichlet_bcs = self.coupled_boundary_conditions()
@@ -53,27 +56,26 @@ class SolverCoupled(Solver):
         # Function spaces
         Vu = sim.data['Vu']
         Vp = sim.data['Vp']
-        Vl = dolfin.FunctionSpace(sim.data['mesh'], "R", 0)
+        cd = sim.data['constrained_domain']
+        Vl = dolfin.FunctionSpace(sim.data['mesh'], "R", 0, constrained_domain=cd)
         Vu_family = Vu.ufl_element().family()
         self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
             
         # Create coupled mixed function space and mixed function to hold results
         if sim.ndim == 2:
-            self.Vcoupled = Vu * Vu * Vp * Vl
-            self.subspaces = [self.Vcoupled.sub(0).sub(0).sub(0),
-                              self.Vcoupled.sub(0).sub(0).sub(1),
-                              self.Vcoupled.sub(0).sub(1),
-                              self.Vcoupled.sub(1)]
+            self.Vcoupled = dolfin.MixedFunctionSpace([Vu, Vu, Vp, Vl])
             self.subspace_names = 'u0 u1 p l'.split()
-        
         else:
-            self.Vcoupled = Vu * Vu * Vu * Vp * Vl  
-            self.subspaces = [self.Vcoupled.sub(0).sub(0).sub(0),
-                              self.Vcoupled.sub(0).sub(0).sub(1),
-                              self.Vcoupled.sub(0).sub(0).sub(2),
-                              self.Vcoupled.sub(0).sub(0).sub(1),
-                              self.Vcoupled.sub(1)]
+            self.Vcoupled = dolfin.MixedFunctionSpace([Vu, Vu, Vu, Vp, Vl])
             self.subspace_names = 'u0 u1 u2 p l'.split()
+            
+        self.subspaces = [self.Vcoupled.sub(i) for i in range(sim.ndim + 2)]
+        sim.data['coupled'] = self.coupled_func = dolfin.Function(self.Vcoupled)
+        
+        self.subfunctions = [self.coupled_func.sub(i) for i in range(sim.ndim + 2)]
+        self.assigners = [dolfin.FunctionAssigner(Vu, self.subspaces[i]) for i in range(sim.ndim)]
+        self.assigners.append(dolfin.FunctionAssigner(Vp, self.subspaces[-2]))
+        self.assigners.append(dolfin.FunctionAssigner(Vl, self.subspaces[-1]))
         
         # Create segregated velocity functions on component and vector form
         u_list, up_list, upp_list, u_conv = [], [], [], []
@@ -90,7 +92,6 @@ class SolverCoupled(Solver):
         sim.data['up'] = dolfin.as_vector(up_list)
         sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['u_conv'] = dolfin.as_vector(u_conv)
-        sim.data['coupled'] = self.coupled_func = dolfin.Function(self.Vcoupled)
         
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
@@ -112,15 +113,14 @@ class SolverCoupled(Solver):
             self.coupled_solver.parameters['same_nonzero_pattern'] = True
         
         # Get flux type for the velocity
-        self.flux_type = sim.input.get_value('convection/u/flux_type', BLENDED, 'string')
-        if self.vel_is_discontinuous and self.flux_type == BLENDED:
-            # Get convection blending scheme
-            conv_schemes = []
-            conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', 'Upwind', 'string')
-            for d in range(sim.ndim):
-                conv_scheme = get_convection_scheme(conv_scheme_name)(sim, 'u%d' % d)
-                conv_schemes.append(conv_scheme)
-            self.convection_schemes = conv_schemes
+        self.flux_type = sim.input.get_value('convection/u/flux_type', UPWIND, 'string')
+        
+        # Velocity post_processing
+        default_postprocessing = BDM if self.vel_is_discontinuous else None
+        self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
+        
+        # Stress divergence form
+        self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form', STRESS_DIVERGENCE, 'bool')
         
         # Coefficients for u, up and upp
         self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
@@ -134,15 +134,18 @@ class SolverCoupled(Solver):
         """
         Setup the coupled Navier-Stokes equation
         """
-        uc = dolfin.TrialFunction(self.Vcoupled)
-        vc = dolfin.TestFunction(self.Vcoupled)
+        sim = self.simulation
+        u_conv = sim.data['u_conv']
         
         # Unpack the coupled trial and test functions
+        uc = dolfin.TrialFunction(self.Vcoupled)
+        vc = dolfin.TestFunction(self.Vcoupled)
         ulist = []; vlist = []
         ndim = self.simulation.ndim
         for d in range(ndim):
             ulist.append(uc[d])
             vlist.append(vc[d])
+        
         u = dolfin.as_vector(ulist)
         v = dolfin.as_vector(vlist)
         p = uc[ndim]
@@ -150,19 +153,41 @@ class SolverCoupled(Solver):
         lm_trial = uc[ndim+1]
         lm_test = vc[ndim+1]
         
-        sim = self.simulation
         c1, c2, c3 = sim.data['time_coeffs']
         dt = sim.data['dt']
-        u_conv = sim.data['u_conv']
         g = sim.data['g']
-        rho = sim.data['rho']
-        nu = sim.data['nu']
-        mu = rho*nu
         mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
         
+        # Fluid properties at t^{n}, t^{n-1} and t^{n+1}*
+        rhop = sim.data['rho']
+        rhopp = sim.data['rho_old']
+        rhos = sim.data['rho_star']
+        nus = sim.data['nu_star']
+        mus = rhos*nus
+        
         # Include (∇u)^T term?
-        sd = dolfin.Constant(1.0)
+        if self.use_stress_divergence_form:
+            sd = Constant(1.0)
+        else:
+            sd = Constant(0.0)
+            
+        if self.vel_is_discontinuous:
+            # Calculate SIPG penalty
+            mpm = sim.multi_phase_model
+            mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
+            P = sim.data['Vu'].ufl_element().degree()
+            penalty1 = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
+            penalty2 = penalty1*2
+            penalty_dS = Constant(penalty1)
+            penalty_ds = Constant(penalty2)
+            print 'DG SIP penalty:  dS %.1f  ds %.1f' % (penalty1, penalty2)
+            
+            # Upwind and downwind velocitues
+            w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
+            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
+            
+            assert not self.use_stress_divergence_form
         
         # Lagrange multiplicator to remove the pressure null space
         # ∫ p dx = 0
@@ -182,16 +207,16 @@ class SolverCoupled(Solver):
                 
                 # Time derivative
                 # ∂u/∂t
-                eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
+                eq += (rhos*c1*u[d] + rhop*c2*up + rhopp*c3*upp)/dt*v[d]*dx
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
-                eq += div(rho*u[d]*u_conv)*v[d]*dx
+                eq += div(rhos*u[d]*u_conv)*v[d]*dx
                 
                 # Diffusion
                 # -∇⋅μ[(∇u) + (∇u)^T]
-                eq += mu*dot(grad(u[d]), grad(v[d]))*dx
-                eq += sd*mu*dot(u.dx(d), grad(v[d]))*dx
+                eq += mus*dot(grad(u[d]), grad(v[d]))*dx
+                eq += sd*mus*dot(u.dx(d), grad(v[d]))*dx
                 
                 # Pressure
                 # ∇p
@@ -199,124 +224,74 @@ class SolverCoupled(Solver):
                 
                 # Body force (gravity)
                 # ρ g
-                eq -= rho*g[d]*v[d]*dx
-            
+                eq -= rhos*g[d]*v[d]*dx
+                
+                # Neumann boundary conditions
+                neumann_bcs_pressure = sim.data['neumann_bcs'].get('p', [])
+                for nbc in neumann_bcs_pressure:
+                    eq += p*v[d]*n[d]*nbc.ds()
+                
             else:
                 # Weak form of the Navier-Stokes eq. with discontinuous elements
+                assert self.flux_type == UPWIND
                 
                 # Divergence free criterion
                 # ∇⋅u = 0
-                eq += u[d].dx(d)*q*dx
-                eq += avg(q)*jump(u[d])*n[d]('+')*dS
+                eq -= u[d]*q.dx(d)*dx
+                eq += avg(u[d])*jump(q)*n[d]('+')*dS
                 
                 # Time derivative
                 # ∂u/∂t
-                eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
+                eq += (rhos*c1*u[d] + rhop*c2*up + rhopp*c3*upp)/dt*v[d]*dx
                 
-                # Define the convective flux
-                # f = ρ u ⊗ u_conv
-                def calc_flux(ui, uc):
-                    if self.flux_type == BLENDED:
-                        # Upstream and downstream normal velocities
-                        flux_nU = rho*ui*(dot(uc, n) + abs(dot(uc, n)))/2
-                        flux_nD = rho*ui*(dot(uc, n) - abs(dot(uc, n)))/2
-                        
-                        # Define the blended flux
-                        # The blending factor beta is not DG, so beta('+') == beta('-')
-                        b = self.convection_schemes[d].blending_function('+')
-                        flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
-                        flux = flux_nU('+') - flux_nU('-')
-                    
-                    elif self.flux_type == UPWIND:
-                        # Pure upwind flux
-                        flux_nU = rho*ui*(dot(uc, n) + abs(dot(uc, n)))/2
-                        flux = flux_nU('+') - flux_nU('-')
-                    
-                    elif self.flux_type == LOCAL_LAX_FRIEDRICH:
-                        # Local Lax-Friedrich flux
-                        uflmax = lambda a, b: dolfin.conditional(dolfin.gt(a, b), a, b)
-                        uflmag = lambda a: dolfin.sqrt(dolfin.inner(a, a))
-                        C = 1.2*uflmax(uflmag(rho('+')*uc('+')), uflmag(rho('-')*uc('-')))
-                        flux = avg(rho*ui*uc) + C/2*jump(ui)*n('+')
-                        flux = dot(flux, n('+'))
-                    return flux
-                
-                # Convection
-                # ∇⋅(ρ u ⊗ u_conv)
-                if True:
-                    # Implicit convection
-                    flux = calc_flux(u[d], u_conv)
-                    eq -= dot(rho*u[d]*u_conv, grad(v[d]))*dx
-                    eq += flux*jump(v[d])*dS
-                else:
-                    # Explicit convection
-                    for fac, uc in ((2, sim.data['up']), (-1, sim.data['upp'])):
-                        flux = calc_flux(uc[d], uc)
-                        eq -= fac*dot(rho*uc[d]*uc, grad(v[d]))*dx
-                        eq += fac*flux*jump(v[d])*dS
-                
-                # Calculate SIPG penalty 
-                mpm = sim.multi_phase_model
-                mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
-                P = sim.data['Vu'].ufl_element().degree()
-                penalty1 = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=2.0)
-                penalty2 = define_penalty(mesh, P, mu_min, mu_max, boost_factor=30, exponent=2.0)
-                #penalty = 3*mu_max*(P+1)*(P + ndim)/mesh.hmin()
-                sim.log.info('\nDG SIPG penalties u%d:  %.4e  %.4e' % (d, penalty1, penalty2))
-                penalty_dS = dolfin.Constant(penalty1)
-                penalty_ds = dolfin.Constant(penalty2)
+                # Convection:
+                # -w⋅∇u    
+                flux_nU = u[d]*w_nU
+                flux = jump(flux_nU)
+                eq -= rhos*u[d]*div(v[d]*u_conv)*dx
+                eq += rhos*flux*jump(v[d])*dS
+                eq += rhos*flux_nU*v[d]*ds
                 
                 # Diffusion:
-                # -∇⋅μ[(∇u) + (∇u)^T]
-                eq += mu*dot(grad(u[d]), grad(v[d]))*dx
-                eq += sd*mu*dot(u.dx(d), grad(v[d]))*dx
+                # -∇⋅∇u
+                eq += mus*dot(grad(u[d]), grad(v[d]))*dx
                 
                 # Symmetric Interior Penalty method for -∇⋅μ∇u
-                eq -= avg(dot(n, mu*grad(u[d])))*jump(v[d])*dS
-                eq -= avg(dot(n, mu*grad(v[d])))*jump(u[d])*dS
-                
-                # Symmetric Interior Penalty method for -∇⋅μ(∇u)^T
-                eq -= sd*avg(dot(n, mu*u.dx(d)))*jump(v[d])*dS
-                eq -= sd*avg(dot(n, mu*v.dx(d)))*jump(u[d])*dS
+                eq -= mus*dot(n('+'), avg(grad(u[d])))*jump(v[d])*dS
+                eq -= mus*dot(n('+'), avg(grad(v[d])))*jump(u[d])*dS
                 
                 # Symmetric Interior Penalty coercivity term
                 eq += penalty_dS*jump(u[d])*jump(v[d])*dS
                 
                 # Pressure
                 # ∇p
-                eq -= p*v[d].dx(d)*dx
+                eq -= v[d].dx(d)*p*dx
                 eq += avg(p)*jump(v[d])*n[d]('+')*dS
                 
                 # Body force (gravity)
                 # ρ g
-                eq -= rho*g[d]*v[d]*dx
+                eq -= rhos*g[d]*v[d]*dx
                 
                 # Dirichlet boundary
                 dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
                 for dbc in dirichlet_bcs:
                     # Divergence free criterion
-                    eq += q*(u[d] - dbc.func())*n[d]*dbc.ds()
+                    eq += q*u[d]*n[d]*dbc.ds()
                     
-                    # SIPG for -∇⋅μ∇u 
-                    eq -= mu*dot(n, grad(u[d]))*v[d]*dbc.ds()
-                    eq -= mu*dot(n, grad(v[d]))*u[d]*dbc.ds()
-                    eq += mu*dot(n, grad(v[d]))*dbc.func()*dbc.ds()
+                    # Convection
+                    eq += rhos*w_nD*dbc.func()*v[d]*dbc.ds()
                     
-                    # SIPG for -∇⋅μ(∇u)^T
-                    eq -= sd*mu*dot(n, u.dx(d))*v[d]*dbc.ds()
-                    eq -= sd*mu*dot(n, v.dx(d))*u[d]*dbc.ds()
-                    eq += sd*mu*dot(n, v.dx(d))*dbc.func()*dbc.ds()
+                    # SIPG for -∇⋅μ∇u
+                    eq -= mus*dot(n, grad(u[d]))*v[d]*dbc.ds()
+                    eq -= mus*dot(n, grad(v[d]))*u[d]*dbc.ds()
+                    eq += mus*dot(n, grad(v[d]))*dbc.func()*dbc.ds()
                     
                     # Weak Dirichlet
-                    parts = (penalty_ds + abs(rho*dot(n, u_conv)))
-                    eq += parts*(u[d] - dbc.func())*v[d]*dbc.ds()
+                    eq += penalty_ds*(u[d] - dbc.func())*v[d]*dbc.ds()
                     
                     # Pressure
                     eq += p*v[d]*n[d]*dbc.ds()
                 
-                if d == 1:
-                    print 'Penalty:', penalty1, penalty2, 'Flux:', self.flux_type
-        
         self.eq_coupled = dolfin.system(eq)
     
     def coupled_boundary_conditions(self):
@@ -358,6 +333,15 @@ class SolverCoupled(Solver):
                 uic.vector()[:] = 2.0*uip.vector()[:] - 1.0*uipp.vector()[:]
         
         self.is_first_timestep = False
+        
+    @timeit
+    def postprocess_velocity(self, vel):
+        """
+        Apply a post-processing operator to the given velocity field
+        """
+        mesh = self.simulation.data['mesh']
+        if self.velocity_postprocessing == BDM:
+            bdm_projection(vel, mesh)
     
     @timeit
     def solve_coupled(self):
@@ -375,13 +359,9 @@ class SolverCoupled(Solver):
         # Solve the equation system
         self.coupled_solver.solve(A, self.coupled_func.vector(), b)
         
-        # Copy the data from the coupled solution vector and to the individual components
-        up, _ = self.coupled_func.split()
-        u, p = up.split(True)
-        
-        funcs = list(u.split(True)) + [p]
-        for name, func in zip(self.subspace_names, funcs):
-            self.simulation.data[name].vector()[:] = func.vector()
+        # Assign into the regular (split) functions from the coupled function
+        for name, func, assigner in zip(self.subspace_names[:-1], self.subfunctions, self.assigners):
+            assigner.assign(self.simulation.data[name], func)
     
     @timeit
     def run(self):
@@ -405,7 +385,10 @@ class SolverCoupled(Solver):
             sim.log.info('Initial values for upp are found and used')
             self.is_first_timestep = False
             if self.timestepping_method == BDF:
-                self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+                self.simulation.data['time_coeffs'].assign(Constant([3/2, -2, 1/2]))
+        
+        self.postprocess_velocity(sim.data['upp'])
+        self.postprocess_velocity(sim.data['up'])
         
         while True:
             # Get input values, these can possibly change over time
@@ -428,6 +411,9 @@ class SolverCoupled(Solver):
             # Solve for the new time step
             self.solve_coupled()
             
+            # Postprocess the solution velocity field
+            self.postprocess_velocity(sim.data['u'])
+            
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(self.simulation.ndim):
                 u_new = self.simulation.data['u%d' % d]
@@ -438,7 +424,7 @@ class SolverCoupled(Solver):
             
             # Change time coefficient to second order
             if self.timestepping_method == BDF:
-                self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+                self.simulation.data['time_coeffs'].assign(Constant([3/2, -2, 1/2]))
             
             # Postprocess this time step
             sim.hooks.end_timestep()

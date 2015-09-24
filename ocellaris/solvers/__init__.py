@@ -43,5 +43,8 @@ BLENDED = 'Blended'
 UPWIND = 'Upwind'
 LOCAL_LAX_FRIEDRICH = 'Local Lax-Friedrich'
 
+# Velocity post-processing
+BDM = 'BDM'
+
 from . import ipcs
 from . import coupled

@@ -1,5 +1,4 @@
-import sys, time, collections, traceback
-import yaml
+import sys, time, traceback
 import dolfin
 from .multiphase import get_multi_phase_model
 from .solvers import get_solver
@@ -141,13 +140,15 @@ def load_mesh(simulation):
         
         startx = inp.get_value('mesh/startx', 0, 'float')
         starty = inp.get_value('mesh/starty', 0, 'float')
+        start = dolfin.Point(startx, starty)
         endx = inp.get_value('mesh/endx', 1, 'float')
         endy = inp.get_value('mesh/endy', 1, 'float')
+        end = dolfin.Point(endx, endy)
         Nx = inp.get_value('mesh/Nx', required_type='int')
         Ny = inp.get_value('mesh/Ny', required_type='int')
         diagonal = inp.get_value('mesh/diagonal', 'right', required_type='string')
         
-        mesh = dolfin.RectangleMesh(startx, starty, endx, endy, Nx, Ny, diagonal)
+        mesh = dolfin.RectangleMesh(start, end, Nx, Ny, diagonal)
         mesh_facet_regions = None
     
     elif mesh_type == 'XML':
@@ -193,7 +194,7 @@ def mark_boundaries(simulation, mesh_facet_regions):
     simulation.data['boundary_marker'] = marker
     
     # Create a boundary measure that is aware of the marked regions
-    ds = dolfin.Measure('ds')[marker]
+    ds = dolfin.Measure('ds')(subdomain_data=marker)
     simulation.data['ds'] = ds
 
 
