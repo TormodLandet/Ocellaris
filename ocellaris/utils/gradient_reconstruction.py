@@ -29,14 +29,14 @@ class GradientReconstructor(object):
         V = self.alpha_function.function_space()
         cd = self.simulation.data['constrained_domain']
         Vvec = dolfin.VectorFunctionSpace(self.mesh, 'DG', 0, constrained_domain=cd)
-        ndim = V.cell().topological_dimension()
+        ndim = V.ufl_cell().topological_dimension()
         ncells = self.mesh.num_cells()
         
         # To be used by others accessing this class
         self.gradient = dolfin.Function(Vvec)
         self.gradient_dofmaps = [Vvec.sub(d).dofmap().dofs() for d in range(ndim)]
         
-        if self.alpha_function.element().degree() > 0:
+        if self.alpha_function.ufl_element().degree() > 0:
             # We do not need the rest of the precomputed data for
             # higher order functions
             return
@@ -115,7 +115,7 @@ class GradientReconstructor(object):
         if not self.reconstruction_initialized:
             self.initialize()
         
-        if self.alpha_function.element().degree() > 0:
+        if self.alpha_function.ufl_element().degree() > 0:
             # We use projection for higher degrees
             V = self.gradient.function_space()
             dolfin.project(dolfin.nabla_grad(self.alpha_function), V, function=self.gradient)

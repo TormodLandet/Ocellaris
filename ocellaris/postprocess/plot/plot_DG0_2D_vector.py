@@ -14,7 +14,7 @@ class Plot2DDG0Vec(object):
         # Get information about the underlying function space
         function_space = func.function_space()
         element = function_space.ufl_element()
-        cell = function_space.cell()
+        cell = function_space.ufl_cell()
         
         # Check that the function is of a supported type
         assert element.family() == 'Discontinuous Lagrange'

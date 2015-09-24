@@ -1,25 +1,28 @@
 import numpy
 import dolfin
+from ocellaris.utils import facet_dofmap
 from .plot_CR1_2D_scalar import plot_2d_CR1
 
-class PlotFacetExpressionDG0(object):
+class PlotDGT0(object):
     def __init__(self, simulation, func, **options):
         """
-        A plotter for FacetExpressionDG0 functions in 2D
+        A plotter for DGT0 functions in 2D
         """
         self.func = func
         self.options = options
         
         # Get information about the underlying function space
-        assert hasattr(func, 'ocellaris_cpp_expression_type')
-        family = func.ocellaris_cpp_expression_type
-        ndim = func.mesh.geometry().dim()
+        function_space = func.function_space()
+        family = func.ufl_element().family()
+        mesh = function_space.mesh()
+        ndim = mesh.geometry().dim()
         
         # Check that the function is of a supported type
-        assert family == 'FacetExpressionDG0'
+        assert family == 'Discontinuous Lagrange Trace'
         assert ndim == 2
         
-        self.mesh = func.mesh
+        self.mesh = mesh
+        self.dofmap = facet_dofmap(function_space)
         
         # Build matplotlib plolygon data
         self.coords = self.mesh.coordinates()
@@ -48,7 +51,14 @@ class PlotFacetExpressionDG0(object):
         """
         Plot the current state of the referenced function to a file
         """
-        scalars = self.func.facet_data.array() 
+        # Rearange function values according to the dofmap
+        scalars = numpy.zeros(self.Nfacet, float)
+        funcvals = self.func.vector()
+        
+        for i, facet in enumerate(dolfin.facets(self.mesh)):
+            fidx = facet.index()
+            scalars[i] = funcvals[self.dofmap[fidx]]
+        
         radius = self.facet_length/8
         cmap = self.options.get('cmap', 'Reds')
         

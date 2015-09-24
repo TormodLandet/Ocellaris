@@ -16,7 +16,7 @@ class Plot2DCR1(object):
         # Get information about the underlying function space
         function_space = func.function_space()
         element = function_space.ufl_element()
-        cell = function_space.cell()
+        cell = function_space.ufl_cell()
         ndim = cell.topological_dimension()
         
         # Check that the function is of a supported type
