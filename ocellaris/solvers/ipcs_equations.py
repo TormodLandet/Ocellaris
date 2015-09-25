@@ -1,11 +1,12 @@
 # encoding: utf8
 import dolfin
-from dolfin import dot, nabla_grad, nabla_div, avg, jump, dx, dS
+from dolfin import dot, nabla_grad, nabla_div, avg, jump, dx, dS, Constant
 from . import BDF, CRANK_NICOLSON
+from .dg_helpers import define_penalty
 
 
 # Default values, can be changed in the input file
-PENALTY_BOOST = 2
+PENALTY_BOOST = 1
 STRESS_DIVERGENCE = True
 
 
@@ -32,7 +33,7 @@ class MomentumPredictionEquation(object):
         g = simulation.data['g']
         mu = rho*nu
         
-        if up.element().family() == 'Discontinuous Lagrange':
+        if up.ufl_element().family() == 'Discontinuous Lagrange':
             # Bounds on the diffusion coefficients for SIPG penalty calculation
             mpm = simulation.multi_phase_model
             mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
@@ -105,18 +106,18 @@ class PressureCorrectionEquation(object):
         u_star = simulation.data['u_star']
         p = simulation.data['p']
         
-        if p.element().family() == 'Discontinuous Lagrange':
+        if p.ufl_element().family() == 'Discontinuous Lagrange':
             # Bounds on the diffusion coefficients for SIPG penalty calculation
-            mpm = simulation.multi_phase_model
-            rho_max, rho_min = mpm.get_density_range()
-            k_p_max, k_p_min = 1/rho_min, 1/rho_max
+            #mpm = simulation.multi_phase_model
+            #rho_max, rho_min = mpm.get_density_range()
+            #k_p_max, k_p_min = 1/rho_min, 1/rho_max
             
             # Calculate SIPG penalties for the DG Poisson equation solver
             Pu = Vu.ufl_element().degree()
             Pp = Vp.ufl_element().degree()
             P = max(Pu, Pp)
             boost_factor = simulation.input.get_value('solver/p/penalty_boost_factor', PENALTY_BOOST, 'float')
-            penalty = define_penalty(mesh, P, k_p_max, k_p_min, boost_factor)
+            penalty = define_penalty(mesh, P, 1, 1, boost_factor)
             simulation.log.info('\nDG SIPG penalties p:\n   %.4e' % penalty)
             penalty = dolfin.Constant(penalty)
         else:
@@ -124,8 +125,8 @@ class PressureCorrectionEquation(object):
         
         trial = dolfin.TrialFunction(Vp)
         test = dolfin.TestFunction(Vp)
-        f = -time_coeffs[0]/dt * nabla_div(u_star)
-        k = 1/rho
+        f = -time_coeffs[0]/dt * nabla_div(rho*u_star)
+        k = Constant(1)
         thetas = dolfin.Constant([1.0, -1.0])
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         neumann_bcs = self.simulation.data['neumann_bcs'].get('p', [])
@@ -161,8 +162,11 @@ class VelocityUpdateEquation(object):
         u = dolfin.TrialFunction(Vu)
         v = dolfin.TestFunction(Vu)
         
-        self.form_lhs = u*v*dx
-        self.form_rhs = us*v*dx - dt/(c0*rho)*p_hat.dx(d)*v*dx
+        # FIXME: why is this needed?
+        dx2 = dx(simulation.data['mesh'])
+        
+        self.form_lhs = u*v*dx2
+        self.form_rhs = us*v*dx2 - dt/(c0*rho)*p_hat.dx(d)*v*dx2
     
     def assemble_lhs(self):
         return dolfin.assemble(self.form_lhs)
@@ -191,7 +195,7 @@ def define_advection_problem(u, v, up, upp, u_conv, r, n, beta, time_coeffs, the
     
     Returns the bilinear and linear forms
     """
-    family = u.element().family()
+    family = u.ufl_element().family()
     
     t1, t2, t3 = thetas
     U = t1*u + t2*up + t3*upp
@@ -211,7 +215,7 @@ def define_advection_problem(u, v, up, upp, u_conv, r, n, beta, time_coeffs, the
         b = beta('+')
         flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
         
-        # Equaqtion to solve
+        # Equation to solve
         c1, c2, c3 = time_coeffs 
         eq = r*(c1*u + c2*up + c3*upp)/dt*v*dx \
              - dot(r*U*u_conv, nabla_grad(v))*dx \
@@ -219,7 +223,7 @@ def define_advection_problem(u, v, up, upp, u_conv, r, n, beta, time_coeffs, the
         
         # Enforce Dirichlet BCs weakly
         for dbc in dirichlet_bcs:
-            eq += r*v*(u - dbc.func())*dbc.ds()
+            eq += dot(u_conv, n)*r*v*(u - dbc.func())*dbc.ds()
     
     a, L = dolfin.system(eq)    
     return a, L
@@ -259,7 +263,7 @@ def define_poisson_problem(u, v, k, f, n, thetas, q, penalty, dirichlet_bcs, neu
     Returns:
         a, L: the bilinear and linear forms
     """
-    family = u.element().family()
+    family = u.ufl_element().family()
     t1, t2 = thetas[0], thetas[1]
     
     if q is None:
@@ -297,30 +301,3 @@ def define_poisson_problem(u, v, k, f, n, thetas, q, penalty, dirichlet_bcs, neu
     
     a, L = dolfin.system(eq)
     return a, L
-
-
-def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
-    """
-    Define the penalty parameter used in the Poisson equations
-    
-    Arguments:
-        mesh: the mesh used in the simulation
-        P: the polynomial degree of the unknown
-        k_min: the minimum diffusion coefficient
-        k_max: the maximum diffusion coefficient
-        boost_factor: the penalty is multiplied by this factor
-        exponent: set this to greater than 1 for superpenalisation
-    """
-    assert k_max >= k_min
-    ndim = mesh.geometry().dim()
-    
-    # Calculate geometrical factor used in the penalty
-    geom_fac = 0
-    for cell in dolfin.cells(mesh):
-        vol = cell.volume()
-        area = sum(cell.facet_area(i) for i in range(ndim + 1))
-        gf = area/vol
-        geom_fac = max(geom_fac, gf)
-    
-    penalty = boost_factor * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac**exponent
-    return penalty

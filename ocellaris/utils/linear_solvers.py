@@ -57,11 +57,13 @@ def make_linear_solver(solver_method, preconditioner=None, lu_method=None, param
     if solver_method.lower() == 'lu':
         solver = dolfin.LUSolver(lu_method)
     else:
-        solver = dolfin.KrylovSolver(solver_method, preconditioner)
+        precon = dolfin.PETScPreconditioner(preconditioner)
+        solver = dolfin.PETScKrylovSolver(solver_method, precon)
+        solver.prec = precon # Keep from going out of scope
     
     for parameter_set in parameters:
         apply_settings(solver.parameters, parameter_set)
-        
+    
     return solver
 
 

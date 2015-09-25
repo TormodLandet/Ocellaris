@@ -2,8 +2,9 @@ from __future__ import division
 import dolfin
 from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, CRANK_NICOLSON
+from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM
 from .ipcs_equations import MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation
+from .dg_helpers import bdm_projection
 
 
 # Default values, can be changed in the input file
@@ -95,6 +96,10 @@ class SolverIPCS(Solver):
             conv_schemes.append(conv_scheme)
         self.convection_schemes = conv_schemes
         
+        # Velocity post_processing
+        default_postprocessing = BDM if self.vel_is_discontinuous else None
+        self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
+        
         # Coefficients for u, up and upp
         self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
         if not self.timestepping_method in TIMESTEPPING_METHODS:
@@ -112,6 +117,9 @@ class SolverIPCS(Solver):
         # Function spaces
         Vu = sim.data['Vu']
         Vp = sim.data['Vp']
+        
+        Vu_family = Vu.ufl_element().family()
+        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
         
         # Create velocity functions. Keep both component and vector forms
         u_list, up_list, upp_list, u_conv, u_star = [], [], [], [], []
@@ -199,8 +207,7 @@ class SolverIPCS(Solver):
             b = eq.assemble_rhs()
             
             # Solve the advection equation
-            family = us.element().family()
-            if family == 'Lagrange':
+            if not self.vel_is_discontinuous:
                 for dbc in dirichlet_bcs:
                     dbc.apply(A, b)
             
@@ -231,8 +238,7 @@ class SolverIPCS(Solver):
         b = self.eq_pressure.assemble_rhs()
         
         # Apply strong boundary conditions
-        family = p.element().family()
-        if family == 'Lagrange':
+        if not self.vel_is_discontinuous:
             for dbc in dirichlet_bcs:
                 dbc.apply(A, b)
         
@@ -243,9 +249,11 @@ class SolverIPCS(Solver):
                 null_vec[:] = 1
                 null_vec *= 1/null_vec.norm("l2")
                 
-                # Create null space basis object and attach to Krylov solver
+                # Create null space basis object
                 self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
-                self.pressure_solver.set_nullspace(self.pressure_null_space)
+            
+            # Make sure the null space is set on the matrix
+            dolfin.as_backend_type(A).set_nullspace(self.pressure_null_space)
             
             # Orthogonalize b with respect to the null space
             self.pressure_null_space.orthogonalize(b)
@@ -280,14 +288,22 @@ class SolverIPCS(Solver):
             u_new = self.simulation.data['u%d' % d]
             
             # Apply the Dirichlet boundary conditions
-            family = u_new.element().family()
-            if family == 'Lagrange':
+            if not self.vel_is_discontinuous:
                 # Apply strong boundary conditions
                 dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
                 for bc in dirichlet_bcs:
                     bc.apply(A, b)
             
             self.niters_u_upd[d] = self.u_upd_solver.solve(A, u_new.vector(), b)
+    
+    @timeit
+    def postprocess_velocity(self, vel):
+        """
+        Apply a post-processing operator to the given velocity field
+        """
+        mesh = self.simulation.data['mesh']
+        if self.velocity_postprocessing == BDM:
+            bdm_projection(vel, mesh)
     
     def run(self):
         """
@@ -311,6 +327,10 @@ class SolverIPCS(Solver):
             self.is_first_timestep = False
             if self.timestepping_method == BDF:
                 self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+        
+        # Postprocess the velocity initial conditions        
+        self.postprocess_velocity(sim.data['upp'])
+        self.postprocess_velocity(sim.data['up'])
         
         while True:
             # Get input values, these can possibly change over time
@@ -351,6 +371,7 @@ class SolverIPCS(Solver):
                     break
             
             self.velocity_update()
+            self.postprocess_velocity(sim.data['u'])
             
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(self.simulation.ndim):
