@@ -17,13 +17,13 @@ physical_properties:
 
 mesh:
     type: Rectangle
-    Nx: 64
-    Ny: 64
+    Nx: 20
+    Ny: 20
     endx: 2
     endy: 2
-    
+    diagonal: right
 
-# Periodic boundary conditions. Not supported in FEniCS 1.5 for DG. Works for CG
+# Periodic boundary conditions. Not supported in FEniCS for DG. Works for CG
 #
 # Example of periodic boundary conditions. The inside and map code is
 # taken from the Taylor-Green demo in Oasis, https://github.com/mikaem/Oasis/
@@ -45,6 +45,7 @@ mesh:
 #            y[0] = x[0]
 #            y[1] = x[1] - 2.0
 
+# Dirichlet boundary conditions for u, Neumann for p
 boundary_conditions:
 -   name: walls
     selector: code
@@ -55,19 +56,23 @@ boundary_conditions:
         -   -sin(pi*x[1]) * cos(pi*x[0]) * exp(-2*pi*pi*nu*t)
         -    sin(pi*x[0]) * cos(pi*x[1]) * exp(-2*pi*pi*nu*t)
     p:
-        type: CppCodedValue
-        cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4.*pi*pi*nu*t)/4
+        type: ConstantGradient
+        value: 0
 
 initial_conditions:
     up0:
         cpp_code: -sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)
     up1:
         cpp_code:  sin(pi*x[0])*cos(pi*x[1])*exp(-2*pi*pi*nu*t)
+    upp0:
+        cpp_code: -sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*(t-dt))
+    upp1:
+        cpp_code:  sin(pi*x[0])*cos(pi*x[1])*exp(-2*pi*pi*nu*(t-dt))
     p:
         cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*t)/4
 
 time:
-    dt: 0.001
+    dt: 0.1
     tmax: 1.0
 
 output:
@@ -77,31 +82,40 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: IPCS
-    num_inner_iter: 10
-    allowable_error_inner: 5.0e-3
-    polynomial_degree_pressure: 1
+    type: Coupled
     polynomial_degree_velocity: 2
-    function_space_pressure: CG
-    function_space_velocity: CG
+    polynomial_degree_pressure: 1
+    function_space_velocity: DG
+    function_space_pressure: DG
     timestepping_method: BDF
+    num_inner_iter: 20
+    use_stress_divergence_form: false
 
 convection:
     u:
         convection_scheme: Upwind
 
 hooks:
+#    pre-solve:
+#    -   name: set params
+#        code: |
+#            parameters["linear_algebra_backend"] = "PETSc"
+#            parameters["form_compiler"]["optimize"] = True
+#            parameters["form_compiler"]["cpp_optimize"] = True
+#            parameters["form_compiler"]["representation"] = "quadrature"
+#            #parameters["form_compiler"]["quadrature_degree"] = 4
+#            #parameters["form_compiler"]["cache_dir"] = "instant"
+#            parameters["form_compiler"]["cpp_optimize_flags"] = "-O3 --fast-math"
+#            parameters["mesh_partitioner"] = "ParMETIS"
+#            parameters["form_compiler"].add("no_ferari", True)
+#            #parameters["ghost_mode"] = "shared_vertex"
+#            #set_log_active(False)
+                        
     post_timestep:
-    -   name: calculate Taylor-Green error
+    -   name: calculate divergence
         code: |
-            errors_u0 = hook_data.setdefault('errors_u0', [])
-            if it == 1 or it % 1 == 0:
-                e = Expression('-sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)', t=t, nu=nu)
-                ue = interpolate(e, Vu)
-                err = norm(u0.vector() - ue.vector())/norm(ue)
-                errors_u0.append(err)
-                #print errors_u0
-                print 'ERROR-SUM-u0', sum(errors_u0)
+            div_u = project(u[0].dx(0) + u[1].dx(1), Vp)
+            print 'max_div_u|Vp = %10.3e' % abs(div_u.vector().array()).max()
 
-#console_at_end: false
-#console_on_error: true
+console_at_end: false
+console_on_error: true
