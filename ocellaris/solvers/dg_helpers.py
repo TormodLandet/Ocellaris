@@ -3,7 +3,6 @@ import dolfin
 from dolfin import MixedFunctionSpace, VectorFunctionSpace, FunctionSpace
 from dolfin import FacetNormal, TrialFunction, TestFunctions, Function 
 from dolfin import cells, dot, as_vector, dx, ds, dS, LocalSolver
-from ..utils import convert_to_dgt
 
 
 def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
@@ -66,16 +65,17 @@ def bdm_projection(w, mesh):
     u = TrialFunction(V)
     
     # Calculate the upwind normal velocity, u_hat = w⋅n⁺, on all facets
-    V_hat = VectorFunctionSpace(mesh, 'DGT', k)
-    u_hat = Function(V_hat)
-    convert_to_dgt(w, u_hat)
+    wn = dot(w, n)
+    u_hat_ds = wn*n
+    upwind = (wn + abs(wn))/2*n
+    u_hat_dS = upwind('+') + upwind('-') 
     
     # Equation 1 - flux through the sides
     a = dot(u, n)*v1*ds
-    L = dot(u_hat, n)*v1*ds
+    L = dot(u_hat_ds, n)*v1*ds
     for R in '+-':
         a += dot(u(R), n(R))*v1(R)*dS
-        L += dot(u_hat(R), n(R))*v1(R)*dS 
+        L += dot(u_hat_dS, n(R))*v1(R)*dS 
     
     # Equation 2 - internal shape
     a += dot(u, v2)*dx
