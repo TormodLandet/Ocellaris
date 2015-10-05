@@ -5,6 +5,7 @@ import dolfin
 from ocellaris.multiphase import get_multi_phase_model
 from ocellaris import Simulation
 from ocellaris.run import load_mesh, setup_boundary_conditions, mark_boundaries
+from ocellaris.postprocess import setup_probes
 
 thisdir = os.path.dirname(os.path.abspath(__file__))
 inpfile = os.path.join(thisdir, 'diagonal_advection_of_square.inp')
@@ -23,14 +24,6 @@ PLOT = False
 PNG_OUTPUT_FREQUENCY = 1
 PLOT_INTERPOLATED = False
 FIELDS_TO_PLOT = 'c c_beta c_grad'.split()
-
-Nx = sim.input.get_value('mesh/Nx', required_type='int')
-Ny = sim.input.get_value('mesh/Ny', required_type='int')
-xmax = sim.input.get_value('mesh/endx', required_type='float')
-ymax = sim.input.get_value('mesh/endy', required_type='float') 
-hx = xmax / Nx
-hy = ymax / Ny
-print 'CFL ~', (TMAX/Nt)/hx*VEL[0], (TMAX/Nt)/hy*VEL[1]
 
 class CField(dolfin.Expression):
     t = 0
@@ -72,6 +65,9 @@ vof = multiphase_model(sim)
 # Initialize the colour function field
 c0 = dolfin.interpolate(cexpr, sim.data['Vc'])
 
+# Initialise probes used for reporting iso surfaces
+setup_probes(sim)
+
 ################################################################################
 # Runtime postprocessing
 
@@ -80,12 +76,13 @@ def postprocess(cfunc, t):
     
     cexpr.t = t
     target = dolfin.interpolate(cexpr, sim.data['Vc']).vector().array()
-    error = ((target - cvec)**2).sum() *  60*60/(Nx*Ny)
+    error = ((target - cvec)**2).sum() *  60*60*2/mesh.num_cells()
     
     sim.reporting.report_timestep_value('error', error)
 
 ###############################################################################
 # Time loop
+print 'CFL ~', (TMAX/Nt)/mesh.hmin()
 
 t_vec = numpy.linspace(0, TMAX, Nt)
 dt_vec = t_vec[1:] - t_vec[:-1]
@@ -128,25 +125,4 @@ for it in xrange(1, Nt):
         break
 
 sim.hooks.simulation_ended(success=True)
-
-###############################################################################
-# Visualisation
-
-if PLOT_INTERPOLATED:
-    # Create a CG mesh and function space for visualisation
-    mesh_vis = dolfin.RectangleMesh(0, 0, xmax, ymax, Nx*5, Ny*5, 'left/right')
-    V_vis = dolfin.FunctionSpace(mesh_vis, "CG", 1)
-
-    # Visualize the initial colour field
-    c0_vis = dolfin.project(c0, V=V_vis)
-    dolfin.plot(c0_vis, title='c - initial', wireframe=False)
-
-    # Visualize the final colour field
-    c_vis = dolfin.project(vof.colour_function, V=V_vis)
-    dolfin.plot(c_vis, title='c - final', wireframe=False)
-
-    #plot(mesh, wireframe=True, title='Mesh DG')
-
-    dolfin.interactive()
-
 sim.plotting.plot_all()

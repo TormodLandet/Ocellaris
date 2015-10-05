@@ -14,9 +14,7 @@ class ConvectionSchemeUpwind(ConvectionScheme):
         super(ConvectionSchemeUpwind, self).__init__(simulation, func_name)
         
         # Set downwind factor to 0.0
-        Nf = len(self.blending_function.facet_data)
-        for i in range(Nf):
-            self.blending_function.facet_data[i] = 0.0
+        self.blending_function.vector()[:] = 0.0
     
     def update(self, t, dt, velocity):
         """

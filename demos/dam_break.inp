@@ -1,0 +1,162 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+physical_properties:
+    rho0: 1000.0
+    nu0: 1.0e-2
+    rho1: 1.225
+    nu1: 1.5e-3
+    g: [0, -9.81]
+
+mesh:
+    type: Rectangle
+    Nx: 64
+    Ny: 48
+    endy: 0.75
+
+_boundary_conditions:
+-   name: walls
+    selector: code
+    inside_code: on_boundary
+    u:
+        type: ConstantValue
+        value: [0, 0]
+    p:
+        type: WallPressure
+        
+#-   name: top
+#    selector: code
+#    inside_code: 'on_boundary and x[1] > 0.75-1e-5'
+#    u:
+#        type: ConstantGradient
+#        value: [0, 0]
+#    p:
+#        type: ConstantValue
+#        value: 0
+#        
+boundary_conditions:
+-   name: bottom and top
+    selector: code
+    inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > 0.75-1e-5)'
+    p:
+        type: WallPressure
+        value: 0
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantValue
+        value: 0
+-   name: walls
+    selector: code
+    inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 1-1e-5)'
+    p:
+        type: WallPressure
+        value: 0
+    u0:
+        type: ConstantValue
+        value: 0
+    u1:
+        type: ConstantGradient
+        value: 0
+  
+initial_conditions:
+    cp:
+        #cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
+        cpp_code: |
+            (((x[0] < 0.25-0.04+1e-5 && x[1] < 0.5-0.04+1e-5) ? 0.2 : 0.0) +
+             ((x[0] < 0.25-0.02+1e-5 && x[1] < 0.5-0.02+1e-5) ? 0.2 : 0.0) +
+             ((x[0] < 0.25-0.00+1e-5 && x[1] < 0.5-0.00+1e-5) ? 0.2 : 0.0) +
+             ((x[0] < 0.25+0.02+1e-5 && x[1] < 0.5+0.02+1e-5) ? 0.2 : 0.0) +
+             ((x[0] < 0.25+0.04+1e-5 && x[1] < 0.5+0.04+1e-5) ? 0.2 : 0.0))
+time:
+    dt: 0.001
+    tmax: 0.5
+
+output:
+    prefix: dam_break_test
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+
+multiphase_solver:
+    type: BlendedAlgebraicVOF
+    function_space_colour: DG
+    polynomial_degree_colour: 0
+
+solver:
+    type: Coupled
+    function_space_velocity: DG
+    function_space_pressure: DG
+    polynomial_degree_velocity: 2
+    polynomial_degree_pressure: 1
+    use_stress_divergence_form: false
+
+convection:
+    u:
+        convection_scheme: Upwind
+    c:
+        convection_scheme: Upwind
+
+probes:
+    -   name: c=0.5
+        type: IsoSurface
+        value: 0.5
+        field: c
+        file_name: '_c05.out'
+        show_interval: 1
+        xlim: [0, 1]
+        ylim: [0, 0.75]
+    -   name: c=0.1
+        type: IsoSurface
+        value: 0.1
+        field: c
+        file_name: '_c01.out'
+    -   name: c=0.9
+        type: IsoSurface
+        value: 0.9
+        field: c
+        file_name: '_c09.out'
+
+hooks:
+    post_timestep:
+#    -   name: plot p
+#        code: plot(p, title='p')
+#    -   name: plot c
+#        code: plot(c, title='c')
+#    -   name: plot div(u)
+#        code: |
+#          if not hasattr(simulation, 'divfunv'):
+#            simulation.divfunc = Function(Vc, name='divu')
+#          project(div(u), Vc, function=simulation.divfunc)
+#          plot(simulation.divfunc)
+#    -   name: plot to file
+#        code: '[simulation.plotting.plot(name) for name in ("c", "div(u)|Vc", "p", "mag(u)")]'
+    -   name: debug on fishy values
+        enabled: no
+        code: |
+            umag = (u0.vector().array()**2 +  u1.vector().array()**2)
+            if max(umag) > 1:
+                run_debug_console(simulation, False)
+    -   name: print location of largest divergence
+        enabled: yes
+        code: |
+            udiv = project(div(u), Vc)
+            values = udiv.compute_vertex_values()
+            coords = mesh.coordinates()
+            valmax = 0
+            for val, coord in zip(values, coords):
+                if abs(val) > valmax:
+                    valmax = abs(val)
+                    coordmax = coord
+            print '\n%10.3e   %5.2f %5.2f\n' % (valmax, coordmax[0], coordmax[1])
+            if valmax > 1e-4:
+                run_debug_console(simulation, False)
+
+reporting:
+    reports_to_show: ['sum(c)', 'max(div(u_adv_c))'] #, 'max(div(u)|Vp)']
+
+#console_on_error: true
+#console_at_end: True
+    

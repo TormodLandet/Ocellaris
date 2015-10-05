@@ -11,13 +11,19 @@ convection:
         convection_scheme: HRIC
         HRIC_version: HRIC
 
-mesh:
+# Structured mesh
+_mesh:
     type: Rectangle
-    Nx: 32
-    Ny: 32
+    Nx: 128
+    Ny: 128
     endx: 1.5
     endy: 1.5
     diagonal: left/right
+
+# Unstructured mesh
+mesh:
+    type: XML
+    mesh_file: square_120.xml
 
 boundary_conditions:
 -   name: all
@@ -30,8 +36,30 @@ boundary_conditions:
 output:
     prefix: diagonal_advection_of_square
 
+probes:
+    -   name: c=0.5
+        type: IsoSurface
+        value: 0.5
+        field: c
+        file_name: '_c05.out'
+        show_interval: 10
+        xlim: [0, 1.5]
+        ylim: [0, 1.5]
+    -   name: c=0.1
+        type: IsoSurface
+        value: 0.1
+        field: c
+        file_name: '_c01.out'
+    -   name: c=0.9
+        type: IsoSurface
+        value: 0.9
+        field: c
+        file_name: '_c09.out'
+
 physical_properties:
     rho0: 1.0
     nu0: 1.0
     rho1: 1.0
     nu1: 1.0
+
+ 

@@ -43,7 +43,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         beta_arr = self.blending_function.facet_data
         
         ndim = self.simulation.ndim
-        polydeg = self.alpha_function.element().degree()
+        polydeg = self.alpha_function.ufl_element().degree()
         conFC = self.simulation.data['connectivity_FC']
         facet_info = self.simulation.data['facet_info']
         cell_info = self.simulation.data['cell_info']

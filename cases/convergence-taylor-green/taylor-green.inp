@@ -1,0 +1,107 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2015-03-13
+    description: |
+        Implements the Taylor-Green vortex test case. This benchmark case
+        with purely periodic boundary conditions has an analytical solution
+        in both space and time with the incompressible Navier-Stokes equations
+
+physical_properties:
+    g: [0, 0]
+    nu0: 0.01
+    rho0: 1.0
+
+mesh:
+    type: Rectangle
+    Nx: 64
+    Ny: 64
+    endx: 2
+    endy: 2
+    diagonal: left/right
+
+_mesh:
+    type: XML
+    mesh_file: taylor-green.xml
+
+# Periodic boundary conditions. Not supported in FEniCS 1.5 for DG. Works for CG
+_boundary_conditions:
+-   name: left and bottom    
+    selector: code
+    inside_code: |
+        inside = bool((near(x[0], 0) or near(x[1], 0)) and 
+                      (not ((near(x[0], 0) and near(x[1], 2)) or 
+                      (near(x[0], 2) and near(x[1], 0)))) and on_boundary)
+    map_code: |
+        if near(x[0], 2) and near(x[1], 2):
+            y[0] = x[0] - 2.0
+            y[1] = x[1] - 2.0
+        elif near(x[0], 2):
+            y[0] = x[0] - 2.0
+            y[1] = x[1]
+        else:
+            y[0] = x[0]
+            y[1] = x[1] - 2.0
+
+# Dirichlet boundary conditions for u, Neumann for p
+boundary_conditions:
+-   name: walls
+    selector: code
+    inside_code: on_boundary
+    u:
+        type: CppCodedValue
+        cpp_code:
+        -   -sin(pi*x[1]) * cos(pi*x[0]) * exp(-2*pi*pi*nu*t)
+        -    sin(pi*x[0]) * cos(pi*x[1]) * exp(-2*pi*pi*nu*t)
+    p:
+        type: ConstantGradient
+        value: 0
+
+initial_conditions:
+    up0:
+        cpp_code: -sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)
+    up1:
+        cpp_code:  sin(pi*x[0])*cos(pi*x[1])*exp(-2*pi*pi*nu*t)
+    upp0:
+        cpp_code: -sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*(t-dt))
+    upp1:
+        cpp_code:  sin(pi*x[0])*cos(pi*x[1])*exp(-2*pi*pi*nu*(t-dt))
+    p:
+        cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*t)/4
+
+time:
+    dt: overridden in script
+    tmax: overridden in script
+
+output:
+    prefix: taylor_green
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: warning
+
+solver:
+    type: Coupled
+    #num_inner_iter: 4
+    polynomial_degree_velocity: overridden in script
+    polynomial_degree_pressure: overridden in script
+    function_space_velocity: DG
+    function_space_pressure: DG
+    timestepping_method: BDF
+    #velocity_postprocessing: None
+    use_stress_divergence_form: false
+    u:
+        penalty_boost_factor: 2
+        parameters:
+            relative_tolerance: 1.0e-10
+            absolute_tolerance: 1.0e-15
+    p:
+        penalty_boost_factor: 2
+        parameters:
+            relative_tolerance: 1.0e-10
+            absolute_tolerance: 1.0e-15
+    _coupled:
+        solver: gmres
+        preconditioner: ilu

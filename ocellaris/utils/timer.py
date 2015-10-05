@@ -1,6 +1,6 @@
 from functools import wraps
-import time
 from collections import defaultdict
+import dolfin
 
 def timeit(f):
     """
@@ -13,9 +13,11 @@ def timeit(f):
     """
     @wraps(f)
     def wrapper(*args, **kwds):
-        t1 = time.time()
+        task = f.__name__
+        timer = dolfin.Timer(task)
         ret =  f(*args, **kwds)
-        timeit.timings[f.__name__].append(time.time()-t1)
+        t = timer.stop()
+        timeit.timings[task].append(t)
         return ret
     return wrapper
 timeit.timings = defaultdict(list)

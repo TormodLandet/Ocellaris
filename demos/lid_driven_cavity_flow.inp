@@ -60,13 +60,13 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: IPCS
+    type: Coupled
     num_inner_iter: 20
     allowable_error_inner: 5.0e-3
-    polynomial_degree_pressure: 1
     polynomial_degree_velocity: 2
-    function_space_pressure: DG
+    polynomial_degree_pressure: 1
     function_space_velocity: DG
+    function_space_pressure: DG
     timestepping_method: BDF
 
 convection:
