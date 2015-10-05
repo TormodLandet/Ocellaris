@@ -40,14 +40,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
         
         # The convection blending function that counteracts numerical diffusion
-        scheme = get_convection_scheme(simulation.input.get_value('convection/c/convection_scheme', 'HRIC', 'string'))
-        self.convection_scheme = scheme(simulation, 'c')
-        self.convection_scheme_star = scheme(simulation, 'c_star')
+        scheme = simulation.input.get_value('convection/c/convection_scheme', 'HRIC', 'string')
+        scheme_class = get_convection_scheme(scheme)
+        self.convection_scheme = scheme_class(simulation, 'c')
+        self.convection_scheme_star = scheme_class(simulation, 'c_star')
         
         self.need_gradient = True
         if scheme == 'Upwind':
             self.need_gradient = False
-        self.need_extrapolation = False
         
         # Create the equations when the simulation starts
         self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
@@ -101,14 +101,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.eq = define_advection_problem(trial, test, cp, cpp, vel, r, normal, beta,
                                            self.time_coeffs, thetas, self.dt, dirichlet_bcs)
         
-        if self.need_extrapolation:
-            # At the next time step (extrapolated advecting velocity)
-            Vu = self.simulation.data['Vu']
-            self.u_conv_comps = [dolfin.Function(Vu) for _ in range(self.simulation.ndim)]
-            self.u_conv = dolfin.as_vector(self.u_conv_comps)
-            beta_star = self.convection_scheme_star.blending_function
-            self.eq_star = define_advection_problem(trial, test, c, cp, self.u_conv, r, normal, beta_star,
-                                                    self.time_coeffs, thetas, self.dt, dirichlet_bcs)
+        
+        # At the next time step (extrapolated advecting velocity)
+        Vu = self.simulation.data['Vu']
+        self.u_conv_comps = [dolfin.Function(Vu) for _ in range(self.simulation.ndim)]
+        self.u_conv = dolfin.as_vector(self.u_conv_comps)
+        beta_star = self.convection_scheme_star.blending_function
+        self.eq_star = define_advection_problem(trial, test, c, cp, self.u_conv, r, normal, beta_star,
+                                                self.time_coeffs, thetas, self.dt, dirichlet_bcs)
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('c', c, clim=(0, 1))        
@@ -139,9 +139,6 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         if sharp_interface:
             c = dolfin.conditional(dolfin.ge(c, 0.5), Constant(1.0), Constant(0.0))
-            
-        if k == 1 and not force_steady:
-            self.need_extrapolation = True
         
         return c
     
@@ -215,22 +212,21 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             a, L = self.eq
             solve(a == L, c)
         
-        if self.need_extrapolation:
-            # Update the extrapolated convecting velocity
-            e1, e2 = self.extrapolation_coeffs
-            for d, uci in enumerate(self.u_conv_comps):
-                uciv = uci.vector() 
-                uciv.zero()
-                uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
-                uciv.axpy(e2, self.simulation.data['up%d' % d].vector())
-            
-            # Update the convection blending factors
-            self.convection_scheme_star.update(t, dt, self.u_conv)
-            
-            # Solve the advection equations for the extrapolated colour field
-            c_star = self.simulation.data['c_star']
-            a_star, L_star = self.eq_star
-            solve(a_star == L_star, c_star)
+        # Update the extrapolated convecting velocity
+        e1, e2 = self.extrapolation_coeffs
+        for d, uci in enumerate(self.u_conv_comps):
+            uciv = uci.vector() 
+            uciv.zero()
+            uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
+            uciv.axpy(e2, self.simulation.data['upp%d' % d].vector())
+        
+        # Update the convection blending factors
+        self.convection_scheme_star.update(t, dt, self.u_conv)
+        
+        # Solve the advection equations for the extrapolated colour field
+        c_star = self.simulation.data['c_star']
+        a_star, L_star = self.eq_star
+        solve(a_star == L_star, c_star)
         
         # Report total mass balance and divergence
         sum_c = dolfin.assemble(c*dolfin.dx)

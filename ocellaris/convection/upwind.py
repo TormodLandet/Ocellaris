@@ -20,5 +20,4 @@ class ConvectionSchemeUpwind(ConvectionScheme):
         """
         Update the values of the blending function beta at the facets
         """
-        # Reconstruct the gradient to calculate upstream values
-        self.gradient_reconstructor.reconstruct()
+        pass

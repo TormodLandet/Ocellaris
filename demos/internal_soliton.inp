@@ -60,8 +60,8 @@ output:
 
 multiphase_solver:
     type: BlendedAlgebraicVOF
-    function_space_colour: CG
-    polynomial_degree_colour: 1
+    function_space_colour: DG
+    polynomial_degree_colour: 0
 
 solver:
     type: Coupled

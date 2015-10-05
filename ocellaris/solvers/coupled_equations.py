@@ -151,10 +151,10 @@ class CoupledEquationsSlow(object):
                 
                 # Convection:
                 # -w⋅∇u    
-                flux_nU = u[d]*w_nU
+                flux_nU = rhos*u[d]*w_nU
                 flux = jump(flux_nU)
                 eq -= rhos*u[d]*div(v[d]*u_conv)*dx
-                eq += rhos*flux*jump(v[d])*dS
+                eq += flux*jump(v[d])*dS
                 eq += rhos*flux_nU*v[d]*ds
                 
                 # Diffusion:
@@ -163,8 +163,8 @@ class CoupledEquationsSlow(object):
                 eq += mus*dot(grad(u[d]), grad(v[d]))*dx
                 
                 # Symmetric Interior Penalty method for -∇⋅μ∇u
-                eq -= mus*dot(n('+'), avg(grad(u[d])))*jump(v[d])*dS
-                eq -= mus*dot(n('+'), avg(grad(v[d])))*jump(u[d])*dS
+                eq -= avg(mus)*dot(n('+'), avg(grad(u[d])))*jump(v[d])*dS
+                eq -= avg(mus)*dot(n('+'), avg(grad(v[d])))*jump(u[d])*dS
                 
                 # Symmetric Interior Penalty coercivity term
                 eq += penalty_dS*jump(u[d])*jump(v[d])*dS
