@@ -2,9 +2,11 @@ import numpy
 import dolfin
 from collections import namedtuple
 
+
 # Compact way to store the information, may turn into classes later if needed
 CellInfo = namedtuple('CellData', 'volume midpoint')
 FacetInfo = namedtuple('FacetData', 'area midpoint normal')
+
 
 def init_connectivity(simulation):
     """
@@ -14,41 +16,36 @@ def init_connectivity(simulation):
     ndim = simulation.ndim
     
     if ndim == 2:
-        # Connectivity from face to edge
+        # In 2D: cell = face, facet = edge
+        
+        # Connectivity from vertex to face and vice versa
+        mesh.init(0, 2)
+        mesh.init(2, 0)
+        
+        # Connectivity from face to edge and vice versa
         mesh.init(2, 1)
-        con21 = mesh.topology()(2, 1)
-    
-        # Connectivity from edge to face
         mesh.init(1, 2)
-        con12 = mesh.topology()(1, 2)
         
-        # Connectivity from face to face
-        mesh.init(2, 2)
-        con22 = mesh.topology()(2, 2)
-        
-        #simulation.data['connectivity_21'] = con21
-        #simulation.data['connectivity_12'] = con12
-        simulation.data['connectivity_FC'] = con12
-        simulation.data['connectivity_CF'] = con21
-        simulation.data['connectivity_CC'] = con22
+        simulation.data['connectivity_VC'] = mesh.topology()(0, 2)
+        simulation.data['connectivity_CV'] = mesh.topology()(2, 0)
+        simulation.data['connectivity_FC'] = mesh.topology()(1, 2)
+        simulation.data['connectivity_CF'] = mesh.topology()(2, 1)
     
     else:
-        # Connectivity from cell to face
+        # Connectivity from vertex to cell and vice versa
+        mesh.init(0, 3)
+        mesh.init(3, 0)
+        
+        # Connectivity from cell to face and vice versa
         mesh.init(3, 2)
-        con32 = mesh.topology()(3, 2)
-    
-        # Connectivity from face to cell
         mesh.init(2, 3)
-        con23 = mesh.topology()(2, 3)
         
-        # Connectivity from cell to cell
-        mesh.init(3, 3)
-        con33 = mesh.topology()(3, 3)
-        
-        simulation.data['connectivity_FC'] = con23
-        simulation.data['connectivity_CF'] = con32
-        simulation.data['connectivity_CC'] = con33
-    
+        simulation.data['connectivity_VC'] = mesh.topology()(0, 3)
+        simulation.data['connectivity_CV'] = mesh.topology()(3, 0)
+        simulation.data['connectivity_FC'] = mesh.topology()(2, 3)
+        simulation.data['connectivity_CF'] = mesh.topology()(3, 2)
+
+
 def precompute_cell_data(simulation):
     """
     Get cell volume and midpoint in an easy to use format
@@ -68,6 +65,7 @@ def precompute_cell_data(simulation):
         cell_info[cell.index()] = CellInfo(volume, midpoint)
     
     simulation.data['cell_info'] = cell_info
+
 
 def precompute_facet_data(simulation):
     """

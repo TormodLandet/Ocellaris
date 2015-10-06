@@ -2,6 +2,7 @@ import dolfin
 import numpy
 from ocellaris.cpp import load_module
 
+
 class GradientReconstructor(object):
     def __init__(self, simulation, alpha_func, use_vertex_neighbours=True):
         """
@@ -45,28 +46,32 @@ class GradientReconstructor(object):
         cell_info = self.simulation.data['cell_info']
         conFC = self.simulation.data['connectivity_FC']
         conCF = self.simulation.data['connectivity_CF']
-        conCC = self.simulation.data['connectivity_CC']
-         
+        conVC = self.simulation.data['connectivity_VC']
+        conCV = self.simulation.data['connectivity_CV']
+        
+        if self.use_vertex_neighbours:
+            # Find cells sharing one or more vertices
+            con1 = conCV
+            con2 = conVC
+        else:
+            # Find cells sharing one or more facets
+            con1 = conCF
+            con2 = conFC
+        
         # Precompute connectivity and geometry matrices 
         everyones_neighbours = [None]*ncells
         lstsq_matrices = [None]*ncells
         self.lstsq_inv_matrices = numpy.zeros((ncells, ndim, ndim), float, order='C')
         
-        for i, cell in enumerate(dolfin.cells(self.mesh)):
+        for cell in dolfin.cells(self.mesh):
             idx = cell.index()
             
             # Find neighbours
-            if self.use_vertex_neighbours:
-                # Find cells sharing one or more vertices
-                neighbours = conCC(idx)
-            else:
-                # Find cells sharing one or more facets
-                neighbours = []
-                facets = conCF(idx)
-                for fi in facets:
-                    cells = conFC(fi)
-                    for cell in cells:
-                        neighbours.extend([ci for ci in cells if ci != idx and ci not in neighbours])
+            neighbours = []
+            facets_or_vertices = con1(idx)
+            for ifv in facets_or_vertices:
+                cell_neighbours = con2(ifv)
+                neighbours.extend([ci for ci in cell_neighbours if ci != idx and ci not in neighbours])
             
             # Get the centroid of the cell neighbours
             nneigh = len(neighbours)
@@ -79,7 +84,7 @@ class GradientReconstructor(object):
             # Calculate the matrices needed for least squares gradient reconstruction
             AT = A.T
             ATA = numpy.dot(AT, A)
-            everyones_neighbours[i] = neighbours
+            everyones_neighbours[idx] = neighbours
             lstsq_matrices[idx] = AT
             self.lstsq_inv_matrices[idx] = numpy.linalg.inv(ATA)
         
@@ -136,6 +141,7 @@ class GradientReconstructor(object):
                           self.lstsq_matrices,
                           self.lstsq_inv_matrices,
                           self.gradient)
+
 
 def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours, lstsq_matrices, lstsq_inv_matrices, gradient):
     """
