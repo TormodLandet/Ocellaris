@@ -345,21 +345,19 @@ def summarise_simulation_after_running(simulation, t_start, success):
     for key, value in sorted(simulation.data.items()):
         simulation.log.debug('%20s = %s' % (key, repr(type(value))[:57]))
     
-    # Get timings from FEniCS
-    simulation.log.info()    
-    table = dolfin.timings(dolfin.TimingClear_keep, [dolfin.TimingType_wall])
-    simulation.log.info('\nFEniCS timings:   ' + table.str(True)[18:])
-    
-    # Print the runtime of the functions timed with the @timeit decorator
-    simulation.log.info('\nSummary of time spent:')
-    tottime = time.time() - t_start
-    for funcname in sorted(timeit.timings):
-        durations = timeit.timings[funcname]
-        simulation.log.info('  %30s total time %7.3fs for %5d runs, minimum runtime %7.3fs'
-                            % (funcname, sum(durations), len(durations), min(durations)) +
-                            '  (%5.1f%% of tot.time)' % (sum(durations)/tottime*100))
+    # Get timings from FEniCS and sort by total time spent
+    timingtypes = [dolfin.TimingType_user, dolfin.TimingType_system, dolfin.TimingType_wall]
+    table = dolfin.timings(dolfin.TimingClear_keep, timingtypes)
+    table_lines = table.str(True).split('\n')
+    simulation.log.info('\nFEniCS timings:   ' + table_lines[0][18:])
+    simulation.log.info(table_lines[1])
+    tmp = [(float(line.split()[-5]), line) for line in table_lines[2:]]
+    tmp.sort(reverse=True)
+    for _, line in tmp:
+        simulation.log.info(line)
     
     # Show the total duration
+    tottime = time.time() - t_start
     h = int(tottime/60**2)
     m = int((tottime - h*60**2)/60)
     s = tottime - h*60**2 - m*60

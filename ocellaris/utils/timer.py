@@ -14,7 +14,7 @@ def timeit(f):
     @wraps(f)
     def wrapper(*args, **kwds):
         task = f.__name__
-        timer = dolfin.Timer(task)
+        timer = dolfin.Timer('Ocellaris %s' % task)
         ret =  f(*args, **kwds)
         t = timer.stop()
         timeit.timings[task].append(t)
