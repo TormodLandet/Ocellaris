@@ -201,12 +201,22 @@ class CoupledEquationsSlow(object):
         a, L = dolfin.system(eq)
         self.form_lhs = a
         self.form_rhs = L
+        self.tensor_lhs = None
+        self.tensor_rhs = None
     
     def assemble_lhs(self):
-        return dolfin.assemble(self.form_lhs)
+        if self.tensor_lhs is None:
+            self.tensor_lhs = dolfin.assemble(self.form_lhs)
+        else:
+            dolfin.assemble(self.form_lhs, tensor=self.tensor_lhs)
+        return self.tensor_lhs
 
     def assemble_rhs(self):
-        return dolfin.assemble(self.form_rhs)
+        if self.tensor_rhs is None:
+            self.tensor_rhs = dolfin.assemble(self.form_rhs)
+        else:
+            dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
+        return self.tensor_rhs
 
 
 class CoupledEquationsFast(object):

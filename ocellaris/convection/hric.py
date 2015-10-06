@@ -7,8 +7,8 @@ from . import ConvectionScheme, register_convection_scheme
 
 @register_convection_scheme('HRIC')
 class ConvectionSchemeHric2D(ConvectionScheme):
-    
     description = 'High Resolution Interface Capturing (HRIC, Modified HRIC and Refined HRIC)'
+    need_alpha_gradient = True
     
     def __init__(self, simulation, func_name):
         """
@@ -40,7 +40,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         are implemented
         """
         alpha_arr = self.alpha_function.vector().get_local()
-        beta_arr = self.blending_function.facet_data
+        beta_arr = self.blending_function.vector().get_local()
         
         ndim = self.simulation.ndim
         polydeg = self.alpha_function.ufl_element().degree()
@@ -48,8 +48,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         facet_info = self.simulation.data['facet_info']
         cell_info = self.simulation.data['cell_info']
         
-        # Reconstruct the gradient to calculate upstream values
-        #self.gradient_reconstructor.reconstruct()
+        # Get the alpha function gradient to calculate upstream values
         gradient = self.gradient_reconstructor.gradient
         gradient_dofmaps = self.gradient_reconstructor.gradient_dofmaps
         gradient_arr = gradient.vector().get_local()
@@ -58,6 +57,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         Co_max = 0
         for facet in dolfin.facets(self.mesh):
             fidx = facet.index()
+            fdof = self.blending_function_facet_dofmap[fidx]
             finfo = facet_info[fidx]
             
             # Find the local cells (the two cells sharing this face)
@@ -66,7 +66,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             if len(connected_cells) != 2:
                 # This should be an exterior facet (on ds)
                 assert facet.exterior()
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
             
             # Indices of the two local cells
@@ -110,7 +110,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if abs(aC - aD) < EPS:
                 # No change in this area, use upstream value
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
             
             # Gradient
@@ -120,7 +120,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if len_gC2 == 0:
                 # No change in this area, use upstream value
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
             
             # Upstream value
@@ -134,7 +134,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if abs(aU - aD) < EPS:
                 # No change in this area, use upstream value
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
             
             # Angle between face normal and surface normal
@@ -146,7 +146,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if tilde_aC <= 0 or tilde_aC >= 1:
                 # Only upwind is stable
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
             
             if self.variant == 'HRIC':
@@ -206,6 +206,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 print ' aU %r, aC %r, aD %r' % (aU, aC, aD)
             
             assert 0.0 <= tilde_beta <= 1.0
-            beta_arr[fidx] = tilde_beta
+            beta_arr[fdof] = tilde_beta
         
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)

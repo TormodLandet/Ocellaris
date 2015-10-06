@@ -6,6 +6,7 @@ from . import ConvectionScheme, register_convection_scheme
 @register_convection_scheme('Upwind')
 class ConvectionSchemeUpwind(ConvectionScheme):
     description = 'First order upwind'
+    need_alpha_gradient = False
     
     def __init__(self, simulation, func_name):
         """

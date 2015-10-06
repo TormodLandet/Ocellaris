@@ -4,7 +4,7 @@ from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM
 from .ipcs_equations import MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation
-from .dg_helpers import bdm_projection
+from .dg_helpers import VelocityBDMProjection
 
 
 # Default values, can be changed in the input file
@@ -54,6 +54,11 @@ class SolverIPCS(Solver):
         for d in range(sim.ndim):
             eq = VelocityUpdateEquation(simulation, d)
             self.eqs_vel_upd.append(eq)
+            
+        # Projection for the velocity
+        self.velocity_postprocessor = None
+        if self.velocity_postprocessing == BDM:
+            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'])
         
         # Storage for preassembled matrices
         self.Au = [None]*sim.ndim
@@ -297,13 +302,12 @@ class SolverIPCS(Solver):
             self.niters_u_upd[d] = self.u_upd_solver.solve(A, u_new.vector(), b)
     
     @timeit
-    def postprocess_velocity(self, vel):
+    def postprocess_velocity(self):
         """
         Apply a post-processing operator to the given velocity field
         """
-        mesh = self.simulation.data['mesh']
-        if self.velocity_postprocessing == BDM:
-            bdm_projection(vel, mesh)
+        if self.velocity_postprocessor:
+            self.velocity_postprocessor.run()
     
     def run(self):
         """
@@ -327,10 +331,6 @@ class SolverIPCS(Solver):
             self.is_first_timestep = False
             if self.timestepping_method == BDF:
                 self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
-        
-        # Postprocess the velocity initial conditions        
-        self.postprocess_velocity(sim.data['upp'])
-        self.postprocess_velocity(sim.data['up'])
         
         while True:
             # Get input values, these can possibly change over time
@@ -371,7 +371,7 @@ class SolverIPCS(Solver):
                     break
             
             self.velocity_update()
-            self.postprocess_velocity(sim.data['u'])
+            self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(self.simulation.ndim):

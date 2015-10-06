@@ -13,8 +13,10 @@ mesh:
     type: Rectangle
     #Nx: 256
     #Ny: 128
-    Nx: 80
-    Ny: 20
+    #Nx: 80
+    #Ny: 20
+    Nx: 160
+    Ny: 40
     starty: 0.5
     endx: 4
 
@@ -50,10 +52,10 @@ initial_conditions:
 
 time:
     dt: 0.1
-    tmax: 50.0
+    tmax: 20.0
 
 output:
-    prefix: internal_soliton_th
+    prefix: output/internal_soliton
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -75,7 +77,7 @@ convection:
     u:
         convection_scheme: Upwind
     c:
-        convection_scheme: Upwind
+        convection_scheme: HRIC
 
 probes:
     -   name: c=0.5
@@ -86,16 +88,16 @@ probes:
         show_interval: 1
         xlim: [0, 4]
         ylim: [0.6, 0.9]
-#    -   name: c=0.1
-#        type: IsoSurface
-#        value: 0.1
-#        field: c
-#        file_name: '_c01.out'
-#    -   name: c=0.9
-#        type: IsoSurface
-#        value: 0.9
-#        field: c
-#        file_name: '_c09.out'
+    -   name: c=0.1
+        type: IsoSurface
+        value: 0.1
+        field: c
+        file_name: '_c01.out'
+    -   name: c=0.9
+        type: IsoSurface
+        value: 0.9
+        field: c
+        file_name: '_c09.out'
 
 hooks:
     post_timestep:
@@ -114,10 +116,22 @@ hooks:
             #if valmax > 1e-4:
             #    run_debug_console(simulation, False)
             #    exit()
+    
     -   name: plot u
         enabled: no
         code: |
             plot(u, title='u', key='u', window_width=1000, interactive=True)
+    
+    -   name: save colour fields
+        enabled: yes
+        code: |
+            if not 'cf' in hook_data:
+                prefix = simulation.input.get_value('output/prefix')
+                hook_data['cf'] = File(prefix + '_c.pvd')
+                c.rename('c', 'c')
+                c_star.rename('c_star', 'c_star')
+            hook_data['cf'] << (c, t)
+            hook_data['cf'] << (c_star, t)
 
 _reporting:
     reports_to_show: ['sum(c)', 'max(div(u_adv_c))'] #, 'max(div(u)|Vp)']

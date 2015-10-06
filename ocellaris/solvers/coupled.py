@@ -6,7 +6,7 @@ from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, BDM, UPWIND
 from .coupled_equations import CoupledEquations
-from .dg_helpers import bdm_projection
+from .dg_helpers import VelocityBDMProjection
 
 # Default values, can be changed in the input file
 SOLVER = 'petsc'
@@ -38,6 +38,11 @@ class SolverCoupled(Solver):
         
         # Create equation
         self.eqs = CoupledEquations(simulation, self.timestepping_method)
+        
+        # Projection for the velocity
+        self.velocity_postprocessor = None
+        if self.velocity_postprocessing == BDM:
+            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'])
         
         # Store number of iterations
         self.niters = None
@@ -173,13 +178,12 @@ class SolverCoupled(Solver):
         self.is_first_timestep = False
         
     @timeit
-    def postprocess_velocity(self, vel):
+    def postprocess_velocity(self):
         """
         Apply a post-processing operator to the given velocity field
         """
-        mesh = self.simulation.data['mesh']
-        if self.velocity_postprocessing == BDM:
-            bdm_projection(vel, mesh)
+        if self.velocity_postprocessor:
+            self.velocity_postprocessor.run()
     
     @timeit
     def solve_coupled(self):
@@ -225,9 +229,6 @@ class SolverCoupled(Solver):
             if self.timestepping_method == BDF:
                 self.set_timestepping_coefficients([3/2, -2, 1/2])
         
-        self.postprocess_velocity(sim.data['upp'])
-        self.postprocess_velocity(sim.data['up'])
-        
         while True:
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
@@ -250,7 +251,7 @@ class SolverCoupled(Solver):
             self.solve_coupled()
             
             # Postprocess the solution velocity field
-            self.postprocess_velocity(sim.data['u'])
+            self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(self.simulation.ndim):

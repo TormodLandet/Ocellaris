@@ -128,7 +128,7 @@ short description of what we will be calculating.
             has no analytical solution, but is a nice way to test the solver in
             presence of viscous shear and discontinuities.
             
-            Comparison data is included. This is from the paper by V. Ghia, 
+            Comparison data is included. This isget_value from the paper by V. Ghia, 
             K.N. Ghia and C.T. Shin: "High-Re solutions for incompressible flow
             using the Navier-Stokes equations and a multi-grid method" in 
             J.Comp.Phys., v.48, 1982, pp.387-411. 
@@ -636,6 +636,22 @@ TODO: describe this. See example under timestepping above for now.
    :header: "key", "Default value", "Description"
 
     "...", "**required input**", "FIXME: finish this table"
+
+The example below shows that each hook gets it's own dictionary ``hook_data``
+to store whatever it wants between calls. The example also shows how to read
+the input file parameters in a hook that is defined in the same input file, and
+how to perform output to file in a configurable manner:
+
+.. code-block:: yaml
+
+    -   name: save colour function field
+        enabled: yes
+        code: |
+            if not 'cf' in hook_data:
+                prefix = simulation.input.get_value('output/prefix')
+                hook_data['cf'] = File(prefix + '_c.pvd')
+            if t > 1:
+                hook_data['cf'] << (c, t)
 
 
 Example: lid driven cavity flow

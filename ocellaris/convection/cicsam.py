@@ -8,8 +8,8 @@ from . import ConvectionScheme, register_convection_scheme
 
 @register_convection_scheme('CICSAM')
 class ConvectionSchemeHric2D(ConvectionScheme):
-    
     description = 'Compressive Interface Capturing Scheme for Arbitrary Meshes'
+    need_alpha_gradient = True
     
     def __init__(self, simulation, func_name):
         """
@@ -37,7 +37,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         cell_info = self.simulation.data['cell_info']
         
         # Reconstruct the gradient to calculate upstream values
-        #self.gradient_reconstructor.reconstruct()
         gradient = self.gradient_reconstructor.gradient
         gradient_dofmaps = self.gradient_reconstructor.gradient_dofmaps
         gradient_arr = gradient.vector().get_local()

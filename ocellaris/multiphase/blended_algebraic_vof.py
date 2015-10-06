@@ -1,7 +1,7 @@
 # encoding: utf-8
 from __future__ import division
 import dolfin
-from dolfin import Function, Constant, FacetNormal, solve
+from dolfin import Function, Constant, FacetNormal, assemble, solve
 from . import register_multi_phase_model, MultiPhaseModel 
 from ..convection import get_convection_scheme
 from ..solvers.ipcs_equations import define_advection_problem
@@ -45,9 +45,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.convection_scheme = scheme_class(simulation, 'c')
         self.convection_scheme_star = scheme_class(simulation, 'c_star')
         
-        self.need_gradient = True
-        if scheme == 'Upwind':
-            self.need_gradient = False
+        self.need_gradient = scheme_class.need_alpha_gradient
         
         # Create the equations when the simulation starts
         self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
@@ -100,7 +98,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         thetas = Constant([1.0, 0.0, 0.0])
         self.eq = define_advection_problem(trial, test, cp, cpp, vel, r, normal, beta,
                                            self.time_coeffs, thetas, self.dt, dirichlet_bcs)
-        
+        self.tensor_lhs = self.tensor_rhs = None
         
         # At the next time step (extrapolated advecting velocity)
         Vu = self.simulation.data['Vu']
@@ -109,6 +107,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         beta_star = self.convection_scheme_star.blending_function
         self.eq_star = define_advection_problem(trial, test, c, cp, self.u_conv, r, normal, beta_star,
                                                 self.time_coeffs, thetas, self.dt, dirichlet_bcs)
+        self.tensor_star_lhs = self.tensor_star_rhs = None
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('c', c, clim=(0, 1))        
@@ -189,6 +188,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field
         """
+        timer = dolfin.Timer('Ocellaris update VOF')
         self.dt.assign(dt)
         
         if self.need_gradient:
@@ -208,9 +208,15 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # Solve the advection equations for the colour field
         if it == 1:
             c.assign(self.simulation.data['cp'])
-        else: 
+        else:
             a, L = self.eq
-            solve(a == L, c)
+            if self.tensor_lhs is None:
+                self.tensor_lhs = assemble(a)
+                self.tensor_rhs = assemble(L)
+            else:
+                assemble(a, tensor=self.tensor_lhs)
+                assemble(L, tensor=self.tensor_rhs)
+            solve(self.tensor_lhs, c.vector(), self.tensor_rhs)
         
         # Update the extrapolated convecting velocity
         e1, e2 = self.extrapolation_coeffs
@@ -226,7 +232,13 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # Solve the advection equations for the extrapolated colour field
         c_star = self.simulation.data['c_star']
         a_star, L_star = self.eq_star
-        solve(a_star == L_star, c_star)
+        if self.tensor_star_lhs is None:
+            self.tensor_star_lhs = assemble(a_star)
+            self.tensor_star_rhs = assemble(L_star)
+        else:
+            assemble(a_star, tensor=self.tensor_star_lhs)
+            assemble(L_star, tensor=self.tensor_star_rhs)
+        solve(self.tensor_star_lhs, c_star.vector(), self.tensor_star_rhs)
         
         # Report total mass balance and divergence
         sum_c = dolfin.assemble(c*dolfin.dx)
@@ -244,6 +256,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         # Use second order backward time difference after the first time step
         self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
         self.extrapolation_coeffs = [2, -1]
+        
+        timer.stop()
     
     def report_divergence(self):
         """
