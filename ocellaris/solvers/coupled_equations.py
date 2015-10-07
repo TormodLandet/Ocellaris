@@ -5,9 +5,11 @@ from ufl.classes import Zero
 from . import BDF, UPWIND
 from .dg_helpers import define_penalty
 
+
 # Default values, can be changed in the input file
 PENALTY_BOOST = 1
 STRESS_DIVERGENCE = True
+LAGRANGE_MULTIPLICATOR = False
 
 
 class CoupledEquationsSlow(object):
@@ -19,16 +21,17 @@ class CoupledEquationsSlow(object):
         """
         self.simulation = simulation
         self.timestepping_method = timestepping_method
-
-        # Read necessary input
-        inp = simulation.input
-
-        # Get flux type for the velocity
-        self.flux_type = inp.get_value('convection/u/flux_type', UPWIND, 'string')
         
-        # Stress divergence form
+        # Input values influencing equations
+        inp = simulation.input
+        self.flux_type = inp.get_value('convection/u/flux_type', UPWIND, 'string')
         self.use_stress_divergence_form = inp.get_value('solver/use_stress_divergence_form', STRESS_DIVERGENCE, 'bool')
-
+        self.use_lagrange_multiplicator = inp.get_value('solver/use_lagrange_multiplicator', LAGRANGE_MULTIPLICATOR, 'bool')
+        
+        # No need for lagrange multiplicatiorns if the pressure is set via Dirichlet conditions somewhere
+        if self.simulation.data['dirichlet_bcs'].get('p', []):
+            self.use_lagrange_multiplicator = False
+        
         # Discontinuous or continuous elements
         Vu_family = simulation.data['Vu'].ufl_element().family()
         self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
@@ -57,8 +60,6 @@ class CoupledEquationsSlow(object):
         v = dolfin.as_vector(vlist)
         p = uc[ndim]
         q = vc[ndim]
-        lm_trial = uc[ndim+1]
-        lm_test = vc[ndim+1]
         
         c1, c2, c3 = sim.data['time_coeffs']
         dt = sim.data['dt']
@@ -96,7 +97,12 @@ class CoupledEquationsSlow(object):
         
         # Lagrange multiplicator to remove the pressure null space
         # ∫ p dx = 0
-        eq = (p*lm_test + q*lm_trial)*dx
+        if self.use_lagrange_multiplicator:
+            lm_trial = uc[ndim+1]
+            lm_test = vc[ndim+1]
+            eq = (p*lm_test + q*lm_trial)*dx
+        else:
+            eq = Zero()*dx(domain=mesh)
         
         # Momentum equations
         for d in range(sim.ndim):

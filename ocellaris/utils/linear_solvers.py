@@ -64,6 +64,10 @@ def make_linear_solver(solver_method, preconditioner=None, lu_method=None, param
     for parameter_set in parameters:
         apply_settings(solver.parameters, parameter_set)
     
+    solver.created_with_preconditioner = preconditioner
+    solver.created_with_lu_method = lu_method
+    solver.created_with_parameters = parameters
+    
     return solver
 
 
