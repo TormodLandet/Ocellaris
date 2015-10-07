@@ -102,13 +102,16 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     try:
         solver.run()
         success = True
-    except Exception, e:
+    except BaseException, e:
         if catch_exceptions:
             success = False
             simulation.log.error('=== EXCEPTION =='*5)
-            tb = traceback.format_tb(sys.exc_info()[2])
-            simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
-            simulation.log.error('Got exception when running solver:\n%s' % str(e))
+            if isinstance(e, KeyboardInterrupt):
+                simulation.log.error('You pressed Ctrl+C')
+            else:
+                tb = traceback.format_tb(sys.exc_info()[2])
+                simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
+                simulation.log.error('Got exception when running solver:\n%s' % str(e))
             simulation.log.error('=== EXCEPTION =='*5)
             simulation.hooks.simulation_ended(success)
         else:

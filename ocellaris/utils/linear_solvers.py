@@ -55,7 +55,7 @@ def make_linear_solver(solver_method, preconditioner=None, lu_method=None, param
     in the input file  
     """
     if solver_method.lower() == 'lu':
-        solver = dolfin.LUSolver(lu_method)
+        solver = dolfin.PETScLUSolver(lu_method)
     else:
         precon = dolfin.PETScPreconditioner(preconditioner)
         solver = dolfin.PETScKrylovSolver(solver_method, precon)

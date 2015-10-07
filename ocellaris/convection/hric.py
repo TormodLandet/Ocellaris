@@ -39,6 +39,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         according to the HRIC algorithm. Several versions of HRIC
         are implemented
         """
+        timer = dolfin.Timer('Ocellaris update HRIC')
         alpha_arr = self.alpha_function.vector().get_local()
         beta_arr = self.blending_function.vector().get_local()
         
@@ -208,4 +209,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             assert 0.0 <= tilde_beta <= 1.0
             beta_arr[fdof] = tilde_beta
         
+        self.blending_function.vector().set_local(beta_arr)
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
+        timer.stop()

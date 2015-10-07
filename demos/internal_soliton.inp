@@ -15,8 +15,8 @@ mesh:
     #Ny: 128
     #Nx: 80
     #Ny: 20
-    Nx: 160
-    Ny: 40
+    Nx: 50
+    Ny: 15
     starty: 0.5
     endx: 4
 
@@ -72,6 +72,8 @@ solver:
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     use_stress_divergence_form: false
+    coupled:
+        lu_method: mumps
 
 convection:
     u:
@@ -129,12 +131,12 @@ hooks:
                 prefix = simulation.input.get_value('output/prefix')
                 hook_data['cf'] = File(prefix + '_c.pvd')
                 c.rename('c', 'c')
-                c_star.rename('c_star', 'c_star')
+                #c_star.rename('c_star', 'c_star')
             hook_data['cf'] << (c, t)
-            hook_data['cf'] << (c_star, t)
+            #hook_data['cf'] << (c_star, t)
 
-_reporting:
-    reports_to_show: ['sum(c)', 'max(div(u_adv_c))'] #, 'max(div(u)|Vp)']
+reporting:
+    reports_to_show: ['min(c)', 'max(c)'] #, 'max(div(u)|Vp)']
 
 #console_on_error: true
 #console_at_end: true

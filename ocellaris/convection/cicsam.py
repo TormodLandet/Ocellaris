@@ -28,8 +28,9 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         according to the HRIC algorithm. Several versions of HRIC
         are implemented
         """
+        timer = dolfin.Timer('Ocellaris update CICSAM')
         alpha_arr = self.alpha_function.vector().get_local()
-        beta_arr = self.blending_function.facet_data
+        beta_arr = self.blending_function.vector().get_local()
         
         ndim = self.simulation.ndim
         conFC = self.simulation.data['connectivity_FC']
@@ -45,6 +46,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         Co_max = 0
         for facet in dolfin.facets(self.mesh):
             fidx = facet.index()
+            fdof = self.blending_function_facet_dofmap[fidx]
             finfo = facet_info[fidx]
             
             # Find the local cells (the two cells sharing this face)
@@ -53,7 +55,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             if len(connected_cells) != 2:
                 # This should be an exterior facet (on ds)
                 assert facet.exterior()
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
             
             # Indices of the two local cells
@@ -102,7 +104,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if abs(aC - aD) < EPS or abs(aU - aD) < EPS:
                 # No change in this area, use upstream value
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
             
             # Introduce normalized variables
@@ -110,7 +112,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             if tilde_aC <= 0 or tilde_aC >= 1:
                 # Only upwind is stable
-                beta_arr[fidx] = 0.0
+                beta_arr[fdof] = 0.0
                 continue
         
             # Compressive scheme, Hyper-C
@@ -145,6 +147,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 print ' aU %r, aC %r, aD %r' % (aU, aC, aD)
             
             assert 0.0 <= tilde_beta <= 1.0
-            beta_arr[fidx] = tilde_beta
+            beta_arr[fdof] = tilde_beta
         
+        self.blending_function.vector().set_local(beta_arr)
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
+        timer.stop()

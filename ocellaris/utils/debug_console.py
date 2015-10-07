@@ -38,7 +38,11 @@ def debug_console_hook(simulation):
         
         elif command.startswith('prof'):
             # Run the profiler
-            num_timesteps = int(command.split()[1])
+            try:
+                num_timesteps = int(command.split()[1])
+            except:
+                simulation.log.warning('Did not understand requested number of profile time steps')
+                return
             simulation._profile_after_n_timesteps = num_timesteps+1
             simulation._profile_object = cProfile.Profile()
             simulation._profile_object.enable()
@@ -47,7 +51,7 @@ def debug_console_hook(simulation):
     
     if hasattr(simulation, '_profile_after_n_timesteps'):
         simulation._profile_after_n_timesteps -= 1
-        simulation.log.info('Profile will start after %d time steps' % simulation._profile_after_n_timesteps)
+        simulation.log.info('Profile will end after %d time steps' % simulation._profile_after_n_timesteps)
         if simulation._profile_after_n_timesteps == 0:
             simulation._profile_object.disable()
             stats = pstats.Stats(simulation._profile_object)
