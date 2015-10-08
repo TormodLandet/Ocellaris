@@ -85,6 +85,9 @@ class CoupledEquations(object):
             
         if self.vel_is_discontinuous:
             penalty_dS, penalty_ds = self.calculate_penalties()
+            D12 = Constant([1, 1])
+            h = dolfin.CellSize(mesh)
+            D11 = avg(h/nus)
             
             # Upwind and downwind velocitues
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
@@ -143,8 +146,12 @@ class CoupledEquations(object):
                 
                 # Divergence free criterion
                 # ∇⋅u = 0
-                eq -= u[d]*q.dx(d)*dx
-                eq += avg(u[d])*jump(q)*n[d]('+')*dS
+                if self.use_grad_p_form:
+                    eq -= u[d]*q.dx(d)*dx
+                    eq += (avg(u[d]) + D12[d]*jump(u, n))*jump(q)*n[d]('+')*dS
+                else:
+                    eq += q*u[d].dx(d)*dx
+                    eq -= (avg(q) - dot(D12, jump(q, n)))*jump(u[d])*n[d]('+')*dS
                 
                 # Time derivative
                 # ∂u/∂t
@@ -172,8 +179,13 @@ class CoupledEquations(object):
                 
                 # Pressure
                 # ∇p
-                eq -= v[d].dx(d)*p*dx
-                eq += avg(p)*jump(v[d])*n[d]('+')*dS
+                if self.use_grad_p_form:
+                    eq += v[d]*p.dx(d)*dx
+                    eq -= (avg(v[d]) + D12[d]*jump(v, n))*jump(p)*n[d]('+')*dS
+                else:
+                    eq -= p*v[d].dx(d)*dx
+                    eq += (avg(p) - dot(D12, jump(p, n)))*jump(v[d])*n[d]('+')*dS
+                eq += D11*dot(jump(p, n), jump(q, n))*dS
                 
                 # Body force (gravity)
                 # ρ g
@@ -182,19 +194,25 @@ class CoupledEquations(object):
                 # Dirichlet boundary
                 dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
                 for dbc in dirichlet_bcs:
+                    u_bc = dbc.func()
+                    
                     # Divergence free criterion
-                    eq += q*u[d]*n[d]*dbc.ds()
+                    if self.use_grad_p_form:
+                        eq += q*u_bc*n[d]*dbc.ds()
+                    else:
+                        eq -= q*u[d]*n[d]*dbc.ds()
+                        eq += q*u_bc*n[d]*dbc.ds()
                     
                     # Convection
-                    eq += rhos*w_nD*dbc.func()*v[d]*dbc.ds()
+                    eq += rhos*w_nD*u_bc*v[d]*dbc.ds()
                     
                     # SIPG for -∇⋅μ∇u
                     eq -= mus*dot(n, grad(u[d]))*v[d]*dbc.ds()
                     eq -= mus*dot(n, grad(v[d]))*u[d]*dbc.ds()
-                    eq += mus*dot(n, grad(v[d]))*dbc.func()*dbc.ds()
+                    eq += mus*dot(n, grad(v[d]))*u_bc*dbc.ds()
                     
                     # Weak Dirichlet
-                    eq += penalty_ds*(u[d] - dbc.func())*v[d]*dbc.ds()
+                    eq += penalty_ds*(u[d] - u_bc)*v[d]*dbc.ds()
                     
                     # Pressure
                     eq += p*v[d]*n[d]*dbc.ds()
@@ -568,5 +586,5 @@ class CoupledEquationsPreassembled(CoupledEquations):
         return dolfin.assemble(self.form_L)
 
 # Pick the version to run
-CoupledEquations = CoupledEquationsScaledPressure
+#CoupledEquations = CoupledEquationsScaledPressure
 #CoupledEquations = CoupledEquationsPreassembled

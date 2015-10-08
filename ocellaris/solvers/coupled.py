@@ -18,7 +18,7 @@ TIMESTEPPING_METHODS = (BDF,)
 # Default values, can be changed in the input file
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
-USE_GRAD_P_FORM = True
+USE_GRAD_P_FORM = False
 
 @register_solver('Coupled')
 class SolverCoupled(Solver):
