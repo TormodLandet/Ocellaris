@@ -3,8 +3,8 @@ from __future__ import division
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, BDM
-from .coupled_equations import CoupledEquations, LAGRANGE_MULTIPLICATOR
+from . import Solver, register_solver, BDF, BDM, UPWIND
+from .coupled_equations import CoupledEquations
 from .dg_helpers import VelocityBDMProjection
 
 
@@ -15,6 +15,10 @@ LU_PARAMETERS = {}
 # Implemented timestepping methods
 TIMESTEPPING_METHODS = (BDF,)
 
+# Default values, can be changed in the input file
+USE_STRESS_DIVERGENCE = False
+USE_LAGRANGE_MULTIPLICATOR = False
+USE_GRAD_P_FORM = True
 
 @register_solver('Coupled')
 class SolverCoupled(Solver):
@@ -38,13 +42,17 @@ class SolverCoupled(Solver):
         self.dirichlet_bcs = self.coupled_boundary_conditions()
         
         # Create equation
-        self.eqs = CoupledEquations(simulation, self.timestepping_method)
+        self.eqs = CoupledEquations(simulation,
+                                    timestepping_method=self.timestepping_method,
+                                    flux_type=self.flux_type,
+                                    use_stress_divergence_form=self.use_stress_divergence_form,
+                                    use_grad_p_form=self.use_grad_p_form,
+                                    use_lagrange_multiplicator=self.use_lagrange_multiplicator)
         
         # Velocity post_processing
         self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
             self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'])
-        
         
         # Store number of iterations
         self.niters = None
@@ -60,7 +68,7 @@ class SolverCoupled(Solver):
                                                        None, LU_SOLVER, LU_PARAMETERS)
         
         # Give warning if using iterative solver
-        if isinstance(self.coupled_solver, dolfin.KrylovSolver):
+        if isinstance(self.coupled_solver, dolfin.PETScKrylovSolver):
             sim.log.warning('WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
         else:
             self.coupled_solver.parameters['same_nonzero_pattern'] = True
@@ -77,7 +85,7 @@ class SolverCoupled(Solver):
         self.remove_null_space = True
         self.pressure_null_space = None
         self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
-                                                              LAGRANGE_MULTIPLICATOR, 'bool')
+                                                              USE_LAGRANGE_MULTIPLICATOR, 'bool')
         if self.use_lagrange_multiplicator or self.simulation.data['dirichlet_bcs'].get('p', []):
             self.remove_null_space = False
         
@@ -87,7 +95,17 @@ class SolverCoupled(Solver):
         if self.remove_null_space and self.coupled_solver.created_with_lu_method in does_not_support_null_space:    
             self.normalize_pressure = True
             self.remove_null_space = False
-            
+        
+        # No need for lagrange multiplicatiorns if the pressure is set via Dirichlet conditions somewhere
+        if self.simulation.data['dirichlet_bcs'].get('p', []):
+            self.use_lagrange_multiplicator = False
+        
+        # Control the form of the governing equations 
+        self.flux_type = sim.input.get_value('convection/u/flux_type', UPWIND, 'string')
+        self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
+                                                              USE_STRESS_DIVERGENCE, 'bool')
+        self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+        
         # Representation of velocity
         Vu_family = sim.data['Vu'].ufl_element().family()
         self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
