@@ -585,6 +585,7 @@ class CoupledEquationsPreassembled(CoupledEquations):
     def assemble_rhs(self):
         return dolfin.assemble(self.form_L)
 
-# Pick the version to run
-#CoupledEquations = CoupledEquationsScaledPressure
-#CoupledEquations = CoupledEquationsPreassembled
+
+EQUATION_SUBTYPES = {'Default': CoupledEquations,
+                     'ScaledPressure': CoupledEquationsScaledPressure,
+                     'Preassembled': CoupledEquationsPreassembled}

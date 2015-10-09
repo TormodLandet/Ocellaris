@@ -4,7 +4,7 @@ import dolfin
 from dolfin import Constant
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, BDM, UPWIND
-from .coupled_equations import CoupledEquations
+from .coupled_equations import EQUATION_SUBTYPES
 from .dg_helpers import VelocityBDMProjection
 
 
@@ -16,9 +16,11 @@ LU_PARAMETERS = {}
 TIMESTEPPING_METHODS = (BDF,)
 
 # Default values, can be changed in the input file
+EQUATION_SUBTYPE = 'Default'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
+
 
 @register_solver('Coupled')
 class SolverCoupled(Solver):
@@ -42,6 +44,7 @@ class SolverCoupled(Solver):
         self.dirichlet_bcs = self.coupled_boundary_conditions()
         
         # Create equation
+        CoupledEquations = EQUATION_SUBTYPES[self.equation_subtype]
         self.eqs = CoupledEquations(simulation,
                                     timestepping_method=self.timestepping_method,
                                     flux_type=self.flux_type,
@@ -66,6 +69,14 @@ class SolverCoupled(Solver):
         # Solver for the coupled system
         self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu', 
                                                        None, LU_SOLVER, LU_PARAMETERS)
+        
+        # Get the class to be used for the equation system assembly
+        self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
+        if not self.equation_subtype in EQUATION_SUBTYPES:
+            available_methods = '\n'.join(' - %s' % m for m in EQUATION_SUBTYPES)
+            report_error('Unknown equation sub-type', 
+                         'Equation sub-type %s not available for coupled solver, please use one of:\n%s' %
+                         (self.equation_subtype, EQUATION_SUBTYPES))
         
         # Give warning if using iterative solver
         if isinstance(self.coupled_solver, dolfin.PETScKrylovSolver):
@@ -96,7 +107,7 @@ class SolverCoupled(Solver):
             self.normalize_pressure = True
             self.remove_null_space = False
         
-        # No need for lagrange multiplicatiorns if the pressure is set via Dirichlet conditions somewhere
+        # No need for Lagrange multiplicatiorns if the pressure is set via Dirichlet conditions somewhere
         if self.simulation.data['dirichlet_bcs'].get('p', []):
             self.use_lagrange_multiplicator = False
         
