@@ -281,16 +281,19 @@ class SolverCoupled(Solver):
         for func in funcs:
             func.vector().apply('insert') # dolfin bug #587
                     
-        # Some solver cannot remove the null space, so we just normalize the pressure instead
-        if self.normalize_pressure:
+        # Some solvers cannot remove the null space, so we just normalize the pressure instead.
+        # If we remove the null space of the matrix system this will not be the exact same as
+        # removing the proper null space of the equation, so we also fix this here
+        if self.normalize_pressure or self.remove_null_space:
             p = self.simulation.data['p']
             dx2 = dolfin.dx(domain=p.function_space().mesh())
             vol = dolfin.assemble(dolfin.Constant(1)*dx2)
-            # Perform correction twice due to round-of error. The first correction can be
-            # i.e 1e14 while the next correction is around unity
-            for _ in range(2):
-                pavg = dolfin.assemble(p*dx2)
-                p.vector()[:] -= pavg/vol   
+            # Perform correction multiple times due to round-of error. The first correction
+            # can be i.e 1e14 while the next correction is around unity
+            pavg = 1e10
+            while abs(pavg) > 1000: 
+                pavg = dolfin.assemble(p*dx2)/vol
+                p.vector()[:] -= pavg
     
     @timeit
     def run(self):

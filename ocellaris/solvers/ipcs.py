@@ -292,6 +292,14 @@ class SolverIPCS(Solver):
         # Solve for new pressure
         self.niters_p = self.pressure_solver.solve(A, p.vector(), b)
         
+        # Removing the null space of the matrix system is not strictly the same as removing
+        # the null space of the equation, so we correct for this here 
+        if self.remove_null_space:
+            dx2 = dolfin.dx(domain=p.function_space().mesh())
+            vol = dolfin.assemble(dolfin.Constant(1)*dx2)
+            pavg = dolfin.assemble(p*dx2)/vol
+            p.vector()[:] -= pavg
+        
         # Calculate p_hat = p_new - p_old 
         p_hat.vector().axpy(1, p.vector())
         
@@ -329,6 +337,7 @@ class SolverIPCS(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
+        raise '111111111111111'
     
     def run(self):
         """
@@ -392,7 +401,7 @@ class SolverIPCS(Solver):
                     break
             
             self.velocity_update()
-            self.postprocess_velocity()
+            #self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(self.simulation.ndim):
