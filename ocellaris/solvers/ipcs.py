@@ -17,7 +17,7 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
 
 # Equations - default values, can be changed in the input file
 TIMESTEPPING_METHODS = (BDF, CRANK_NICOLSON)
-EQUATION_SUBTYPE = 'New'
+EQUATION_SUBTYPE = 'Default'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
@@ -337,7 +337,6 @@ class SolverIPCS(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
-        raise '111111111111111'
     
     def run(self):
         """
@@ -401,7 +400,7 @@ class SolverIPCS(Solver):
                     break
             
             self.velocity_update()
-            #self.postprocess_velocity()
+            self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(self.simulation.ndim):
