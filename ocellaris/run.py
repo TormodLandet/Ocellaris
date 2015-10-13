@@ -16,7 +16,14 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     
     simulation.log.info('Preparing simulation ...\n')
     t_start = time.time()
-     
+    
+    # Test for PETSc linear algebra backend
+    if not dolfin.has_linear_algebra_backend("PETSc"):
+        report_error('Missing PETSc',
+                     'DOLFIN has not been configured with PETSc '
+                     'which is needed by Ocellaris.')
+    dolfin.parameters["linear_algebra_backend"] = "PETSc"
+    
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
     simulation.dt = simulation.input.get_value('time/dt', required_type='float')

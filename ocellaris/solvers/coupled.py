@@ -16,10 +16,11 @@ LU_PARAMETERS = {}
 TIMESTEPPING_METHODS = (BDF,)
 
 # Default values, can be changed in the input file
-EQUATION_SUBTYPE = 'Default'
+EQUATION_SUBTYPE = 'Conservative'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
+PRESSURE_CONTINUITY_FACTOR = 0
 
 
 @register_solver('Coupled')
@@ -50,7 +51,8 @@ class SolverCoupled(Solver):
                                     flux_type=self.flux_type,
                                     use_stress_divergence_form=self.use_stress_divergence_form,
                                     use_grad_p_form=self.use_grad_p_form,
-                                    use_lagrange_multiplicator=self.use_lagrange_multiplicator)
+                                    use_lagrange_multiplicator=self.use_lagrange_multiplicator,
+                                    pressure_continuity_factor=self.pressure_continuity_factor)
         
         # Velocity post_processing
         self.velocity_postprocessor = None
@@ -116,6 +118,8 @@ class SolverCoupled(Solver):
         self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
                                                               USE_STRESS_DIVERGENCE, 'bool')
         self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+        self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor', 
+                                                                 PRESSURE_CONTINUITY_FACTOR, 'float')
         
         # Representation of velocity
         Vu_family = sim.data['Vu'].ufl_element().family()

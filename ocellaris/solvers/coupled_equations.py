@@ -7,7 +7,7 @@ from .dg_helpers import define_penalty
 
 class CoupledEquations(object):
     def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
-                 use_grad_p_form, use_lagrange_multiplicator):
+                 use_grad_p_form, use_lagrange_multiplicator, pressure_continuity_factor):
         """
         This class assembles the coupled Navier-Stokes equations, both CG and DG 
         """
@@ -17,6 +17,7 @@ class CoupledEquations(object):
         self.use_grad_p_form = use_grad_p_form
         self.flux_type = flux_type
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
+        self.pressure_continuity_factor =  pressure_continuity_factor
         
         # Discontinuous or continuous elements
         Vu_family = simulation.data['Vu'].ufl_element().family()
@@ -25,7 +26,7 @@ class CoupledEquations(object):
         # Create UFL forms
         self.define_coupled_equation()
         
-    def calculate_penalties(self):
+    def calculate_penalties(self, nu):
         """
         Calculate SIPG penalty
         """
@@ -38,7 +39,15 @@ class CoupledEquations(object):
         penalty_ds = penalty_dS*2
         self.simulation.log.info('DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
-        return Constant(penalty_dS), Constant(penalty_ds)
+        D12 = Constant([1, 1])
+        h = dolfin.CellSize(mesh)
+        
+        if self.pressure_continuity_factor != 0:
+            D11 = avg(h/nu)*Constant(self.pressure_continuity_factor)
+        else:
+            D11 = None
+        
+        return Constant(penalty_dS), Constant(penalty_ds), D11, D12
     
     def define_coupled_equation(self):
         """
@@ -71,8 +80,6 @@ class CoupledEquations(object):
         n = dolfin.FacetNormal(mesh)
         
         # Fluid properties at t^{n}, t^{n-1} and t^{n+1}*
-        rhop = sim.data['rho']
-        rhopp = sim.data['rho_old']
         rhos = sim.data['rho_star']
         nus = sim.data['nu_star']
         mus = rhos*nus
@@ -84,10 +91,7 @@ class CoupledEquations(object):
             sd = Constant(0.0)
             
         if self.vel_is_discontinuous:
-            penalty_dS, penalty_ds = self.calculate_penalties()
-            D12 = Constant([1, 1])
-            h = dolfin.CellSize(mesh)
-            D11 = avg(h/nus)
+            penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nus)
             
             # Upwind and downwind velocitues
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
@@ -116,7 +120,7 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂u/∂t
-                eq += (rhos*c1*u[d] + rhop*c2*up + rhopp*c3*upp)/dt*v[d]*dx
+                eq += rhos*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
@@ -155,7 +159,7 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂u/∂t
-                eq += (rhos*c1*u[d] + rhop*c2*up + rhopp*c3*upp)/dt*v[d]*dx
+                eq += rhos*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
                 
                 # Convection:
                 # -w⋅∇u    
@@ -185,7 +189,10 @@ class CoupledEquations(object):
                 else:
                     eq -= p*v[d].dx(d)*dx
                     eq += (avg(p) - dot(D12, jump(p, n)))*jump(v[d])*n[d]('+')*dS
-                eq += D11*dot(jump(p, n), jump(q, n))*dS
+                
+                # Pressure continuity stabilization. Needed for equal order discretization
+                if D11 is not None:
+                    eq += D11*dot(jump(p, n), jump(q, n))*dS
                 
                 # Body force (gravity)
                 # ρ g
@@ -276,10 +283,7 @@ class CoupledEquationsScaledPressure(CoupledEquations):
         assert not self.use_stress_divergence_form
           
         if self.vel_is_discontinuous:
-            penalty_dS, penalty_ds = self.calculate_penalties()
-            D12 = Constant([1, 1])
-            h = dolfin.CellSize(mesh)
-            D11 = avg(h/nu)
+            penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nu)
             
             # Upwind and downwind velocitues
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
@@ -374,8 +378,11 @@ class CoupledEquationsScaledPressure(CoupledEquations):
                     eq -= (avg(v[d]) + D12[d]*jump(v, n))*jump(phi)*n[d]('+')*dS
                 else:
                     eq -= phi*v[d].dx(d)*dx
-                    eq += (avg(phi) - dot(D12, jump(phi, n)))*jump(v[d])*n[d]('+')*dS
-                eq += D11*dot(jump(p, n), jump(q, n))*dS
+                    eq += (avg(phi) - dot(D12, jump(p, n)))*jump(v[d])*n[d]('+')*dS
+                
+                # Pressure continuity stabilization. Needed for equal order discretization    
+                if D11 is not None:
+                    eq += D11*dot(jump(p, n), jump(q, n))*dS
                 
                 # Body force (gravity)
                 # ρ g
@@ -586,6 +593,8 @@ class CoupledEquationsPreassembled(CoupledEquations):
         return dolfin.assemble(self.form_L)
 
 
-EQUATION_SUBTYPES = {'Default': CoupledEquations,
-                     'ScaledPressure': CoupledEquationsScaledPressure,
-                     'Preassembled': CoupledEquationsPreassembled}
+EQUATION_SUBTYPES = {
+    'Conservative': CoupledEquations,
+    'ScaledPressure': CoupledEquationsScaledPressure,
+    #'ConservativePreassembled': CoupledEquationsPreassembled,
+}

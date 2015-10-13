@@ -1,23 +1,27 @@
 from __future__ import division
 import dolfin
-from ocellaris.convection import get_convection_scheme
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM
-from .ipcs_equations import MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation
+from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
+from .ipcs_equations import EQUATION_SUBTYPES
 from .dg_helpers import VelocityBDMProjection
 
 
-# Default values, can be changed in the input file
+# Solvers - default values, can be changed in the input file
 SOLVER_U = 'gmres'
 PRECONDITIONER_U = 'additive_schwarz'
-SOLVER_P = 'minres'
+SOLVER_P = 'gmres'
 PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'relative_tolerance': 1e-10,
                      'absolute_tolerance': 1e-15}
 
-# Implemented timestepping methods
+# Equations - default values, can be changed in the input file
 TIMESTEPPING_METHODS = (BDF, CRANK_NICOLSON)
+EQUATION_SUBTYPE = 'New'
+USE_STRESS_DIVERGENCE = False
+USE_LAGRANGE_MULTIPLICATOR = False
+USE_GRAD_P_FORM = False
+PRESSURE_CONTINUITY_FACTOR = 0
 
 
 @register_solver('IPCS')
@@ -28,8 +32,8 @@ class SolverIPCS(Solver):
         scheme IPCS (Incremental Pressure Correction Scheme)
         """
         self.simulation = sim = simulation
-        self.create_functions()
         self.read_input()
+        self.create_functions()
         
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -39,22 +43,29 @@ class SolverIPCS(Solver):
         sim.data['dt'] = dolfin.Constant(simulation.dt)
         self.is_single_phase = isinstance(sim.data['rho'], dolfin.Constant)
         
+        # Get equations
+        MomentumPredictionEquation, PressureCorrectionEquation, \
+            VelocityUpdateEquation = EQUATION_SUBTYPES[self.equation_subtype]
+        
         # Define the momentum prediction equations
         self.eqs_mom_pred = []
         for d in range(sim.ndim):
-            beta = self.convection_schemes[d].blending_function
-            eq = MomentumPredictionEquation(simulation, d, beta, self.timestepping_method)
+            eq = MomentumPredictionEquation(simulation, d,
+                                            timestepping_method=self.timestepping_method,
+                                            flux_type=self.flux_type,
+                                            use_stress_divergence_form=self.use_stress_divergence_form,
+                                            use_grad_p_form=self.use_grad_p_form)
             self.eqs_mom_pred.append(eq)
         
         # Define the pressure correction equation
-        self.eq_pressure = PressureCorrectionEquation(simulation)
+        self.eq_pressure = PressureCorrectionEquation(simulation, self.use_lagrange_multiplicator)
         
         # Define the velocity update equations
         self.eqs_vel_upd = []
         for d in range(sim.ndim):
             eq = VelocityUpdateEquation(simulation, d)
             self.eqs_vel_upd.append(eq)
-            
+        
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
@@ -77,13 +88,6 @@ class SolverIPCS(Solver):
         """
         sim = self.simulation
         
-        # Test for PETSc
-        if not dolfin.has_linear_algebra_backend("PETSc"):
-            report_error('Missing PETSc',
-                         'DOLFIN has not been configured with PETSc '
-                         'which is needed by Ocellaris.')
-        dolfin.parameters["linear_algebra_backend"] = "PETSc"
-        
         # Create linear solvers
         self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u', SOLVER_U,
                                                         PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
@@ -93,17 +97,13 @@ class SolverIPCS(Solver):
         self.u_upd_solver = linear_solver_from_input(self.simulation, 'solver/u_upd', SOLVER_U,
                                                      PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
         
-        # Get convection schemes for the velocity
-        conv_schemes = []
-        conv_scheme_name = sim.input.get_value('convection/u/convection_scheme', 'Upwind', 'string')
-        for d in range(sim.ndim):
-            conv_scheme = get_convection_scheme(conv_scheme_name)(sim, 'u%d' % d)
-            conv_schemes.append(conv_scheme)
-        self.convection_schemes = conv_schemes
-        
-        # Velocity post_processing
-        default_postprocessing = BDM if self.vel_is_discontinuous else None
-        self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
+        # Get the class to be used for the equation system assembly
+        self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
+        if not self.equation_subtype in EQUATION_SUBTYPES:
+            available_methods = '\n'.join(' - %s' % m for m in EQUATION_SUBTYPES)
+            report_error('Unknown equation sub-type', 
+                         'Equation sub-type %s not available for ipcs solver, please use one of:\n%s' %
+                         (self.equation_subtype, EQUATION_SUBTYPES))
         
         # Coefficients for u, up and upp
         self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
@@ -112,7 +112,36 @@ class SolverIPCS(Solver):
             report_error('Unknown timestepping method', 
                          'Timestepping method %s not recognised, please use one of:\n%s' %
                          (self.timestepping_method, available_methods))
-    
+        
+        # Lagrange multiplicator or remove null space via PETSc
+        self.remove_null_space = True
+        self.pressure_null_space = None
+        self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
+                                                              USE_LAGRANGE_MULTIPLICATOR, 'bool')
+        if self.use_lagrange_multiplicator or self.simulation.data['dirichlet_bcs'].get('p', []):
+            self.remove_null_space = False
+        
+        # No need for special treatment if the pressure is set via Dirichlet conditions somewhere
+        if self.simulation.data['dirichlet_bcs'].get('p', []):
+            self.use_lagrange_multiplicator = False
+            self.remove_null_space = False
+        
+        # Control the form of the governing equations 
+        self.flux_type = sim.input.get_value('convection/u/flux_type', UPWIND, 'string')
+        self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
+                                                              USE_STRESS_DIVERGENCE, 'bool')
+        self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+        self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor', 
+                                                                 PRESSURE_CONTINUITY_FACTOR, 'float')
+        
+        # Representation of velocity
+        Vu_family = sim.data['Vu'].ufl_element().family()
+        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
+        
+        # Velocity post_processing
+        default_postprocessing = BDM if self.vel_is_discontinuous else None
+        self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
+        
     def create_functions(self):
         """
         Create functions to hold solutions
@@ -122,9 +151,6 @@ class SolverIPCS(Solver):
         # Function spaces
         Vu = sim.data['Vu']
         Vp = sim.data['Vp']
-        
-        Vu_family = Vu.ufl_element().family()
-        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
         
         # Create velocity functions. Keep both component and vector forms
         u_list, up_list, upp_list, u_conv, u_star = [], [], [], [], []
@@ -182,10 +208,6 @@ class SolverIPCS(Solver):
                 # Standard Crank-Nicolson linear extrapolation method
                 uic.vector()[:] = 1.5*uip.vector()[:] - 0.5*uipp.vector()[:]
         
-        # Update the convection blending factors
-        for cs in self.convection_schemes:
-            cs.update(t, dt, data['u'])
-        
         self.is_first_timestep = False
     
     @timeit
@@ -196,7 +218,7 @@ class SolverIPCS(Solver):
         err = 0.0
         for d in range(self.simulation.ndim):
             us = self.simulation.data['u_star%d' % d]
-            self.u_tmp.vector()[:] = us.vector()
+            self.u_tmp.assign(us)
             
             dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
             eq = self.eqs_mom_pred[d]
@@ -211,7 +233,6 @@ class SolverIPCS(Solver):
             A = self.Au[d]
             b = eq.assemble_rhs()
             
-            # Solve the advection equation
             if not self.vel_is_discontinuous:
                 for dbc in dirichlet_bcs:
                     dbc.apply(A, b)
@@ -247,7 +268,7 @@ class SolverIPCS(Solver):
             for dbc in dirichlet_bcs:
                 dbc.apply(A, b)
         
-        if not dirichlet_bcs:
+        if self.remove_null_space:
             if self.pressure_null_space is None:
                 # Create vector that spans the null space
                 null_vec = dolfin.Vector(p.vector())
@@ -363,9 +384,9 @@ class SolverIPCS(Solver):
                 solver_info = ' - iters: %s' % ' '.join(niters)
                 
                 # Convergence estimates
-                sim.log.info('  Inner iteration %3d - Linf* %10.3e - Linfp %10.3e%s'
+                sim.log.info('  Inner iteration %3d - Diff u* %10.3e - Diff p %10.3e%s'
                              % (self.inner_iteration, err_u_star, err_p, solver_info) + 
-                             '  u0max %10.3e' % abs(sim.data['u_star0'].vector().array()).max())
+                             '  u0*max %10.3e' % abs(sim.data['u_star0'].vector().array()).max())
                 
                 if err_u_star < allowable_error_inner:
                     break
