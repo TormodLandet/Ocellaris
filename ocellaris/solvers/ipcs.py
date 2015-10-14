@@ -364,7 +364,7 @@ class SolverIPCS(Solver):
         for d in range(sim.ndim):
             this_maxabs = abs(sim.data['upp%d' % d].vector().array()).max()
             maxabs = max(maxabs, this_maxabs)
-        has_upp_start_values = maxabs > 0 
+        has_upp_start_values = maxabs > 0
         
         # Previous-previous values are provided so we can start up with second order time stepping 
         if has_upp_start_values:
@@ -372,6 +372,14 @@ class SolverIPCS(Solver):
             self.is_first_timestep = False
             if self.timestepping_method == BDF:
                 self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+        
+        # Give reasonable starting guesses for the solvers
+        for d in range(sim.ndim):
+            up = self.simulation.data['up%d' % d]
+            u_new = self.simulation.data['u%d' % d]
+            u_star = self.simulation.data['u_star%d' % d]
+            u_new.assign(up)
+            u_star.assign(up)
         
         while True:
             # Get input values, these can possibly change over time

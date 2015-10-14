@@ -150,7 +150,7 @@ class MomentumPredictionEquation(BaseEquation):
             L = -rhos*(c2*up + c3*upp)/dt*v*dx
             
             # Convection:
-            # -w⋅∇u    
+            # w⋅∇u    
             flux_nU = rhos*u*w_nU
             flux = jump(flux_nU)
             a -= rhos*u*div(v*u_conv)*dx
@@ -295,6 +295,7 @@ class PressureCorrectionEquation(BaseEquation):
             # Dirichlet boundary
             dirichlet_bcs = sim.data['dirichlet_bcs'].get('p', [])
             for dbc in dirichlet_bcs:
+                continue
                 p_bc = dbc.func()
                 
                 # SIPG for -∇⋅∇p
@@ -314,10 +315,11 @@ class PressureCorrectionEquation(BaseEquation):
                 L += penalty_ds*p_star*q*dbc.ds()
                 L -= penalty_ds*p_bc*q*dbc.ds()
             
-            # Neumann boundary conditions
-            neumann_bcs = sim.data['neumann_bcs'].get('p', [])
-            for nbc in neumann_bcs:
-                L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
+            # Neumann boundary conditions on p and p_star cancel
+            ## Neumann boundary conditions
+            #neumann_bcs = sim.data['neumann_bcs'].get('p', [])
+            #for nbc in neumann_bcs:
+            #    L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
