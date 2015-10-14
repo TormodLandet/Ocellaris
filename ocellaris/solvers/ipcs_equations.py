@@ -5,7 +5,27 @@ from . import BDF, UPWIND
 from .dg_helpers import define_penalty
 
 
-class MomentumPredictionEquation(object):
+class BaseEquation(object):
+    # Will be shadowed by object properties after first assemble
+    tensor_lhs = None
+    tensor_rhs = None
+    
+    def assemble_lhs(self):
+        if self.tensor_lhs is None:
+            self.tensor_lhs = dolfin.assemble(self.form_lhs)
+        else:
+            dolfin.assemble(self.form_lhs, tensor=self.tensor_lhs)
+        return self.tensor_lhs
+
+    def assemble_rhs(self):
+        if self.tensor_rhs is None:
+            self.tensor_rhs = dolfin.assemble(self.form_rhs)
+        else:
+            dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
+        return self.tensor_rhs
+
+
+class MomentumPredictionEquation(BaseEquation):
     def __init__(self, simulation, component, timestepping_method, flux_type,
                  use_stress_divergence_form, use_grad_p_form):
         """
@@ -53,6 +73,7 @@ class MomentumPredictionEquation(object):
         sim = self.simulation
         mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
+        ni = n[self.component]
         
         # Trial and test functions
         Vu = sim.data['Vu']
@@ -72,13 +93,6 @@ class MomentumPredictionEquation(object):
         
         # Include (∇u)^T term?
         assert not self.use_stress_divergence_form
-        
-        if self.vel_is_discontinuous:
-            penalty_dS, penalty_ds, D12 = self.calculate_penalties(nus)
-            
-            # Upwind and downwind velocitues
-            w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
-            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
         
         # Values at previous time steps
         up = sim.data['up%d' % self.component]
@@ -117,11 +131,18 @@ class MomentumPredictionEquation(object):
                 L += mus*nbc.func()*v*nbc.ds()
                 
                 if not self.use_grad_p_form:
-                    L -= p*v*n[self.component]*nbc.ds()
+                    L -= p*v*ni*nbc.ds()
         
         else:
             # Weak form of the Navier-Stokes eq. with discontinuous elements
             assert self.flux_type == UPWIND
+            
+            # Upwind and downwind velocitues
+            w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
+            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
+            
+            # Penalties
+            penalty_dS, penalty_ds, D12 = self.calculate_penalties(nus)
             
             # Time derivative
             # ∂u/∂t
@@ -150,10 +171,10 @@ class MomentumPredictionEquation(object):
             # ∇p
             if self.use_grad_p_form:
                 L -= v*p.dx(self.component)*dx
-                L += (avg(v) + D12*jump(v, n))*jump(p)*n[self.component]('+')*dS
+                L += (avg(v) + dot(D12, jump(v, n)))*jump(p)*ni('+')*dS
             else:
                 L += p*v.dx(self.component)*dx
-                L -= (avg(p) - dot(D12, jump(p, n)))*jump(v)*n[self.component]('+')*dS
+                L -= (avg(p) - dot(D12, jump(p, n)))*jump(v)*ni('+')*dS
             
             # Body force (gravity)
             # ρ g
@@ -165,7 +186,8 @@ class MomentumPredictionEquation(object):
                 u_bc = dbc.func()
                 
                 # Convection
-                L -= rhos*w_nD*u_bc*v*dbc.ds()
+                a += rhos*u*w_nU*v*dbc.ds()
+                L -= rhos*u_bc*w_nD*v*dbc.ds()
                 
                 # SIPG for -∇⋅μ∇u
                 a -= mus*dot(n, grad(u))*v*dbc.ds()
@@ -178,29 +200,13 @@ class MomentumPredictionEquation(object):
                 
                 # Pressure
                 if not self.use_grad_p_form:
-                    L -= p*v*n[self.component]*dbc.ds()
+                    L -= p*v*ni*dbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
-        self.tensor_lhs = None
-        self.tensor_rhs = None
-    
-    def assemble_lhs(self):
-        if self.tensor_lhs is None:
-            self.tensor_lhs = dolfin.assemble(self.form_lhs)
-        else:
-            dolfin.assemble(self.form_lhs, tensor=self.tensor_lhs)
-        return self.tensor_lhs
-
-    def assemble_rhs(self):
-        if self.tensor_rhs is None:
-            self.tensor_rhs = dolfin.assemble(self.form_rhs)
-        else:
-            dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
-        return self.tensor_rhs
 
 
-class PressureCorrectionEquation(object):
+class PressureCorrectionEquation(BaseEquation):
     def __init__(self, simulation, use_lagrange_multiplicator):
         """
         This class assembles the pressure Poisson equation, both CG and DG 
@@ -284,6 +290,7 @@ class PressureCorrectionEquation(object):
             
             # Symmetric Interior Penalty coercivity term
             a += penalty_dS*jump(p)*jump(q)*dS
+            L += penalty_dS*jump(p_star)*jump(q)*dS
             
             # Dirichlet boundary
             dirichlet_bcs = sim.data['dirichlet_bcs'].get('p', [])
@@ -295,61 +302,56 @@ class PressureCorrectionEquation(object):
                 a -= dot(n, grad(q))*p*dbc.ds()
                 L -= dot(n, grad(q))*p_bc*dbc.ds()
                 
+                # SIPG for -∇⋅∇p^*
                 L -= dot(n, grad(p_star))*q*dbc.ds()
                 L -= dot(n, grad(q))*p_star*dbc.ds()
                 
                 # Weak Dirichlet
                 a += penalty_ds*p*q*dbc.ds()
                 L += penalty_ds*p_bc*q*dbc.ds()
+                
+                # Weak Dirichlet for p^*
+                L += penalty_ds*p_star*q*dbc.ds()
+                L -= penalty_ds*p_bc*q*dbc.ds()
             
-            # Neumann boundary conditions on p and p_star cancel
+            # Neumann boundary conditions
+            neumann_bcs = sim.data['neumann_bcs'].get('p', [])
+            for nbc in neumann_bcs:
+                L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
-        self.tensor_lhs = None
-        self.tensor_rhs = None
-    
-    def assemble_lhs(self):
-        if self.tensor_lhs is None:
-            self.tensor_lhs = dolfin.assemble(self.form_lhs)
-        else:
-            dolfin.assemble(self.form_lhs, tensor=self.tensor_lhs)
-        return self.tensor_lhs
-
-    def assemble_rhs(self):
-        if self.tensor_rhs is None:
-            self.tensor_rhs = dolfin.assemble(self.form_rhs)
-        else:
-            dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
-        return self.tensor_rhs
 
 
-class VelocityUpdateEquation(object):
-    def __init__(self, simulation, d):
+class VelocityUpdateEquation(BaseEquation):
+    def __init__(self, simulation, component):
         """
         Define the velocity update equation for velocity component d.
         """
         self.simulation = simulation
+        self.component = component
         
-        rho = simulation.data['rho_star']
-        c0 = simulation.data['time_coeffs'][0]
-        dt = simulation.data['dt']
+        # Discontinuous or continuous elements
+        Vu_family = simulation.data['Vu'].ufl_element().family()
+        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
         
-        Vu = simulation.data['Vu']
-        us = simulation.data['u_star%d' % d]
-        p_hat = simulation.data['p_hat']
+        # Create UFL forms
+        self.define_update_equation()
+    
+    def define_update_equation(self):
+        sim = self.simulation
+        rho = sim.data['rho_star']
+        c1 = sim.data['time_coeffs'][0]
+        dt = sim.data['dt']
         
+        Vu = sim.data['Vu']
+        us = sim.data['u_star%d' % self.component]
+        p_hat = sim.data['p_hat']
         u = dolfin.TrialFunction(Vu)
         v = dolfin.TestFunction(Vu)
         
         self.form_lhs = u*v*dx
-        self.form_rhs = us*v*dx - dt/(c0*rho)*p_hat.dx(d)*v*dx
-    
-    def assemble_lhs(self):
-        return dolfin.assemble(self.form_lhs)
-
-    def assemble_rhs(self):
-        return dolfin.assemble(self.form_rhs)
+        self.form_rhs = us*v*dx - dt/(c1*rho)*p_hat.dx(self.component)*v*dx
 
 
 EQUATION_SUBTYPES = {

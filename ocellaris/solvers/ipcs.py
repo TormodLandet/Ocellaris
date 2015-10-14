@@ -16,12 +16,11 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'absolute_tolerance': 1e-15}
 
 # Equations - default values, can be changed in the input file
-TIMESTEPPING_METHODS = (BDF, CRANK_NICOLSON)
+TIMESTEPPING_METHODS = (BDF,)
 EQUATION_SUBTYPE = 'Default'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
-PRESSURE_CONTINUITY_FACTOR = 0
 
 
 @register_solver('IPCS')
@@ -88,14 +87,24 @@ class SolverIPCS(Solver):
         """
         sim = self.simulation
         
+        # Representation of velocity
+        Vu_family = sim.data['Vu'].ufl_element().family()
+        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
+        
         # Create linear solvers
         self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u', SOLVER_U,
                                                         PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
         self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p', SOLVER_P,
                                                         PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
         self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
-        self.u_upd_solver = linear_solver_from_input(self.simulation, 'solver/u_upd', SOLVER_U,
-                                                     PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
+        
+        # Velocity update can be performed with local solver for DG velocities
+        self.use_local_solver_for_update = sim.input.get_value('solver/u_upd', self.vel_is_discontinuous, 'bool')
+        if self.use_local_solver_for_update:
+            self.u_upd_solver = None # Will be set when LHS is ready
+        else:
+            self.u_upd_solver = linear_solver_from_input(self.simulation, 'solver/u_upd', SOLVER_U,
+                                                         PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
@@ -131,12 +140,6 @@ class SolverIPCS(Solver):
         self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
                                                               USE_STRESS_DIVERGENCE, 'bool')
         self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
-        self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor', 
-                                                                 PRESSURE_CONTINUITY_FACTOR, 'float')
-        
-        # Representation of velocity
-        Vu_family = sim.data['Vu'].ufl_element().family()
-        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
         
         # Velocity post_processing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
@@ -310,25 +313,34 @@ class SolverIPCS(Solver):
         """
         Update the velocity predictions with the updated pressure
         field from the pressure correction equation
-        """    
-        for d in range(self.simulation.ndim):
-            eq = self.eqs_vel_upd[d]
+        """
+        if self.use_local_solver_for_update:
+            # Element-wise projection
+            if self.u_upd_solver is None:
+                self.u_upd_solver = dolfin.LocalSolver(self.eqs_vel_upd[0].form_lhs)
+                self.u_upd_solver.factorize()
             
-            if self.Au_upd is None:
-                self.Au_upd = eq.assemble_lhs()
-            
-            A = self.Au_upd
-            b = eq.assemble_rhs()
-            u_new = self.simulation.data['u%d' % d]
-            
-            # Apply the Dirichlet boundary conditions
-            if not self.vel_is_discontinuous:
-                # Apply strong boundary conditions
-                dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('u%d' % d, [])
-                for bc in dirichlet_bcs:
-                    bc.apply(A, b)
-            
-            self.niters_u_upd[d] = self.u_upd_solver.solve(A, u_new.vector(), b)
+            Vu = self.simulation.data['Vu']
+            for d in range(self.simulation.ndim):
+                eq = self.eqs_vel_upd[d]
+                b = eq.assemble_rhs()
+                u_new = self.simulation.data['u%d' % d]
+                self.u_upd_solver.solve_local(u_new.vector(), b, Vu.dofmap())
+                self.niters_u_upd[d] = 0
+        
+        else:
+            # Global projection
+            for d in range(self.simulation.ndim):
+                eq = self.eqs_vel_upd[d]
+                
+                if self.Au_upd is None:
+                    self.Au_upd = eq.assemble_lhs()
+                
+                A = self.Au_upd
+                b = eq.assemble_rhs()
+                u_new = self.simulation.data['u%d' % d]
+                
+                self.niters_u_upd[d] = self.u_upd_solver.solve(A, u_new.vector(), b)
     
     @timeit
     def postprocess_velocity(self):

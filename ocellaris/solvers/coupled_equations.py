@@ -167,7 +167,6 @@ class CoupledEquations(object):
                 flux = jump(flux_nU)
                 eq -= rhos*u[d]*div(v[d]*u_conv)*dx
                 eq += flux*jump(v[d])*dS
-                eq += rhos*flux_nU*v[d]*ds
                 
                 # Diffusion:
                 # -∇⋅∇u
@@ -211,7 +210,8 @@ class CoupledEquations(object):
                         eq += q*u_bc*n[d]*dbc.ds()
                     
                     # Convection
-                    eq += rhos*w_nD*u_bc*v[d]*dbc.ds()
+                    eq += rhos*u[d]*w_nU*v[d]*dbc.ds()
+                    eq += rhos*u_bc*w_nD*v[d]*dbc.ds()
                     
                     # SIPG for -∇⋅μ∇u
                     eq -= mus*dot(n, grad(u[d]))*v[d]*dbc.ds()
