@@ -53,7 +53,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     # Interpolate the analytical solution to the same function space
     Vu = sim.data['Vu']
     Vp = sim.data['Vp']
-    vals = dict(t=sim.time, dt=sim.dt, nu=sim.input['physical_properties']['nu0'])
+    vals = dict(t=sim.time, dt=sim.dt, nu=sim.input['physical_properties']['nu0'], rho=sim.input['physical_properties']['rho0'])
     u0e = dolfin.Expression(sim.input.get_value('initial_conditions/up0/cpp_code'), **vals)
     u1e = dolfin.Expression(sim.input.get_value('initial_conditions/up1/cpp_code'), **vals)
     if sim.input.get_value('solver/timestepping_method') == 'CN':
@@ -101,6 +101,18 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
             p1.write_png('%g_%g_%s_diff' % (N, dt, name))
             p2.write_png('%g_%g_%s' % (N, dt, name))
         dolfin.interactive()
+        
+        
+    if N == 40:
+        dolfin.plot(sim.data['u0'], title='u0')
+        dolfin.plot(sim.data['u1'], title='u1')
+        dolfin.plot(sim.data['p'], title='p')
+        dolfin.plot(u0a, title='u0a')
+        dolfin.plot(u1a, title='u1a')
+        dolfin.plot(pa, title='pa')
+        plot_err(sim.data['u0'], u0a, 'u0a - u0')
+        plot_err(sim.data['u1'], u1a, 'u1a - u1')
+        plot_err(sim.data['p'], pa, 'pa - p')
     
     hmin = sim.data['mesh'].hmin()
     return err_u0, err_u1, err_p, err_u0_H1, err_u1_H1, err_p_H1, hmin, dt, duration
@@ -116,6 +128,12 @@ def calc_err(f_num, f_ana, normtype='l2'):
         return dolfin.norm(f_err) / dolfin.norm(f_ana)
     else:
         return dolfin.norm(f_err, normtype)
+
+
+def plot_err(f_num, f_ana, title):
+    f_err = dolfin.Function(f_num.function_space())
+    f_err.vector()[:] = f_ana.vector()[:] - f_num.vector()[:]
+    dolfin.plot(f_err, title=title)
 
 
 def print_results(results, indices, restype):
@@ -181,3 +199,4 @@ def run_convergence_time(dt_list):
 run_convergence_space([8, 16, 24])
 #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
 #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
+dolfin.interactive()

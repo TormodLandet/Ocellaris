@@ -12,7 +12,7 @@ metadata:
 
 physical_properties:
     g: [0, 0]
-    nu0: 0.01
+    nu0: 0.005
     rho0: 1.0
 
 mesh:
@@ -70,7 +70,7 @@ initial_conditions:
     upp1:
         cpp_code:  sin(pi*x[0])*cos(pi*x[1])*exp(-2*pi*pi*nu*(t-dt))
     p:
-        cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*t)/4
+        cpp_code: -(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*t)/4*rho
 
 time:
     dt: overridden in script
@@ -83,8 +83,8 @@ output:
     ocellaris_log_level: warning
 
 solver:
-    type: Coupled
-    #num_inner_iter: 4
+    type: IPCS
+    num_inner_iter: 4
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
     function_space_velocity: DG
@@ -92,16 +92,15 @@ solver:
     timestepping_method: BDF
     #velocity_postprocessing: None
     use_stress_divergence_form: false
+    use_lagrange_multiplicator: no
     u:
-        penalty_boost_factor: 2
         parameters:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
     p:
-        penalty_boost_factor: 2
         parameters:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
     _coupled:
         solver: gmres
-        preconditioner: ilu
+        preconditioner: petsc_amg
