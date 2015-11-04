@@ -6,6 +6,10 @@ from . import register_multi_phase_model, MultiPhaseModel
 from ..convection import get_convection_scheme
 
 
+CONVECTION_SCHEME = 'HRIC'
+CONTINUOUS_FIELDS = False
+
+
 @register_multi_phase_model('BlendedAlgebraicVOF')
 class BlendedAlgebraicVofModel(MultiPhaseModel):
     description = 'A blended algebraic VOF scheme implementing HRIC/CICSAM type schemes'
@@ -32,6 +36,17 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         simulation.data['cp'] = Function(V)
         simulation.data['cpp'] = Function(V)
         simulation.data['c_star']= Function(V)
+
+        # The projected density and viscosity functions for the new time step can be made continuous
+        self.continuous_fields = simulation.input.get_value('multiphase_solver/continuous_fields',
+                                                            CONTINUOUS_FIELDS, 'bool')
+        if self.continuous_fields:
+            mesh = simulation.data['mesh']
+            P = V.ufl_element().degree()
+            V_star = dolfin.FunctionSpace(mesh, 'CG', P+1)
+            self.continuous_c_star = dolfin.Function(V_star)
+            self.continuous_c = dolfin.Function(V_star)
+            self.continuous_c_old = dolfin.Function(V_star)
         
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value('physical_properties/rho0', required_type='float')
@@ -40,11 +55,10 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
         
         # The convection blending function that counteracts numerical diffusion
-        scheme = simulation.input.get_value('convection/c/convection_scheme', 'HRIC', 'string')
+        scheme = simulation.input.get_value('convection/c/convection_scheme', CONVECTION_SCHEME, 'string')
         scheme_class = get_convection_scheme(scheme)
         self.convection_scheme = scheme_class(simulation, 'c')
         self.convection_scheme_star = scheme_class(simulation, 'c_star')
-        
         self.need_gradient = scheme_class.need_alpha_gradient
         
         # Create the equations when the simulation starts
@@ -55,6 +69,10 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Report divergence of the velocity field after each time step
         simulation.hooks.add_post_timestep_hook(self.report_divergence, 'BlendedAlgebraicVofModel - report velocity divergence')
+
+        simulation.log.info('Creating blended VOF multiphase model')
+        simulation.log.info('    Using convection scheme %s for the colour function' % scheme)
+        simulation.log.info('    Using continuous rho and nu fields: %r' % self.continuous_fields)
     
     def on_simulation_start(self):
         """
@@ -111,11 +129,20 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         Return the colour function on timestep t^{n+k}
         """
         if k == 0:
-            c = self.simulation.data['cp']
+            if self.continuous_fields:
+                c = self.continuous_c
+            else:
+                c = self.simulation.data['cp']
         elif k == -1:
-            c = self.simulation.data['cpp']
+            if self.continuous_fields:
+                c = self.continuous_c_old
+            else:
+                c = self.simulation.data['cpp']
         elif k == 1:
-            c = self.simulation.data['c_star']
+            if self.continuous_fields:
+                c = self.continuous_c_star
+            else:
+                c = self.simulation.data['c_star']
         
         if force_steady:
             c = self.simulation.data['c']
@@ -178,8 +205,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         timer = dolfin.Timer('Ocellaris update VOF')
         self.dt.assign(dt)
         
+        # Reconstruct the gradients
         if self.need_gradient:
-            # Reconstruct the gradients
             self.convection_scheme.gradient_reconstructor.reconstruct()
             self.convection_scheme_star.gradient_reconstructor.reconstruct()
         
@@ -216,6 +243,16 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         A_star = self.eq_star.assemble_lhs()
         b_star = self.eq_star.assemble_rhs()
         dolfin.solve(A_star, c_star.vector(), b_star)
+        
+        # Optionally use a continuous predicted colour field
+        if self.continuous_fields:
+            #self.continuous_c_star.interpolate(c_star)
+            #self.continuous_c.interpolate(c)
+            #self.continuous_c_old.interpolate(cp)
+            Vcg = self.continuous_c_star.function_space()          
+            self.continuous_c_star.assign(dolfin.project(c_star, Vcg))
+            self.continuous_c.assign(dolfin.project(c, Vcg))
+            self.continuous_c_old.assign(dolfin.project(cp, Vcg))
         
         # Report total mass balance and divergence
         sum_c = dolfin.assemble(c*dolfin.dx)
@@ -332,3 +369,4 @@ class AdvectionEquation(object):
         else:
             dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
         return self.tensor_rhs
+
