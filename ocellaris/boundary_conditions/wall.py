@@ -1,10 +1,11 @@
+# encoding: utf8
 import dolfin
 from . import register_boundary_condition, BoundaryCondition
 from .neumann import OcellarisNeumannBC
 
 @register_boundary_condition('WallPressure')
 class WallPressureBoundaryCondition(BoundaryCondition):
-    description = 'Boundary condition for pressure at a wall, dp/dn = g'
+    description = 'Boundary condition for pressure at a wall, dp/dn = ρ g⋅n'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """

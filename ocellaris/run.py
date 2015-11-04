@@ -118,7 +118,8 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
             else:
                 tb = traceback.format_tb(sys.exc_info()[2])
                 simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
-                simulation.log.error('Got exception when running solver:\n%s' % str(e))
+                e_type = type(e).__name__
+                simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
             simulation.log.error('=== EXCEPTION =='*5)
             simulation.hooks.simulation_ended(success)
         else:
