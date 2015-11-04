@@ -129,6 +129,11 @@ class SolverCoupled(Solver):
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing_method = sim.input.get_value('solver/velocity_postprocessing',
                                                                   default_postprocessing, 'string')
+        
+        # Quasi-steady simulation input
+        self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
+                                                       None, 'float')
+        self.is_steady = self.steady_velocity_eps is not None
     
     def create_functions(self):
         """
@@ -344,16 +349,28 @@ class SolverCoupled(Solver):
             self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
+            vel_diff = 0
             for d in range(self.simulation.ndim):
                 u_new = self.simulation.data['u%d' % d]
                 up = self.simulation.data['up%d' % d]
                 upp = self.simulation.data['upp%d' % d]
+                
+                if self.is_steady:
+                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max() 
+                    vel_diff = max(vel_diff, diff)
+                
                 upp.assign(up)
                 up.assign(u_new)
             
             # Change time coefficient to second order
             if self.timestepping_method == BDF:
                 self.set_timestepping_coefficients([3/2, -2, 1/2])
+                
+            if self.is_steady:
+                sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)
+                if vel_diff < self.steady_velocity_eps:
+                    sim.log.info('Stopping simulation, steady state achieved')
+                    sim.input.set_value('time/tmax', t)
             
             # Postprocess this time step
             sim.hooks.end_timestep()

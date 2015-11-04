@@ -66,7 +66,13 @@ class Input(collections.OrderedDict):
         
         d = self
         for p in path:
-            if p not in d:
+            if isinstance(d, list):
+                try:
+                    p = int(p)
+                except ValueError:
+                    report_error('List index not integer',
+                                 'Not a valid list index:  %s' % p)    
+            elif p not in d:
                 if default_value is UNDEFINED:
                     report_error('Missing parameter on input file',
                                  'Missing required input parameter:\n  %s' % pathstr)

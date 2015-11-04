@@ -83,6 +83,8 @@ class CoupledEquations(object):
         rhos = sim.data['rho_star']
         nus = sim.data['nu_star']
         mus = rhos*nus
+        rho = sim.data['rho']
+        rho_old = sim.data['rho_old']
         
         # Include (∇u)^T term?
         if self.use_stress_divergence_form:
@@ -120,7 +122,7 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂u/∂t
-                eq += rhos*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
+                eq += (rhos*c1*u[d] + rho*c2*up + rho_old*c3*upp)/dt*v[d]*dx
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
@@ -158,11 +160,11 @@ class CoupledEquations(object):
                     eq -= (avg(q) - dot(D12, jump(q, n)))*jump(u[d])*n[d]('+')*dS
                 
                 # Time derivative
-                # ∂u/∂t
-                eq += rhos*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
+                # ∂(ρu)/∂t
+                eq += (rhos*c1*u[d] + rho*c2*up + rho_old*c3*upp)/dt*v[d]*dx
                 
                 # Convection:
-                # -w⋅∇u    
+                # -w⋅∇(ρu)
                 flux_nU = rhos*u[d]*w_nU
                 flux = jump(flux_nU)
                 eq -= rhos*u[d]*div(v[d]*u_conv)*dx
@@ -222,7 +224,25 @@ class CoupledEquations(object):
                     eq += penalty_ds*(u[d] - u_bc)*v[d]*dbc.ds()
                     
                     # Pressure
-                    eq += p*v[d]*n[d]*dbc.ds()
+                    if not self.use_grad_p_form:
+                        eq += p*v[d]*n[d]*dbc.ds()
+                
+                # Neumann boundary
+                neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                for nbc in neumann_bcs:
+                    # Divergence free criterion
+                    if not self.use_grad_p_form:
+                        eq -= q*u[d]*n[d]*nbc.ds()
+                    
+                    # Convection
+                    eq += rhos*u[d]*w_nU*v[d]*nbc.ds()
+                    
+                    # Diffusion
+                    eq -= mus*nbc.func()*v[d]*dbc.ds()
+                    
+                    # Pressure
+                    if not self.use_grad_p_form:
+                        eq += p*v[d]*n[d]*nbc.ds()
                 
         a, L = dolfin.system(eq)
         self.form_lhs = a
@@ -549,7 +569,7 @@ class CoupledEquationsPreassembled(CoupledEquations):
                 # Convection
                 L -= rhos*w_nD*dbc.func()*v[d]*dbc.ds()
                 
-                # SIPG for -∇⋅μ∇udbc.func()
+                # SIPG for -∇⋅μ∇u
                 a_diffusion -= dot(n, grad(u[d]))*v[d]*dbc.ds()
                 a_diffusion -= dot(n, grad(v[d]))*u[d]*dbc.ds()
                 L -= mus*dot(n, grad(v[d]))*dbc.func()*dbc.ds()
@@ -561,7 +581,7 @@ class CoupledEquationsPreassembled(CoupledEquations):
                 # Pressure
                 a_pressure += p*v[d]*n[d]*dbc.ds()
 
-        # Assemble matricesCoupledEquationsScaledPressure
+        # Assemble matrices
         self.matrix_Q = dolfin.assemble(a_lm + a_divergence + a_jump +
                                         a_pressure + a_dirichlet)        
         self.matrix_M = dolfin.assemble(dot(u, v)*dx)
