@@ -1,0 +1,71 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2015-03-13
+    description: |
+        Implements the Kovasznay flow test case from "Laminar flow behind a
+        two-dimensional grid" by L. I. G Kovasznay (1948)
+        
+        Reynolds number R = 40 which gives λ = -0.9637405441957689
+
+physical_properties:
+    g: [0, 0]
+    nu0: 0.025
+    rho0: 1.0
+
+mesh:
+    type: Rectangle
+    Nx: 15
+    Ny: 15
+    starty: -0.5
+    endy: 0.5
+    diagonal: left/right
+
+
+boundary_conditions:
+-   name: vertical sides
+    selector: code
+    inside_code: on_boundary and (near(x[0], 0.0) or near(x[0], 1.0))
+    u:
+        type: CppCodedValue
+        cpp_code:
+        -   1.0 - exp(-0.9637405441957689*x[0])*cos(2*pi*x[1])
+        -   -0.9637405441957689/(2*pi)*exp(-0.9637405441957689*x[0])*sin(2*pi*x[1])
+    p:
+        type: CppCodedGradient
+        cpp_code: "-0.9637405441957689/2*exp(-0.9637405441957689*x[0]) * (near(x[0], 0.0) ? 1.0 : -1.0)"
+
+-   name: horisontal sides
+    selector: code
+    inside_code: on_boundary and (near(x[1], -0.5) or near(x[1], 0.5))
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantValue
+        value: 0
+    p:
+        type: ConstantGradient
+        value: 0
+
+time:
+    dt: 0.001
+    tmax: 1000.0
+
+output:
+    prefix: kovasznay
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+
+solver:
+    type: Coupled
+    num_inner_iter: 4
+    polynomial_degree_velocity: 2
+    polynomial_degree_pressure: 1
+    function_space_velocity: CG
+    function_space_pressure: CG
+    steady_velocity_stopping_criterion: 1.0e-8
