@@ -368,6 +368,7 @@ class SolverCoupled(Solver):
             if self.timestepping_method == BDF:
                 self.set_timestepping_coefficients([3/2, -2, 1/2])
                 
+            # Stop steady state simulation if convergence has been reached
             if self.is_steady:
                 sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)
                 if vel_diff < self.steady_velocity_eps:
