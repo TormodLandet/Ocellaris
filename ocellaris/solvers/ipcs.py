@@ -1,7 +1,7 @@
 from __future__ import division
 import dolfin
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
+from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND, SolverError
 from .ipcs_equations import EQUATION_SUBTYPES
 from .dg_helpers import VelocityBDMProjection
 
@@ -14,6 +14,8 @@ PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'relative_tolerance': 1e-10,
                      'absolute_tolerance': 1e-15}
+MAX_ITER_MOMENTUM = 1000
+MAX_INNER_RERUNS = 1
 
 # Equations - default values, can be changed in the input file
 TIMESTEPPING_METHODS = (BDF,)
@@ -40,7 +42,19 @@ class SolverIPCS(Solver):
         
         # Solver control parameters
         sim.data['dt'] = dolfin.Constant(simulation.dt)
-        self.is_single_phase = isinstance(sim.data['rho'], dolfin.Constant)
+        
+        # Hydrostatic pressure
+        rho_min, rho_max = sim.multi_phase_model.get_density_range()
+        self.hydrostatic_pressure_correction = rho_min != rho_max
+        if self.hydrostatic_pressure_correction:
+            rho = sim.data['rho_star']
+            g = sim.data['g']
+            ph = sim.data['p_hydrostatic']
+            default_vertical_direction = sim.ndim - 1
+            vertical_direction = sim.input.get_value('multiphase_solver/vertical_direction',
+                                                     default_vertical_direction, 'float')
+            sky_location = sim.input.get_value('multiphase_solver/sky_location', required_type='float')
+            self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, vertical_direction, sky_location)
         
         # Get equations
         MomentumPredictionEquation, PressureCorrectionEquation, \
@@ -53,7 +67,8 @@ class SolverIPCS(Solver):
                                             timestepping_method=self.timestepping_method,
                                             flux_type=self.flux_type,
                                             use_stress_divergence_form=self.use_stress_divergence_form,
-                                            use_grad_p_form=self.use_grad_p_form)
+                                            use_grad_p_form=self.use_grad_p_form,
+                                            include_hydrostatic_pressure=self.hydrostatic_pressure_correction)
             self.eqs_mom_pred.append(eq)
         
         # Define the pressure correction equation
@@ -179,6 +194,11 @@ class SolverIPCS(Solver):
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
         sim.data['p_hat'] = dolfin.Function(Vp)
+        
+        # Hydrostatic pressure is always CG
+        Pp = Vp.ufl_element().degree()
+        Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
+        sim.data['p_hydrostatic'] = dolfin.Function(Vph)
     
     @timeit
     def update_convection(self, t, dt):
@@ -218,6 +238,9 @@ class SolverIPCS(Solver):
         """
         Solve the momentum prediction equation
         """
+        solver = self.velocity_solver
+        self.momentum_solver_converged = True
+        
         err = 0.0
         for d in range(self.simulation.ndim):
             us = self.simulation.data['u_star%d' % d]
@@ -240,7 +263,12 @@ class SolverIPCS(Solver):
                 for dbc in dirichlet_bcs:
                     dbc.apply(A, b)
             
-            self.niters_u[d] = self.velocity_solver.solve(A, us.vector(), b)
+            solver.parameters['error_on_nonconvergence'] = False
+            solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
+            self.niters_u[d] = solver.solve(A, us.vector(), b)
+            
+            if self.niters_u[d] == MAX_ITER_MOMENTUM:
+                self.momentum_solver_converged = False
             
             self.u_tmp.vector().axpy(-1, us.vector())
             err += self.u_tmp.vector().norm('l2')
@@ -401,10 +429,25 @@ class SolverIPCS(Solver):
             # Extrapolate the convecting velocity to the new time step
             self.update_convection(t, dt)
             
+            # Calculate the hydrostatic pressure when the density is not constant
+            if self.hydrostatic_pressure_correction:
+                self.hydrostatic_pressure.update()
+            
             # Run inner iterations
-            for self.inner_iteration in xrange(1, num_inner_iter+1):
+            self.inner_iteration = 1
+            num_inner_reruns = 0
+            while self.inner_iteration <= num_inner_iter:
                 err_u_star = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
+                
+                if not self.momentum_solver_converged:
+                    # We need to rerun this inner iteration
+                    num_inner_reruns += 1
+                    
+                    if num_inner_reruns > MAX_INNER_RERUNS:
+                        msg  = 'Inner iterations needed more than %d reruns' % MAX_INNER_RERUNS
+                        sim.log.warning(msg)
+                        raise SolverError(msg)
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
@@ -418,6 +461,10 @@ class SolverIPCS(Solver):
                 
                 if err_u_star < allowable_error_inner:
                     break
+                
+                if self.momentum_solver_converged:
+                    self.inner_iteration += 1
+                    num_inner_reruns = 0
             
             self.velocity_update()
             self.postprocess_velocity()
@@ -441,3 +488,35 @@ class SolverIPCS(Solver):
         
         # We are done
         sim.hooks.simulation_ended(success=True)
+
+
+class HydrostaticPressure(object):
+    def __init__(self, rho, g, ph, vertical_direction, zero_level, eps=1e-8):
+        """
+        Calculate the hydrostatic pressure
+
+        The gravity vector g must be parallel to one of th axes
+        """
+        Vp = ph.function_space()
+        p = dolfin.TrialFunction(Vp)
+        q = dolfin.TestFunction(Vp)
+        d = vertical_direction
+        
+        a = p.dx(d)*q.dx(d)*dolfin.dx
+        L = g[d]*rho*q.dx(d)*dolfin.dx
+        
+        inside = lambda  x, on_boundary: zero_level - eps <= x[d] <= zero_level + eps
+        self.zero_bc = dolfin.DirichletBC(Vp, 0.0, inside)
+        self.func = ph
+        self.tensor_lhs = dolfin.assemble(a)
+        self.form_rhs = L
+    
+    def update(self):
+        t = dolfin.Timer('Ocellaris update hydrostatic pressure')
+        
+        A = self.tensor_lhs
+        b = dolfin.assemble(self.form_rhs)
+        self.zero_bc.apply(A, b)
+        dolfin.solve(A, self.func.vector(), b)
+        
+        t.stop()

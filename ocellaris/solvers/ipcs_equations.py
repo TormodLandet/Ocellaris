@@ -27,7 +27,7 @@ class BaseEquation(object):
 
 class MomentumPredictionEquation(BaseEquation):
     def __init__(self, simulation, component, timestepping_method, flux_type,
-                 use_stress_divergence_form, use_grad_p_form):
+                 use_stress_divergence_form, use_grad_p_form, include_hydrostatic_pressure):
         """
         This class assembles the momentum equation for one velocity component, both CG and DG 
         """
@@ -37,6 +37,7 @@ class MomentumPredictionEquation(BaseEquation):
         self.use_stress_divergence_form = use_stress_divergence_form
         self.use_grad_p_form = use_grad_p_form
         self.flux_type = flux_type
+        self.include_hydrostatic_pressure = include_hydrostatic_pressure
         
         assert self.timestepping_method == BDF
         
@@ -60,7 +61,7 @@ class MomentumPredictionEquation(BaseEquation):
         penalty_ds = penalty_dS*2
         self.simulation.log.info('DG SIP penalty viscosity:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
-        D12 = Constant([0, 0])
+        D12 = Constant([1, 1])
         
         return Constant(penalty_dS), Constant(penalty_ds), D12
     
@@ -86,8 +87,13 @@ class MomentumPredictionEquation(BaseEquation):
         u_conv = sim.data['u_conv']
         p = sim.data['p']
         
+        if self.include_hydrostatic_pressure:
+            p += sim.data['p_hydrostatic']
+        
         # Fluid properties at t^{n+1}*
         rhos = sim.data['rho_star']
+        rho = sim.data['rho']
+        rho_old = sim.data['rho_old']
         nus = sim.data['nu_star']
         mus = rhos*nus
         
@@ -104,7 +110,7 @@ class MomentumPredictionEquation(BaseEquation):
             # Time derivative
             # ∂u/∂t
             a = rhos*c1*u/dt*v*dx
-            L = -rhos*(c2*up + c3*upp)/dt*v*dx
+            L = -(rho*c2*up + rho_old*c3*upp)/dt*v*dx
             
             # Convection
             # ρ∇⋅(u ⊗ u_conv)
@@ -145,12 +151,12 @@ class MomentumPredictionEquation(BaseEquation):
             penalty_dS, penalty_ds, D12 = self.calculate_penalties(nus)
             
             # Time derivative
-            # ∂u/∂t
+            # ∂(ρu)/∂t
             a = rhos*c1*u/dt*v*dx
-            L = -rhos*(c2*up + c3*upp)/dt*v*dx
+            L = -(rho*c2*up + rho_old*c3*upp)/dt*v*dx
             
             # Convection:
-            # w⋅∇u    
+            # w⋅∇(ρu)    
             flux_nU = rhos*u*w_nU
             flux = jump(flux_nU)
             a -= rhos*u*div(v*u_conv)*dx
@@ -201,6 +207,14 @@ class MomentumPredictionEquation(BaseEquation):
                 # Pressure
                 if not self.use_grad_p_form:
                     L -= p*v*ni*dbc.ds()
+                    
+            # Neumann boundary
+            neumann_bcs = sim.data['neumann_bcs'].get('u%d' % self.component, [])
+            for nbc in neumann_bcs:
+                L -= mus*nbc.func()*v*nbc.ds()
+                
+                if not self.use_grad_p_form:
+                    L -= p*v*ni*nbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
@@ -295,7 +309,6 @@ class PressureCorrectionEquation(BaseEquation):
             # Dirichlet boundary
             dirichlet_bcs = sim.data['dirichlet_bcs'].get('p', [])
             for dbc in dirichlet_bcs:
-                continue
                 p_bc = dbc.func()
                 
                 # SIPG for -∇⋅∇p
