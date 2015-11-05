@@ -30,6 +30,8 @@ class Input(collections.OrderedDict):
                 inp = yaml.load(inpf)
         except ValueError as e:
             report_error('Error on input file', str(e))
+        except yaml.YAMLError as e:
+            report_error('Input file "%s" is not a valid YAML file' % file_name, str(e))
         
         assert 'ocellaris' in inp
         assert inp['ocellaris']['type'] == 'input'

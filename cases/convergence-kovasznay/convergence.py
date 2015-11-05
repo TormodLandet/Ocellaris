@@ -35,13 +35,14 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
         traceback.print_exc()
         return [1e10]*6 + [1, dt, time.time()-t1]
     print 'DONE'
+    tmax_warning = ' <------ NON CONVERGENCE!!' if sim.time >= tmax else ''
     
     # Interpolate the analytical solution to the same function space
     Vu = sim.data['Vu']
     Vp = sim.data['Vp']
     u0e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/0'), degree=polydeg_u)
     u1e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/1'), degree=polydeg_u)
-    pe  = dolfin.Expression('0.5*(1 - exp(-0.9637405441957689*x[0]))', degree=polydeg_p)
+    pe  = dolfin.Expression('-0.5*exp(-0.9637405441957689*2*x[0])', degree=polydeg_p)
     u0a = dolfin.project(u0e, Vu)
     u1a = dolfin.project(u1e, Vu)
     pa = dolfin.project(pe, Vp)
@@ -61,7 +62,8 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     err_u1_H1 = calc_err(sim.data['u1'], u1a, 'H1')
     err_p_H1 = calc_err(sim.data['p'], pa, 'H1')
     
-    print 'Num iterations:', sim.timestep
+    print 'Number of time steps:', sim.timestep, tmax_warning
+    print 'max(ui_new-ui_prev)', sim.reporting.get_report('max(ui_new-ui_prev)')[1][-1]
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
     print 'p*dx', int_p
     print 'pa*dx', dolfin.assemble(pa*dolfin.dx(domain=Vp.mesh()))
@@ -158,7 +160,7 @@ def seconds_as_string(seconds):
 
 def run_convergence_space(N_list):
     dt = 0.01
-    tmax = 1000.0
+    tmax = 3.0
     results = {}
     prev_N = None
     for N in N_list:
@@ -167,4 +169,4 @@ def run_convergence_space(N_list):
         print_results(results, N_list, 'h')
 
 run_convergence_space([8, 16, 24])
-dolfin.interactive()
+#dolfin.interactive()

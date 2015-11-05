@@ -18,12 +18,11 @@ physical_properties:
 
 mesh:
     type: Rectangle
-    Nx: 15
-    Ny: 15
+    Nx: 15 # Overridden in convergence.py
+    Ny: 15 # Overridden in convergence.py
     starty: -0.5
     endy: 0.5
     diagonal: left/right
-
 
 boundary_conditions:
 -   name: vertical sides
@@ -36,7 +35,7 @@ boundary_conditions:
         -   -0.9637405441957689/(2*pi)*exp(-0.9637405441957689*x[0])*sin(2*pi*x[1])
     p:
         type: CppCodedGradient
-        cpp_code: "-0.9637405441957689/2*exp(-0.9637405441957689*x[0]) * (near(x[0], 0.0) ? 1.0 : -1.0)"
+        cpp_code: "-0.9637405441957689/2*exp(-0.9637405441957689*x[0]) * (near(x[0], 0.0) ? -1.0 : 1.0)"
 
 -   name: horisontal sides
     selector: code
@@ -52,20 +51,20 @@ boundary_conditions:
         value: 0
 
 time:
-    dt: 0.001
-    tmax: 1000.0
+    dt: 0.01   # Overridden in convergence.py
+    tmax: 10.0 # Overridden in convergence.py
 
 output:
     prefix: kovasznay
     log_name: .log
     dolfin_log_level: warning
-    ocellaris_log_level: info
+    ocellaris_log_level: info  # Overridden in convergence.py
 
 solver:
     type: Coupled
     num_inner_iter: 4
-    polynomial_degree_velocity: 2
-    polynomial_degree_pressure: 1
+    polynomial_degree_velocity: 2  # Overridden in convergence.py
+    polynomial_degree_pressure: 1  # Overridden in convergence.py
     function_space_velocity: CG
     function_space_pressure: CG
     steady_velocity_stopping_criterion: 1.0e-8

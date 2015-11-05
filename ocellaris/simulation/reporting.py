@@ -36,7 +36,17 @@ class Reporting(object):
         time = self.simulation.time
         if not self.timesteps or not self.timesteps[-1] == time:
             self.timesteps.append(time)
-        self.timestep_xy_reports.setdefault(report_name, []).append(value)
+        rep = self.timestep_xy_reports.setdefault(report_name, [])
+        rep.extend([None]*(len(self.timesteps) - len(rep)))
+        rep[-1] = value
+        
+    def get_report(self, report_name):
+        """
+        Get a the time series of a reported value
+        """
+        t = self.timesteps
+        rep = self.timestep_xy_reports[report_name]
+        return t[:len(rep)], rep
     
     def log_timestep_reports(self):
         """
@@ -50,6 +60,13 @@ class Reporting(object):
         self.simulation.log.info('Reports for timestep = %5d, time = %10.4f, ' % (it, t) +
                                  ', '.join(info))
         
+        # Update interactive report plots
+        self._update_plots()
+    
+    def _update_plots(self):
+        """
+        Update plots requested in input (reporting/reports_to_show)
+        """
         for report_name in self.figures:
             if not report_name in self.timestep_xy_reports:
                 report_error('Unknown report name: "%s"' % report_name,

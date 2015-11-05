@@ -99,18 +99,20 @@ class SolverCoupled(Solver):
         self.pressure_null_space = None
         self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
                                                               USE_LAGRANGE_MULTIPLICATOR, 'bool')
-        if self.use_lagrange_multiplicator or self.simulation.data['dirichlet_bcs'].get('p', []):
+        if self.use_lagrange_multiplicator:
             self.remove_null_space = False
         
-        # Check if the solver supports removing null spaces
+        # Check if the solver supports removing null spaces, otherwise we can enable a hack
+        # that works better than nothing, but is most definitely not preferred  
         self.normalize_pressure = False
         does_not_support_null_space = ('mumps', )
         if self.remove_null_space and self.coupled_solver.created_with_lu_method in does_not_support_null_space:    
             self.normalize_pressure = True
             self.remove_null_space = False
         
-        # No need for Lagrange multiplicatiorns if the pressure is set via Dirichlet conditions somewhere
+        # No need for any tricks if the pressure is set via Dirichlet conditions somewhere
         if self.simulation.data['dirichlet_bcs'].get('p', []):
+            self.remove_null_space = False
             self.use_lagrange_multiplicator = False
         
         # Control the form of the governing equations 
