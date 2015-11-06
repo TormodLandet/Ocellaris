@@ -97,6 +97,12 @@ class Input(collections.OrderedDict):
         if required_type == 'bool':
             check_isinstance(d, bool)
         elif required_type == 'float':
+            # The YAML parser annoyingly thinks 1e-3 is a string (while 1.0e-3 is a float)
+            if isinstance(d, str):
+                try:
+                    d = float(d)
+                except ValueError:
+                    pass
             check_isinstance(d, number)
         elif required_type == 'int':
             check_isinstance(d, int)
