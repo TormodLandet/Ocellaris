@@ -95,7 +95,7 @@ class CoupledEquations(object):
         if self.vel_is_discontinuous:
             penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nus)
             
-            # Upwind and downwind velocitues
+            # Upwind and downwind velocities
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
             w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
         

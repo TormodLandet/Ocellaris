@@ -143,7 +143,7 @@ class MomentumPredictionEquation(BaseEquation):
             # Weak form of the Navier-Stokes eq. with discontinuous elements
             assert self.flux_type == UPWIND
             
-            # Upwind and downwind velocitues
+            # Upwind and downwind velocities
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
             w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
             

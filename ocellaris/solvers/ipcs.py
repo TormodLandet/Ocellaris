@@ -15,7 +15,6 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'relative_tolerance': 1e-10,
                      'absolute_tolerance': 1e-15}
 MAX_ITER_MOMENTUM = 1000
-MAX_INNER_RERUNS = 1
 
 # Equations - default values, can be changed in the input file
 TIMESTEPPING_METHODS = (BDF,)
@@ -244,7 +243,6 @@ class SolverIPCS(Solver):
         Solve the momentum prediction equation
         """
         solver = self.velocity_solver
-        self.momentum_solver_converged = True
         
         err = 0.0
         for d in range(self.simulation.ndim):
@@ -268,12 +266,8 @@ class SolverIPCS(Solver):
                 for dbc in dirichlet_bcs:
                     dbc.apply(A, b)
             
-            solver.parameters['error_on_nonconvergence'] = False
             solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
             self.niters_u[d] = solver.solve(A, us.vector(), b)
-            
-            if self.niters_u[d] == MAX_ITER_MOMENTUM:
-                self.momentum_solver_converged = False
             
             self.u_tmp.vector().axpy(-1, us.vector())
             err += self.u_tmp.vector().norm('l2')
@@ -440,19 +434,9 @@ class SolverIPCS(Solver):
             
             # Run inner iterations
             self.inner_iteration = 1
-            num_inner_reruns = 0
             while self.inner_iteration <= num_inner_iter:
                 err_u_star = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
-                
-                if not self.momentum_solver_converged:
-                    # We need to rerun this inner iteration
-                    num_inner_reruns += 1
-                    
-                    if num_inner_reruns > MAX_INNER_RERUNS:
-                        msg  = 'Inner iterations needed more than %d reruns' % MAX_INNER_RERUNS
-                        sim.log.warning(msg)
-                        raise SolverError(msg)
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
@@ -467,9 +451,7 @@ class SolverIPCS(Solver):
                 if err_u_star < allowable_error_inner:
                     break
                 
-                if self.momentum_solver_converged:
-                    self.inner_iteration += 1
-                    num_inner_reruns = 0
+                self.inner_iteration += 1
             
             self.velocity_update()
             self.postprocess_velocity()
