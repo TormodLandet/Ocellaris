@@ -1,14 +1,9 @@
-import sys
+class OcellarisError(Exception):
+    def __init__(self, header, description):
+        super(OcellarisError, self).__init__('%s: %s' % (header, description))
+        self.header = header
+        self.description = description
 
-def report_error(header, description, stop=True):
-    print 'ERROR === '*8
-    print
-    print header
-    print
-    print description
-    print
-    print 'ERROR === '*8 
-    if stop:
-        print 'Stopping due to error'
-        sys.exit(-1)
+def report_error(header, description):
+    raise OcellarisError(header, description)
     

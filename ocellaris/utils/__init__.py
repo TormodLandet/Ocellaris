@@ -1,4 +1,4 @@
-from .error_handling import report_error
+from .error_handling import OcellarisError, report_error
 from .debug_console import debug_console_hook, run_debug_console
 from .timer import timeit
 from .code_runner import RunnablePythonString, CodedExpression

@@ -4,7 +4,7 @@ from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
 from .postprocess import setup_probes
-from .utils import timeit, run_debug_console, debug_console_hook, report_error, ocellaris_project
+from .utils import OcellarisError, run_debug_console, debug_console_hook, report_error, ocellaris_project
 from ocellaris.utils.code_runner import RunnablePythonString
 
 def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
@@ -107,23 +107,28 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     
     # Run the simulation
     try:
+        success = False
         solver.run()
         success = True
-    except BaseException, e:
-        if catch_exceptions:
-            success = False
-            simulation.log.error('=== EXCEPTION =='*5)
-            if isinstance(e, KeyboardInterrupt):
-                simulation.log.error('You pressed Ctrl+C')
-            else:
-                tb = traceback.format_tb(sys.exc_info()[2])
-                simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
-                e_type = type(e).__name__
-                simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
-            simulation.log.error('=== EXCEPTION =='*5)
-            simulation.hooks.simulation_ended(success)
-        else:
-            raise
+    except OcellarisError as e:
+        simulation.log.error('ERROR === '*8)
+        simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
+        simulation.log.error('ERROR === '*8)
+    except KeyboardInterrupt as e:
+        simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
+    except BaseException as e:
+        simulation.log.error('=== EXCEPTION =='*5)    
+        tb = traceback.format_tb(sys.exc_info()[2])
+        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
+        e_type = type(e).__name__
+        simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
+        simulation.log.error('=== EXCEPTION =='*5)
+    
+    # Check if the solver ran without problems
+    if not success:
+        if not catch_exceptions:
+            raise e # Re-raise the exception gotten from running the solver 
+        simulation.hooks.simulation_ended(success)
     
     # Show dolfin plots?
     if simulation.input.get_value('output/plot_at_end', False, 'bool'):
