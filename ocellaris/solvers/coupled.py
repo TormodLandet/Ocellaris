@@ -9,7 +9,8 @@ from .dg_helpers import VelocityBDMProjection
 
 
 # Default values, can be changed in the input file
-LU_SOLVER = 'petsc'
+LU_SOLVER_1CPU = 'petsc'
+LU_SOLVER_NCPU = 'superlu_dist'
 LU_PARAMETERS = {}
 
 # Implemented timestepping methods
@@ -69,8 +70,9 @@ class SolverCoupled(Solver):
         sim = self.simulation
         
         # Solver for the coupled system
+        default_lu_solver = LU_SOLVER_1CPU if sim.ncpu == 1 else LU_SOLVER_NCPU
         self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu', 
-                                                       None, LU_SOLVER, LU_PARAMETERS)
+                                                       None, default_lu_solver, LU_PARAMETERS)
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
@@ -228,10 +230,12 @@ class SolverCoupled(Solver):
             uipp = data['upp%d' % d]
             
             if self.is_first_timestep:
-                uic.vector()[:] = uip.vector()[:]
+                uic.assign(uip)
             else:
                 # Backwards difference formulation - standard linear extrapolation 
-                uic.vector()[:] = 2.0*uip.vector()[:] - 1.0*uipp.vector()[:]
+                uic.vector().zero()
+                uic.vector().axpy(2.0, uip.vector())
+                uic.vector().axpy(-1.0, uipp.vector())
         
         self.is_first_timestep = False
         
@@ -287,7 +291,7 @@ class SolverCoupled(Solver):
         self.assigner.assign(funcs, self.coupled_func)
         for func in funcs:
             func.vector().apply('insert') # dolfin bug #587
-                    
+        
         # Some solvers cannot remove the null space, so we just normalize the pressure instead.
         # If we remove the null space of the matrix system this will not be the exact same as
         # removing the proper null space of the equation, so we also fix this here
@@ -315,9 +319,10 @@ class SolverCoupled(Solver):
         # Check if there are non-zero values in the upp vectors
         maxabs = 0
         for d in range(sim.ndim):
-            this_maxabs = abs(sim.data['upp%d' % d].vector().array()).max()
+            this_maxabs = abs(sim.data['upp%d' % d].vector().get_local()).max()
             maxabs = max(maxabs, this_maxabs)
-        has_upp_start_values = maxabs > 0 
+        maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
+        has_upp_start_values = maxabs > 0
         
         # Previous-previous values are provided so we can start up with second order time stepping 
         if has_upp_start_values:
@@ -370,6 +375,7 @@ class SolverCoupled(Solver):
                 
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
+                vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
                 sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)
                 if vel_diff < self.steady_velocity_eps:
                     sim.log.info('Stopping simulation, steady state achieved')
