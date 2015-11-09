@@ -61,7 +61,7 @@ class MomentumPredictionEquation(BaseEquation):
         penalty_ds = penalty_dS*2
         self.simulation.log.info('DG SIP penalty viscosity:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
-        D12 = Constant([1, 1])
+        D12 = Constant([0, 0])
         
         return Constant(penalty_dS), Constant(penalty_ds), D12
     

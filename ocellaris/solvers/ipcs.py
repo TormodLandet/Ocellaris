@@ -1,7 +1,7 @@
 from __future__ import division
 import dolfin
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND, SolverError
+from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
 from .ipcs_equations import EQUATION_SUBTYPES
 from .dg_helpers import VelocityBDMProjection
 
@@ -219,9 +219,11 @@ class SolverIPCS(Solver):
             uipp = data['upp%d' % d]
             
             if self.is_first_timestep:
-                uic.vector()[:] = uip.vector()[:]
+                uic.assign(uip)
             elif self.timestepping_method == BDF:
-                uic.vector()[:] = 2.0*uip.vector()[:] - 1.0*uipp.vector()[:]
+                uic.vector().zero()
+                uic.vector().axpy(2.0, uip.vector())
+                uic.vector().axpy(-1.0, uipp.vector())
             elif self.timestepping_method == CRANK_NICOLSON:
                 # These two methods seem to give exactly the same results
                 # Ingram (2013) claims that the first has better stability properties
@@ -233,7 +235,9 @@ class SolverIPCS(Solver):
                 #uic.vector()[:] = uip.vector()[:] + 0.5*uipp.vector()[:] - 0.5*uippp.vector()[:]
                 
                 # Standard Crank-Nicolson linear extrapolation method
-                uic.vector()[:] = 1.5*uip.vector()[:] - 0.5*uipp.vector()[:]
+                uic.vector().zero()
+                uic.vector().axpy(1.5, uip.vector())
+                uic.vector().axpy(-0.5, uipp.vector())
         
         self.is_first_timestep = False
     
@@ -389,8 +393,9 @@ class SolverIPCS(Solver):
         # Check if there are non-zero values in the upp vectors
         maxabs = 0
         for d in range(sim.ndim):
-            this_maxabs = abs(sim.data['upp%d' % d].vector().array()).max()
+            this_maxabs = abs(sim.data['upp%d' % d].vector().get_local()).max()
             maxabs = max(maxabs, this_maxabs)
+        maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
         has_upp_start_values = maxabs > 0
         
         # Previous-previous values are provided so we can start up with second order time stepping 
@@ -442,11 +447,17 @@ class SolverIPCS(Solver):
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
+
+                # Get max u_star
+                ustarmax = 0
+                for d in range(sim.ndim):
+                    thismax = abs(sim.data['u_star0'].vector().get_local()).max()
+                    ustarmax = max(thismax, ustarmax)
+                ustarmax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(ustarmax))
                 
                 # Convergence estimates
-                sim.log.info('  Inner iteration %3d - Diff u* %10.3e - Diff p %10.3e%s'
-                             % (self.inner_iteration, err_u_star, err_p, solver_info) + 
-                             '  u0*max %10.3e' % abs(sim.data['u_star0'].vector().array()).max())
+                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
+                             % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax))
                 
                 if err_u_star < allowable_error_inner:
                     break
@@ -458,11 +469,11 @@ class SolverIPCS(Solver):
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0
-            for d in range(self.simulation.ndim):
-                u_new = self.simulation.data['u%d' % d]
-                up = self.simulation.data['up%d' % d]
-                upp = self.simulation.data['upp%d' % d]
-                uppp = self.simulation.data['uppp%d' % d]
+            for d in range(sim.ndim):
+                u_new = sim.data['u%d' % d]
+                up = sim.data['up%d' % d]
+                upp = sim.data['upp%d' % d]
+                uppp = sim.data['uppp%d' % d]
                 
                 if self.is_steady:
                     diff = abs(u_new.vector().get_local() - up.vector().get_local()).max() 
@@ -474,11 +485,12 @@ class SolverIPCS(Solver):
             
             # Change time coefficient to second order
             if self.timestepping_method == BDF:
-                self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+                sim.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
             
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
-                sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)
+                vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
+                sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)                
                 if vel_diff < self.steady_velocity_eps:
                     sim.log.info('Stopping simulation, steady state achieved')
                     sim.input.set_value('time/tmax', t)
@@ -495,7 +507,7 @@ class HydrostaticPressure(object):
         """
         Calculate the hydrostatic pressure
 
-        The gravity vector g must be parallel to one of th axes
+        The gravity vector g *must* be parallel to one of the axes
         """
         Vp = ph.function_space()
         p = dolfin.TrialFunction(Vp)
@@ -520,3 +532,4 @@ class HydrostaticPressure(object):
         dolfin.solve(A, self.func.vector(), b)
         
         t.stop()
+

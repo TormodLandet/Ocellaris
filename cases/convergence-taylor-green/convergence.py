@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import time, subprocess, os
 from math import log
 import dolfin
@@ -9,7 +9,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     """
     Run Ocellaris and return L2 & H1 errors in the last time step
     """
-    print N, dt, tmax, polydeg_u, polydeg_p
+    say(N, dt, tmax, polydeg_u, polydeg_p)
     
     # Setup and run simulation
     sim = Simulation()
@@ -26,7 +26,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
         cmd2 = ['dolfin-convert', 'taylor-green_%d.msh' % N, 'taylor-green.xml']
         with open('/dev/null', 'w') as devnull:
             for cmd in (cmd1, cmd2):
-                print ' '.join(cmd)
+                say(' '.join(cmd))
                 subprocess.call(cmd, stdout=devnull, stderr=devnull)
         
     sim.input['time']['dt'] = dt
@@ -37,7 +37,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     if sim.input.get_value('solver/timestepping_method') == 'CN':
         sim.input.set_value('initial_conditions/p/cpp_code', '-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*(t+dt/2))/4') 
     
-    print 'Running ...'
+    say('Running ...')
     try:
         t1 = time.time()
         run_simulation(sim)
@@ -45,10 +45,11 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     except KeyboardInterrupt:
         raise
     except BaseException as e:
+        raise
         import traceback
         traceback.print_exc()
         return [1e10]*6 + [1, dt, time.time()-t1]
-    print 'DONE'
+    say('DONE')
     
     # Interpolate the analytical solution to the same function space
     Vu = sim.data['Vu']
@@ -79,19 +80,19 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     err_u1_H1 = calc_err(sim.data['u1'], u1a, 'H1')
     err_p_H1 = calc_err(sim.data['p'], pa, 'H1')
     
-    print 'Num iterations:', sim.timestep
+    say('Num iterations:', sim.timestep)
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
-    print 'p*dx', int_p
+    say('p*dx', int_p)
     div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
-    print 'div(u)|Vp', div_u_Vp
+    say('div(u)|Vp', div_u_Vp)
     div_u_Vu = abs(dolfin.project(dolfin.div(sim.data['u']), Vu).vector().array()).max()
-    print 'div(u)|Vu', div_u_Vu
+    say('div(u)|Vu', div_u_Vu)
     Vdg0 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 0)
     div_u_DG0 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg0).vector().array()).max()
-    print 'div(u)|DG0', div_u_DG0
+    say('div(u)|DG0', div_u_DG0)
     Vdg1 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 1)
     div_u_DG1 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg1).vector().array()).max()
-    print 'div(u)|DG1', div_u_DG1
+    say('div(u)|DG1', div_u_DG1)
     
     if False:
         # Plot the results
@@ -139,31 +140,31 @@ def plot_err(f_num, f_ana, title):
 def print_results(results, indices, restype):
     for normname, selected in [('L2', slice(0, 3)),
                                ('H1', slice(3, 6))]:
-        print '======= ========== ========== ========== ===== ===== ===== ========= ====='
-        print ' Discr.        Errors in %s norm         Convergence rates     Duration   ' % normname
-        print '------- -------------------------------- ----------------- ---------------'
-        print '    %3s         u0         u1          p    u0    u1     p wallclock  rate' % restype
-        print '======= ========== ========== ========== ===== ===== ===== ========= ====='
+        say('======= ========== ========== ========== ===== ===== ===== ========= =====')
+        say(' Discr.        Errors in %s norm         Convergence rates     Duration   ' % normname)
+        say('------- -------------------------------- ----------------- ---------------')
+        say('    %3s         u0         u1          p    u0    u1     p wallclock  rate' % restype)
+        say('======= ========== ========== ========== ===== ===== ===== ========= =====')
         for i, idx in enumerate(indices):
             if idx not in results:
                 break
             hmin, dt, duration = results[idx][-3:]
             eu0, eu1, ep = results[idx][selected]
             discr = hmin if restype == 'h' else dt
-            print '%7.5f %10.2e %10.2e %10.2e' % (discr, eu0, eu1, ep),
+            say('%7.5f %10.2e %10.2e %10.2e' % (discr, eu0, eu1, ep), end=' ')
             if i > 0:
                 prev_idx = indices[i-1]
                 prev_eu0, prev_eu1, prev_ep = results[prev_idx][selected]
                 prev_hmin, prev_dt, prev_duration = results[prev_idx][-3:]
                 prev_discr = prev_hmin if restype == 'h' else prev_dt
                 fac = log(prev_discr/discr) 
-                print '%5.2f %5.2f %5.2f' % (log(prev_eu0/eu0)/fac, log(prev_eu1/eu1)/fac, log(prev_ep/ep)/fac),
-                print '%9s %5.2f' % (seconds_as_string(duration), log(duration/prev_duration)/fac)
+                say('%5.2f %5.2f %5.2f' % (log(prev_eu0/eu0)/fac, log(prev_eu1/eu1)/fac, log(prev_ep/ep)/fac), end=' ')
+                say('%9s %5.2f' % (seconds_as_string(duration), log(duration/prev_duration)/fac))
             else:
-                print '                  %9s' % seconds_as_string(duration)
+                say('                  %9s' % seconds_as_string(duration))
         
-        print '======= ========== ========== ========== ===== ===== ===== ========= ====='
-        print
+        say('======= ========== ========== ========== ===== ===== ===== ========= =====')
+        say()
 
 
 def seconds_as_string(seconds):
@@ -172,6 +173,11 @@ def seconds_as_string(seconds):
         return '%4.1fs' % secs
     else:
         return '%2dm %4.1fs' % (mins, secs)
+    
+
+def say(*args, **kwargs):
+    if dolfin.MPI.rank(dolfin.mpi_comm_world()) == 0:
+        print(*args, **kwargs)
 
 
 def run_convergence_space(N_list):
@@ -180,7 +186,7 @@ def run_convergence_space(N_list):
     results = {}
     prev_N = None
     for N in N_list:
-        print 'Running N = %g with dt = %g' % (N, dt)
+        say('Running N = %g with dt = %g' % (N, dt))
         results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1)
         print_results(results, N_list, 'h')
 
@@ -191,7 +197,7 @@ def run_convergence_time(dt_list):
     results = {}
     for dt in dt_list:
         t1 = time.time()
-        print 'Running dt =', dt
+        say('Running dt =', dt)
         results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1)
         print_results(results, dt_list, 'dt')
 
@@ -199,4 +205,4 @@ def run_convergence_time(dt_list):
 run_convergence_space([8, 16, 24])
 #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
 #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
-dolfin.interactive()
+#dolfin.interactive()

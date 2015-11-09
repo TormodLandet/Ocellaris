@@ -20,9 +20,11 @@ class Log(object):
         """
         Write a message to the log without checking the log level
         """
+        message = str(message) # hypotetically a collective operation ...
         if self.write_log:
             self.log_file.write(message + '\n')
-        print message
+        if self.write_stdout:
+            print message
     
     def set_log_level(self, log_level):
         """
@@ -56,12 +58,20 @@ class Log(object):
         Setup logging to file if requested in the simulation input
         """
         log_name = self.simulation.input.get_output_file_path('output/log_name', None)
-        if log_name is None:
-            self.write_log = False
-        else:
-            self.write_log = True
-            self.log_file_name = log_name
-            self.log_file = open(self.log_file_name, 'wt')
+        log_on_all_ranks = self.simulation.input.get_value('output/log_on_all_ranks', False, 'bool')
+        stdout_on_all_ranks = self.simulation.input.get_value('output/stdout_on_all_ranks', False, 'bool')
+        rank = self.simulation.rank
+        
+        self.write_stdout = (rank == 0 or stdout_on_all_ranks)
+        self.write_log = False
+        if log_name is not None:    
+            if log_on_all_ranks and rank > 0:
+                log_name = '%s.%d' % (log_name, self.simulation.rank)
+            
+            if rank == 0 or log_on_all_ranks:
+                self.write_log = True
+                self.log_file_name = log_name
+                self.log_file = open(self.log_file_name, 'wt')
         
         # Set the Ocellaris log level
         log_level = self.simulation.input.get_value('output/ocellaris_log_level', 'info')

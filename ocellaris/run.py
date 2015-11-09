@@ -102,7 +102,7 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     simulation.log.info(str(simulation.input))
     simulation.log.info('{:-^80}'.format(' configuration end '))
     simulation.log.info("\nCurrent time: %s" % time.strftime('%Y-%m-%d %H:%M:%S'))
-    simulation.log.info("\nRunning simulation ...\n")
+    simulation.log.info("\nRunning simulation on %d CPUs...\n" % simulation.ncpu)
     t_start = time.time()
     
     # Run the simulation
@@ -151,6 +151,7 @@ def load_mesh(simulation):
     inp = simulation.input
     mesh_type = inp.get_value('mesh/type', required_type='string')
     
+    dolfin.parameters['ghost_mode'] = 'shared_facet'
     if mesh_type == 'Rectangle':
         simulation.log.info('Creating rectangular mesh')
         

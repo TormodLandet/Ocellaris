@@ -12,6 +12,10 @@ def debug_console_hook(simulation):
     if 'win' in sys.platform:
         return
     
+    # The below implementation will not work in parallel
+    if simulation.ncpu > 1:
+        return
+    
     # Check if there is input on stdin. If there is a line
     # containing only a "d" then start the debuc console
     import select

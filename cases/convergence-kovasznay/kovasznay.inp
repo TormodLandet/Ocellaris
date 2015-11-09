@@ -24,6 +24,7 @@ mesh:
     endy: 0.5
     diagonal: left/right
 
+# Dirichlet on vertical sides and no-slip on horisontal sides
 boundary_conditions:
 -   name: vertical sides
     selector: code
@@ -31,11 +32,11 @@ boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code:
-        -   1.0 - exp(-0.9637405441957689*x[0])*cos(2*pi*x[1])
-        -   -0.9637405441957689/(2*pi)*exp(-0.9637405441957689*x[0])*sin(2*pi*x[1])
+        -   1.0 - exp(-0.96374054419576697314*x[0])*cos(2*pi*x[1])
+        -   -0.96374054419576697314/(2*pi)*exp(-0.96374054419576697314*x[0])*sin(2*pi*x[1])
     p:
         type: CppCodedGradient
-        cpp_code: "-0.9637405441957689/2*exp(-0.9637405441957689*x[0]) * (near(x[0], 0.0) ? -1.0 : 1.0)"
+        cpp_code: "-0.96374054419576697314*exp(2*-0.96374054419576697314*x[0]) * (near(x[0], 0.0) ? 1.0 : -1.0)"
 
 -   name: horisontal sides
     selector: code
@@ -50,6 +51,17 @@ boundary_conditions:
         type: ConstantGradient
         value: 0
 
+# Dirichlet on all sides
+_boundary_conditions:
+-   name: all sides
+    selector: code
+    inside_code: on_boundary
+    u:
+        type: CppCodedValue
+        cpp_code:
+        -   1.0 - exp(-0.96374054419576697314*x[0])*cos(2*pi*x[1])
+        -   -0.96374054419576697314/(2*pi)*exp(-0.96374054419576697314*x[0])*sin(2*pi*x[1])
+
 time:
     dt: 0.01   # Overridden in convergence.py
     tmax: 10.0 # Overridden in convergence.py
@@ -61,10 +73,10 @@ output:
     ocellaris_log_level: info  # Overridden in convergence.py
 
 solver:
-    type: Coupled
+    type: IPCS
     num_inner_iter: 4
     polynomial_degree_velocity: 2  # Overridden in convergence.py
     polynomial_degree_pressure: 1  # Overridden in convergence.py
-    function_space_velocity: CG
-    function_space_pressure: CG
+    function_space_velocity: DG
+    function_space_pressure: DG
     steady_velocity_stopping_criterion: 1.0e-8

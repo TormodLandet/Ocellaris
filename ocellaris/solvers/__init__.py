@@ -33,9 +33,6 @@ def get_solver(name):
 
 class Solver(object):
     description = 'No description available'
-    
-class SolverError(Exception):
-    pass
 
 # Timestepping methods
 BDF = 'BDF'

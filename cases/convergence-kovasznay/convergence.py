@@ -1,4 +1,4 @@
-from __future__ import division
+from __future__ import division, print_function
 import time, subprocess, os
 from math import log
 import dolfin
@@ -9,7 +9,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     """
     Run Ocellaris and return L2 & H1 errors in the last time step
     """
-    print N, dt, tmax, polydeg_u, polydeg_p
+    say(N, dt, tmax, polydeg_u, polydeg_p)
     
     # Setup and run simulation
     sim = Simulation()
@@ -23,7 +23,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     sim.input.set_value('solver/polynomial_degree_pressure', polydeg_p)
     sim.input.set_value('output/ocellaris_log_level', 'warning')
     
-    print 'Running ...'
+    say('Running ...')
     try:
         t1 = time.time()
         run_simulation(sim)
@@ -31,23 +31,24 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     except KeyboardInterrupt:
         raise
     except BaseException as e:
+        raise
         import traceback
         traceback.print_exc()
         return [1e10]*6 + [1, dt, time.time()-t1]
-    print 'DONE'
-    tmax_warning = ' <------ NON CONVERGENCE!!' if sim.time >= tmax else ''
+    say('DONE')
+    tmax_warning = ' <------ NON CONVERGENCE!!' if sim.time > tmax-dt/2 else ''
     
     # Interpolate the analytical solution to the same function space
     Vu = sim.data['Vu']
     Vp = sim.data['Vp']
     u0e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/0'), degree=polydeg_u)
     u1e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/1'), degree=polydeg_u)
-    pe  = dolfin.Expression('-0.5*exp(-0.9637405441957689*2*x[0])', degree=polydeg_p)
+    pe  = dolfin.Expression('-0.5*exp(-0.96374054419576697314*2*x[0]) + 1/(4*-0.96374054419576697314)*(exp(2*-0.96374054419576697314) - 1.0)', degree=polydeg_p)
     u0a = dolfin.project(u0e, Vu)
     u1a = dolfin.project(u1e, Vu)
     pa = dolfin.project(pe, Vp)
     
-    # Correct pa
+    # Correct pa (we want to be spot on, not close)
     int_pa = dolfin.assemble(pa*dolfin.dx)
     vol = dolfin.assemble(dolfin.Constant(1.0)*dolfin.dx(domain=Vp.mesh()))
     pa.vector()[:] -= int_pa/vol
@@ -62,21 +63,21 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     err_u1_H1 = calc_err(sim.data['u1'], u1a, 'H1')
     err_p_H1 = calc_err(sim.data['p'], pa, 'H1')
     
-    print 'Number of time steps:', sim.timestep, tmax_warning
-    print 'max(ui_new-ui_prev)', sim.reporting.get_report('max(ui_new-ui_prev)')[1][-1]
+    say('Number of time steps:', sim.timestep, tmax_warning)
+    say('max(ui_new-ui_prev)', sim.reporting.get_report('max(ui_new-ui_prev)')[1][-1])
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
-    print 'p*dx', int_p
-    print 'pa*dx', dolfin.assemble(pa*dolfin.dx(domain=Vp.mesh()))
+    say('p*dx', int_p)
+    say('pa*dx', dolfin.assemble(pa*dolfin.dx(domain=Vp.mesh())))
     div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
-    print 'div(u)|Vp', div_u_Vp
+    say('div(u)|Vp', div_u_Vp)
     div_u_Vu = abs(dolfin.project(dolfin.div(sim.data['u']), Vu).vector().array()).max()
-    print 'div(u)|Vu', div_u_Vu
+    say('div(u)|Vu', div_u_Vu)
     Vdg0 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 0)
     div_u_DG0 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg0).vector().array()).max()
-    print 'div(u)|DG0', div_u_DG0
+    say('div(u)|DG0', div_u_DG0)
     Vdg1 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 1)
     div_u_DG1 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg1).vector().array()).max()
-    print 'div(u)|DG1', div_u_DG1
+    say('div(u)|DG1', div_u_DG1)
     
     if False:
         # Plot the results
@@ -86,17 +87,45 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
             p1.write_png('%g_%g_%s_diff' % (N, dt, name))
             p2.write_png('%g_%g_%s' % (N, dt, name))
         dolfin.interactive()
+    
+    from numpy import argmax
+    for d in range(2):
+        up = sim.data['up%d' %d]
+        upp = sim.data['upp%d' %d]
+        uppp = sim.data['uppp%d' %d]
         
-    if N == 24 and False:
-        dolfin.plot(sim.data['u0'], title='u0')
-        dolfin.plot(sim.data['u1'], title='u1')
-        dolfin.plot(sim.data['p'], title='p')
-        dolfin.plot(u0a, title='u0a')
-        dolfin.plot(u1a, title='u1a')
-        dolfin.plot(pa, title='pa')
-        plot_err(sim.data['u0'], u0a, 'u0a - u0')
-        plot_err(sim.data['u1'], u1a, 'u1a - u1')
+        up.vector()[:] -= upp.vector()
+        upp.vector()[:] -= uppp.vector() 
+        
+        diff = abs(up.vector().get_local())
+        diffp = abs(upp.vector().get_local())
+        i = argmax(diff)
+        ip = argmax(diffp)
+        
+        V = up.function_space()
+        coords = V.tabulate_dof_coordinates().reshape((-1, 2))
+        
+        say('Max difference in %d direction is %.4e at %r' % (d, diff[i], coords[i]))
+        say('Prev max diff. in %d direction is %.4e at %r' % (d, diffp[ip], coords[ip]))
+        
+    if False and N == 24:
+        #dolfin.plot(sim.data['u0'], title='u0')
+        #dolfin.plot(sim.data['u1'], title='u1')
+        #dolfin.plot(sim.data['p'], title='p')
+        #dolfin.plot(u0a, title='u0a')
+        #dolfin.plot(u1a, title='u1a')
+        #dolfin.plot(pa, title='pa')
+        plot_err(sim.data['u0'], u0a, title='u0a - u0')
+        plot_err(sim.data['u1'], u1a, title='u1a - u1')
         plot_err(sim.data['p'], pa, 'pa - p')
+        
+        #plot_err(sim.data['u0'], u0a, title='u0a - u0')
+        dolfin.plot(sim.data['up0'], title='up0 - upp0')
+        dolfin.plot(sim.data['upp0'], title='upp0 - uppp0')
+        
+        #plot_err(sim.data['u1'], u1a, title='u1a - u1')
+        dolfin.plot(sim.data['up1'], title='up1 - upp1')
+        #dolfin.plot(sim.data['upp1'], title='upp1 - uppp1')
     
     hmin = sim.data['mesh'].hmin()
     return err_u0, err_u1, err_p, err_u0_H1, err_u1_H1, err_p_H1, hmin, dt, duration
@@ -123,31 +152,31 @@ def plot_err(f_num, f_ana, title):
 def print_results(results, indices, restype):
     for normname, selected in [('L2', slice(0, 3)),
                                ('H1', slice(3, 6))]:
-        print '======= ========== ========== ========== ===== ===== ===== ========= ====='
-        print ' Discr.        Errors in %s norm         Convergence rates     Duration   ' % normname
-        print '------- -------------------------------- ----------------- ---------------'
-        print '    %3s         u0         u1          p    u0    u1     p wallclock  rate' % restype
-        print '======= ========== ========== ========== ===== ===== ===== ========= ====='
+        say('======= ========== ========== ========== ===== ===== ===== ========= =====')
+        say(' Discr.        Errors in %s norm         Convergence rates     Duration   ' % normname)
+        say('------- -------------------------------- ----------------- ---------------')
+        say('    %3s         u0         u1          p    u0    u1     p wallclock  rate' % restype)
+        say('======= ========== ========== ========== ===== ===== ===== ========= =====')
         for i, idx in enumerate(indices):
             if idx not in results:
                 break
             hmin, dt, duration = results[idx][-3:]
             eu0, eu1, ep = results[idx][selected]
             discr = hmin if restype == 'h' else dt
-            print '%7.5f %10.2e %10.2e %10.2e' % (discr, eu0, eu1, ep),
+            say('%7.5f %10.2e %10.2e %10.2e' % (discr, eu0, eu1, ep), end=' ')
             if i > 0:
                 prev_idx = indices[i-1]
                 prev_eu0, prev_eu1, prev_ep = results[prev_idx][selected]
                 prev_hmin, prev_dt, prev_duration = results[prev_idx][-3:]
                 prev_discr = prev_hmin if restype == 'h' else prev_dt
                 fac = log(prev_discr/discr) 
-                print '%5.2f %5.2f %5.2f' % (log(prev_eu0/eu0)/fac, log(prev_eu1/eu1)/fac, log(prev_ep/ep)/fac),
-                print '%9s %5.2f' % (seconds_as_string(duration), log(duration/prev_duration)/fac)
+                say('%5.2f %5.2f %5.2f' % (log(prev_eu0/eu0)/fac, log(prev_eu1/eu1)/fac, log(prev_ep/ep)/fac), end =' ')
+                say('%9s %5.2f' % (seconds_as_string(duration), log(duration/prev_duration)/fac))
             else:
-                print '                  %9s' % seconds_as_string(duration)
+                say('                  %9s' % seconds_as_string(duration))
         
-        print '======= ========== ========== ========== ===== ===== ===== ========= ====='
-        print
+        say('======= ========== ========== ========== ===== ===== ===== ========= =====')
+        say()
 
 
 def seconds_as_string(seconds):
@@ -158,13 +187,18 @@ def seconds_as_string(seconds):
         return '%2dm %4.1fs' % (mins, secs)
 
 
+def say(*args, **kwargs):
+    if dolfin.MPI.rank(dolfin.mpi_comm_world()) == 0:
+        print(*args, **kwargs)
+
+
 def run_convergence_space(N_list):
     dt = 0.01
     tmax = 3.0
     results = {}
     prev_N = None
     for N in N_list:
-        print 'Running N = %g with dt = %g' % (N, dt)
+        say('Running N = %g with dt = %g' % (N, dt))
         results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1)
         print_results(results, N_list, 'h')
 

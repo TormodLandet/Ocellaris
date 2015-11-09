@@ -1,4 +1,5 @@
 import time
+import dolfin
 from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
@@ -26,6 +27,8 @@ class Simulation(object):
         self.timestep = 0
         self.time = 0.0
         self.dt = 0.0
+        self.ncpu = dolfin.MPI.size(dolfin.mpi_comm_world())
+        self.rank = dolfin.MPI.rank(dolfin.mpi_comm_world())
         
         # These will be filled out when ocellaris.run is setting up
         # the solver. Included here for documentation purposes only
@@ -67,9 +70,11 @@ class Simulation(object):
         # Report the maximum velocity
         vels = 0
         for d in range(self.ndim):
-            vels += self.data['u'][d].vector().array()**2
+            vels += self.data['u%d' % d].vector().get_local()**2
         vel_max = vels.max()**0.5
+        vel_max = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_max))
         self.reporting.report_timestep_value('umax', vel_max)
         
         # Write timestep report
         self.reporting.log_timestep_reports()
+

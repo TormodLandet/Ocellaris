@@ -27,6 +27,7 @@ def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
         area = sum(cell.facet_area(i) for i in range(ndim + 1))
         gf = area/vol
         geom_fac = max(geom_fac, gf)
+    geom_fac = dolfin.MPI.max(dolfin.mpi_comm_world(), float(geom_fac))
     
     penalty = boost_factor * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac**exponent
     return penalty
