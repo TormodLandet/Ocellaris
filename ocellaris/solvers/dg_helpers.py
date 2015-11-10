@@ -67,11 +67,9 @@ class VelocityBDMProjection():
         v1, v2, v3b = TestFunctions(W)
         u = TrialFunction(V)
         
-        # Calculate the upwind normal velocity, u_hat = w⋅n⁺, on all facets
-        wn = dot(w, n)
-        u_hat_ds = wn*n
-        upwind = (wn + abs(wn))/2*n
-        u_hat_dS = upwind('+') + upwind('-') 
+        # The same fluxes that are used in the incompressibility equation
+        u_hat_ds = w
+        u_hat_dS = dolfin.avg(w)
         
         # Equation 1 - flux through the sides
         a = dot(u, n)*v1*ds

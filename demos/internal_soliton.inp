@@ -3,20 +3,22 @@ ocellaris:
     version: 1.0
 
 physical_properties:
-    rho0: 1
-    nu0: 1.0e-2
-    rho1: 1.02
-    nu1: 1.0e-2
+    rho0: 999
+    nu0: 1.0e-6
+    rho1: 1022
+    nu1: 1.0e-6
     g: [0, -9.81]
 
 mesh:
     type: Rectangle
     #Nx: 256
     #Ny: 128
+    Nx: 160
+    Ny: 40
     #Nx: 80
     #Ny: 20
-    Nx: 50
-    Ny: 15
+    #Nx: 50
+    #Ny: 15
     starty: 0.5
     endx: 4
 
@@ -52,10 +54,10 @@ initial_conditions:
 
 time:
     dt: 0.1
-    tmax: 20.0
+    tmax: 20.1
 
 output:
-    prefix: output/internal_soliton
+    prefix: output/internal_soliton_test2
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -64,22 +66,23 @@ multiphase_solver:
     type: BlendedAlgebraicVOF
     function_space_colour: DG
     polynomial_degree_colour: 0
+    sky_location: 1.0
 
 solver:
-    type: Coupled
+    type: IPCS
+    num_inner_iter: 20
+    allowable_error_inner: 1e-3
     function_space_velocity: DG
     function_space_pressure: DG
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
-    use_stress_divergence_form: false
-    coupled:
-        lu_method: mumps
+    velocity_postprocessing: BDM
 
 convection:
     u:
         convection_scheme: Upwind
     c:
-        convection_scheme: HRIC
+        convection_scheme: Upwind
 
 probes:
     -   name: c=0.5
@@ -104,7 +107,7 @@ probes:
 hooks:
     post_timestep:
     -   name: print location of largest divergence
-        enabled: yes
+        enabled: no
         code: |
             udiv = project(div(u), Vc)
             values = udiv.compute_vertex_values()
@@ -125,7 +128,7 @@ hooks:
             plot(u, title='u', key='u', window_width=1000, interactive=True)
     
     -   name: save colour fields
-        enabled: yes
+        enabled: no
         code: |
             if not 'cf' in hook_data:
                 prefix = simulation.input.get_value('output/prefix')
@@ -135,7 +138,7 @@ hooks:
             hook_data['cf'] << (c, t)
             #hook_data['cf'] << (c_star, t)
 
-reporting:
+_reporting:
     reports_to_show: ['min(c)', 'max(c)'] #, 'max(div(u)|Vp)']
 
 #console_on_error: true
