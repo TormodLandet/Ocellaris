@@ -1,6 +1,6 @@
 import os, collections
 import yaml
-from ocellaris.utils import report_error
+from ocellaris.utils import report_error, get_root_value
 
 
 class UndefinedParameter(object):
@@ -41,7 +41,7 @@ class Input(collections.OrderedDict):
         self.update(inp)
         self.file_name = file_name
     
-    def get_value(self, path, default_value=UNDEFINED, required_type='any'):
+    def get_value(self, path, default_value=UNDEFINED, required_type='any', mpi_root_value=False):
         """
         Get an input value by its path in the input dictionary
         
@@ -55,6 +55,7 @@ class Input(collections.OrderedDict):
                 not exist in the input dictionary
             required_type: expected type of the variable. Giving 
                 type="any" does no type checking
+            mpi_root_value: get the value on the root MPI process
         
         Returns:
             The input value if it exist otherwise the default value
@@ -140,6 +141,11 @@ class Input(collections.OrderedDict):
             pass
         else:
             raise ValueError('Unknown required_type %s' % required_type)
+        
+        # Get the value on the root process
+        if mpi_root_value:
+            d = get_root_value(d)
+        
         return d
     
     def set_value(self, path, value):

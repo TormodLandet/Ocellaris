@@ -2,6 +2,20 @@ import dolfin
 import numpy
 
 
+def get_root_value(value):
+    """
+    Return the value that is given on the root process
+    """
+    ncpu = dolfin.MPI.size(dolfin.mpi_comm_world())
+    
+    if ncpu == 1:
+        # Not running in parallel
+        return value
+    
+    from mpi4py.MPI import COMM_WORLD as comm
+    return comm.bcast(value)
+
+
 def gather_lines_on_root(lines):
     """
     Given a list of lines, use MPI to add all processes' lines to the list of

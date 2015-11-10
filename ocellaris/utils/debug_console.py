@@ -12,8 +12,8 @@ def debug_console_hook(simulation):
     if 'win' in sys.platform:
         return
     
-    # The below implementation will not work in parallel
-    if simulation.ncpu > 1:
+    # The below implementation will not work without a terminal
+    if simulation.rank > 0:
         return
     
     # Check if there is input on stdin. If there is a line
@@ -24,7 +24,7 @@ def debug_console_hook(simulation):
         line = sys.stdin.readline()
         command = line.strip().lower()
         
-        if command == 'd':
+        if command == 'd' and simulation.ncpu == 1:
             # d == "debug" -> start the debug console
             return run_debug_console(simulation)
         
