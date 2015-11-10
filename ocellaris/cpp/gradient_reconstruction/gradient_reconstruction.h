@@ -13,7 +13,7 @@ namespace dolfin
 
 void reconstruct_gradient(const Function& alpha_function,
                           const Array<int>& num_neighbours,
-						  const int max_neighbours,
+                          const int max_neighbours,
                           const Array<int>& neighbours,
                           const Array<double>& lstsq_matrices,
                           const Array<double>& lstsq_inv_matrices,
@@ -30,7 +30,7 @@ void reconstruct_gradient(const Function& alpha_function,
 	std::vector<la_index> gradient_dofmap[ndim];
 	for (int d = 0; d < ndim; d++)
 	{
-		gradient_dofmap[d] =  Vvec[d]->dofmap()->dofs();
+		gradient_dofmap[d] = Vvec[d]->dofmap()->dofs();
 	}
 	std::shared_ptr<const GenericVector> a_cell_vec = alpha_function.vector();
 	std::shared_ptr<GenericVector> gradient_vec = gradient.vector();
@@ -76,10 +76,11 @@ void reconstruct_gradient(const Function& alpha_function,
 				grad[d] += lstsq_inv_matrices[start+d*ndim+d2]*ATdotB[d2];
 			}
 			const la_index didx2 = gradient_dofmap[d][idx];
-			gradient_vec->set(&grad[d], 1, &didx2);
+			gradient_vec->set_local(&grad[d], 1, &didx2);
 		}
 		i++;
 	}
+	gradient_vec->apply("insert");
 }
 
 }

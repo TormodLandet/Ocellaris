@@ -151,7 +151,7 @@ def load_mesh(simulation):
     inp = simulation.input
     mesh_type = inp.get_value('mesh/type', required_type='string')
     
-    dolfin.parameters['ghost_mode'] = 'shared_facet'
+    dolfin.parameters['ghost_mode'] = 'shared_vertex'
     if mesh_type == 'Rectangle':
         simulation.log.info('Creating rectangular mesh')
         

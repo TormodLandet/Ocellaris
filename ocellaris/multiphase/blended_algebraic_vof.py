@@ -7,7 +7,7 @@ from ..convection import get_convection_scheme
 
 
 CONVECTION_SCHEME = 'HRIC'
-CONTINUOUS_FIELDS = False
+CONTINUOUS_FIELDS = True
 
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
@@ -256,9 +256,9 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         
         # Report total mass balance and divergence
         sum_c = dolfin.assemble(c*dolfin.dx)
-        arr_c = c.vector().array()
-        min_c = arr_c.min()
-        max_c = arr_c.max()
+        arr_c = c.vector().get_local()
+        min_c = dolfin.MPI.min(dolfin.mpi_comm_world(), float(arr_c.min()))
+        max_c = dolfin.MPI.max(dolfin.mpi_comm_world(), float(arr_c.max()))
         self.simulation.reporting.report_timestep_value('sum(c)', sum_c)
         self.simulation.reporting.report_timestep_value('min(c)', min_c)
         self.simulation.reporting.report_timestep_value('max(c)', max_c)
@@ -284,7 +284,8 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         for fspace_name in ('Vc', 'Vu', 'Vp'):
             V = self.simulation.data[fspace_name]
             div_u = dolfin.project(dolfin.nabla_div(vel), V)
-            maxdiv = abs(div_u.vector().array()).max()
+            div_u.vector().abs()
+            maxdiv = div_u.vector().max()
             self.simulation.reporting.report_timestep_value('max(div(u)|%s)' % fspace_name, maxdiv)
 
 

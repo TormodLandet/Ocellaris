@@ -161,7 +161,7 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
     gradient_dofmap0 = Vvec.sub(0).dofmap().dofs()
     gradient_dofmap1 = Vvec.sub(1).dofmap().dofs()
     
-    np_gradient = gradient.vector().array()
+    np_gradient = gradient.vector().get_local()
 
     # Reshape arrays. The C++ version needs flatt arrays
     # (limitation in Instant/Dolfin) and we have the same
@@ -190,4 +190,5 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
         np_gradient[gradient_dofmap0[idx]] = g[0]
         np_gradient[gradient_dofmap1[idx]] = g[1]
     
-    gradient.vector()[:] = np_gradient
+    gradient.vector().set_local(np_gradient)
+    gradient.vector().apply('insert')

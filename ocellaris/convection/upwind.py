@@ -15,7 +15,7 @@ class ConvectionSchemeUpwind(ConvectionScheme):
         super(ConvectionSchemeUpwind, self).__init__(simulation, func_name)
         
         # Set downwind factor to 0.0
-        self.blending_function.vector()[:] = 0.0
+        self.blending_function.vector().zero()
     
     def update(self, t, dt, velocity):
         """

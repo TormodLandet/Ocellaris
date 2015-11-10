@@ -150,5 +150,6 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             beta_arr[fdof] = tilde_beta
         
         self.blending_function.vector().set_local(beta_arr)
+        self.blending_function.vector().apply('insert')
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
         timer.stop()
