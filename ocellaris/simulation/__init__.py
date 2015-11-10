@@ -14,6 +14,9 @@ class Simulation(object):
         connects the input file, geometry, mesh and more with the
         solver and the result plotting and reporting tools     
         """
+        self.ncpu = dolfin.MPI.size(dolfin.mpi_comm_world())
+        self.rank = dolfin.MPI.rank(dolfin.mpi_comm_world())
+        
         self.hooks = Hooks(self)
         self.input = Input(self)
         self.data = {}        
@@ -27,8 +30,6 @@ class Simulation(object):
         self.timestep = 0
         self.time = 0.0
         self.dt = 0.0
-        self.ncpu = dolfin.MPI.size(dolfin.mpi_comm_world())
-        self.rank = dolfin.MPI.rank(dolfin.mpi_comm_world())
         
         # These will be filled out when ocellaris.run is setting up
         # the solver. Included here for documentation purposes only

@@ -7,3 +7,4 @@ from .gradient_reconstruction import GradientReconstructor
 from .dofmap import facet_dofmap
 from .linear_solvers import make_linear_solver, linear_solver_from_input
 from .trace_projection import convert_to_dgt
+from .mpi import gather_lines_on_root

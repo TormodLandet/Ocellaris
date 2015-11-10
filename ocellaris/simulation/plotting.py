@@ -10,11 +10,15 @@ class Plotting(object):
         """
         self.simulation = simulation
         self.plots = {}
+        self.active = simulation.rank == 0
     
     def add_plot(self, plot_name, plotter, **options):
         """
         Add a plot to the simulation
         """
+        if not self.active:
+            return
+        
         if not hasattr(plotter, 'plot'):
             # This is not a plotter but something that can be plotted
             plotter = Plotter(self.simulation, plotter, **options)
@@ -33,6 +37,8 @@ class Plotting(object):
         """
         Plot the plotter with the given name
         """
+        if not self.active:
+            return
         sim = self.simulation
         
         # Get the figure directory

@@ -1,6 +1,7 @@
 import dolfin
 import numpy
 from matplotlib import pyplot
+from ocellaris.utils import gather_lines_on_root
 from . import Probe, register_probe
 
 @register_probe('IsoSurface')
@@ -31,17 +32,17 @@ class IsoSurface(Probe):
         
         # Should we pop up a matplotlib window when running?
         self.show_interval = self.input.get('show_interval', 0)
-        self.show = self.show_interval != 0
+        self.show = self.show_interval != 0 and simulation.rank == 0
         self.xlim = self.input.get('xlim', (None, None))
         self.ylim = self.input.get('ylim', (None, None))
         
-        if self.write_file:
+        if self.write_file and simulation.rank == 0:
             self.output_file = open(self.file_name, 'wt')
             self.output_file.write('# Ocellaris iso surface of the %s field\n' % self.field_name)
             self.output_file.write('# value = %15.5e\n' % self.value)
             self.output_file.write('# dim = %d\n' % self.simulation.ndim)
         
-        if self.show:
+        if self.show and simulation.rank == 0:
             pyplot.ion()
             self.fig = pyplot.figure()
             self.ax = self.fig.add_subplot(111)
@@ -70,19 +71,27 @@ class IsoSurface(Probe):
         # Get the iso surfaces
         surfaces = get_iso_surfaces(self.simulation, self.field, self.value)
         
-        if update_file:
-            self.output_file.write('Time %10.5f nsurf %d\n' % (self.simulation.time, len(surfaces)))
-            for surface in surfaces:
-                self.output_file.write(' '.join('%10.5f' % pos[0] for pos in surface) + '\n')
-                self.output_file.write(' '.join('%10.5f' % pos[1] for pos in surface) + '\n')
-                self.output_file.write(' '.join('%10.5f' % pos[2] for pos in surface) + '\n')
+        # Create lines (this assumes 2D and throws away the z-component)
+        lines = []
+        for surface in surfaces:
+            x = numpy.array([pos[0] for pos in surface], float)
+            y = numpy.array([pos[1] for pos in surface], float)
+            lines.append((x, y))
         
-        if update_plot:
+        # Communicate lines to the root process in case we are running in parallel
+        gather_lines_on_root(lines)
+        
+        if update_file and self.simulation.rank == 0:
+            self.output_file.write('Time %10.5f nsurf %d\n' % (self.simulation.time, len(lines)))
+            for x, y in lines:
+                self.output_file.write(' '.join('%10.5f' % v for v in x) + '\n')
+                self.output_file.write(' '.join('%10.5f' % v for v in y) + '\n')
+                self.output_file.write(' '.join('%10.5f' % 0 for v in x) + '\n')
+        
+        if update_plot and self.simulation.rank == 0:
             self.ax.clear()
-            for surface in surfaces:
-                xvals = [pos[0] for pos in surface]
-                yvals = [pos[1] for pos in surface]
-                self.ax.plot(xvals, yvals)
+            for x, y in lines:
+                self.ax.plot(x, y)
             self.ax.set_xlabel('x')
             self.ax.set_ylabel('y')
             self.ax.relim()
@@ -98,7 +107,7 @@ class IsoSurface(Probe):
         """
         The simulation is done. Close the output file
         """
-        if self.write_file:
+        if self.write_file and self.simulation.rank == 0:
             self.output_file.close()
             
 def get_iso_surfaces(simulation, field, value):
