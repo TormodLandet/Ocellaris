@@ -242,7 +242,7 @@ class PressureCorrectionEquation(BaseEquation):
         mesh = self.simulation.data['mesh']
         P = self.simulation.data['Vp'].ufl_element().degree()
         k_min = k_max = 1
-        penalty_dS = define_penalty(mesh, P, k_min, k_max, boost_factor=10, exponent=1.0)
+        penalty_dS = define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
         self.simulation.log.info('DG SIP penalty pressure:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
                 
