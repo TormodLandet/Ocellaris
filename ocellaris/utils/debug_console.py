@@ -8,22 +8,18 @@ def debug_console_hook(simulation):
     """
     Start the debug console if the user writes "d"+Enter
     """
-    # The select() system call does not work on windows
-    if 'win' in sys.platform:
-        return
+    # Check if the user has written something on stdin for us
+    if simulation.rank == 0:
+        commands = get_input_from_terminal()
+    else:
+        commands = []
     
-    # The below implementation will not work without a terminal
-    if simulation.rank > 0:
-        return
+    # Make sure all processes get the same commands
+    if simulation.ncpu > 1:
+        from mpi4py.MPI import COMM_WORLD as comm
+        commands = comm.bcast(commands)
     
-    # Check if there is input on stdin. If there is a line
-    # containing only a "d" then start the debuc console
-    import select
-    has_input = lambda: sys.stdin in select.select([sys.stdin], [], [], 0)[0]
-    while has_input(): 
-        line = sys.stdin.readline()
-        command = line.strip().lower()
-        
+    for command in commands:
         if command == 'd' and simulation.ncpu == 1:
             # d == "debug" -> start the debug console
             return run_debug_console(simulation)
@@ -40,7 +36,7 @@ def debug_console_hook(simulation):
                                 'control parameter tmax to %r\n' % simulation.time)
             simulation.input['time']['tmax'] = simulation.time
         
-        elif command.startswith('prof'):
+        elif command.startswith('prof') and simulation.rank == 0:
             # Run the profiler
             try:
                 num_timesteps = int(command.split()[1])
@@ -51,8 +47,8 @@ def debug_console_hook(simulation):
             simulation._profile_object = cProfile.Profile()
             simulation._profile_object.enable()
             simulation.log.info('\nCommand line action:\n  Starting profile')
-            
     
+    # Write the profile information to file after N time steps
     if hasattr(simulation, '_profile_after_n_timesteps'):
         simulation._profile_after_n_timesteps -= 1
         simulation.log.info('Profile will end after %d time steps' % simulation._profile_after_n_timesteps)
@@ -66,6 +62,29 @@ def debug_console_hook(simulation):
             stats.dump_stats('prof.out')
             del simulation._profile_after_n_timesteps
             del simulation._profile_object
+
+
+def get_input_from_terminal():
+    """
+    Read stdin to see if there are some commands for us to execute
+    """
+    # The select() system call does not work on windows
+    if 'win' in sys.platform:
+        return []
+    
+    import select
+    
+    commands = []
+    has_input = lambda: sys.stdin in select.select([sys.stdin], [], [], 0)[0]
+    
+    # Check if there is input on stdin and read it if it exists
+    while has_input(): 
+        line = sys.stdin.readline()
+        command = line.strip().lower()
+        commands.append(command)
+    
+    return commands
+
 
 def run_debug_console(simulation, show_banner=True):
     """
@@ -109,6 +128,7 @@ def run_debug_console(simulation, show_banner=True):
     banner.append('\n>>> from dolfin import *')
     code.interact('\n'.join(banner), local=debug_locals)
     print '= OCELLARIS CONSOLE ===='*3
+
 
 def define_convenience_functions(simulation):
     """

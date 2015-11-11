@@ -17,6 +17,9 @@ class Reporting(object):
         """
         Setup the reports to be shown in plots during the simulation
         """
+        if self.simulation.rank != 0:
+            return # Do not plot on non root processes
+        
         reps = self.simulation.input.get_value('reporting/reports_to_show', [], 'list(string)')
         self.figures = {}
         for report_name in reps:
@@ -67,6 +70,9 @@ class Reporting(object):
         """
         Update plots requested in input (reporting/reports_to_show)
         """
+        if self.simulation.rank != 0:
+            return # Do not plot on non root processes
+        
         for report_name in self.figures:
             if not report_name in self.timestep_xy_reports:
                 report_error('Unknown report name: "%s"' % report_name,
