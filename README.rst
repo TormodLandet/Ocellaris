@@ -36,9 +36,8 @@ information can be found in the documentation which also contains a description 
 Please feel free to test Ocellaris, but please keep in mind:
 
 - Ocellaris is in a state of constant development and does not have a stable API or input file format
-- Ocellaris is currently only being tested on one CPU. FEniCS scales to many thousands of CPUs, but
-  scaling and speed of the solvers are not a priority at the moment
 - Ocellaris supports Python 2 only, not Python 3
+- This is a research project, do not expect anything to work properly without testing it thoroughly first!
 
 Documentation
 -------------

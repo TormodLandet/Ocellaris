@@ -34,7 +34,7 @@
 Download
 --------
 
-Ocellaris is developed on Bitbucket using Mercurial and can be downloaded from
+Ocellaris is developed on Bitbucket using Git and can be downloaded from
 the `project page <https://bitbucket.org/trlandet/ocellaris>`_.
 
 .. ##############################################################
