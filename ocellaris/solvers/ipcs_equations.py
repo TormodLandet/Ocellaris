@@ -289,7 +289,11 @@ class PressureCorrectionEquation(BaseEquation):
             # -∇⋅∇p = - γ_1/Δt ρ ∇⋅u^*
             a = dot(grad(p), grad(q))*dx
             L = dot(grad(p_star), grad(q))*dx
-            L -= c1/dt*rhos*div(u_star)*q*dx
+
+            # RHS
+            #L -= c1/dt*rhos*div(u_star)*q*dx
+            L += c1/dt*rhos*dot(u_star, grad(q))*dx
+            L -= c1/dt*rhos*dot(avg(u_star), n('+'))*jump(q)*dS
             
             # Symmetric Interior Penalty method for -∇⋅∇p
             a -= dot(n('+'), avg(grad(p)))*jump(q)*dS
@@ -310,6 +314,9 @@ class PressureCorrectionEquation(BaseEquation):
             dirichlet_bcs = sim.data['dirichlet_bcs'].get('p', [])
             for dbc in dirichlet_bcs:
                 p_bc = dbc.func()
+
+                # From integration by parts of RHS
+                L -= c1/dt*rhos*dot(u_star, n)*q*dbc.ds()
                 
                 # SIPG for -∇⋅∇p
                 a -= dot(n, grad(p))*q*dbc.ds()
@@ -328,11 +335,14 @@ class PressureCorrectionEquation(BaseEquation):
                 L += penalty_ds*p_star*q*dbc.ds()
                 L -= penalty_ds*p_bc*q*dbc.ds()
             
-            # Neumann boundary conditions on p and p_star cancel
-            ## Neumann boundary conditions
-            #neumann_bcs = sim.data['neumann_bcs'].get('p', [])
-            #for nbc in neumann_bcs:
-            #    L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
+            # Neumann boundary conditions
+            neumann_bcs = sim.data['neumann_bcs'].get('p', [])
+            for nbc in neumann_bcs:
+                # Neumann boundary conditions on p and p_star cancel
+                #L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
+
+                # From integration by parts of RHS
+                L -= c1/dt*rhos*dot(u_star, n)*q*nbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
