@@ -1,6 +1,6 @@
 from .error_handling import OcellarisError, report_error
 from .debug_console import debug_console_hook, run_debug_console
-from .timer import timeit
+from .timer import timeit, log_timings
 from .code_runner import RunnablePythonString, CodedExpression
 from .cpp_expression import OcellarisCppExpression, ocellaris_project
 from .gradient_reconstruction import GradientReconstructor

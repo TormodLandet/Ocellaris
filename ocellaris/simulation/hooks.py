@@ -1,3 +1,4 @@
+import dolfin
 from ocellaris.utils import timeit
 
 class Hooks(object):
@@ -83,11 +84,14 @@ class Hooks(object):
         order they have been added
         """
         for hook, description in self._post_timestep_hooks[::-1]:
+            t = dolfin.Timer('Ocellaris hook %s' % description)
             try:
                 hook()
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 raise
+            finally:
+                t.stop()
         self.simulation._at_end_of_timestep()
     
     def simulation_ended(self, success):

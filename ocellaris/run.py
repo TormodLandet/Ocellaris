@@ -4,7 +4,7 @@ from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
 from .postprocess import setup_probes
-from .utils import OcellarisError, run_debug_console, debug_console_hook, report_error, ocellaris_project
+from .utils import OcellarisError, run_debug_console, debug_console_hook, report_error, ocellaris_project, log_timings
 from ocellaris.utils.code_runner import RunnablePythonString
 
 def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
@@ -86,7 +86,7 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     simulation.hooks.add_post_timestep_hook(lambda: debug_console_hook(simulation), 'Debug console')
     
     # Setup the summary to show after the simulation
-    hook = lambda success: summarise_simulation_after_running(simulation, t_start, success)
+    hook = lambda success: summarise_simulation_after_running(simulation, success)
     simulation.hooks.add_post_simulation_hook(hook, 'Summarise simulation')
     
     # Show time spent setting up the solver
@@ -103,7 +103,7 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     simulation.log.info('{:-^80}'.format(' configuration end '))
     simulation.log.info("\nCurrent time: %s" % time.strftime('%Y-%m-%d %H:%M:%S'))
     simulation.log.info("\nRunning simulation on %d CPUs...\n" % simulation.ncpu)
-    t_start = time.time()
+    simulation.t_start = time.time()
     
     # Run the simulation
     try:
@@ -354,29 +354,19 @@ def setup_hooks(simulation):
             simulation.log.info('    ' + description)
 
 
-def summarise_simulation_after_running(simulation, t_start, success):
+def summarise_simulation_after_running(simulation, success):
     """
     Print a summary of the time spent on each part of the simulation
     """
     simulation.log.debug('\nGlobal simulation data at end of simulation:')
     for key, value in sorted(simulation.data.items()):
         simulation.log.debug('%20s = %s' % (key, repr(type(value))[:57]))
-        
-    # Total time spent in the simulation
-    tottime = time.time() - t_start
     
-    # Get timings from FEniCS and sort by total time spent
-    timingtypes = [dolfin.TimingType_user, dolfin.TimingType_system, dolfin.TimingType_wall]
-    table = dolfin.timings(dolfin.TimingClear_keep, timingtypes)
-    table_lines = table.str(True).split('\n')
-    simulation.log.info('\nFEniCS timings:   %s  wall pst' % table_lines[0][18:])
-    simulation.log.info(table_lines[1] + '-'*10)
-    tmp = [(float(line.split()[-5]), line) for line in table_lines[2:]]
-    tmp.sort(reverse=True)
-    for wctime, line in tmp:
-        simulation.log.info('%s     %4.1f%%' % (line, wctime/tottime*100))
+    # Add details on the time spent in each part of the simulation to the log
+    log_timings(simulation)
     
     # Show the total duration
+    tottime = time.time() - simulation.t_start
     h = int(tottime/60**2)
     m = int((tottime - h*60**2)/60)
     s = tottime - h*60**2 - m*60

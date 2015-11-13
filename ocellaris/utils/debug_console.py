@@ -3,6 +3,7 @@ import code
 import readline
 import rlcompleter
 import cProfile, pstats
+from .timer import log_timings
 
 def debug_console_hook(simulation):
     """
@@ -35,6 +36,11 @@ def debug_console_hook(simulation):
             simulation.log.info('\nCommand line action:\n  Setting simulation '
                                 'control parameter tmax to %r\n' % simulation.time)
             simulation.input['time']['tmax'] = simulation.time
+
+        elif command == 't':
+            # t == "timings" -> show timings
+            simulation.log.info('\nCommand line action:\n  Showing timings')
+            log_timings(simulation)
         
         elif command.startswith('prof') and simulation.rank == 0:
             # Run the profiler

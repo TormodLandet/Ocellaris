@@ -1,7 +1,7 @@
 import dolfin
 import numpy
 from matplotlib import pyplot
-from ocellaris.utils import gather_lines_on_root
+from ocellaris.utils import gather_lines_on_root, timeit
 from . import Probe, register_probe
 
 @register_probe('IsoSurface')
@@ -109,7 +109,9 @@ class IsoSurface(Probe):
         """
         if self.write_file and self.simulation.rank == 0:
             self.output_file.close()
-            
+
+
+@timeit
 def get_iso_surfaces(simulation, field, value):
     """
     Find the iso-surfaces (contour lines) of the
@@ -166,6 +168,7 @@ def get_iso_surfaces(simulation, field, value):
     
     assert len(crossing_points) == 0
     return contours_from_endpoints + contours_from_singles_and_loops
+
 
 def contour_lines_from_endpoints(endpoints, crossing_points, connections):
     """

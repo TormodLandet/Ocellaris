@@ -35,6 +35,7 @@ class Simulation(object):
         # the solver. Included here for documentation purposes only
         self.solver = None
         self.multi_phase_model = None
+        self.t_start = None
         
         # For timing the analysis
         self.prevtime = self.starttime = time.time()
