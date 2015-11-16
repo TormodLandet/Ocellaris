@@ -15,6 +15,7 @@ class CoupledEquations(object):
         self.timestepping_method = timestepping_method
         self.use_stress_divergence_form = use_stress_divergence_form
         self.use_grad_p_form = use_grad_p_form
+        self.use_grad_q_form = True
         self.flux_type = flux_type
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.pressure_continuity_factor =  pressure_continuity_factor
@@ -152,7 +153,7 @@ class CoupledEquations(object):
                 
                 # Divergence free criterion
                 # ∇⋅u = 0
-                if self.use_grad_p_form:
+                if self.use_grad_q_form:
                     eq -= u[d]*q.dx(d)*dx
                     eq += (avg(u[d]) + D12[d]*jump(u, n))*jump(q)*n[d]('+')*dS
                 else:
@@ -205,7 +206,7 @@ class CoupledEquations(object):
                     u_bc = dbc.func()
                     
                     # Divergence free criterion
-                    if self.use_grad_p_form:
+                    if self.use_grad_q_form:
                         eq += q*u_bc*n[d]*dbc.ds()
                     else:
                         eq -= q*u[d]*n[d]*dbc.ds()
@@ -231,7 +232,9 @@ class CoupledEquations(object):
                 neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
                 for nbc in neumann_bcs:
                     # Divergence free criterion
-                    if not self.use_grad_p_form:
+                    if self.use_grad_q_form:
+                        eq += q*u[d]*n[d]*dbc.ds()
+                    else:
                         eq -= q*u[d]*n[d]*nbc.ds()
                     
                     # Convection
