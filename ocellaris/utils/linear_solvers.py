@@ -30,10 +30,10 @@ def linear_solver_from_input(simulation, path, default_solver, default_precondit
     solver_parameters = simulation.input.get_value('%s/parameters' % path, {}, 'dict(string:any)')
     params = [default_parameters, solver_parameters]
     
-    simulation.log.info('Creating linear equation solver from input "%s"' % path)
-    simulation.log.info('    Method:         %s' % solver_method)
-    simulation.log.info('    Preconditioner: %s' % preconditioner)
-    simulation.log.info('    LU-method:      %s' % lu_method)
+    simulation.log.info('    Creating linear equation solver from input "%s"' % path)
+    simulation.log.info('        Method:         %s' % solver_method)
+    simulation.log.info('        Preconditioner: %s' % preconditioner)
+    simulation.log.info('        LU-method:      %s' % lu_method)
     
     return make_linear_solver(solver_method, preconditioner, lu_method, params)
 

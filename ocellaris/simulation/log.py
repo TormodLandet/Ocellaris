@@ -15,6 +15,7 @@ class Log(object):
         self.log_level = dolfin.INFO
         self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation(), 'Flush log file')
         self.write_log = False
+        self.write_stdout = False
     
     def write(self, message):
         """

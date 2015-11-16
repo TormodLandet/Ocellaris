@@ -25,6 +25,7 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     dolfin.parameters["linear_algebra_backend"] = "PETSc"
     
     # Make time and timestep available in expressions for the initial conditions etc
+    simulation.log.info('Creating time simulation')
     simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
     simulation.dt = simulation.input.get_value('time/dt', required_type='float')
     
@@ -69,6 +70,7 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     setup_boundary_conditions(simulation)
     
     # Get the solver
+    simulation.log.info('Creating Navier-Stokes solver')
     solver_name = simulation.input.get_value('solver/type', required_type='string')
     solver = get_solver(solver_name)(simulation)
     simulation.solver = solver

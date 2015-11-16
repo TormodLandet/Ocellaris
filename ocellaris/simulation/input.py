@@ -17,6 +17,7 @@ class Input(collections.OrderedDict):
         """
         super(Input, self).__init__()
         self.simulation = simulation
+        self._already_logged = set()
     
     def read_yaml(self, file_name):
         """
@@ -80,6 +81,10 @@ class Input(collections.OrderedDict):
                     report_error('Missing parameter on input file',
                                  'Missing required input parameter:\n  %s' % pathstr)
                 else:
+                    msg  = '    No value set for "%s", using default value %r' % (pathstr, default_value)
+                    if not msg in self._already_logged:
+                        self.simulation.log.debug(msg)
+                        self._already_logged.add(msg)
                     return default_value
             d = d[p]
         
@@ -145,6 +150,12 @@ class Input(collections.OrderedDict):
         # Get the value on the root process
         if mpi_root_value:
             d = get_root_value(d)
+        
+        # Show what input values we use
+        msg  = '    Input value "%s" set to %r' % (pathstr, d)
+        if not msg in self._already_logged:
+            self.simulation.log.debug(msg)
+            self._already_logged.add(msg)
         
         return d
     
