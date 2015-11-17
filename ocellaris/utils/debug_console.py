@@ -146,7 +146,7 @@ def define_convenience_functions(simulation):
     funcs = {}
     
     # Convenience plotting function
-    fields = [name for name in ('u', 'p', 'c') if name in simulation.data]
+    fields = [name for name in ('u', 'p', 'c', 'p_hydrostatic') if name in simulation.data]
     info.append('Running plot_all() will plot %s' % ' & '.join(fields))
     def plot_all():
         for name in fields:
