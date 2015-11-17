@@ -114,24 +114,23 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
         solver.run()
         success = True
     except OcellarisError as e:
+        simulation.hooks.simulation_ended(success)
         simulation.log.error('ERROR === '*8)
         simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
-        simulation.log.error('ERROR === '*8)
     except KeyboardInterrupt as e:
+        simulation.hooks.simulation_ended(success)
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
     except BaseException as e:
+        simulation.hooks.simulation_ended(success)
         simulation.log.error('=== EXCEPTION =='*5)    
         tb = traceback.format_tb(sys.exc_info()[2])
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
         e_type = type(e).__name__
         simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
-        simulation.log.error('=== EXCEPTION =='*5)
     
     # Check if the solver ran without problems
-    if not success:
-        if not catch_exceptions:
-            raise e # Re-raise the exception gotten from running the solver 
-        simulation.hooks.simulation_ended(success)
+    if not success and not catch_exceptions:
+        raise e # Re-raise the exception gotten from running the solver 
     
     # Show dolfin plots?
     if simulation.input.get_value('output/plot_at_end', False, 'bool'):
@@ -348,13 +347,14 @@ def setup_hooks(simulation):
             description = '%s hook "%s"' % (hook_name, name)
             
             if not enabled:
-                simulation.log.info('Skipping disabled %s' % description)
+                simulation.log.info('    Skipping disabled %s' % description)
                 continue
             
+            simulation.log.info('    Adding %s' % description)
             code_string = hook_info['code']
             hook = make_hook_from_code_string(code_string, description)
             register_hook(hook, 'User defined hook "%s"' % name)
-            simulation.log.info('    ' + description)
+            simulation.log.info('        ' + description)
 
 
 def summarise_simulation_after_running(simulation, success):
