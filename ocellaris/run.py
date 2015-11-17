@@ -4,7 +4,8 @@ from .multiphase import get_multi_phase_model
 from .solvers import get_solver
 from .boundary_conditions import BoundaryRegion
 from .postprocess import setup_probes
-from .utils import OcellarisError, run_debug_console, debug_console_hook, report_error, ocellaris_project, log_timings
+from .utils import OcellarisError, run_debug_console, debug_console_hook, report_error, \
+                   ocellaris_project, log_timings, OcellarisConstant
 from ocellaris.utils.code_runner import RunnablePythonString
 
 def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
@@ -49,7 +50,7 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     ndim = simulation.ndim
     g = simulation.input.get_value('physical_properties/g', [0]*ndim, required_type='list(float)')
     assert len(g) == simulation.ndim
-    simulation.data['g'] = dolfin.Constant(g)
+    simulation.data['g'] = OcellarisConstant(g)
     
     # Get the density and viscosity properties from the multi phase model
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
