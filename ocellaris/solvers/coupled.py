@@ -21,7 +21,9 @@ EQUATION_SUBTYPE = 'Conservative'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
+USE_GRAD_Q_FORM = False
 PRESSURE_CONTINUITY_FACTOR = 0
+VELOCITY_CONTINUITY_FACTOR_D12 = 0
 
 
 @register_solver('Coupled')
@@ -52,13 +54,16 @@ class SolverCoupled(Solver):
                                     flux_type=self.flux_type,
                                     use_stress_divergence_form=self.use_stress_divergence_form,
                                     use_grad_p_form=self.use_grad_p_form,
+                                    use_grad_q_form=self.use_grad_q_form,
                                     use_lagrange_multiplicator=self.use_lagrange_multiplicator,
-                                    pressure_continuity_factor=self.pressure_continuity_factor)
+                                    pressure_continuity_factor=self.pressure_continuity_factor,
+                                    velocity_continuity_factor_D12=self.velocity_continuity_factor_D12)
         
         # Velocity post_processing
         self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
-            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'])
+            D12 = self.velocity_continuity_factor_D12
+            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'], D12)
         
         # Store number of iterations
         self.niters = None
@@ -122,8 +127,11 @@ class SolverCoupled(Solver):
         self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
                                                               USE_STRESS_DIVERGENCE, 'bool')
         self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+        self.use_grad_q_form = sim.input.get_value('solver/use_grad_q_form', USE_GRAD_Q_FORM, 'bool')
         self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor', 
                                                                  PRESSURE_CONTINUITY_FACTOR, 'float')
+        self.velocity_continuity_factor_D12 = sim.input.get_value('solver/velocity_continuity_factor_D12', 
+                                                                 VELOCITY_CONTINUITY_FACTOR_D12, 'float')
         
         # Representation of velocity
         Vu_family = sim.data['Vu'].ufl_element().family()

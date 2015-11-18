@@ -7,7 +7,8 @@ from .dg_helpers import define_penalty
 
 class CoupledEquations(object):
     def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
-                 use_grad_p_form, use_lagrange_multiplicator, pressure_continuity_factor):
+                 use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator, 
+                 pressure_continuity_factor, velocity_continuity_factor_D12):
         """
         This class assembles the coupled Navier-Stokes equations, both CG and DG 
         """
@@ -15,10 +16,11 @@ class CoupledEquations(object):
         self.timestepping_method = timestepping_method
         self.use_stress_divergence_form = use_stress_divergence_form
         self.use_grad_p_form = use_grad_p_form
-        self.use_grad_q_form = True
+        self.use_grad_q_form = use_grad_q_form
         self.flux_type = flux_type
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.pressure_continuity_factor =  pressure_continuity_factor
+        self.velocity_continuity_factor_D12 = velocity_continuity_factor_D12
         
         # Discontinuous or continuous elements
         Vu_family = simulation.data['Vu'].ufl_element().family()
@@ -40,10 +42,13 @@ class CoupledEquations(object):
         penalty_ds = penalty_dS*2
         self.simulation.log.info('DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
-        D12 = Constant([0, 0])
-        h = dolfin.CellSize(mesh)
+        if self.velocity_continuity_factor_D12 is not None:
+            D12 = Constant([self.velocity_continuity_factor_D12]*self.simulation.ndim)
+        else:
+            D12 = Constant([0, 0])
         
         if self.pressure_continuity_factor != 0:
+            h = dolfin.CellSize(mesh)
             D11 = avg(h/nu)*Constant(self.pressure_continuity_factor)
         else:
             D11 = None
@@ -83,7 +88,7 @@ class CoupledEquations(object):
         # Fluid properties at t^{n}, t^{n-1} and t^{n+1}*
         rhos = sim.data['rho_star']
         nus = sim.data['nu_star']
-        mus = rhos*nus
+        mus = sim.data['mu_star']
         rho = sim.data['rho']
         rho_old = sim.data['rho_old']
         

@@ -34,7 +34,7 @@ def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
 
 
 class VelocityBDMProjection():
-    def __init__(self, w):
+    def __init__(self, w, D12=None):
         """
         Implement equation 4a and 4b in "Two new techniques for generating exactly
         incompressible approximate velocities" by Bernardo Cocburn (2009)
@@ -46,8 +46,7 @@ class VelocityBDMProjection():
             (u, ϕ) = (w, ϕ)      ∀ φ ∈ {ϕ ∈ P_{k}(K)^2 : ∇⋅ϕ = 0 in K, ϕ⋅n = 0 on ∂K}  
             
         Here w is the input velocity function in DG2 space and û is the flux at
-        each face (upwind value of the input velocity w). P_{x} is the space of
-        polynomials of order k
+        each face. P_{x} is the space of polynomials of order k
         """
         ue = w[0].function_space().ufl_element()
         k = 2
@@ -70,6 +69,8 @@ class VelocityBDMProjection():
         # The same fluxes that are used in the incompressibility equation
         u_hat_ds = w
         u_hat_dS = dolfin.avg(w)
+        if D12 is not None:
+            u_hat_dS += dolfin.Constant([D12, D12])*dolfin.jump(w, n)
         
         # Equation 1 - flux through the sides
         a = dot(u, n)*v1*ds
