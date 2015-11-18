@@ -22,6 +22,7 @@ EQUATION_SUBTYPE = 'Default'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
+HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
 
 
 @register_solver('IPCS')
@@ -34,6 +35,7 @@ class SolverIPCS(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
+        self.setup_hydrostatic_pressure_calculations()
         
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -41,19 +43,6 @@ class SolverIPCS(Solver):
         
         # Solver control parameters
         sim.data['dt'] = dolfin.Constant(simulation.dt)
-        
-        # Hydrostatic pressure
-        rho_min, rho_max = sim.multi_phase_model.get_density_range()
-        self.hydrostatic_pressure_correction = rho_min != rho_max
-        if self.hydrostatic_pressure_correction:
-            rho = sim.data['rho_star']
-            g = sim.data['g']
-            ph = sim.data['p_hydrostatic']
-            default_vertical_direction = sim.ndim - 1
-            vertical_direction = sim.input.get_value('multiphase_solver/vertical_direction',
-                                                     default_vertical_direction, 'float')
-            sky_location = sim.input.get_value('multiphase_solver/sky_location', required_type='float')
-            self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, vertical_direction, sky_location)
         
         # Get equations
         MomentumPredictionEquation, PressureCorrectionEquation, \
@@ -199,10 +188,53 @@ class SolverIPCS(Solver):
         sim.data['p'] = dolfin.Function(Vp)
         sim.data['p_hat'] = dolfin.Function(Vp)
         
-        # Hydrostatic pressure is always CG
-        Pp = Vp.ufl_element().degree()
-        Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
-        sim.data['p_hydrostatic'] = dolfin.Function(Vph)
+        # If gravity is nonzero we create a separate hydrostatic pressure field
+        if any(gi != 0 for gi in sim.data['g'].py_value):
+            # Hydrostatic pressure is always CG
+            Pp = Vp.ufl_element().degree()
+            Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
+            sim.data['p_hydrostatic'] = dolfin.Function(Vph)
+    
+    def setup_hydrostatic_pressure_calculations(self):
+        """
+        We can initialize the pressure field to be hydrostatic at the first time step,
+        or we can calculate the hydrostatic pressure as its own pressure field every
+        time step such that the PressureCorrectionEquation only solves for the dynamic
+        pressure
+        """
+        sim = self.simulation
+        
+        # No need for hydrostatic pressure if g is zero
+        g = sim.data['g']
+        self.hydrostatic_pressure_correction = False
+        if all(gi == 0 for gi in g.py_value):
+            return
+        
+        # Get the input needed to calculate p_hydrostatic
+        rho = sim.data['rho_star']
+        default_vertical_direction = sim.ndim - 1
+        vertical_direction = sim.input.get_value('multiphase_solver/vertical_direction',
+                                                 default_vertical_direction, 'float')
+        sky_location = sim.input.get_value('multiphase_solver/sky_location', required_type='float')
+        ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep', 
+                                                HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP, required_type='float')
+        
+        ph = sim.data['p_hydrostatic']
+        
+        
+        # Helper class to calculate the hydrostatic pressure distribution
+        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, vertical_direction, sky_location)
+        if ph_every_timestep:
+            # Correct every timestep
+            self.hydrostatic_pressure_correction = True
+        else:
+            # Correct the pressure only now, at the begining
+            p = sim.data['p']
+            if p.vector().max() == p.vector().min() == 0.0:
+                sim.log.info('    Initial pressure field is identically zero, initializing to hydrostatic')
+                self.hydrostatic_pressure.update()
+                p.assign(dolfin.interpolate(ph, p.function_space()))
+            del sim.data['p_hydrostatic']
     
     @timeit
     def update_convection(self, t, dt):
@@ -439,9 +471,15 @@ class SolverIPCS(Solver):
             
             # Run inner iterations
             self.inner_iteration = 1
+            #of = dolfin.File('test.xdmf')
             while self.inner_iteration <= num_inner_iter:
                 err_u_star = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
+                
+                #for field_name in ('u_star0', 'u_star1', 'p'):
+                #    field = sim.data[field_name]
+                #    field.rename(field_name, field_name)
+                #    of << (field, self.inner_iteration+0.0)
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]

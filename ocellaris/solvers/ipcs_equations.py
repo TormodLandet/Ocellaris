@@ -57,7 +57,7 @@ class MomentumPredictionEquation(BaseEquation):
         
         mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
         P = self.simulation.data['Vu'].ufl_element().degree()
-        penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=10, exponent=1.0)
+        penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
         self.simulation.log.info('DG SIP penalty viscosity:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
@@ -95,7 +95,7 @@ class MomentumPredictionEquation(BaseEquation):
         rho = sim.data['rho']
         rho_old = sim.data['rho_old']
         nus = sim.data['nu_star']
-        mus = rhos*nus
+        mus = sim.data['mu_star']
         
         # Include (∇u)^T term?
         assert not self.use_stress_divergence_form
@@ -207,7 +207,7 @@ class MomentumPredictionEquation(BaseEquation):
                 # Pressure
                 if not self.use_grad_p_form:
                     L -= p*v*ni*dbc.ds()
-                    
+            
             # Neumann boundary
             neumann_bcs = sim.data['neumann_bcs'].get('u%d' % self.component, [])
             for nbc in neumann_bcs:
@@ -241,7 +241,9 @@ class PressureCorrectionEquation(BaseEquation):
         """
         mesh = self.simulation.data['mesh']
         P = self.simulation.data['Vp'].ufl_element().degree()
-        k_min = k_max = 1
+        rho_min, rho_max = self.simulation.multi_phase_model.get_density_range()
+        k_min = 1.0/rho_max
+        k_max = 1.0/rho_min
         penalty_dS = define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
         self.simulation.log.info('DG SIP penalty pressure:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
@@ -261,7 +263,7 @@ class PressureCorrectionEquation(BaseEquation):
         
         # Trial and test functions
         p = dolfin.TrialFunction(Vp)
-        q = dolfin.TestFunction(Vp) 
+        q = dolfin.TestFunction(Vp)
         
         c1 = sim.data['time_coeffs'][0]
         dt = sim.data['dt']
@@ -287,21 +289,21 @@ class PressureCorrectionEquation(BaseEquation):
         else:
             # Weak form of the Poisson eq. with discontinuous elements
             # -∇⋅∇p = - γ_1/Δt ρ ∇⋅u^*
-            a = dot(grad(p), grad(q))*dx
-            L = dot(grad(p_star), grad(q))*dx
+            K = 1.0/rhos
+            a = K*dot(grad(p), grad(q))*dx
+            L = K*dot(grad(p_star), grad(q))*dx
 
-            # RHS
-            #L -= c1/dt*rhos*div(u_star)*q*dx
-            L += c1/dt*rhos*dot(u_star, grad(q))*dx
-            L -= c1/dt*rhos*dot(avg(u_star), n('+'))*jump(q)*dS
+            # RHS, ∇⋅u^*
+            L += c1/dt*dot(u_star, grad(q))*dx
+            L -= c1/dt*dot(avg(u_star), n('+'))*jump(q)*dS
             
             # Symmetric Interior Penalty method for -∇⋅∇p
-            a -= dot(n('+'), avg(grad(p)))*jump(q)*dS
-            a -= dot(n('+'), avg(grad(q)))*jump(p)*dS
+            a -= dot(n('+'), avg(K*grad(p)))*jump(q)*dS
+            a -= dot(n('+'), avg(K*grad(q)))*jump(p)*dS
             
             # Symmetric Interior Penalty method for -∇⋅∇p^*
-            L -= dot(n('+'), avg(grad(p_star)))*jump(q)*dS
-            L -= dot(n('+'), avg(grad(q)))*jump(p_star)*dS
+            L -= dot(n('+'), avg(K*grad(p_star)))*jump(q)*dS
+            L -= dot(n('+'), avg(K*grad(q)))*jump(p_star)*dS
             
             # Weak continuity
             penalty_dS, penalty_ds = self.calculate_penalties()
@@ -316,16 +318,16 @@ class PressureCorrectionEquation(BaseEquation):
                 p_bc = dbc.func()
 
                 # From integration by parts of RHS
-                L -= c1/dt*rhos*dot(u_star, n)*q*dbc.ds()
+                L -= c1/dt*dot(u_star, n)*q*dbc.ds()
                 
                 # SIPG for -∇⋅∇p
-                a -= dot(n, grad(p))*q*dbc.ds()
-                a -= dot(n, grad(q))*p*dbc.ds()
-                L -= dot(n, grad(q))*p_bc*dbc.ds()
+                a -= dot(n, K*grad(p))*q*dbc.ds()
+                a -= dot(n, K*grad(q))*p*dbc.ds()
+                L -= dot(n, K*grad(q))*p_bc*dbc.ds()
                 
                 # SIPG for -∇⋅∇p^*
-                L -= dot(n, grad(p_star))*q*dbc.ds()
-                L -= dot(n, grad(q))*p_star*dbc.ds()
+                L -= dot(n, K*grad(p_star))*q*dbc.ds()
+                L -= dot(n, K*grad(q))*p_star*dbc.ds()
                 
                 # Weak Dirichlet
                 a += penalty_ds*p*q*dbc.ds()
@@ -342,7 +344,7 @@ class PressureCorrectionEquation(BaseEquation):
                 #L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
 
                 # From integration by parts of RHS
-                L -= c1/dt*rhos*dot(u_star, n)*q*nbc.ds()
+                L -= c1/dt*dot(u_star, n)*q*nbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
