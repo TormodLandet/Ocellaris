@@ -1,9 +1,15 @@
 syntax: glob
 .*
+!/.gitignore
 *.pyc
 *.png
 *.avi
 *.out
 *.log
+*.h5
+*.xdmf
+*.pvd
+*.vtu
 results_*
 documentation/_build
+output/
