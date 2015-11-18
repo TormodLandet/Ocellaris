@@ -17,8 +17,8 @@ physical_properties:
 
 mesh:
     type: Rectangle
-    Nx: 20
-    Ny: 20
+    Nx: 60
+    Ny: 60
     endx: 2
     endy: 2
     diagonal: right
@@ -73,7 +73,7 @@ initial_conditions:
 
 time:
     dt: 0.1
-    tmax: 1.0
+    tmax: 0.1
 
 output:
     prefix: taylor_green
@@ -88,7 +88,8 @@ solver:
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
-    num_inner_iter: 20
+    num_inner_iter: 50
+    allowable_error_inner: 1.0e-6
     use_stress_divergence_form: false
 
 convection:
@@ -117,5 +118,5 @@ hooks:
             div_u = project(u[0].dx(0) + u[1].dx(1), Vp)
             print 'max_div_u|Vp = %10.3e' % abs(div_u.vector().array()).max()
 
-console_at_end: false
-console_on_error: true
+#console_at_end: false
+#console_on_error: true

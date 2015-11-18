@@ -30,15 +30,12 @@ boundary_conditions:
     selector: code
     inside_code: on_boundary
     u:
-        #type: ConstantValue
-        #value: [0, 0]
-        type: CppCodedValue
-        cpp_code:
-        -   '0.0'
-        -   '0.0'
+        type: ConstantValue
+        value: [0, 0]
     p:
         type: ConstantGradient
         value: 0
+
 -   name: lid
     selector: code
     inside_code: on_boundary and x[1] >= 1.0 - 1e-8
@@ -51,7 +48,7 @@ boundary_conditions:
 
 time:
     dt: 0.01
-    tmax: 20.0
+    tmax: 30.0
 
 output:
     prefix: lid_driven_cavity_flow
@@ -60,18 +57,14 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: Coupled
+    type: IPCS
     num_inner_iter: 20
-    allowable_error_inner: 5.0e-3
+    allowable_error_inner: 1e-3
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
-    function_space_velocity: DG
-    function_space_pressure: DG
-    timestepping_method: BDF
-
-convection:
-    u:
-        convection_scheme: Upwind
+    function_space_velocity: CG
+    function_space_pressure: CG
+    steady_velocity_stopping_criterion: 1.0e-4
 
 probes:
 -   name: u-vel center

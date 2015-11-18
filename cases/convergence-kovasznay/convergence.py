@@ -92,22 +92,22 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     for d in range(2):
         up = sim.data['up%d' %d]
         upp = sim.data['upp%d' %d]
-        uppp = sim.data['uppp%d' %d]
-        
-        up.vector()[:] -= upp.vector()
-        upp.vector()[:] -= uppp.vector() 
-        
-        diff = abs(up.vector().get_local())
-        diffp = abs(upp.vector().get_local())
-        i = argmax(diff)
-        ip = argmax(diffp)
         
         V = up.function_space()
         coords = V.tabulate_dof_coordinates().reshape((-1, 2))
         
+        up.vector()[:] -= upp.vector()
+        diff = abs(up.vector().get_local())
+        i = argmax(diff)
         say('Max difference in %d direction is %.4e at %r' % (d, diff[i], coords[i]))
-        say('Prev max diff. in %d direction is %.4e at %r' % (d, diffp[ip], coords[ip]))
         
+        if 'uppp%d' %d in sim.data:
+            uppp = sim.data['uppp%d' %d]
+            upp.vector()[:] -= uppp.vector()
+            diffp = abs(upp.vector().get_local())
+            ip = argmax(diffp)
+            say('Prev max diff. in %d direction is %.4e at %r' % (d, diffp[ip], coords[ip]))
+    
     if False and N == 24:
         #dolfin.plot(sim.data['u0'], title='u0')
         #dolfin.plot(sim.data['u1'], title='u1')

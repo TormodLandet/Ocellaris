@@ -3,61 +3,63 @@ ocellaris:
     version: 1.0
 
 physical_properties:
-    rho0: 999
+    rho0: 1000.0
     nu0: 1.0e-6
-    rho1: 1022
-    nu1: 1.0e-6
+    rho1: 20. # 1.225
+    nu1: 1.5e-5 # 1.5e-5
     g: [0, -9.81]
 
 mesh:
     type: Rectangle
-    #Nx: 256
-    #Ny: 128
-    Nx: 160
-    Ny: 40
-    #Nx: 80
-    #Ny: 20
-    #Nx: 50
-    #Ny: 15
-    starty: 0.5
-    endx: 4
+    Nx: 32
+    Ny: 32
 
-boundary_conditions:
--   name: bottom and top
+# BCs with no-slip
+_boundary_conditions:
+-   name: walls
     selector: code
-    inside_code: 'on_boundary and (x[1] < 0.5+1e-5 or x[1] > 1 - 1e-5)'
+    inside_code: on_boundary
+    u:
+        type: ConstantValue
+        value: [0, 0]
+    p:
+        type: WallPressure
+
+# BCs with wall slip        
+boundary_conditions:
+-   name: top and bottom
+    selector: code
+    inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > 1-1e-5)'
     p:
         type: WallPressure
     u0:
-        #type: ConstantGradient
-        type: ConstantValue
+        type: ConstantGradient
         value: 0
     u1:
         type: ConstantValue
         value: 0
 -   name: walls
     selector: code
-    inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 4 - 1e-5)'
+    inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 1-1e-5)'
     p:
         type: WallPressure
     u0:
         type: ConstantValue
         value: 0
     u1:
-        #type: ConstantGradient
-        type: ConstantValue
+        type: ConstantGradient
         value: 0
 
 initial_conditions:
     cp:
-        cpp_code: '((x[0] < 0.25 - 1e-5 && x[1] > 0.67 - 1e-5) || x[1] > 0.75 - 1e-5) ? 1.0 : 0.0'
+        cpp_code: 'x[1] < 0.5 ? 1.0 : 0.0'
 
 time:
-    dt: 0.1
-    tmax: 20.1
+    dt: 0.01
+    tmax: 1.0
 
 output:
-    prefix: output/internal_soliton_test6
+    prefix: output/hydrostatic
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -70,8 +72,8 @@ multiphase_solver:
 
 solver:
     type: IPCS
-    num_inner_iter: 100
-    allowable_error_inner: 1e-5
+    num_inner_iter: 20
+    allowable_error_inner: 1e-3
     function_space_velocity: DG
     function_space_pressure: DG
     polynomial_degree_velocity: 2
@@ -87,9 +89,9 @@ probes:
         value: 0.5
         field: c
         file_name: '_c05.out'
-        show_interval: 0
-        xlim: [0, 4]
-        ylim: [0.6, 0.9]
+        show_interval: 1
+        xlim: [0, 1]
+        ylim: [0, 0.75]
     -   name: c=0.1
         type: IsoSurface
         value: 0.1
@@ -103,27 +105,50 @@ probes:
 
 hooks:
     post_timestep:
+
+    -   name: plot p
+        enabled: no
+        code: plot(p, title='p')
+
+    -   name: plot c
+        enabled: no
+        code: plot(c, title='c')
+
+    -   name: plot div(u)
+        enabled: no
+        code: |
+          if not hasattr(simulation, 'divfunv'):
+            simulation.divfunc = Function(Vc, name='divu')
+          project(div(u), Vc, function=simulation.divfunc)
+          plot(simulation.divfunc)
+
+    -   name: plot to file
+        enabled: no
+        code: '[simulation.plotting.plot(name) for name in ("c", "div(u)|Vc", "p", "mag(u)")]'
+
+    -   name: debug on fishy values
+        enabled: no
+        code: |
+            umag = (u0.vector().array()**2 +  u1.vector().array()**2)
+            if max(umag) > 1:
+                run_debug_console(simulation, False)
+
     -   name: print location of largest divergence
         enabled: no
         code: |
             udiv = project(div(u), Vc)
             values = udiv.compute_vertex_values()
             coords = mesh.coordinates()
-            valmax = -1
+            valmax = 0
             for val, coord in zip(values, coords):
                 if abs(val) > valmax:
                     valmax = abs(val)
                     coordmax = coord
             print '\n%10.3e   %5.2f %5.2f\n' % (valmax, coordmax[0], coordmax[1])
-            #if valmax > 1e-4:
-            #    run_debug_console(simulation, False)
-            #    exit()
-    
-    -   name: plot u
-        enabled: no
-        code: |
-            plot(u, title='u', key='u', window_width=1000, interactive=True)
-    
+            if valmax > 1e-3:
+                print 'Valmax is above 1e-3', valmax
+                #run_debug_console(simulation, False)
+
     -   name: save colour fields
         enabled: no
         code: |
@@ -132,11 +157,14 @@ hooks:
                 hook_data['cf'] = File(prefix + '_c.pvd')
                 c.rename('c', 'c')
                 #c_star.rename('c_star', 'c_star')
-            hook_data['cf'] << (c, t)
+            rho = project(rho_star, Vc)
+            rho.rename('rho', 'rho')
+            hook_data['cf'] << (rho, t)
+            hook_data['cf'] << (p, t)
             #hook_data['cf'] << (c_star, t)
 
-_reporting:
-    reports_to_show: ['min(c)', 'max(c)'] #, 'max(div(u)|Vp)']
+reporting:
+    _reports_to_show: ['sum(c)']#, 'max(div(u)|Vc)']
 
-#console_on_error: true
-#console_at_end: true
+#console_on_error: false
+#console_at_end: True

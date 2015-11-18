@@ -4,9 +4,9 @@ ocellaris:
 
 physical_properties:
     rho0: 1000.0
-    nu0: 1.0e-2
+    nu0: 1.0e-6
     rho1: 1.225
-    nu1: 1.5e-3
+    nu1: 1.5e-5
     g: [0, -9.81]
 
 mesh:
@@ -28,12 +28,11 @@ _boundary_conditions:
 
 # BCs with wall slip        
 boundary_conditions:
--   name: bottom and top
+-   name: top and bottom
     selector: code
     inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > 0.75-1e-5)'
     p:
         type: WallPressure
-        value: 0
     u0:
         type: ConstantGradient
         value: 0
@@ -45,7 +44,6 @@ boundary_conditions:
     inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 1-1e-5)'
     p:
         type: WallPressure
-        value: 0
     u0:
         type: ConstantValue
         value: 0
@@ -55,8 +53,8 @@ boundary_conditions:
 
 initial_conditions:
     cp:
-        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
-        _cpp_code: |
+        _cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
+        cpp_code: |
             (((x[0] < 0.25-0.04+1e-5 && x[1] < 0.5-0.04+1e-5) ? 0.2 : 0.0) +
              ((x[0] < 0.25-0.02+1e-5 && x[1] < 0.5-0.02+1e-5) ? 0.2 : 0.0) +
              ((x[0] < 0.25-0.00+1e-5 && x[1] < 0.5-0.00+1e-5) ? 0.2 : 0.0) +
@@ -76,20 +74,22 @@ multiphase_solver:
     type: BlendedAlgebraicVOF
     function_space_colour: DG
     polynomial_degree_colour: 0
+    sky_location: 0.75
 
 solver:
     type: Coupled
+    num_inner_iter: 20
+    allowable_error_inner: 1e-3
     function_space_velocity: DG
     function_space_pressure: DG
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
-    use_stress_divergence_form: false
 
 convection:
     u:
         convection_scheme: Upwind
     c:
-        convection_scheme: HRIC
+        convection_scheme: Upwind
 
 probes:
     -   name: c=0.5
@@ -142,7 +142,7 @@ hooks:
                 run_debug_console(simulation, False)
 
     -   name: print location of largest divergence
-        enabled: yes
+        enabled: no
         code: |
             udiv = project(div(u), Vc)
             values = udiv.compute_vertex_values()
@@ -158,18 +158,21 @@ hooks:
                 #run_debug_console(simulation, False)
 
     -   name: save colour fields
-        enabled: yes
+        enabled: no
         code: |
             if not 'cf' in hook_data:
                 prefix = simulation.input.get_value('output/prefix')
                 hook_data['cf'] = File(prefix + '_c.pvd')
                 c.rename('c', 'c')
                 #c_star.rename('c_star', 'c_star')
-            hook_data['cf'] << (c, t)
+            rho = project(rho_star, Vc)
+            rho.rename('rho', 'rho')
+            hook_data['cf'] << (rho, t)
+            hook_data['cf'] << (p, t)
             #hook_data['cf'] << (c_star, t)
 
 reporting:
-    reports_to_show: ['sum(c)', 'max(div(u)|Vc)']
+    reports_to_show: ['sum(c)']#, 'max(div(u)|Vc)']
 
-#console_on_error: true
+console_on_error: false
 #console_at_end: True
