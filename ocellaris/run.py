@@ -46,24 +46,8 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     # creating Dirichlet boundary conditions
     setup_function_spaces(simulation)
     
-    # Setup physical constants
-    ndim = simulation.ndim
-    g = simulation.input.get_value('physical_properties/g', [0]*ndim, required_type='list(float)')
-    assert len(g) == simulation.ndim
-    simulation.data['g'] = OcellarisConstant(g)
-    
-    # Get the density and viscosity properties from the multi phase model
-    multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
-    multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
-    simulation.data['rho'] = multiphase_model.get_density(0)
-    simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity(0)
-    simulation.multi_phase_model = multiphase_model
-    
-    # Previous and forcasted values of the fluid parameters
-    simulation.data['rho_old'] = multiphase_model.get_density(-1)
-    simulation.data['rho_star'] = multiphase_model.get_density(1)
-    simulation.data['nu_old'] = multiphase_model.get_laminar_kinematic_viscosity(-1)
-    simulation.data['nu_star'] = multiphase_model.get_laminar_kinematic_viscosity(1)
+    # Setup physical constants and multi-phase model (g, rho, nu, mu)
+    setup_physical_properties(simulation)
     
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs
@@ -268,6 +252,32 @@ def setup_function_spaces(simulation):
         # Create and store function space
         Vc = dolfin.FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
         simulation.data['Vc'] = Vc
+        
+
+def setup_physical_properties(simulation):
+    """
+    Gravity vector and rho/nu/mu fields are created here
+    """
+    ndim = simulation.ndim
+    g = simulation.input.get_value('physical_properties/g', [0]*ndim, required_type='list(float)')
+    assert len(g) == simulation.ndim
+    simulation.data['g'] = OcellarisConstant(g)
+    
+    # Get the density and viscosity properties from the multi phase model
+    multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
+    multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
+    simulation.data['rho'] = multiphase_model.get_density(0)
+    simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity(0)
+    simulation.data['mu'] = multiphase_model.get_laminar_dynamic_viscosity(0)
+    simulation.multi_phase_model = multiphase_model
+    
+    # Previous and forcasted values of the fluid parameters
+    simulation.data['rho_old'] = multiphase_model.get_density(-1)
+    simulation.data['rho_star'] = multiphase_model.get_density(1)
+    simulation.data['nu_old'] = multiphase_model.get_laminar_kinematic_viscosity(-1)
+    simulation.data['nu_star'] = multiphase_model.get_laminar_kinematic_viscosity(1)
+    simulation.data['mu_old'] = multiphase_model.get_laminar_dynamic_viscosity(-1)
+    simulation.data['mu_star'] = multiphase_model.get_laminar_dynamic_viscosity(1)
 
 
 def setup_boundary_conditions(simulation):

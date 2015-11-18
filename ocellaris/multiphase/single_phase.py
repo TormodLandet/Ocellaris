@@ -12,15 +12,21 @@ class SinglePhaseScheme(MultiPhaseModel):
     
     def get_density(self, k):
         """
-        Get flud density function at timestep t^{n+k}
+        Get fluid density function rho at timestep t^{n+k}
         """
         return dolfin.Constant(self.rho0)
 
     def get_laminar_kinematic_viscosity(self, k):
         """
-        Get flud kinematic viscosity function at timestep t^{n+k}
+        Get fluid kinematic viscosity function nu at timestep t^{n+k}
         """
         return dolfin.Constant(self.nu0)
+    
+    def get_laminar_dynamic_viscosity(self, k):
+        """
+        Get fluid dynamic viscosity function mu at timestep t^{n+k}
+        """
+        return dolfin.Constant(self.nu0*self.rho0)
     
     def get_density_range(self):
         """
