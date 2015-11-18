@@ -1,14 +1,14 @@
 import dolfin
 from . import report_error
 
-def make_expression(simulation, cpp_code, description):
+def make_expression(simulation, cpp_code, description, element=None):
     """
     Create a C++ expression with parameters like time and all scalars in 
     simulation.data available (nu and rho for single phase simulations) 
     """
     available_vars = get_vars(simulation)    
     try:
-        return dolfin.Expression(cpp_code, **available_vars)
+        return dolfin.Expression(cpp_code, element=element, **available_vars)
     except Exception as e:
         vardesc = '\n  - '.join('%s (%s)' % (name, type(value)) for name, value in available_vars.items())
         errormsg  = str(e)
@@ -50,7 +50,7 @@ def ocellaris_project(simulation, cpp_code, description, V, function=None):
     provided or a function will be created 
     """
     # Compile the C++ code
-    expr = make_expression(simulation, cpp_code, description)
+    expr = make_expression(simulation, cpp_code, description, element=V.ufl_element())
     
     # Project to the function space and return the projected function
     if function is None:
