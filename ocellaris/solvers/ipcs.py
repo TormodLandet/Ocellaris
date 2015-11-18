@@ -4,6 +4,7 @@ from ocellaris.utils import report_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
 from .ipcs_equations import EQUATION_SUBTYPES
 from .dg_helpers import VelocityBDMProjection
+from .hydrostatic import HydrostaticPressure
 
 
 # Solvers - default values, can be changed in the input file
@@ -212,18 +213,13 @@ class SolverIPCS(Solver):
         
         # Get the input needed to calculate p_hydrostatic
         rho = sim.data['rho_star']
-        default_vertical_direction = sim.ndim - 1
-        vertical_direction = sim.input.get_value('multiphase_solver/vertical_direction',
-                                                 default_vertical_direction, 'float')
         sky_location = sim.input.get_value('multiphase_solver/sky_location', required_type='float')
         ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep', 
                                                 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP, required_type='float')
         
-        ph = sim.data['p_hydrostatic']
-        
-        
         # Helper class to calculate the hydrostatic pressure distribution
-        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, vertical_direction, sky_location)
+        ph = sim.data['p_hydrostatic']
+        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, sky_location)
         if ph_every_timestep:
             # Correct every timestep
             self.hydrostatic_pressure_correction = True
@@ -538,36 +534,3 @@ class SolverIPCS(Solver):
         
         # We are done
         sim.hooks.simulation_ended(success=True)
-
-
-class HydrostaticPressure(object):
-    def __init__(self, rho, g, ph, vertical_direction, zero_level, eps=1e-8):
-        """
-        Calculate the hydrostatic pressure
-
-        The gravity vector g *must* be parallel to one of the axes
-        """
-        Vp = ph.function_space()
-        p = dolfin.TrialFunction(Vp)
-        q = dolfin.TestFunction(Vp)
-        d = vertical_direction
-        
-        a = p.dx(d)*q.dx(d)*dolfin.dx
-        L = g[d]*rho*q.dx(d)*dolfin.dx
-        
-        inside = lambda  x, on_boundary: zero_level - eps <= x[d] <= zero_level + eps
-        self.zero_bc = dolfin.DirichletBC(Vp, 0.0, inside)
-        self.func = ph
-        self.tensor_lhs = dolfin.assemble(a)
-        self.form_rhs = L
-    
-    def update(self):
-        t = dolfin.Timer('Ocellaris update hydrostatic pressure')
-        
-        A = self.tensor_lhs
-        b = dolfin.assemble(self.form_rhs)
-        self.zero_bc.apply(A, b)
-        dolfin.solve(A, self.func.vector(), b)
-        
-        t.stop()
-
