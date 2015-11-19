@@ -69,11 +69,14 @@ class Hooks(object):
         """
         self.simulation._at_start_of_timestep(timestep_number, t, dt)
         for hook, description in self._pre_timestep_hooks[::-1]:
+            t = dolfin.Timer('Ocellaris hook %s' % description)
             try:
                 hook(timestep_number, t, dt)
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 raise
+            finally:
+                t.stop()
     
     @timeit
     def end_timestep(self):

@@ -6,6 +6,7 @@ from .input import Input
 from .plotting import Plotting
 from .reporting import Reporting
 from .log import Log
+from .io import InputOutputHandling
 
 class Simulation(object):
     def __init__(self):
@@ -23,6 +24,7 @@ class Simulation(object):
         self.plotting = Plotting(self)
         self.reporting = Reporting(self)
         self.log = Log(self)
+        self.io = InputOutputHandling(self)
         
         # Several parts of the code wants to know these things,
         # so we keep them in a central place
@@ -76,6 +78,9 @@ class Simulation(object):
         vel_max = vels.max()**0.5
         vel_max = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_max))
         self.reporting.report_timestep_value('umax', vel_max)
+        
+        # Write fields to output file
+        self.io.write_fields()
         
         # Write timestep report
         self.reporting.log_timestep_reports()
