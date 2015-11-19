@@ -2,7 +2,7 @@
 import dolfin
 from dolfin import dot, div, grad, avg, jump, dx, dS, Constant
 from . import BDF, UPWIND
-from .dg_helpers import define_penalty
+from ..solver_parts import define_penalty
 
 
 class BaseEquation(object):

@@ -2,13 +2,14 @@
 import dolfin
 from dolfin import dx, div, grad, dot, jump, avg, ds, dS, Constant
 from . import UPWIND
-from .dg_helpers import define_penalty
+from ..solver_parts import define_penalty
 
 
 class CoupledEquations(object):
     def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
                  use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator, 
-                 pressure_continuity_factor, velocity_continuity_factor_D12):
+                 pressure_continuity_factor, velocity_continuity_factor_D12,
+                 include_hydrostatic_pressure):
         """
         This class assembles the coupled Navier-Stokes equations, both CG and DG 
         """
@@ -21,6 +22,7 @@ class CoupledEquations(object):
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.pressure_continuity_factor =  pressure_continuity_factor
         self.velocity_continuity_factor_D12 = velocity_continuity_factor_D12
+        self.include_hydrostatic_pressure = include_hydrostatic_pressure
         
         # Discontinuous or continuous elements
         Vu_family = simulation.data['Vu'].ufl_element().family()
@@ -91,12 +93,6 @@ class CoupledEquations(object):
         mus = sim.data['mu_star']
         rho = sim.data['rho']
         rho_old = sim.data['rho_old']
-        
-        # Include (∇u)^T term?
-        if self.use_stress_divergence_form:
-            sd = Constant(1.0)
-        else:
-            sd = Constant(0.0)
             
         if self.vel_is_discontinuous:
             penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nus)
@@ -104,6 +100,9 @@ class CoupledEquations(object):
             # Upwind and downwind velocities
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
             w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
+        
+        if self.include_hydrostatic_pressure:
+            p += sim.data['p_hydrostatic']
         
         # Lagrange multiplicator to remove the pressure null space
         # ∫ p dx = 0
@@ -135,9 +134,12 @@ class CoupledEquations(object):
                 eq += div(rhos*u[d]*u_conv)*v[d]*dx
                 
                 # Diffusion
-                # -∇⋅μ[(∇u) + (∇u)^T]
+                # -∇⋅μ(∇u)
                 eq += mus*dot(grad(u[d]), grad(v[d]))*dx
-                eq += sd*mus*dot(u.dx(d), grad(v[d]))*dx
+                
+                # -∇⋅μ(∇u)^T
+                if self.use_stress_divergence_form:
+                    eq += mus*dot(u.dx(d), grad(v[d]))*dx
                 
                 # Pressure
                 # ∇p
@@ -178,7 +180,6 @@ class CoupledEquations(object):
                 
                 # Diffusion:
                 # -∇⋅∇u
-                assert not self.use_stress_divergence_form
                 eq += mus*dot(grad(u[d]), grad(v[d]))*dx
                 
                 # Symmetric Interior Penalty method for -∇⋅μ∇u
@@ -187,6 +188,12 @@ class CoupledEquations(object):
                 
                 # Symmetric Interior Penalty coercivity term
                 eq += penalty_dS*jump(u[d])*jump(v[d])*dS
+                
+                # -∇⋅μ(∇u)^T
+                if self.use_stress_divergence_form:
+                    eq += mus*dot(u.dx(d), grad(v[d]))*dx
+                    eq -= avg(mus)*dot(n('+'), avg(u.dx(d)))*jump(v[d])*dS
+                    eq -= avg(mus)*dot(n('+'), avg(v.dx(d)))*jump(u[d])*dS
                 
                 # Pressure
                 # ∇p

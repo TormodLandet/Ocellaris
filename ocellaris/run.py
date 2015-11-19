@@ -1,12 +1,11 @@
 import sys, time, traceback
 import dolfin
-from .multiphase import get_multi_phase_model
 from .solvers import get_solver
-from .boundary_conditions import BoundaryRegion
 from .postprocess import setup_probes
 from .utils import OcellarisError, run_debug_console, debug_console_hook, report_error, \
                    ocellaris_project, log_timings, OcellarisConstant
 from ocellaris.utils.code_runner import RunnablePythonString
+from .solver_parts import BoundaryRegion, get_multi_phase_model
 
 def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     """
@@ -398,8 +397,8 @@ def plot_at_end(simulation):
     for d in range(simulation.ndim):
         name = 'u%d' % d
         dolfin.plot(simulation.data[name], title=name)
-        #name = 'u_star%d' % d
-        #dolfin.plot(simulation.data[name], title=name)
+        name = 'u_star%d' % d
+        dolfin.plot(simulation.data[name], title=name)
     
     dolfin.plot(simulation.data['u'], title='u')
     

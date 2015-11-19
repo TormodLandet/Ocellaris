@@ -2,9 +2,8 @@ from __future__ import division
 import dolfin
 from ocellaris.utils import report_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
+from ..solver_parts import VelocityBDMProjection, HydrostaticPressure
 from .ipcs_equations import EQUATION_SUBTYPES
-from .dg_helpers import VelocityBDMProjection
-from .hydrostatic import HydrostaticPressure
 
 
 # Solvers - default values, can be changed in the input file
