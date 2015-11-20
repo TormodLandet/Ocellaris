@@ -4,11 +4,11 @@ import dolfin
 import numpy
 from dolfin import Function, Constant, dot, div, grad, jump, dx, dS
 from . import register_multi_phase_model, MultiPhaseModel 
-from ..convection import get_convection_scheme
+from ..convection import get_convection_scheme, StaticScheme
 
 
 CONVECTION_SCHEME = 'HRIC'
-CONTINUOUS_FIELDS = True
+CONTINUOUS_FIELDS = False
 CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION = True
 
 
@@ -67,13 +67,13 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         self.convection_scheme = scheme_class(simulation, 'c')
         self.convection_scheme_star = scheme_class(simulation, 'c_star')
         self.need_gradient = scheme_class.need_alpha_gradient
-        
+    
         # Create the equations when the simulation starts
         self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'BlendedAlgebraicVofModel - update colour field')
-        
+    
         # Report divergence of the velocity field after each time step
         simulation.hooks.add_post_timestep_hook(self.report_divergence, 'BlendedAlgebraicVofModel - report velocity divergence')
 
@@ -105,13 +105,14 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('c', [])
         
         # Make sure the convection scheme has something usefull in the first iteration
-        c_star.assign(c)
+        c.assign(cp)
+        c_star.assign(cp)
         
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
         
         # At the previous time step (known advecting velocity "up")   
-        vel = self.simulation.data['up']
+        vel = self.simulation.data['up']            
         self.eq = AdvectionEquation(self.simulation, cp, cpp, vel, beta, self.time_coeffs, dirichlet_bcs)
         
         # At the next time step (extrapolated advecting velocity)
@@ -256,6 +257,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
         """
         timer = dolfin.Timer('Ocellaris update VOF')
         self.dt.assign(dt)
+        is_static = isinstance(self.convection_scheme, StaticScheme)
         
         # Reconstruct the gradients
         if self.need_gradient:
@@ -263,50 +265,51 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             self.convection_scheme_star.gradient_reconstructor.reconstruct()
         
         # Update the convection blending factors
-        vel = self.simulation.data['up']
-        self.convection_scheme.update(t, dt, vel)
+        if not is_static:
+            vel = self.simulation.data['up']
+            self.convection_scheme.update(t, dt, vel)
         
         # Get the functions
         c = self.simulation.data['c']
         cp = self.simulation.data['cp']
         cpp = self.simulation.data['cpp']
+        c_star = self.simulation.data['c_star']
         
         # Solve the advection equations for the colour field
-        if it == 1:
-            c.assign(self.simulation.data['cp'])
+        if it == 1 or is_static:
+            c.assign(cp)
         else:
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
             dolfin.solve(A, c.vector(), b)
         
-        # Update the extrapolated convecting velocity
-        e1, e2 = self.extrapolation_coeffs
-        for d, uci in enumerate(self.u_conv_comps):
-            uciv = uci.vector() 
-            uciv.zero()
-            uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
-            uciv.axpy(e2, self.simulation.data['upp%d' % d].vector())
+        if is_static:
+            c_star.assign(cp)
+        else:
+            # Update the extrapolated convecting velocity
+            e1, e2 = self.extrapolation_coeffs
+            for d, uci in enumerate(self.u_conv_comps):
+                uciv = uci.vector() 
+                uciv.zero()
+                uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
+                uciv.axpy(e2, self.simulation.data['upp%d' % d].vector())
+            
+            # Update the convection blending factors
+            self.convection_scheme_star.update(t, dt, self.u_conv)
         
-        # Update the convection blending factors
-        self.convection_scheme_star.update(t, dt, self.u_conv)
-        
-        # Solve the advection equations for the extrapolated colour field
-        c_star = self.simulation.data['c_star']
-        A_star = self.eq_star.assemble_lhs()
-        b_star = self.eq_star.assemble_rhs()
-        dolfin.solve(A_star, c_star.vector(), b_star)
+            # Solve the advection equations for the extrapolated colour field
+            A_star = self.eq_star.assemble_lhs()
+            b_star = self.eq_star.assemble_rhs()
+            dolfin.solve(A_star, c_star.vector(), b_star)
         
         # Optionally use a continuous predicted colour field
         if self.continuous_fields:
-            #self.continuous_c_star.interpolate(c_star)
-            #self.continuous_c.interpolate(c)
-            #self.continuous_c_old.interpolate(cp)
-            Vcg = self.continuous_c_star.function_space()          
-            self.continuous_c_star.assign(dolfin.project(c_star, Vcg))
-            self.continuous_c.assign(dolfin.project(c, Vcg))
-            self.continuous_c_old.assign(dolfin.project(cp, Vcg))
+            Vcg = self.continuous_c.function_space()          
+            dolfin.project(c_star, Vcg, function=self.continuous_c_star)
+            dolfin.project(c, Vcg, function=self.continuous_c)
+            dolfin.project(cp, Vcg, function=self.continuous_c_old)
         
-        # Report total mass balance and divergence
+        # Report properties of the colour field
         sum_c = dolfin.assemble(c*dolfin.dx)
         arr_c = c.vector().get_local()
         min_c = dolfin.MPI.min(dolfin.mpi_comm_world(), float(arr_c.min()))

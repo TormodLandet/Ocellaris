@@ -73,6 +73,14 @@ class ConvectionScheme(object):
     def update(self, t, dt, velocity):
         raise NotImplementedError()
 
+
+# Static scheme for testing
+@register_convection_scheme('Static')
+class StaticScheme(ConvectionScheme):
+    description = 'A scheme that does not move the initial colour function in time'
+    need_alpha_gradient = False
+
+
 from . import upwind
 from . import cicsam
 from . import hric
