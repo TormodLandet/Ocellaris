@@ -9,8 +9,10 @@ from ..convection import get_convection_scheme, StaticScheme
 
 CONVECTION_SCHEME = 'HRIC'
 CONTINUOUS_FIELDS = False
-CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION = True
-
+CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION = False
+FORCE_STEADY = False
+FORCE_BOUNDED = False
+FORCE_SHARP = True
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
 class BlendedAlgebraicVofModel(MultiPhaseModel):
@@ -49,6 +51,10 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             self.continuous_c_star = dolfin.Function(V_star)
             self.continuous_c = dolfin.Function(V_star)
             self.continuous_c_old = dolfin.Function(V_star)
+            
+        self.force_steady = simulation.input.get_value('multiphase_solver/force_steady', FORCE_STEADY, 'bool')
+        self.force_bounded = simulation.input.get_value('multiphase_solver/force_bounded', FORCE_BOUNDED, 'bool')
+        self.force_sharp = simulation.input.get_value('multiphase_solver/force_sharp', FORCE_SHARP, 'bool')
             
         # Calculate mu from rho and nu (i.e mu is quadratic in c) or directly from c (linear in c)
         self.calculate_mu_directly_from_colour_function = \
@@ -132,7 +138,7 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             gradient = self.convection_scheme.gradient_reconstructor.gradient
             self.simulation.plotting.add_plot('c_grad', gradient)
     
-    def get_colour_function(self, k, force_boundedness=False, sharp_interface=False, force_steady=False):
+    def get_colour_function(self, k):
         """
         Return the colour function on timestep t^{n+k}
         """
@@ -152,13 +158,13 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             else:
                 c = self.simulation.data['c_star']
         
-        if force_steady:
+        if self.force_steady:
             c = self.simulation.data['c']
         
-        if force_boundedness:
+        if self.force_bounded:
             c = dolfin.max_value(dolfin.min_value(c, Constant(1.0)), Constant(0.0))
         
-        if sharp_interface:
+        if self.force_sharp:
             c = dolfin.conditional(dolfin.ge(c, 0.5), Constant(1.0), Constant(0.0))
         
         return c
@@ -191,7 +197,6 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
             c = self.get_colour_function(k)
         else:
             assert k is None
-        c = self.get_colour_function(k)
         return Constant(self.nu0)*c + Constant(self.nu1)*(1 - c)
     
     def get_laminar_dynamic_viscosity(self, k=None, c=None):
@@ -208,7 +213,6 @@ class BlendedAlgebraicVofModel(MultiPhaseModel):
                 c = self.get_colour_function(k)
             else:
                 assert k is None
-            c = self.get_colour_function(k)
             mu0 = self.nu0*self.rho0
             mu1 = self.nu1*self.rho1
             return Constant(mu0)*c + Constant(mu1)*(1 - c)
