@@ -1,5 +1,5 @@
 import dolfin
-from ocellaris.utils import report_error
+from ocellaris.utils import ocellaris_error
 
 
 class HydrostaticPressure(object):
@@ -22,9 +22,9 @@ class HydrostaticPressure(object):
             self.active = False
             return
         elif len(directions) > 1:
-            report_error('Error calculating hydrostatic pressure',
-                         'Gravity vector %r is not parallel to an axis'
-                         % g.py_value)
+            ocellaris_error('Error calculating hydrostatic pressure',
+                            'Gravity vector %r is not parallel to an axis'
+                            % g.py_value)
         
         self.active = True
         d = directions.pop()

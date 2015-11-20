@@ -1,4 +1,4 @@
-from ocellaris.utils import report_error
+from ocellaris.utils import ocellaris_error
 
 _SOLVERS = {}
 
@@ -24,11 +24,10 @@ def get_solver(name):
     try:
         return _SOLVERS[name]
     except KeyError:
-        report_error('Navier-Stokes solver "%s" not found' % name,
-                     'Available solvers:\n' +
-                     '\n'.join('  %-20s - %s' % (n, s.description) 
-                               for n, s in sorted(_SOLVERS.items())),
-                     stop=True)
+        ocellaris_error('Navier-Stokes solver "%s" not found' % name,
+                        'Available solvers:\n' +
+                        '\n'.join('  %-20s - %s' % (n, s.description) 
+                                  for n, s in sorted(_SOLVERS.items())))
         raise
 
 class Solver(object):

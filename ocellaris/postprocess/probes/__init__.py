@@ -1,4 +1,4 @@
-from ocellaris.utils import report_error
+from ocellaris.utils import ocellaris_error
 
 _PROBES = {}
 
@@ -24,11 +24,10 @@ def get_probe(name):
     try:
         return _PROBES[name]
     except KeyError:
-        report_error('Postprocessing probe "%s" not found' % name,
-                     'Available probe:\n' +
-                     '\n'.join('  %-20s - %s' % (n, s.description) 
-                               for n, s in sorted(_PROBES.items())),
-                     stop=True)
+        ocellaris_error('Postprocessing probe "%s" not found' % name,
+                        'Available probe:\n' +
+                        '\n'.join('  %-20s - %s' % (n, s.description) 
+                               for n, s in sorted(_PROBES.items())))
         raise
 
 def setup_probes(simulation):

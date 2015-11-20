@@ -1,5 +1,5 @@
 import dolfin
-from ocellaris.utils import report_error
+from ocellaris.utils import ocellaris_error
 
 _MULTI_PHASE_MODELS = {}
 
@@ -25,10 +25,10 @@ def get_multi_phase_model(name):
     try:
         return _MULTI_PHASE_MODELS[name]
     except KeyError:
-        report_error('Multi phase model "%s" not found' % name,
-                     'Available models:\n' +
-                     '\n'.join('  %-20s - %s' % (n, s.description) 
-                               for n, s in sorted(_MULTI_PHASE_MODELS.items())))
+        ocellaris_error('Multi phase model "%s" not found' % name,
+                        'Available models:\n' +
+                        '\n'.join('  %-20s - %s' % (n, s.description) 
+                                  for n, s in sorted(_MULTI_PHASE_MODELS.items())))
         raise
 
 class MultiPhaseModel(object):

@@ -1,5 +1,5 @@
 from matplotlib import pyplot
-from ocellaris.utils import report_error
+from ocellaris.utils import ocellaris_error
 
 
 class Reporting(object):
@@ -75,16 +75,16 @@ class Reporting(object):
         
         for report_name in self.figures:
             if not report_name in self.timestep_xy_reports:
-                report_error('Unknown report name: "%s"' % report_name,
-                             'Cannot plot this report, it does not exist')
+                ocellaris_error('Unknown report name: "%s"' % report_name,
+                                'Cannot plot this report, it does not exist')
             
             abscissa = self.timesteps
             ordinate = self.timestep_xy_reports[report_name]
             
             if len(abscissa) != len(ordinate):
-                report_error('Malformed report data: "%s"' % report_name,
-                             'Length of t is %d while report is %d' %
-                             (len(abscissa), len(ordinate)))
+                ocellaris_error('Malformed report data: "%s"' % report_name,
+                                'Length of t is %d while report is %d' %
+                                (len(abscissa), len(ordinate)))
             
             fig, ax, line = self.figures[report_name]
             line.set_xdata(abscissa)

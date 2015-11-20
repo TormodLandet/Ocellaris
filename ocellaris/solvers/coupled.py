@@ -2,7 +2,7 @@
 from __future__ import division
 import dolfin
 from dolfin import Constant
-from ocellaris.utils import report_error, timeit, linear_solver_from_input
+from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 from ..solver_parts import HydrostaticPressure, VelocityBDMProjection
@@ -86,9 +86,9 @@ class SolverCoupled(Solver):
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
         if not self.equation_subtype in EQUATION_SUBTYPES:
             available_methods = '\n'.join(' - %s' % m for m in EQUATION_SUBTYPES)
-            report_error('Unknown equation sub-type', 
-                         'Equation sub-type %s not available for coupled solver, please use one of:\n%s' %
-                         (self.equation_subtype, EQUATION_SUBTYPES))
+            ocellaris_error('Unknown equation sub-type', 
+                            'Equation sub-type %s not available for coupled solver, please use one of:\n%s' %
+                            (self.equation_subtype, EQUATION_SUBTYPES))
         
         # Give warning if using iterative solver
         if isinstance(self.coupled_solver, dolfin.PETScKrylovSolver):
@@ -100,9 +100,9 @@ class SolverCoupled(Solver):
         self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
         if not self.timestepping_method in TIMESTEPPING_METHODS:
             available_methods = '\n'.join(' - %s' % m for m in TIMESTEPPING_METHODS)
-            report_error('Unknown timestepping method', 
-                         'Timestepping method %s not recognised, please use one of:\n%s' %
-                         (self.timestepping_method, available_methods))
+            ocellaris_error('Unknown timestepping method', 
+                            'Timestepping method %s not recognised, please use one of:\n%s' %
+                            (self.timestepping_method, available_methods))
         
         # Lagrange multiplicator or remove null space via PETSc or just normalize after solving
         self.remove_null_space = True

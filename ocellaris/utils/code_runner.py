@@ -1,5 +1,5 @@
 import re
-from . import report_error, run_debug_console
+from . import ocellaris_error, run_debug_console
 
 # Some imports that are useful in the code to be run
 # Note the order. Dolfin overwrites NumPy which overwrites 
@@ -50,9 +50,9 @@ class RunnablePythonString(object):
         needs_exec = multiline or has_vardef
         
         if needs_exec and self.var_name is not None and not has_vardef:
-            report_error('Invalid: %s' % self.description,
-                         'Multi line expression must define the variable "%s"'
-                         % self.var_name)
+            ocellaris_error('Invalid: %s' % self.description,
+                            'Multi line expression must define the variable "%s"'
+                            % self.var_name)
         
         return needs_exec
     

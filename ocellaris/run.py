@@ -2,14 +2,57 @@ import sys, time, traceback
 import dolfin
 from .solvers import get_solver
 from .postprocess import setup_probes
-from .utils import OcellarisError, run_debug_console, debug_console_hook, report_error, \
+from .utils import OcellarisError, run_debug_console, debug_console_hook, ocellaris_error, \
                    ocellaris_project, log_timings, OcellarisConstant
 from ocellaris.utils.code_runner import RunnablePythonString
 from .solver_parts import BoundaryRegion, get_multi_phase_model
 
+
 def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     """
     Prepare and run a simulation
+    
+    This will run the "real" code ``run_simulation_without_error_handling``
+    in a way that handles errors in a user friendly manner (log them etc)
+    """
+    try:
+        success = False
+        run_simulation_without_error_handling(simulation, setup_logging)
+        success = True
+    except OcellarisError as e:
+        simulation.hooks.simulation_ended(success)
+        simulation.log.error('ERROR === '*8)
+        simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
+    except KeyboardInterrupt as e:
+        simulation.hooks.simulation_ended(success)
+        simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
+    except BaseException as e:
+        simulation.hooks.simulation_ended(success)
+        simulation.log.error('=== EXCEPTION =='*5)    
+        tb = traceback.format_tb(sys.exc_info()[2])
+        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
+        e_type = type(e).__name__
+        simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
+    
+    # Check if the solver ran without problems
+    if not success and not catch_exceptions:
+        raise e # Re-raise the exception gotten from running the solver 
+    
+    # Show dolfin plots?
+    if simulation.input.get_value('output/plot_at_end', False, 'bool'):
+        plot_at_end(simulation)
+    
+    # Optionally show the console for debugging and ad-hoc posprocessing
+    console_at_end = simulation.input.get_value('console_at_end', False, 'bool')
+    console_on_error = simulation.input.get_value('console_on_error', False, 'bool')
+    if console_at_end  or (not success and console_on_error):
+        run_debug_console(simulation)
+
+
+def run_simulation_without_error_handling(simulation, setup_logging=True):
+    """
+    Prepare and run a simulation. This is the real starting point to understand
+    how running an Ocellaris simulation works from a program logic perspective
     """
     if setup_logging:
         simulation.log.setup()
@@ -19,9 +62,9 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     
     # Test for PETSc linear algebra backend
     if not dolfin.has_linear_algebra_backend("PETSc"):
-        report_error('Missing PETSc',
-                     'DOLFIN has not been configured with PETSc '
-                     'which is needed by Ocellaris.')
+        ocellaris_error('Missing PETSc',
+                        'DOLFIN has not been configured with PETSc '
+                        'which is needed by Ocellaris.')
     dolfin.parameters["linear_algebra_backend"] = "PETSc"
     
     # Make time and timestep available in expressions for the initial conditions etc
@@ -91,39 +134,8 @@ def run_simulation(simulation, setup_logging=True, catch_exceptions=False):
     simulation.log.info("\nRunning simulation on %d CPUs...\n" % simulation.ncpu)
     simulation.t_start = time.time()
     
-    # Run the simulation
-    try:
-        success = False
-        solver.run()
-        success = True
-    except OcellarisError as e:
-        simulation.hooks.simulation_ended(success)
-        simulation.log.error('ERROR === '*8)
-        simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
-    except KeyboardInterrupt as e:
-        simulation.hooks.simulation_ended(success)
-        simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
-    except BaseException as e:
-        simulation.hooks.simulation_ended(success)
-        simulation.log.error('=== EXCEPTION =='*5)    
-        tb = traceback.format_tb(sys.exc_info()[2])
-        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
-        e_type = type(e).__name__
-        simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
-    
-    # Check if the solver ran without problems
-    if not success and not catch_exceptions:
-        raise e # Re-raise the exception gotten from running the solver 
-    
-    # Show dolfin plots?
-    if simulation.input.get_value('output/plot_at_end', False, 'bool'):
-        plot_at_end(simulation)
-    
-    # Optionally show the console for debugging and ad-hoc posprocessing
-    console_at_end = simulation.input.get_value('console_at_end', False, 'bool')
-    console_on_error = simulation.input.get_value('console_on_error', False, 'bool')
-    if console_at_end  or (not success and console_on_error):
-        run_debug_console(simulation)
+    # Run the simulation time loop
+    solver.run()
 
 
 def load_mesh(simulation):
@@ -304,21 +316,21 @@ def setup_initial_conditions(simulation):
         name = str(name)
         
         if not 'p' in name:
-            report_error('Invalid initial condition',
-                         'You have given initial conditions for %r but this does '
-                         'not seem to be a previous or pressure field.\n\n'
-                         'Valid names: up0, up1, ... , p, cp, ...' % name)
+            ocellaris_error('Invalid initial condition',
+                            'You have given initial conditions for %r but this does '
+                            'not seem to be a previous or pressure field.\n\n'
+                            'Valid names: up0, up1, ... , p, cp, ...' % name)
         
         if not 'cpp_code' in info:
-            report_error('Invalid initial condition',
-                         'You have not given "cpp_code" for %r' % name)
+            ocellaris_error('Invalid initial condition',
+                            'You have not given "cpp_code" for %r' % name)
         
         cpp_code = str(info['cpp_code'])
         
         if not name in simulation.data:
-            report_error('Invalid initial condition',
-                         'You have given initial conditions for %r but this does '
-                         'not seem to be an existing field.' % name)
+            ocellaris_error('Invalid initial condition',
+                            'You have given initial conditions for %r but this does '
+                            'not seem to be an existing field.' % name)
         
         func = simulation.data[name]
         V = func.function_space()

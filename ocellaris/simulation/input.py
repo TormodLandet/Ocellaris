@@ -1,6 +1,6 @@
 import os, collections
 import yaml
-from ocellaris.utils import report_error, get_root_value
+from ocellaris.utils import ocellaris_error, get_root_value
 
 
 class UndefinedParameter(object):
@@ -30,9 +30,9 @@ class Input(collections.OrderedDict):
             with open(file_name, 'rt') as inpf:
                 inp = yaml.load(inpf)
         except ValueError as e:
-            report_error('Error on input file', str(e))
+            ocellaris_error('Error on input file', str(e))
         except yaml.YAMLError as e:
-            report_error('Input file "%s" is not a valid YAML file' % file_name, str(e))
+            ocellaris_error('Input file "%s" is not a valid YAML file' % file_name, str(e))
         
         assert 'ocellaris' in inp
         assert inp['ocellaris']['type'] == 'input'
@@ -74,12 +74,12 @@ class Input(collections.OrderedDict):
                 try:
                     p = int(p)
                 except ValueError:
-                    report_error('List index not integer',
-                                 'Not a valid list index:  %s' % p)    
+                    ocellaris_error('List index not integer',
+                                    'Not a valid list index:  %s' % p)    
             elif p not in d:
                 if default_value is UNDEFINED:
-                    report_error('Missing parameter on input file',
-                                 'Missing required input parameter:\n  %s' % pathstr)
+                    ocellaris_error('Missing parameter on input file',
+                                    'Missing required input parameter:\n  %s' % pathstr)
                 else:
                     msg  = '    No value set for "%s", using default value %r' % (pathstr, default_value)
                     if not msg in self._already_logged:
@@ -93,9 +93,9 @@ class Input(collections.OrderedDict):
             Give error if the input data is not of the required type
             """
             if not isinstance(value, classes):
-                report_error('Malformed data on input file',
-                             'Parameter %s should be of type %s,\nfound %r %r' % 
-                             (pathstr, required_type, value, type(value)))
+                ocellaris_error('Malformed data on input file',
+                                'Parameter %s should be of type %s,\nfound %r %r' % 
+                                (pathstr, required_type, value, type(value)))
         
         # Validate according to required data type
         number = (int, long, float)
@@ -211,7 +211,7 @@ class Input(collections.OrderedDict):
             return pth2
         self.simulation.log.debug('File does not exist: %s' % pth2)
         
-        report_error('File not found', 'The specified file "%s" was not found' % file_name)
+        ocellaris_error('File not found', 'The specified file "%s" was not found' % file_name)
     
     def _setup_yaml(self):
         """

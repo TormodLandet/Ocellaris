@@ -1,6 +1,6 @@
 import numpy
 import dolfin
-from ocellaris.utils import report_error, GradientReconstructor, facet_dofmap
+from ocellaris.utils import ocellaris_error, GradientReconstructor, facet_dofmap
 
 _CONVECTION_SCHEMES = {}
 
@@ -26,10 +26,10 @@ def get_convection_scheme(name):
     try:
         return _CONVECTION_SCHEMES[name]
     except KeyError:
-        report_error('Convection scheme "%s" not found' % name,
-                     'Available convection schemes:\n' +
-                     '\n'.join('  %-20s - %s' % (n, s.description) 
-                               for n, s in sorted(_CONVECTION_SCHEMES.items())))
+        ocellaris_error('Convection scheme "%s" not found' % name,
+                        'Available convection schemes:\n' +
+                        '\n'.join('  %-20s - %s' % (n, s.description) 
+                                  for n, s in sorted(_CONVECTION_SCHEMES.items())))
         raise
 
 class ConvectionScheme(object):

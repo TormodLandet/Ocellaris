@@ -4,6 +4,6 @@ class OcellarisError(Exception):
         self.header = header
         self.description = description
 
-def report_error(header, description):
+def ocellaris_error(header, description):
     raise OcellarisError(header, description)
     

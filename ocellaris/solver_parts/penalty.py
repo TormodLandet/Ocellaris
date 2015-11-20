@@ -1,8 +1,6 @@
 # encoding: utf8
-import dolfin
-from dolfin import MixedFunctionSpace, VectorFunctionSpace, FunctionSpace
-from dolfin import FacetNormal, TrialFunction, TestFunctions, Function 
-from dolfin import cells, dot, as_vector, dx, ds, dS, LocalSolver
+import dolfin 
+from dolfin import cells
 
 
 def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
@@ -31,4 +29,3 @@ def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
     
     penalty = boost_factor * k_max**2/k_min * (P + 1)*(P + ndim)/ndim * geom_fac**exponent
     return penalty
-

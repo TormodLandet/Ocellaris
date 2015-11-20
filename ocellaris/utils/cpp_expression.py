@@ -1,5 +1,5 @@
 import dolfin
-from . import report_error
+from . import ocellaris_error
 
 def make_expression(simulation, cpp_code, description, element=None):
     """
@@ -12,11 +12,11 @@ def make_expression(simulation, cpp_code, description, element=None):
     except Exception as e:
         vardesc = '\n  - '.join('%s (%s)' % (name, type(value)) for name, value in available_vars.items())
         errormsg  = str(e)
-        report_error('Error in C++ code',
-                     'The C++ code for %s does not compile.'
-                     '\n\nCode:\n%s'
-                     '\n\nGiven variables:\n  - %s'
-                     '\n\nError:\n%s' % (description, cpp_code, vardesc, errormsg))
+        ocellaris_error('Error in C++ code',
+                        'The C++ code for %s does not compile.'
+                        '\n\nCode:\n%s'
+                        '\n\nGiven variables:\n  - %s'
+                        '\n\nError:\n%s' % (description, cpp_code, vardesc, errormsg))
 
 
 def get_vars(simulation):
