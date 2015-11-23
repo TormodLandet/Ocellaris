@@ -21,10 +21,11 @@ EQUATION_SUBTYPE = 'Conservative'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
-USE_GRAD_Q_FORM = False
+USE_GRAD_Q_FORM = True
 PRESSURE_CONTINUITY_FACTOR = 0
 VELOCITY_CONTINUITY_FACTOR_D12 = 0
 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
+INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
 
 @register_solver('Coupled')
@@ -60,13 +61,16 @@ class SolverCoupled(Solver):
                                     use_lagrange_multiplicator=self.use_lagrange_multiplicator,
                                     pressure_continuity_factor=self.pressure_continuity_factor,
                                     velocity_continuity_factor_D12=self.velocity_continuity_factor_D12,
-                                    include_hydrostatic_pressure=self.hydrostatic_pressure_correction)
+                                    include_hydrostatic_pressure=self.hydrostatic_pressure_correction,
+                                    incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Velocity post_processing
         self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
-            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'], D12)
+            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'],
+                incompressibility_flux_type=self.incompressibility_flux_type,
+                D12=D12)
         
         # Store number of iterations
         self.niters = None
@@ -131,6 +135,8 @@ class SolverCoupled(Solver):
                                                               USE_STRESS_DIVERGENCE, 'bool')
         self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
         self.use_grad_q_form = sim.input.get_value('solver/use_grad_q_form', USE_GRAD_Q_FORM, 'bool')
+        self.incompressibility_flux_type = sim.input.get_value('solver/incompressibility_flux_type',
+                                                               INCOMPRESSIBILITY_FLUX_TYPE, 'string')
         self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor', 
                                                                  PRESSURE_CONTINUITY_FACTOR, 'float')
         self.velocity_continuity_factor_D12 = sim.input.get_value('solver/velocity_continuity_factor_D12', 

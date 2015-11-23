@@ -6,7 +6,7 @@ from dolfin import dot, as_vector, dx, ds, dS, LocalSolver
 
 
 class VelocityBDMProjection():
-    def __init__(self, w, D12=None):
+    def __init__(self, w, incompressibility_flux_type='central', D12=None):
         """
         Implement equation 4a and 4b in "Two new techniques for generating exactly
         incompressible approximate velocities" by Bernardo Cocburn (2009)
@@ -19,12 +19,15 @@ class VelocityBDMProjection():
             
         Here w is the input velocity function in DG2 space and û is the flux at
         each face. P_{x} is the space of polynomials of order k
+
+        The flux type can be 'central' or 'upwind'
         """
         ue = w[0].function_space().ufl_element()
         k = 2
         assert ue.family() == 'Discontinuous Lagrange'
         assert ue.degree() == k 
         assert w.ufl_shape == (2,)
+        assert incompressibility_flux_type in ('central', 'upwind')
         
         mesh = w[0].function_space().mesh()
         V = VectorFunctionSpace(mesh, 'DG', k)
@@ -40,7 +43,13 @@ class VelocityBDMProjection():
         
         # The same fluxes that are used in the incompressibility equation
         u_hat_ds = w
-        u_hat_dS = dolfin.avg(w)
+        if incompressibility_flux_type == 'central':    
+            u_hat_dS = dolfin.avg(w)
+        elif incompressibility_flux_type == 'upwind':
+            w_nU = (dot(w, n) + abs(dot(w, n)))/2.0
+            switch = dolfin.conditional(dolfin.gt(w_nU('+'), 0.0), 1.0, 0.0)
+            u_hat_dS = switch*w('+') + (1 - switch)*w('-')
+        
         if D12 is not None:
             u_hat_dS += dolfin.Constant([D12, D12])*dolfin.jump(w, n)
         
@@ -49,7 +58,7 @@ class VelocityBDMProjection():
         L = dot(u_hat_ds, n)*v1*ds
         for R in '+-':
             a += dot(u(R), n(R))*v1(R)*dS
-            L += dot(u_hat_dS, n(R))*v1(R)*dS 
+            L += dot(u_hat_dS, n(R))*v1(R)*dS
         
         # Equation 2 - internal shape
         a += dot(u, v2)*dx

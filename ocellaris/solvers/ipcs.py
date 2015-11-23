@@ -23,6 +23,7 @@ USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 USE_GRAD_P_FORM = False
 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
+INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
 
 @register_solver('IPCS')
@@ -60,7 +61,9 @@ class SolverIPCS(Solver):
             self.eqs_mom_pred.append(eq)
         
         # Define the pressure correction equation
-        self.eq_pressure = PressureCorrectionEquation(simulation, self.use_lagrange_multiplicator)
+        self.eq_pressure = PressureCorrectionEquation(simulation,
+                                                      use_lagrange_multiplicator=self.use_lagrange_multiplicator,
+                                                      incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Define the velocity update equations
         self.eqs_vel_upd = []
@@ -71,7 +74,8 @@ class SolverIPCS(Solver):
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
-            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'])
+            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'], 
+                incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Storage for preassembled matrices
         self.Au = [None]*sim.ndim
@@ -143,6 +147,8 @@ class SolverIPCS(Solver):
         self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
                                                               USE_STRESS_DIVERGENCE, 'bool')
         self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+        self.incompressibility_flux_type = sim.input.get_value('solver/incompressibility_flux_type',
+                                                               INCOMPRESSIBILITY_FLUX_TYPE, 'string')
         
         # Velocity post_processing
         default_postprocessing = BDM if self.vel_is_discontinuous else None

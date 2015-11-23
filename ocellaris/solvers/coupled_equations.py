@@ -9,7 +9,7 @@ class CoupledEquations(object):
     def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
                  use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator, 
                  pressure_continuity_factor, velocity_continuity_factor_D12,
-                 include_hydrostatic_pressure):
+                 include_hydrostatic_pressure, incompressibility_flux_type):
         """
         This class assembles the coupled Navier-Stokes equations, both CG and DG 
         """
@@ -23,6 +23,9 @@ class CoupledEquations(object):
         self.pressure_continuity_factor =  pressure_continuity_factor
         self.velocity_continuity_factor_D12 = velocity_continuity_factor_D12
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
+        self.incompressibility_flux_type = incompressibility_flux_type
+
+        assert self.incompressibility_flux_type in ('central', 'upwind')
         
         # Discontinuous or continuous elements
         Vu_family = simulation.data['Vu'].ufl_element().family()
@@ -160,9 +163,16 @@ class CoupledEquations(object):
                 
                 # Divergence free criterion
                 # ∇⋅u = 0
+                if self.incompressibility_flux_type == 'central':
+                    u_hat_p = avg(u[d])
+                elif self.incompressibility_flux_type == 'upwind':
+                    assert self.use_grad_q_form
+                    switch = dolfin.conditional(dolfin.gt(w_nU('+'), 0.0), 1.0, 0.0)
+                    u_hat_p = switch*u[d]('+') + (1 - switch)*u[d]('-')
+                
                 if self.use_grad_q_form:
                     eq -= u[d]*q.dx(d)*dx
-                    eq += (avg(u[d]) + D12[d]*jump(u, n))*jump(q)*n[d]('+')*dS
+                    eq += (u_hat_p + D12[d]*jump(u, n))*jump(q)*n[d]('+')*dS
                 else:
                     eq += q*u[d].dx(d)*dx
                     eq -= (avg(q) - dot(D12, jump(q, n)))*jump(u[d])*n[d]('+')*dS

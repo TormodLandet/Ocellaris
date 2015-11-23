@@ -221,12 +221,13 @@ class MomentumPredictionEquation(BaseEquation):
 
 
 class PressureCorrectionEquation(BaseEquation):
-    def __init__(self, simulation, use_lagrange_multiplicator):
+    def __init__(self, simulation, use_lagrange_multiplicator, incompressibility_flux_type):
         """
         This class assembles the pressure Poisson equation, both CG and DG 
         """
         self.simulation = simulation
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
+        self.incompressibility_flux_type = incompressibility_flux_type
         
         # Discontinuous or continuous elements
         Vp_family = simulation.data['Vp'].ufl_element().family()
@@ -294,8 +295,13 @@ class PressureCorrectionEquation(BaseEquation):
             L = K*dot(grad(p_star), grad(q))*dx
 
             # RHS, ∇⋅u^*
+            if self.incompressibility_flux_type == 'central':
+                u_flux = avg(u_star)
+            elif self.incompressibility_flux_type == 'upwind':
+                switch = dolfin.conditional(dolfin.gt(abs(dot(u_star, n))('+'), 0.0), 1.0, 0.0)
+                u_flux = switch*u_star('+') + (1 - switch)*u_star('-')
             L += c1/dt*dot(u_star, grad(q))*dx
-            L -= c1/dt*dot(avg(u_star), n('+'))*jump(q)*dS
+            L -= c1/dt*dot(u_flux, n('+'))*jump(q)*dS
             
             # Symmetric Interior Penalty method for -∇⋅∇p
             a -= dot(n('+'), avg(K*grad(p)))*jump(q)*dS
