@@ -47,3 +47,4 @@ BDM = 'BDM'
 
 from . import ipcs
 from . import coupled
+from . import analytical_solution

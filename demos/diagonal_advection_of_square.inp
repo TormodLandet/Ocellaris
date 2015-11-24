@@ -1,27 +1,32 @@
 ocellaris:
     type: input
     version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2014-12-19
+    description: |
+        Diagonal advection of an initially square blob of colour function in
+        an analytical velocity field which is pointed with 45 degrees to the
+        axes 
 
-multiphase_solver:
-    type: BlendedAlgebraicVOF
-    compression_factor: 0.0
-
-convection:
-    c:
-        convection_scheme: HRIC
-        HRIC_version: HRIC
+physical_properties:
+    rho0: 1.0
+    nu0: 1.0
+    rho1: 1.0
+    nu1: 1.0
 
 # Structured mesh
-_mesh:
+mesh:
     type: Rectangle
-    Nx: 128
-    Ny: 128
+    Nx: 64
+    Ny: 64
     endx: 1.5
     endy: 1.5
     diagonal: left/right
 
 # Unstructured mesh
-mesh:
+_mesh:
     type: XML
     mesh_file: square_120.xml
 
@@ -29,12 +34,47 @@ boundary_conditions:
 -   name: all
     selector: code
     inside_code: on_boundary
-    c:
-        type: ConstantValue
-        value: 0
+    #c:
+    #    type: ConstantValue
+    #    value: 0
+
+initial_conditions:
+    up0:
+        cpp_code: 't < 0.5 ? 1.0 : -1.0'
+    up1:
+        cpp_code: 't < 0.5 ? 1.0 : -1.0'
+    p:
+        cpp_code: 0
+    cp:
+        cpp_code: '(0.25 <= x[0] && x[0] <= 0.5 && 0.25 <= x[1] && x[1] <= 0.5) ? 1.0 : 0.0'
+
+time:
+    dt: 0.01
+    tmax: 1.0
 
 output:
-    prefix: diagonal_advection_of_square
+    prefix: output/diagonal_advection_of_square
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+
+multiphase_solver:
+    type: BlendedAlgebraicVOF
+    function_space_colour: DG
+    polynomial_degree_colour: 0
+    sky_location: 1.0
+
+solver:
+    type: AnalyticalSolution
+    function_space_velocity: DG
+    function_space_pressure: DG
+    polynomial_degree_velocity: 2
+    polynomial_degree_pressure: 1
+
+convection:
+    c:
+        convection_scheme: Upwind
+        HRIC_version: HRIC
 
 probes:
     -   name: c=0.5
@@ -42,7 +82,7 @@ probes:
         value: 0.5
         field: c
         file_name: '_c05.out'
-        show_interval: 10
+        show_interval: 1
         xlim: [0, 1.5]
         ylim: [0, 1.5]
     -   name: c=0.1
@@ -55,11 +95,3 @@ probes:
         value: 0.9
         field: c
         file_name: '_c09.out'
-
-physical_properties:
-    rho0: 1.0
-    nu0: 1.0
-    rho1: 1.0
-    nu1: 1.0
-
- 

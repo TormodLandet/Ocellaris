@@ -71,6 +71,7 @@ def run_simulation_without_error_handling(simulation, setup_logging=True):
     simulation.log.info('Creating time simulation')
     simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
     simulation.dt = simulation.input.get_value('time/dt', required_type='float')
+    assert simulation.dt > 0
     
     # Load the mesh. The mesh determines if we are in 2D or 3D
     mesh_facet_regions = load_mesh(simulation)

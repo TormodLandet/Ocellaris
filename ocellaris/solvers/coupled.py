@@ -45,7 +45,6 @@ class SolverCoupled(Solver):
         
         # Solver control parameters
         sim.data['dt'] = Constant(simulation.dt)
-        self.is_single_phase = isinstance(sim.data['rho'], Constant)
         
         # Get the BCs for the coupled function space
         self.dirichlet_bcs = self.coupled_boundary_conditions()
