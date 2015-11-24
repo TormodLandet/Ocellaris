@@ -1,9 +1,12 @@
 import dolfin
 
 
+ALWAYS_WRITE = 1e10
+
 class Log(object):
     # Names for the available log levels in Dolfin and Ocellaris
-    AVAILABLE_LOG_LEVELS = {'critical': dolfin.CRITICAL,
+    AVAILABLE_LOG_LEVELS = {'all': ALWAYS_WRITE,
+                            'critical': dolfin.CRITICAL,
                             'error': dolfin.ERROR,
                             'warning': dolfin.WARNING,
                             'info': dolfin.INFO,
@@ -16,16 +19,22 @@ class Log(object):
         self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation(), 'Flush log file')
         self.write_log = False
         self.write_stdout = False
+        self._the_log = []
     
-    def write(self, message):
+    def write(self, message, msg_log_level=ALWAYS_WRITE):
         """
         Write a message to the log without checking the log level
         """
         message = str(message) # hypotetically a collective operation ...
-        if self.write_log:
-            self.log_file.write(message + '\n')
-        if self.write_stdout:
-            print message
+        
+        if self.log_level <= msg_log_level:
+            if self.write_log:
+                self.log_file.write(message + '\n')
+            if self.write_stdout:
+                print message
+        
+        # Store all messages irrespective of the log level
+        self._the_log.append(message)
     
     def set_log_level(self, log_level):
         """
@@ -36,23 +45,19 @@ class Log(object):
     
     def error(self, message):
         "Log an error message"
-        if self.log_level <= dolfin.ERROR:
-            self.write(message)
+        self.write(message, dolfin.ERROR)
     
     def warning(self, message=''):
         "Log a warning message"
-        if self.log_level <= dolfin.WARNING:
-            self.write(message)
+        self.write(message, dolfin.WARNING)
     
     def info(self, message=''):
         "Log an info message"
-        if self.log_level <= dolfin.INFO:
-            self.write(message)
+        self.write(message, dolfin.INFO)
     
     def debug(self, message=''):
         "Log a debug message"
-        if self.log_level <= dolfin.DEBUG:
-            self.write(message)
+        self.write(message, dolfin.DEBUG)
     
     def setup(self):
         """
@@ -90,3 +95,9 @@ class Log(object):
         """
         if self.write_log:
             self.log_file.flush()
+    
+    def get_full_log(self):
+        """
+        Get the contents of all logged messages as a string
+        """
+        return '\n'.join(self._the_log)

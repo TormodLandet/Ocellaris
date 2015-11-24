@@ -30,6 +30,11 @@ def debug_console_hook(simulation):
             funcs, _ = define_convenience_functions(simulation)
             simulation.log.info('\nCommand line action:\n  Plotting fields')
             funcs['plot_all']()
+            
+        elif command == 'r':
+            # r == "restart" -> write restart file
+            simulation.log.info('\nCommand line action:\n  Writing restart file')
+            simulation.io.write_restart_file()
         
         elif command == 's':
             # s == "stop" -> stop the simulation

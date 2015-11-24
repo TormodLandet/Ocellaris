@@ -1,3 +1,4 @@
+import numpy
 import dolfin
 
 # Default values, can be changed in the input file
@@ -70,12 +71,19 @@ class InputOutputHandling():
             self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
         
         if write_xdmf:
-            t = dolfin.Timer('Ocellaris save xdmf')
-            self._write_xdmf()
-            t.stop()
+            self.write_plot_file()
         
         if write_hdf5:
             self.write_restart_file()
+            
+    def write_plot_file(self):
+        """
+        Write a file that can be used for visualization. The fluid fields will be automatically
+        downgraded (interpolated) into something VTK can accept, typically linear CG elements.
+        """
+        t = dolfin.Timer('Ocellaris save xdmf')
+        self._write_xdmf()
+        t.stop()
     
     def write_restart_file(self):
         """
@@ -100,9 +108,13 @@ class InputOutputHandling():
         """
         Write fields to HDF5 file to support restarting the solver 
         """
-        raise NotImplementedError('Untested code ...')
-        
         sim = self.simulation
+        
+        # Information about the current time step
+        tinfo = numpy.array([sim.time, sim.timestep, sim.dt])
+        
+        # Skip these functions
+        skip = {'coupled', }
         
         # Create HDF5 file object
         h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_savepoint_%r.h5') 
@@ -110,13 +122,13 @@ class InputOutputHandling():
         h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'w')
         
         h5.write(sim.data['mesh'], '/mesh')
-        
         for name, value in sim.data.items():
-            if isinstance(value, dolfin.Function):
+            if isinstance(value, dolfin.Function) and name not in skip:
                 h5.write(value, '/%s' % name)
         
-        # TODO: Save timestep, etc on the HDF5 file. Maybe also input 
-        #       dictionary to restart directly from the h5 file?
-        #       This would probably require h5py
+        # Metadata
+        h5.write(tinfo, '/ocellaris/time_info')
+        h5.attributes('/ocellaris')['input_file'] = str(sim.input)
+        h5.attributes('/ocellaris')['full_log'] = sim.log.get_full_log() 
         
         h5.close()
