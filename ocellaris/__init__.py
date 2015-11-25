@@ -30,4 +30,4 @@ def get_detailed_version():
 # Convenience imports for scripting
 from .postprocess import Plotter
 from .simulation import Simulation
-from .run import run_simulation
+from .run import setup_simulation, run_simulation

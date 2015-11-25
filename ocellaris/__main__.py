@@ -1,15 +1,20 @@
-from ocellaris import get_version, get_detailed_version, Simulation, run_simulation
+from ocellaris import get_version, get_detailed_version, Simulation, setup_simulation, run_simulation
+
 
 def main(inputfile, input_override):
     """
     Run Ocellaris
     """
     sim = Simulation()
-    sim.input.read_yaml(inputfile)
+    
+    # Read input
+    if sim.io.is_restart_file(inputfile):
+        sim.io.load_restart_file_input(inputfile)
+    else:
+        sim.input.read_yaml(inputfile)
     
     # Alter input by values given on the command line
-    if input_override is not None:
-        override_input_variables(sim, input_override)
+    override_input_variables(sim, input_override)
     
     # Setup logging before we start printing anything
     sim.log.setup()
@@ -21,14 +26,22 @@ def main(inputfile, input_override):
     sim.log.info('='*80)
     sim.log.info()
     
-    # Run setup and run the Ocellaris simulation time loop
-    run_simulation(sim, setup_logging=False, catch_exceptions=True)
+    # Setup the Ocellaris simulation
+    setup_simulation(sim, setup_logging=False, catch_exceptions=True)
+    
+    if sim.restarted:
+        # Load previous results
+        sim.io.load_restart_file_results(inputfile)
+    
+    # Run the Ocellaris simulation time loop
+    run_simulation(sim, catch_exceptions=True)
     
     sim.log.info('='*80)
     if sim.success:
         sim.log.info('Ocellaris finished successfully')
     else:
         sim.log.info('Ocellaris finished with errors')
+
 
 def override_input_variables(simulation, input_override):
     """
@@ -39,6 +52,8 @@ def override_input_variables(simulation, input_override):
         
     This code updates the input dictionary with these modifications
     """
+    if input_override is None:
+        return
     
     def conv_path_element(element):
         """
@@ -84,6 +99,7 @@ def override_input_variables(simulation, input_override):
         # Update the input sub-dictionary
         idx = conv_path_element(path_elements[-1])
         d[idx] = py_value
+
 
 if __name__ == '__main__':
     # Get command line arguments

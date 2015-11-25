@@ -19,16 +19,21 @@ class Input(collections.OrderedDict):
         self.simulation = simulation
         self._already_logged = set()
     
-    def read_yaml(self, file_name):
+    def read_yaml(self, file_name=None, yaml_string=None):
         """
-        Read the input to an Ocellaris simulation from a YAML 
-        formated input file. The user will get an error if the
-        input file is malformed 
+        Read the input to an Ocellaris simulation from a YAML formated input file or a 
+        YAML formated string. The user will get an error if the input is malformed 
         """
         self._setup_yaml()
-        try:
+        
+        if yaml_string is None:
             with open(file_name, 'rt') as inpf:
-                inp = yaml.load(inpf)
+                yaml_string = inpf.read()
+        else:
+            assert file_name is None
+        
+        try:
+            inp = yaml.load(yaml_string)
         except ValueError as e:
             ocellaris_error('Error on input file', str(e))
         except yaml.YAMLError as e:
