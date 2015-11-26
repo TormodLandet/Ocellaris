@@ -118,6 +118,10 @@ def get_iso_surfaces(simulation, field, value):
     given field with the given scalar value 
     """
     assert simulation.ndim == 2
+    
+    if field.function_space().ufl_element().degree() == 0:
+        return get_iso_surfaces_picewice_constants(simulation, field, value)
+    
     mesh = simulation.data['mesh']
     all_values = field.compute_vertex_values()
     
@@ -170,10 +174,92 @@ def get_iso_surfaces(simulation, field, value):
     return contours_from_endpoints + contours_from_singles_and_loops
 
 
+def get_iso_surfaces_picewice_constants(simulation, field, value):
+    """
+    Find the iso-surfaces (contour lines) of the
+    given field with the given scalar value
+    
+    The field is assumed to be piecewice constant (DG0) 
+    """
+    mesh = simulation.data['mesh']
+    all_values = field.vector().get_local()
+    dofmap = field.function_space().dofmap()
+    startdof = dofmap.ownership_range()[0]
+    
+    # Mesh connectivities
+    conFC = simulation.data['connectivity_FC']
+    conVF = simulation.data['connectivity_VF']
+    conFV = simulation.data['connectivity_FV']
+    
+    # We define acronym LCCM: line connecting cell midpoints
+    #   - We restrinct ourselves to LCCMs that cross only ony ONE facet
+    #   - We number LLCMs by the index of the crossed facet
+    
+    # Find the crossing points where the contour crosses a LCCM
+    vertex_coords = numpy.zeros((2, 3), float)
+    vertex_values = numpy.zeros(2, float) 
+    crossing_points = {}
+    for facet in dolfin.facets(mesh):
+        fid = facet.index()
+        cell_ids = conFC(fid)
+        if len(cell_ids) != 2:
+            continue
+        
+        has_ghost_cell = False
+        for i, cell_id in enumerate(cell_ids):
+            cell = dolfin.Cell(mesh, cell_id)
+            if cell.is_ghost():
+                has_ghost_cell = True
+                break
+            
+            # LCCM endpoint coordinates
+            pt = cell.midpoint()
+            vertex_coords[i,0] = pt.x()
+            vertex_coords[i,1] = pt.y()
+            vertex_coords[i,2] = pt.z()
+            
+            # LCCM endpoint values
+            dofs = dofmap.cell_dofs(cell_id)
+            assert len(dofs) == 1
+            vertex_values[i] = all_values[dofs[0] - startdof]
+            
+        if has_ghost_cell:
+            continue
+        
+        b1, b2 = vertex_values[0] < value, vertex_values[1] < value
+        if (b1 and b2) or not (b1 or b2):
+            # LCCM not crossed by contour
+            continue
+        
+        # Find the location where the contour line crosses the LCCM
+        v1, v2 = vertex_values
+        fac = (v1 - value)/(v1 - v2)
+        crossing_points[fid] = (1 - fac)*vertex_coords[0] + fac*vertex_coords[1]
+    
+    # Find facet to facet connections
+    connections = {}
+    for facet_id in crossing_points:
+        for vertex_id in conFV(facet_id):
+            for facet_neighbour_id in conVF(vertex_id):
+                if facet_neighbour_id != facet_id and facet_neighbour_id in crossing_points:
+                    connections.setdefault(facet_id, []).append(facet_neighbour_id)
+    
+    # Make continous contour lines
+    # Find end points of contour lines and start with these
+    end_points = [facet_id for facet_id, neighbours in connections.items() if len(neighbours) == 1]
+    contours_from_endpoints = contour_lines_from_endpoints(end_points, crossing_points, connections)
+    
+    # Include crossing points without neighbours or joined circles without end points
+    other_points = crossing_points.keys()
+    contours_from_singles_and_loops = contour_lines_from_endpoints(other_points, crossing_points, connections)
+    
+    assert len(crossing_points) == 0
+    return contours_from_endpoints + contours_from_singles_and_loops
+
+
 def contour_lines_from_endpoints(endpoints, crossing_points, connections):
     """
     Given facet ids of endpoints, follow the contour line and create contours
-    
     """
     contours = []
     for endpoint in endpoints:
@@ -186,11 +272,16 @@ def contour_lines_from_endpoints(endpoints, crossing_points, connections):
         
         # Loop over neighbours to the end of the contour
         queue = list(connections[endpoint])
+        prev = endpoint
         while queue:
             facet_id = queue.pop()
             if facet_id in crossing_points:
                 contour.append(crossing_points.pop(facet_id))
                 queue.extend(connections[facet_id])
+                prev = facet_id
+            if facet_id == endpoint and prev in connections[endpoint]:
+                contour.append(contour[0])
+                break
         
         contours.append(contour)
     
