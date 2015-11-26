@@ -60,7 +60,8 @@ def setup_simulation(simulation):
     setup_probes(simulation)
     
     # Initialise the fields
-    setup_initial_conditions(simulation)
+    if not simulation.restarted:
+        setup_initial_conditions(simulation)
     
     # Setup any hooks that may be present on the input file
     setup_hooks(simulation)

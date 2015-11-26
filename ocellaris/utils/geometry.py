@@ -26,10 +26,16 @@ def init_connectivity(simulation):
         mesh.init(2, 1)
         mesh.init(1, 2)
         
+        # Connectivity from vertex to edge and vice versa
+        mesh.init(0, 1)
+        mesh.init(1, 0)
+        
         simulation.data['connectivity_VC'] = mesh.topology()(0, 2)
         simulation.data['connectivity_CV'] = mesh.topology()(2, 0)
         simulation.data['connectivity_FC'] = mesh.topology()(1, 2)
         simulation.data['connectivity_CF'] = mesh.topology()(2, 1)
+        simulation.data['connectivity_FV'] = mesh.topology()(1, 0)
+        simulation.data['connectivity_VF'] = mesh.topology()(0, 1)
     
     else:
         # Connectivity from vertex to cell and vice versa
