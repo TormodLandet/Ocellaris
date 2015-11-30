@@ -36,7 +36,9 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
     
     # Check if the setup ran without problems
     if not success and not catch_exceptions:
-        raise e # Re-raise the exception gotten from running the solver 
+        raise e # Re-raise the exception gotten from running the solver
+    
+    return success 
 
 
 def run_simulation(simulation, catch_exceptions=False):
@@ -93,6 +95,8 @@ def run_simulation(simulation, catch_exceptions=False):
     console_on_error = simulation.input.get_value('console_on_error', False, 'bool')
     if console_at_end  or (not success and console_on_error):
         run_debug_console(simulation)
+        
+    return success
 
 
 def plot_at_end(simulation):

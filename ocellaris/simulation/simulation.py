@@ -63,12 +63,13 @@ class Simulation(object):
         self.ndim = mesh.topology().dim()
         self.update_mesh_data()
     
-    def update_mesh_data(self):
+    def update_mesh_data(self, connectivity_changed=True):
         """
         Some precomputed values must be calculated before the timestepping
         and updated every time the mesh changes
         """
-        init_connectivity(self)
+        if connectivity_changed:
+            init_connectivity(self)
         precompute_cell_data(self)
         precompute_facet_data(self)
         

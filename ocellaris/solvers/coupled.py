@@ -34,6 +34,8 @@ class SolverCoupled(Solver):
         """
         A Navier-Stokes solver based on the pressure-velocity splitting
         scheme IPCS (Incremental Pressure Correction Scheme)
+        
+        :type simulation: ocellaris.Simulation
         """
         self.simulation = sim = simulation
         self.read_input()
@@ -288,6 +290,11 @@ class SolverCoupled(Solver):
                 uic.vector().zero()
                 uic.vector().axpy(2.0, uip.vector())
                 uic.vector().axpy(-1.0, uipp.vector())
+                
+            # ALE mesh velocity
+            if 'u_mesh' in self.simulation.data:
+                uimesh = data['u_mesh%d' % d]
+                uic.vector().axpy(-1.0, uimesh.vector())
         
         self.is_first_timestep = False
         
@@ -408,8 +415,12 @@ class SolverCoupled(Solver):
             # Solve for the new time step
             self.solve_coupled()
             
+            #sim.io.write_restart_file('output/test_hydrostatic_%03da.h5' % it)
+            
             # Postprocess the solution velocity field
             self.postprocess_velocity()
+            
+            #sim.io.write_restart_file('output/test_hydrostatic_%03db.h5' % it)
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0
