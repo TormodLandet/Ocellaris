@@ -55,6 +55,9 @@ class InputOutputHandling():
                                   ('u2', 'Z-component of velocity')):
             if name in sim.data:
                 sim.data[name].rename(name, description)
+                
+        # Dump initial state
+        self.write_fields()
     
     def write_fields(self):
         """
@@ -68,17 +71,17 @@ class InputOutputHandling():
         if not (write_xdmf or write_hdf5):
             return
         
-        # Copy the velocity components into a vector function
-        for d in range(sim.ndim):
-            ui = sim.data['u%d' % d]
-            self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
-        
         if write_xdmf:
+            # Copy the velocity components into a vector function
+            for d in range(sim.ndim):
+                ui = sim.data['u%d' % d]
+                self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
+            
             self.write_plot_file()
         
         if write_hdf5:
             self.write_restart_file()
-            
+    
     def write_plot_file(self):
         """
         Write a file that can be used for visualization. The fluid fields will be automatically
@@ -145,8 +148,8 @@ class InputOutputHandling():
         sim = self.simulation
         
         if h5_file_name is None:
-            h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_savepoint_%r.h5') 
-            h5_file_name = h5_file_name % sim.time
+            h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_savepoint_%08d.h5') 
+            h5_file_name = h5_file_name % sim.timestep
         
         # Create HDF5 file object
         h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'w')
