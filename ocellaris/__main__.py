@@ -1,3 +1,4 @@
+import sys
 from ocellaris import get_version, get_detailed_version, Simulation, setup_simulation, run_simulation
 
 
@@ -27,7 +28,9 @@ def main(inputfile, input_override):
     sim.log.info()
     
     # Setup the Ocellaris simulation
-    setup_simulation(sim, setup_logging=False, catch_exceptions=True)
+    ok = setup_simulation(sim, setup_logging=False, catch_exceptions=True)
+    if not ok:
+        sys.exit(-1)
     
     if sim.restarted:
         # Load previous results
