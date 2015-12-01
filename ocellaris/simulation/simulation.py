@@ -40,6 +40,7 @@ class Simulation(object):
         # solver. Included here for documentation purposes only
         self.solver = None
         self.multi_phase_model = None
+        self.mesh_morpher = None
         self.t_start = None
         
         # For timing the analysis

@@ -38,20 +38,8 @@ class LagrangianMeshMorpher(VOFMixin, MultiPhaseModel):
         simulation.data['c'] = c
         simulation.data['cp'] = c # Initial conditions are specified for cp, so we need this alias
         
-        # The mesh velocity components
-        Vu = simulation.data['Vu']
-        u_mesh = []
-        for d in range(simulation.ndim):
-            umi = dolfin.Function(Vu)
-            simulation.data['u_mesh%d' % d] = umi
-            u_mesh.append(umi)
-        simulation.data['u_mesh'] = dolfin.as_vector(u_mesh)
-        
-        # Displacement vector function to move the mesh
-        mesh = simulation.data['mesh']
-        Vd = dolfin.VectorFunctionSpace(mesh, Vu.ufl_element().family(), Vu.ufl_element().degree())
-        self.displacement = dolfin.Function(Vd)
-        self.assigners = [dolfin.FunctionAssigner(Vd.sub(d), Vu) for d in range(simulation.ndim)]
+        # Setup the mesh morpher
+        simulation.mesh_morpher.setup()
         
         # Calculate mu from rho and nu (i.e mu is quadratic in c) or directly from c (linear in c)
         self.calculate_mu_directly_from_colour_function = \
@@ -79,21 +67,17 @@ class LagrangianMeshMorpher(VOFMixin, MultiPhaseModel):
         """
         Update the mesh position according to the calculated fluid velocities
         """
-        timer = dolfin.Timer('Ocellaris move mesh')
+        timer = dolfin.Timer('Ocellaris Lagrangian mesh update')
         sim = self.simulation
         
         # Get updated mesh velocity (use the fluid velocity)
         for d in range(sim.ndim):
             ui = sim.data['u%d' % d]
             umi = sim.data['u_mesh%d' % d]
-            umi.assign(ui)
-            self.assigners[d].assign(self.displacement.sub(d), umi)
-        self.displacement.vector()[:] *= sim.dt
-        
-        # Move the mesh according to the mesh velocity
-        mesh = sim.data['mesh']
-        mesh.move(self.displacement)
-        sim.update_mesh_data(connectivity_changed=False)
+            dolfin.project(ui, V=umi.function_space(), function=umi)
+            
+        # Perform the morphing
+        sim.mesh_morpher.morph_mesh()
         
         # Report properties of the colour field
         sum_c = dolfin.assemble(sim.data['c']*dolfin.dx)

@@ -3,7 +3,7 @@ import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.postprocess import setup_probes
 from ocellaris.utils import debug_console_hook, ocellaris_error, ocellaris_project, log_timings, OcellarisConstant, RunnablePythonString
-from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model
+from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
 
 
 def setup_simulation(simulation):
@@ -42,6 +42,9 @@ def setup_simulation(simulation):
     # Create function spaces. This must be done before
     # creating Dirichlet boundary conditions
     setup_function_spaces(simulation)
+    
+    # Load the mesh morpher used for prescribed mesh velocities and ALE multiphase solvers
+    simulation.mesh_morpher = MeshMorpher(simulation)
     
     # Setup physical constants and multi-phase model (g, rho, nu, mu)
     setup_physical_properties(simulation)

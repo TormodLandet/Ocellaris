@@ -22,6 +22,11 @@ mesh:
     endx: 2
     endy: 2
     diagonal: left/right
+    prescribed_velocity:
+        type: CppCodedValue
+        cpp_code:
+        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.0005*sin(pi/2*t)
+        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.0005*sin(pi/2*t)
 
 _mesh:
     type: XML
@@ -81,9 +86,10 @@ output:
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: warning
+    xdmf_write_interval: 1
 
 solver:
-    type: IPCS
+    type: Coupled
     num_inner_iter: 4
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
@@ -91,7 +97,7 @@ solver:
     function_space_pressure: DG
     timestepping_method: BDF
     #velocity_postprocessing: None
-    use_stress_divergence_form: false
+    use_stress_divergence_form: no
     use_lagrange_multiplicator: no
     u:
         parameters:

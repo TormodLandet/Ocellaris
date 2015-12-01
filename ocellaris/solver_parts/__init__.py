@@ -3,4 +3,5 @@ from .boundary_conditions import BoundaryRegion
 from .hydrostatic import HydrostaticPressure
 from .penalty import define_penalty
 from .bdm import VelocityBDMProjection
+from .ale import MeshMorpher
 

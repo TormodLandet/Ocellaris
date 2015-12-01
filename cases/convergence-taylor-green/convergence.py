@@ -2,7 +2,7 @@ from __future__ import division, print_function
 import time, subprocess, os
 from math import log
 import dolfin
-from ocellaris import Simulation, run_simulation
+from ocellaris import Simulation, setup_simulation, run_simulation
 
 
 def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
@@ -15,10 +15,10 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     sim = Simulation()
     sim.input.read_yaml('taylor-green.inp')
     
-    #sim.input.set_value('solver/type', 'IPCS')
-    
     if sim.input.get_value('mesh/type') == 'Rectangle':
-        sim.input['mesh']['Nx'] = sim.input['mesh']['Ny'] = N
+        # Use structured mesh
+        sim.input.set_value('mesh/Nx', N)
+        sim.input.set_value('mesh/Ny', N)
     else:
         # Create unstructured mesh with gmsh
         cmd1 = ['gmsh', '-string', 'lc = %f;' % (2.0/N),
@@ -28,27 +28,21 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
             for cmd in (cmd1, cmd2):
                 say(' '.join(cmd))
                 subprocess.call(cmd, stdout=devnull, stderr=devnull)
-        
-    sim.input['time']['dt'] = dt
-    sim.input['time']['tmax'] = tmax
-    sim.input['solver']['polynomial_degree_velocity'] = polydeg_u
-    sim.input['solver']['polynomial_degree_pressure'] = polydeg_p
+    
+    sim.input.set_value('time/dt', dt)
+    sim.input.set_value('time/tmax', tmax)
+    sim.input.set_value('solver/polynomial_degree_velocity', polydeg_u)
+    sim.input.set_value('solver/polynomial_degree_pressure', polydeg_p)
+    sim.input.set_value('output/ocellaris_log_level', 'warning')
     
     if sim.input.get_value('solver/timestepping_method') == 'CN':
         sim.input.set_value('initial_conditions/p/cpp_code', '-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*(t+dt/2))/4') 
     
     say('Running ...')
-    try:
-        t1 = time.time()
-        run_simulation(sim)
-        duration = time.time() - t1
-    except KeyboardInterrupt:
-        raise
-    except BaseException as e:
-        raise
-        import traceback
-        traceback.print_exc()
-        return [1e10]*6 + [1, dt, time.time()-t1]
+    t1 = time.time()
+    setup_simulation(sim)
+    run_simulation(sim)
+    duration = time.time() - t1
     say('DONE')
     
     # Interpolate the analytical solution to the same function space
