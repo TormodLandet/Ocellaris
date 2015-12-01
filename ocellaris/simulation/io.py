@@ -41,7 +41,6 @@ class InputOutputHandling():
             Vu_vec = dolfin.VectorFunctionSpace(sim.data['mesh'], family, degree,
                                             constrained_domain=cd)
             self._vel_func = dolfin.Function(Vu_vec)
-            self._vel_func.rename('u', 'Velocity')
             
             # Create function assigners for the components
             self._vel_func_assigners = [dolfin.FunctionAssigner(Vu_vec.sub(d), Vu) for d in range(sim.ndim)]
@@ -65,21 +64,10 @@ class InputOutputHandling():
         """
         sim = self.simulation
         
-        # Should we write to file at all this timestep?
-        write_xdmf = self.xdmf_write_interval > 0 and sim.timestep % self.xdmf_write_interval == 0
-        write_hdf5 = self.hdf5_write_interval > 0 and sim.timestep % self.hdf5_write_interval == 0
-        if not (write_xdmf or write_hdf5):
-            return
-        
-        if write_xdmf:
-            # Copy the velocity components into a vector function
-            for d in range(sim.ndim):
-                ui = sim.data['u%d' % d]
-                self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
-            
+        if self.xdmf_write_interval > 0 and sim.timestep % self.xdmf_write_interval == 0:
             self.write_plot_file()
         
-        if write_hdf5:
+        if self.hdf5_write_interval > 0 and sim.timestep % self.hdf5_write_interval == 0:
             self.write_restart_file()
     
     def write_plot_file(self):
@@ -135,7 +123,23 @@ class InputOutputHandling():
         Write plot files for Paraview and similar applications
         """
         t = self.simulation.time
+        
+        # Write the fluid velocities
+        for d in range(self.simulation.ndim):
+            ui = self.simulation.data['up%d' % d]
+            self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
+        self._vel_func.rename('u', 'Velocity')
         self.xdmf_file << (self._vel_func, t)
+        
+        # Write the mesh velocities (used in ALE calculations)
+        if 'u_mesh' in self.simulation.data:
+            for d in range(self.simulation.ndim):
+                ui = self.simulation.data['u_mesh%d' % d]
+                self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
+            self._vel_func.rename('u_mesh', 'Velocity of the mesh')
+            self.xdmf_file << (self._vel_func, t)
+        
+        # Write scalar functions
         for name in ('p', 'p_hydrostatic', 'c'):
             if name in self.simulation.data:
                 func = self.simulation.data[name] 
