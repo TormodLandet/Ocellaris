@@ -36,7 +36,7 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
     
     # Check if the setup ran without problems
     if not success and not catch_exceptions:
-        raise e # Re-raise the exception gotten from running the solver
+        raise # Re-raise the exception gotten from running the solver
     
     return success 
 
@@ -80,7 +80,7 @@ def run_simulation(simulation, catch_exceptions=False):
     
     # Check if the solver ran without problems
     if not success and not catch_exceptions:
-        raise e # Re-raise the exception gotten from running the solver 
+        raise # Re-raise the exception gotten from running the solver 
     
     ##############################################################################################
     # Limited support for postprocessing implemented below. It is generally better to use Paraview

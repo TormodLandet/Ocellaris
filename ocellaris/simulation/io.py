@@ -1,3 +1,4 @@
+import os
 import numpy
 import dolfin
 from ocellaris.utils import ocellaris_error
@@ -17,6 +18,7 @@ class InputOutputHandling():
         """
         self.simulation = sim = simulation
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
+        sim.hooks.add_post_simulation_hook(lambda success: self._close_files(), 'Close files')
     
     def _setup_io(self):
         sim = self.simulation
@@ -30,6 +32,11 @@ class InputOutputHandling():
         if self.xdmf_write_interval > 0:
             create_vec_func = True
             file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
+            
+            # Remove previous file
+            if os.path.isfile(file_name):
+                os.remove(file_name)
+            
             self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
         
         # Create a vector function from the components
@@ -57,6 +64,13 @@ class InputOutputHandling():
                 
         # Dump initial state
         self.write_fields()
+        
+    def _close_files(self):
+        """
+        Close open files
+        """
+        if self.xdmf_write_interval > 0:
+            del self.xdmf_file
     
     def write_fields(self):
         """
