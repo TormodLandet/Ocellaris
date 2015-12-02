@@ -9,6 +9,8 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
     
     This will run the "real" code ``run_simulation_without_error_handling``
     in a way that handles errors in a user friendly manner (log them etc)
+    
+    :type simulation: ocellaris.Simulation
     """
     try:
         success = False
@@ -20,14 +22,11 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
         success = True
     
     except OcellarisError as e:
-        simulation.hooks.simulation_ended(success)
         simulation.log.error('ERROR === '*8)
         simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
     except KeyboardInterrupt as e:
-        simulation.hooks.simulation_ended(success)
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
     except BaseException as e:
-        simulation.hooks.simulation_ended(success)
         simulation.log.error('=== EXCEPTION =='*5)    
         tb = traceback.format_tb(sys.exc_info()[2])
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
@@ -47,6 +46,8 @@ def run_simulation(simulation, catch_exceptions=False):
     
     This will run the "real" code ``run_simulation_without_error_handling``
     in a way that handles errors in a user friendly manner (log them etc)
+    
+    :type simulation: ocellaris.Simulation
     """
     # Print information about configuration parameters
     simulation.log.info('\nSimulation configuration when starting the solver:')
@@ -60,7 +61,6 @@ def run_simulation(simulation, catch_exceptions=False):
     
     try:
         success = False
-        
         simulation.solver.run()
         success = True
     except OcellarisError as e:
