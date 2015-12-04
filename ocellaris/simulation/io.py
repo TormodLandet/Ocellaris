@@ -18,7 +18,8 @@ class InputOutputHandling():
         """
         self.simulation = sim = simulation
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
-        sim.hooks.add_post_simulation_hook(lambda success: self._close_files(), 'Close files')
+        close = lambda success: self._close_files()
+        sim.hooks.add_post_simulation_hook(close, 'Close files')
     
     def _setup_io(self):
         sim = self.simulation
@@ -39,18 +40,27 @@ class InputOutputHandling():
             
             self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
         
-        # Create a vector function from the components
-        if create_vec_func:
-            Vu = sim.data['Vu']
-            family = Vu.ufl_element().family()
-            degree = Vu.ufl_element().degree()
+        def create_vec_func(V):
+            "Create a vector function from the components"
+            family = V.ufl_element().family()
+            degree = V.ufl_element().degree()
             cd = sim.data['constrained_domain']
-            Vu_vec = dolfin.VectorFunctionSpace(sim.data['mesh'], family, degree,
-                                            constrained_domain=cd)
-            self._vel_func = dolfin.Function(Vu_vec)
+            V_vec = dolfin.VectorFunctionSpace(sim.data['mesh'], family, degree,
+                                               constrained_domain=cd)
+            vec_func = dolfin.Function(V_vec)
             
             # Create function assigners for the components
-            self._vel_func_assigners = [dolfin.FunctionAssigner(Vu_vec.sub(d), Vu) for d in range(sim.ndim)]
+            assigners = [dolfin.FunctionAssigner(V_vec.sub(d), V) for d in range(sim.ndim)]
+            
+            return vec_func, assigners
+        
+        # Some output formats cannot save functions given as "as_vector(list)" 
+        if create_vec_func:
+            self._vel_func, self._vel_func_assigners = create_vec_func(sim.data['Vu'])
+            self._vel_func.rename('u', 'Velocity')
+        if sim.mesh_morpher.active and create_vec_func:
+            self._mesh_vel_func, self._mesh_vel_func_assigners = create_vec_func(sim.data['Vmesh'])
+            self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
         
         # Make sure functions have nice names for output
         for name, description in (('p', 'Pressure'),
@@ -142,16 +152,14 @@ class InputOutputHandling():
         for d in range(self.simulation.ndim):
             ui = self.simulation.data['up%d' % d]
             self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
-        self._vel_func.rename('u', 'Velocity')
         self.xdmf_file << (self._vel_func, t)
         
         # Write the mesh velocities (used in ALE calculations)
         if 'u_mesh' in self.simulation.data:
             for d in range(self.simulation.ndim):
                 ui = self.simulation.data['u_mesh%d' % d]
-                self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
-            self._vel_func.rename('u_mesh', 'Velocity of the mesh')
-            self.xdmf_file << (self._vel_func, t)
+                self._mesh_vel_func_assigners[d].assign(self._mesh_vel_func.sub(d), ui)
+            self.xdmf_file << (self._mesh_vel_func, t)
         
         # Write scalar functions
         for name in ('p', 'p_hydrostatic', 'c'):

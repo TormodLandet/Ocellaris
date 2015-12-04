@@ -54,7 +54,7 @@ def setup_simulation(simulation):
     # the Neumann conditions to define weak forms
     setup_boundary_conditions(simulation)
     
-    # Get the solver
+    # Create the solver
     simulation.log.info('Creating Navier-Stokes solver')
     solver_name = simulation.input.get_value('solver/type', required_type='string')
     simulation.solver = get_solver(solver_name)(simulation)
