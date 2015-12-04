@@ -271,11 +271,6 @@ class SolverIPCS(Solver):
                 uic.vector().zero()
                 uic.vector().axpy(1.5, uip.vector())
                 uic.vector().axpy(-0.5, uipp.vector())
-                
-            # ALE mesh velocity
-            if 'u_mesh' in self.simulation.data:
-                uimesh = data['u_mesh%d' % d]
-                uic.vector().axpy(-1.0, uimesh.vector())
         
         self.is_first_timestep = False
     

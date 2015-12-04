@@ -11,7 +11,9 @@ class CoupledEquations(object):
                  pressure_continuity_factor, velocity_continuity_factor_D12,
                  include_hydrostatic_pressure, incompressibility_flux_type):
         """
-        This class assembles the coupled Navier-Stokes equations, both CG and DG 
+        This class assembles the coupled Navier-Stokes equations, both CG and DG
+        
+        :type simulation: ocellaris.Simulation
         """
         self.simulation = simulation
         self.timestepping_method = timestepping_method
@@ -69,6 +71,12 @@ class CoupledEquations(object):
         sim = self.simulation
         Vcoupled = sim.data['Vcoupled']
         u_conv = sim.data['u_conv']
+        
+        # ALE mesh velocities
+        if sim.mesh_morpher.active:
+            u_mesh = sim.data['u_mesh']
+            u_conv -= u_mesh
+            assert self.use_grad_q_form, 'ALE only implemented for grad_q_form'
         
         # Unpack the coupled trial and test functions
         uc = dolfin.TrialFunction(Vcoupled)
@@ -128,6 +136,10 @@ class CoupledEquations(object):
                 # ∇⋅u = 0
                 eq += u[d].dx(d)*q*dx
                 
+                # ALE mesh velocities
+                if sim.mesh_morpher.active:
+                    eq += u_mesh[d].dx(d)*q*dx
+                
                 # Time derivative
                 # ∂u/∂t
                 eq += (rhos*c1*u[d] + rho*c2*up + rho_old*c3*upp)/dt*v[d]*dx
@@ -166,7 +178,7 @@ class CoupledEquations(object):
                 if self.incompressibility_flux_type == 'central':
                     u_hat_p = avg(u[d])
                 elif self.incompressibility_flux_type == 'upwind':
-                    assert self.use_grad_q_form
+                    assert self.use_grad_q_form, 'Upwind only implemented for grad_q_form'
                     switch = dolfin.conditional(dolfin.gt(w_nU('+'), 0.0), 1.0, 0.0)
                     u_hat_p = switch*u[d]('+') + (1 - switch)*u[d]('-')
                 
@@ -176,6 +188,12 @@ class CoupledEquations(object):
                 else:
                     eq += q*u[d].dx(d)*dx
                     eq -= (avg(q) - dot(D12, jump(q, n)))*jump(u[d])*n[d]('+')*dS
+                    
+                # ALE mesh velocities
+                if sim.mesh_morpher.active:
+                    eq -= u_mesh[d]*q.dx(d)*dx
+                    eq += u_mesh[d]('+')*jump(q)*n[d]('+')*dS
+                    eq += u_mesh[d]*q*n[d]*ds
                 
                 # Time derivative
                 # ∂(ρu)/∂t
