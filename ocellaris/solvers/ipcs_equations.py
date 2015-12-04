@@ -266,8 +266,6 @@ class PressureCorrectionEquation(BaseEquation):
         Vp = sim.data['Vp']
         p_star = sim.data['p']
         u_star = sim.data['u_star']
-        if sim.mesh_morpher.active:
-            u_mesh = sim.data['u_mesh']
         
         # Trial and test functions
         p = dolfin.TrialFunction(Vp)
@@ -292,10 +290,6 @@ class PressureCorrectionEquation(BaseEquation):
             L = dot(grad(p_star), grad(q))*dx
             L -= c1/dt*rhos*div(u_star)*q*dx
             
-            # ALE mesh velocities
-            if sim.mesh_morpher.active:
-                L -= c1/dt*rhos*div(u_mesh)*q*dx
-            
             # Neumann boundary conditions on p and p_star cancel
         
         else:
@@ -313,12 +307,6 @@ class PressureCorrectionEquation(BaseEquation):
                 u_flux = switch*u_star('+') + (1 - switch)*u_star('-')
             L += c1/dt*dot(u_star, grad(q))*dx
             L -= c1/dt*dot(u_flux, n('+'))*jump(q)*dS
-            
-            # ALE mesh velocities
-            if sim.mesh_morpher.active:
-                L += c1/dt*dot(u_mesh, grad(q))*dx
-                L -= c1/dt*dot(u_mesh('+'), n('+'))*jump(q)*dS
-                L -= c1/dt*dot(u_mesh, n)*q*dolfin.ds
             
             # Symmetric Interior Penalty method for -∇⋅∇p
             a -= dot(n('+'), avg(K*grad(p)))*jump(q)*dS
@@ -368,6 +356,15 @@ class PressureCorrectionEquation(BaseEquation):
 
                 # From integration by parts of RHS
                 L -= c1/dt*dot(u_star, n)*q*nbc.ds()
+        
+        # ALE mesh velocities
+        if sim.mesh_morpher.active:
+            cvol_new = dolfin.CellVolume(mesh)
+            cvol_old = sim.data['cvolp']
+            
+            # Divergence of u should balance expansion/contraction of the cell K
+            # ∇⋅u = -∂K/∂t       (See below for definition of the ∇⋅u term)  
+            L -= (cvol_new - cvol_old)/dt*q*dx
         
         self.form_lhs = a
         self.form_rhs = L

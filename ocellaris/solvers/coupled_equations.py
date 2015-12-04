@@ -69,14 +69,9 @@ class CoupledEquations(object):
         This implementation assembles the full LHS and RHS each time they are needed
         """
         sim = self.simulation
+        mesh = sim.data['mesh']
         Vcoupled = sim.data['Vcoupled']
         u_conv = sim.data['u_conv']
-        
-        # ALE mesh velocities
-        if sim.mesh_morpher.active:
-            u_mesh = sim.data['u_mesh']
-            u_conv -= u_mesh
-            assert self.use_grad_q_form, 'ALE only implemented for grad_q_form'
         
         # Unpack the coupled trial and test functions
         uc = dolfin.TrialFunction(Vcoupled)
@@ -95,7 +90,6 @@ class CoupledEquations(object):
         c1, c2, c3 = sim.data['time_coeffs']
         dt = sim.data['dt']
         g = sim.data['g']
-        mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
         
         # Fluid properties at t^{n}, t^{n-1} and t^{n+1}*
@@ -124,6 +118,20 @@ class CoupledEquations(object):
         else:
             eq = 0
         
+        # ALE mesh velocities
+        if sim.mesh_morpher.active:
+            u_mesh = sim.data['u_mesh']
+            
+            # Modification of the convective velocity
+            u_conv -= u_mesh
+            
+            cvol_new = dolfin.CellVolume(mesh)
+            cvol_old = sim.data['cvolp']
+            
+            # Divergence of u should balance expansion/contraction of the cell K
+            # ∇⋅u = -∂K/∂t       (See below for definition of the ∇⋅u term)  
+            eq += (cvol_new - cvol_old)/dt*q*dx
+        
         # Momentum equations
         for d in range(sim.ndim):
             up = sim.data['up%d' % d]
@@ -135,10 +143,6 @@ class CoupledEquations(object):
                 # Divergence free criterion
                 # ∇⋅u = 0
                 eq += u[d].dx(d)*q*dx
-                
-                # ALE mesh velocities
-                if sim.mesh_morpher.active:
-                    eq += u_mesh[d].dx(d)*q*dx
                 
                 # Time derivative
                 # ∂u/∂t
@@ -188,12 +192,6 @@ class CoupledEquations(object):
                 else:
                     eq += q*u[d].dx(d)*dx
                     eq -= (avg(q) - dot(D12, jump(q, n)))*jump(u[d])*n[d]('+')*dS
-                    
-                # ALE mesh velocities
-                if sim.mesh_morpher.active:
-                    eq -= u_mesh[d]*q.dx(d)*dx
-                    eq += u_mesh[d]('+')*jump(q)*n[d]('+')*dS
-                    eq += u_mesh[d]*q*n[d]*ds
                 
                 # Time derivative
                 # ∂(ρu)/∂t

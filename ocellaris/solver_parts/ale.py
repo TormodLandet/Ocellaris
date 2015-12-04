@@ -27,8 +27,12 @@ class MeshMorpher(object):
         sim = self.simulation
         assert self.active is False, 'Trying to setup mesh morphing twice in the same simulation'
         
-        # The function spaces for mesh velocities and displacements
+        # Store previous cell volumes
         mesh = sim.data['mesh']
+        Vcvol = dolfin.FunctionSpace(mesh, 'DG', 0) 
+        sim.data['cvolp'] = dolfin.Function(Vcvol)
+        
+        # The function spaces for mesh velocities and displacements
         Vmesh = dolfin.FunctionSpace(mesh, 'CG', 1)
         Vmesh_vec = dolfin.VectorFunctionSpace(mesh, 'CG', 1)
         sim.data['Vmesh'] = Vmesh
@@ -90,9 +94,16 @@ class MeshMorpher(object):
             self.assigners[d].assign(self.displacement.sub(d), umi)
         self.displacement.vector()[:] *= sim.dt
         
-        # Save the old mesh for interpolation
+        # Save the cell volumes before morphing
         mesh = sim.data['mesh']
+        cvolp = sim.data['cvolp']
+        dofmap_cvol = cvolp.function_space().dofmap()
+        for cell in dolfin.cells(mesh):
+            dofs = dofmap_cvol.cell_dofs(cell.index())
+            assert len(dofs) == 1
+            cvolp.vector()[dofs[0]] = cell.volume()
         
         # Move the mesh according to the given displacements
         mesh.move(self.displacement)
+        mesh.bounding_box_tree().build(mesh)
         sim.update_mesh_data(connectivity_changed=False)
