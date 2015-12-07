@@ -37,6 +37,9 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     
     if sim.input.get_value('solver/timestepping_method') == 'CN':
         sim.input.set_value('initial_conditions/p/cpp_code', '-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*(t+dt/2))/4') 
+        
+    if N == 24:
+        sim.input.set_value('output/xdmf_write_interval', 1)
     
     say('Running ...')
     t1 = time.time()

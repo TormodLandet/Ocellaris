@@ -16,6 +16,9 @@ physical_properties:
     rho0: 1.0
 
 mesh:
+    #type: XML
+    #mesh_file: taylor-green.xml
+    
     type: Rectangle
     Nx: 64
     Ny: 64
@@ -25,12 +28,8 @@ mesh:
     prescribed_velocity:
         type: CppCodedValue
         cpp_code:
-        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.0005*sin(pi/2*t)
-        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.0005*sin(pi/2*t)
-
-_mesh:
-    type: XML
-    mesh_file: taylor-green.xml
+        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
+        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
 
 # Periodic boundary conditions. Not supported in FEniCS 1.5 for DG. Works for CG
 _boundary_conditions:
@@ -86,7 +85,7 @@ output:
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: warning
-    xdmf_write_interval: 1
+    xdmf_write_interval: 0
 
 solver:
     type: Coupled

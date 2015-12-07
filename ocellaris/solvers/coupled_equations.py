@@ -98,25 +98,13 @@ class CoupledEquations(object):
         mus = sim.data['mu_star']
         rho = sim.data['rho']
         rho_old = sim.data['rho_old']
-            
-        if self.vel_is_discontinuous:
-            penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nus)
-            
-            # Upwind and downwind velocities
-            w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
-            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
         
+        # Hydrostatic pressure correction
         if self.include_hydrostatic_pressure:
             p += sim.data['p_hydrostatic']
         
-        # Lagrange multiplicator to remove the pressure null space
-        # ∫ p dx = 0
-        if self.use_lagrange_multiplicator:
-            lm_trial = uc[ndim+1]
-            lm_test = vc[ndim+1]
-            eq = (p*lm_test + q*lm_trial)*dx
-        else:
-            eq = 0
+        # Start building the coupled equations
+        eq = 0
         
         # ALE mesh velocities
         if sim.mesh_morpher.active:
@@ -131,6 +119,20 @@ class CoupledEquations(object):
             # Divergence of u should balance expansion/contraction of the cell K
             # ∇⋅u = -∂K/∂t       (See below for definition of the ∇⋅u term)  
             eq += (cvol_new - cvol_old)/dt*q*dx
+        
+        if self.vel_is_discontinuous:
+            penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nus)
+            
+            # Upwind and downwind velocities
+            w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
+            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
+        
+        # Lagrange multiplicator to remove the pressure null space
+        # ∫ p dx = 0
+        if self.use_lagrange_multiplicator:
+            lm_trial = uc[ndim+1]
+            lm_test = vc[ndim+1]
+            eq = (p*lm_test + q*lm_trial)*dx
         
         # Momentum equations
         for d in range(sim.ndim):

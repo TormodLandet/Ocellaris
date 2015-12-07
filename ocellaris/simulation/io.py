@@ -155,7 +155,7 @@ class InputOutputHandling():
         self.xdmf_file << (self._vel_func, t)
         
         # Write the mesh velocities (used in ALE calculations)
-        if 'u_mesh' in self.simulation.data:
+        if self.simulation.mesh_morpher.active:
             for d in range(self.simulation.ndim):
                 ui = self.simulation.data['u_mesh%d' % d]
                 self._mesh_vel_func_assigners[d].assign(self._mesh_vel_func.sub(d), ui)
