@@ -2,7 +2,7 @@ import time
 import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.postprocess import setup_probes
-from ocellaris.utils import debug_console_hook, ocellaris_error, ocellaris_project, log_timings, OcellarisConstant, RunnablePythonString
+from ocellaris.utils import debug_console_hook, ocellaris_error, ocellaris_interpolate, log_timings, OcellarisConstant, RunnablePythonString
 from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
 
 
@@ -281,8 +281,8 @@ def setup_initial_conditions(simulation):
         description = 'initial conditions for %r' % name
         simulation.log.info('    C++ %s' % description)
         
-        # Project into the function
-        ocellaris_project(simulation, cpp_code, description, V, func)
+        # Run the C++ code to set the initial value of the function
+        ocellaris_interpolate(simulation, cpp_code, description, V, func)
 
 
 def setup_hooks(simulation):

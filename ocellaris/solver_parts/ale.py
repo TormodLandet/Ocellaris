@@ -1,5 +1,5 @@
 import dolfin
-from ocellaris.utils import timeit, ocellaris_project
+from ocellaris.utils import timeit, ocellaris_interpolate
 
 
 class MeshMorpher(object):
@@ -77,7 +77,7 @@ class MeshMorpher(object):
             func = sim.data['u_mesh%d' % d]
             
             # Update the mesh velocity functions
-            ocellaris_project(sim, cpp_code, description, Vmesh, func)
+            ocellaris_interpolate(sim, cpp_code, description, Vmesh, func)
         
         self.morph_mesh()
     

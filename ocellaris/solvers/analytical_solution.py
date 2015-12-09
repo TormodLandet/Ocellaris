@@ -2,7 +2,7 @@
 from __future__ import division
 import dolfin
 from dolfin import Constant
-from ocellaris.utils import timeit, ocellaris_project
+from ocellaris.utils import timeit, ocellaris_interpolate
 from . import Solver, register_solver
 
 
@@ -70,8 +70,8 @@ class AnalyticalSolution(Solver):
             V = func.function_space()
             description = 'initial conditions for %r' % name
             
-            # Project into the function
-            ocellaris_project(sim, cpp_code, description, V, func)
+            # Update the function by running the C++ code
+            ocellaris_interpolate(sim, cpp_code, description, V, func)
     
     @timeit
     def run(self):

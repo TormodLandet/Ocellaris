@@ -41,22 +41,29 @@ def get_vars(simulation):
     return available_vars
 
 
-def ocellaris_project(simulation, cpp_code, description, V, function=None):
+def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
     """
     Create a C++ expression with parameters like time and all scalars in 
     simulation.data available (nu and rho for single phase simulations) 
     
-    Project the expression into a dolfin.Function. The function is either
-    provided or a function will be created 
+    Interpolate the expression into a dolfin.Function. The results can be
+    returned in a provided function, or a new function will be returned 
     """
     # Compile the C++ code
     expr = make_expression(simulation, cpp_code, description, element=V.ufl_element())
     
-    # Project to the function space and return the projected function
+    # Interpolate
+    res  = dolfin.interpolate(expr, V)
+    
     if function is None:
-        function = dolfin.Function(V)
-    dolfin.project(expr, V=V, function=function)
-    return function
+        return res
+    else:
+        Vf = function.function_space()
+        if not Vf.ufl_element().family() == V.ufl_element().family() and Vf.dim() == V.dim():
+            ocellaris_error('Error in ocellaris_interpolate',
+                            'Provided function is not in the specified function space V')  
+        function.assign(res)
+        return function
 
 
 def OcellarisCppExpression(simulation, cpp_code, description, update=False):
