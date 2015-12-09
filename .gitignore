@@ -10,6 +10,8 @@ syntax: glob
 *.xdmf
 *.pvd
 *.vtu
+*.msh
+*.xml
 results_*
 documentation/_build
 output/
