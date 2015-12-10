@@ -6,6 +6,9 @@ def make_expression(simulation, cpp_code, description, element=None):
     Create a C++ expression with parameters like time and all scalars in 
     simulation.data available (nu and rho for single phase simulations) 
     """
+    if isinstance(cpp_code, (float, int, long)):
+        cpp_code = repr(cpp_code)
+    
     available_vars = get_vars(simulation)    
     try:
         return dolfin.Expression(cpp_code, element=element, **available_vars)
