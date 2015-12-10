@@ -47,9 +47,6 @@ class MeshMorpher(object):
         u_mesh = dolfin.as_vector(u_mesh)
         sim.data['u_mesh'] = u_mesh
         
-        # Divergence remover for mesh velocities
-        self.divergence_remover = DivergenceRemover(u_mesh)
-        
         # Create mesh displacement vector function
         self.displacement = dolfin.Function(Vmesh_vec)
         self.assigners = [dolfin.FunctionAssigner(Vmesh_vec.sub(d), Vmesh) for d in range(sim.ndim)]
@@ -93,9 +90,6 @@ class MeshMorpher(object):
         """
         sim = self.simulation
         
-        # Remove any divergence from the velocity field
-        self.divergence_remover.update_field()
-        
         # Get the mesh displacement
         for d in range(sim.ndim):
             umi = sim.data['u_mesh%d' % d]
@@ -115,55 +109,3 @@ class MeshMorpher(object):
         mesh.move(self.displacement)
         mesh.bounding_box_tree().build(mesh)
         sim.update_mesh_data(connectivity_changed=False)
-
-
-class DivergenceRemover(object):
-    def __init__(self, u_star):
-        """
-        Remove the divergence from a vector field by using Helmholtz decomposition.
-        
-            ∇⋅∇φ = ∇⋅u_star
-            u_divfree = u_star - ∇φ
-        
-        The field is modified in place when .update_field() is called
-        """
-        self.u_star = u_star
-        V = u_star[0].function_space()
-        mesh = V.mesh()
-        
-        self.phi = dolfin.Function(V)
-        self.uc = dolfin.Function(V)
-        
-        # Define weak form of Poisson problem
-        from dolfin import grad, div, dot, dx, ds
-        phi = dolfin.TrialFunction(V)
-        q = dolfin.TestFunction(V)
-        n = dolfin.FacetNormal(mesh)
-        a = -dot(grad(phi), grad(q))*dx + dot(grad(phi), n)*q*ds
-        L = div(u_star)*q*dx
-        self.tensor_lhs = dolfin.assemble(a)
-        self.form_rhs = L
-        
-        # Define velocity update equation
-        self.tensor_lhs2 = dolfin.assemble(phi*q*dx)
-        self.form_rhs2 = []
-        for d in range(len(u_star)):
-            self.form_rhs2.append(self.phi.dx(d)*q*dx)
-    
-    def update_field(self):
-        """
-        This function modifies u_star in place and removes the divergence
-        """
-        A = self.tensor_lhs
-        b = dolfin.assemble(self.form_rhs)
-        phi = self.phi
-        u_star = self.u_star
-        
-        dolfin.solve(A, phi.vector(), b)
-        
-        uc = self.uc
-        A2 = self.tensor_lhs2
-        for d in range(len(u_star)):
-            b2 = dolfin.assemble(self.form_rhs2[d])
-            dolfin.solve(A2, uc.vector(), b2)
-            u_star[d].vector().axpy(-1.0, uc.vector())

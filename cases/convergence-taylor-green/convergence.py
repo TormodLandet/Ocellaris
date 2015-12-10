@@ -41,7 +41,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     if N == 24:
         sim.input.set_value('output/xdmf_write_interval', 1)
     
-    say('Running ...')
+    say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'), sim.input.get_value('solver/function_space_velocity')))
     t1 = time.time()
     setup_simulation(sim)
     run_simulation(sim)
@@ -90,6 +90,15 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     Vdg1 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 1)
     div_u_DG1 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg1).vector().array()).max()
     say('div(u)|DG1', div_u_DG1)
+    
+    if 'u_mesh' in sim.data:
+        Vmesh = sim.data['Vmesh']
+        div_u_mesh_Vmesh = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vmesh).vector().array()).max()
+        say('div(u_mesh)|V_mesh', div_u_mesh_Vmesh)
+        div_u_mesh_DG0 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg0).vector().array()).max()
+        say('div(u_mesh)|DG0', div_u_mesh_DG0)
+        div_u_mesh_DG1 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg1).vector().array()).max()
+        say('div(u_mesh)|DG1', div_u_mesh_DG1)
     
     if False:
         # Plot the results
