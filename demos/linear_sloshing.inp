@@ -1,0 +1,103 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+physical_properties:
+    rho0: 1000.0
+    nu0: 1.0e-6
+    rho1: 1.225
+    nu1: 1.5e-5
+    g: [0, -10]
+
+mesh:
+    type: Rectangle
+    Nx: 10
+    Ny: 10
+    diagonal: right
+
+# BCs with no-slip
+_boundary_conditions:
+-   name: walls
+    selector: code
+    inside_code: on_boundary
+    u:
+        type: ConstantValue
+        value: [0, 0]
+    p:
+        type: WallPressure
+
+# BCs with wall slip        
+boundary_conditions:
+-   name: top and bottom
+    selector: code
+    inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > 1-1e-5)'
+    p:
+        type: WallPressure
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantValue
+        value: 0
+-   name: walls
+    selector: code
+    inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 1-1e-5)'
+    p:
+        type: WallPressure
+    u0:
+        type: ConstantValue
+        value: 0
+    u1:
+        type: ConstantGradient
+        value: 0
+
+time:
+    dt: 0.001
+    tmax: 20.0
+
+output:
+    prefix: output/linear_sloshing
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    xdmf_write_interval: 1
+    hdf5_write_interval: 0
+
+multiphase_solver:
+    type: HeightFunctionALE
+    height_function_cpp: 0.4 + 0.01*x[0]
+
+solver:
+    type: Coupled
+    num_inner_iter: 20
+    allowable_error_inner: 1e-5
+    function_space_velocity: CG
+    function_space_pressure: CG
+    polynomial_degree_velocity: 2
+    polynomial_degree_pressure: 1
+
+probes:
+    -   name: c=0.5
+        type: IsoSurface
+        value: 0.5
+        field: c
+        file_name: '_c05.out'
+        show_interval: 1
+        xlim: [0, 1]
+        ylim: [0, 0.75]
+    -   name: c=0.1
+        type: IsoSurface
+        value: 0.1
+        field: c
+        file_name: '_c01.out'
+    -   name: c=0.9
+        type: IsoSurface
+        value: 0.9
+        field: c
+        file_name: '_c09.out'
+
+reporting:
+    reports_to_show: ['umax'] #['sum(c)', 'max(div(u)|Vc)']
+
+#console_on_error: false
+#console_at_end: true

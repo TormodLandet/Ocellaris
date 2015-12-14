@@ -40,3 +40,4 @@ class MultiPhaseModel(object):
 from . import single_phase
 from . import blended_algebraic_vof
 from . import lagrangian
+from . import height_function_ale
