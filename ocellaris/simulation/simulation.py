@@ -55,7 +55,7 @@ class Simulation(object):
         # The implementation is rather long, so it is in a separate file
         setup_simulation(self)
     
-    def set_mesh(self, mesh, mesh_facet_regions):
+    def set_mesh(self, mesh, mesh_facet_regions=None):
         """
         Set the computational domain
         """

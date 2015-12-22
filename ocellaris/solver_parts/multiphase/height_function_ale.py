@@ -35,8 +35,11 @@ class HeightFunctionALE(VOFMixin, MultiPhaseModel):
         self.calculate_mu_directly_from_colour_function = \
             simulation.input.get_value('multiphase_solver/calculate_mu_directly_from_colour_function',
                                        CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION, 'bool')
+            
+        # The mean free surface height
+        height_function_mean = simulation.input.get_value('multiphase_solver/height_function_mean', required_type='float')
         
-        # The C++ code for the free surface height
+        # The C++ code for the free surface height (final_height = height_function_mean + height_function_cpp)
         height_function_cpp = simulation.input.get_value('multiphase_solver/height_function_cpp', required_type='string')
         assert 'x[1]' not in height_function_cpp and 'x[2]' not in height_function_cpp
         
@@ -45,15 +48,14 @@ class HeightFunctionALE(VOFMixin, MultiPhaseModel):
                                                                             MINIMUM_DIAMETER_OF_VERTEX_COLUMN, required_type='float')
         
         # Morph the mesh to match the initial configuration of the free surface
-        columns = initial_mesh_morphing(simulation, height_function_cpp, self.minimum_diameter_of_vertex_column)
+        columns = initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
+                                        eps=self.minimum_diameter_of_vertex_column)
         self.vertex_columns = columns
         
         # Show some information about the columns
         simulation.log.info('    Created %d mesh columns' % len(columns))
         for col in columns:
             simulation.log.info('        %r' % col)
-            
-        #exit()
         
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value('physical_properties/rho0', required_type='float')
@@ -122,7 +124,7 @@ class MeshColumn(object):
                                            self.velocity_dof, len(self.vertices))
 
 
-def initial_mesh_morphing(simulation, height_function_cpp, eps):
+def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean, eps):
     """
     This funcution does the following:
     
@@ -140,16 +142,22 @@ def initial_mesh_morphing(simulation, height_function_cpp, eps):
     D = simulation.ndim
     assert D == 2
     
+    def get_height_func():
+        height = ocellaris_interpolate(simulation, height_function_cpp, 'Height function', Vmesh)
+        height.vector()[:] += height_function_mean
+        return height
+    
     mesh = simulation.data['mesh']
     Vmesh =  simulation.data['Vmesh']
     Vu =  simulation.data['Vu']
     Vc =  simulation.data['Vc']
     con_CV = simulation.data['connectivity_CV']
-    height = ocellaris_interpolate(simulation, height_function_cpp, 'Height function', Vmesh)
+    
     dofmap = Vmesh.dofmap()
     dofmap_fluid = Vu.dofmap()
     dofmap_colour = Vc.dofmap()
     colour_vec = simulation.data['c'].vector()
+    height = get_height_func()
     
     # Find cells that contain the free surface
     vertices_to_move = set()
@@ -165,6 +173,7 @@ def initial_mesh_morphing(simulation, height_function_cpp, eps):
         assert len(dofs) == len(vertices) == 3
         
         above = []
+        below = []
         for i, vid in enumerate(vertices):
             if not vid in vertex_coords:
                 vtx = dolfin.Vertex(mesh, vid)
@@ -175,20 +184,21 @@ def initial_mesh_morphing(simulation, height_function_cpp, eps):
                 vertex_heights[vid] = h
                 vertex_dofs[vid] = dof
                 vertex_fluid_vel_dofs[vid] = dofs_fluid[i]
-            above.append(vertex_coords[vid][1] >= h)
+
+            #h = vertex_heights[vid]
+            h = height_function_mean
+            above.append(vertex_coords[vid][1] >= h - 1e6)
+            below.append(vertex_coords[vid][1] <= h + 1e6)
         
-        if all(above) or not any(above):
+        if (all(above) and not any(below)) or (all(below) and not any(above)):
             # The free surface does not cut through this cell
             continue
         
-        # Find the vertices to move down to the free surface.
-        # We never move a vertex up in the initial mesh morphing
-        to_move = [vid for vid, above in zip(vertices, above) if above]
-        
-        # Store the free surface vertices
-        vertices_to_move.update(to_move)
+        # The vertices to move to the free surface location
+        # (We will end up moving only the closest vertex in each column)
+        vertices_to_move.update(vertices)
     
-    # Find x-positions of the vertices on the free surface
+    # Find x-positions of the vertices near the free surface
     xpos = [(vertex_coords[vid][0], vertex_coords[vid][1], vid) for vid in vertices_to_move]
     assert len(xpos) > 1
     xpos.append((-1e10, None, None))
@@ -212,20 +222,26 @@ def initial_mesh_morphing(simulation, height_function_cpp, eps):
             startpos = (x + xpos[i-1][0])/2 if xpos[i-1][2] is not None else x - eps/100  
         endpos = (x + xpos[i+1][0])/2 if xpos[i+1][2] is not None else x + eps/100
         
-        print 'x', x, 'xi-1', xpos[i-1][0], 'xi+1', xpos[i+1][0], 'y', xpos[i][1], 'vid', xpos[i][2]
+        #print 'x', x, 'xi-1', xpos[i-1][0], 'xi+1', xpos[i+1][0], 'y', xpos[i][1], 'vid', xpos[i][2]
         if xpos[i+1][0] - x < eps:  
             continue
-        print 'NWCOL'
+        #print 'NWCOL'
         
-        # Get the lowest y-coordinate (of free surface vertices) in the column
-        miny = (None, 1e100, None)
+        # Get the closest y-coordinate (of free surface vertices) in the column
+        min_diff_y = (None, None, None, 1e100)
         for p in in_col:
-            if p[1] < miny[1]:
-                miny = p
+            x, y, vid = p
+            dof = vertex_dofs[vid]
+            #h = vertex_heights[vid]
+            h = height_function_mean
+            diff_y = abs(y - h)
+            if diff_y < min_diff_y[3]:
+                min_diff_y = (x, y, vid, diff_y)
+        #print 'FS', min_diff_y
         
         # Create a MeshColumn object
-        vid = miny[2]
-        y_pos = miny[1]
+        vid = min_diff_y[2]
+        y_pos = min_diff_y[1]
         fluid_dof = vertex_fluid_vel_dofs[vid]
         col = MeshColumn(startpos, endpos, vid, y_pos, fluid_dof)
         columns.append(col)
@@ -278,7 +294,7 @@ def initial_mesh_morphing(simulation, height_function_cpp, eps):
         
     # Initialize the colour field. This will not change during the simulation.
     # Wet cells will remain wet and vice versa
-    height = ocellaris_interpolate(simulation, height_function_cpp, 'Height function', Vmesh)
+    height = get_height_func()
     for cell in dolfin.cells(mesh):
         cid = cell.index()
         dofs = dofmap.cell_dofs(cid)
@@ -317,5 +333,10 @@ def morph_mesh(simulation, columns, fs_vert_velocity):
                 fac = (y_vtx - col.bottom)/(y_fs - col.bottom)
             u_mesh.vector()[dof] = vel*fac
         col.free_surface_pos = y_fs + vel*dt
+
+        if col.free_surface_pos >= col.top:
+            ocellaris_error('HeightFunctionALE morphing error',
+                            'Free surface is above top of column in column %r' % col)
     
     simulation.mesh_morpher.morph_mesh()
+

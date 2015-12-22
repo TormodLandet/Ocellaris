@@ -11,8 +11,8 @@ physical_properties:
 
 mesh:
     type: Rectangle
-    Nx: 10
-    Ny: 10
+    Nx: 25
+    Ny: 25
     diagonal: right
 
 # BCs with no-slip
@@ -65,7 +65,8 @@ output:
 
 multiphase_solver:
     type: HeightFunctionALE
-    height_function_cpp: 0.4 + 0.01*x[0]
+    height_function_mean: 0.5
+    height_function_cpp: 0.01*(x[0] - 0.5)
 
 solver:
     type: Coupled
@@ -82,22 +83,12 @@ probes:
         value: 0.5
         field: c
         file_name: '_c05.out'
-        show_interval: 1
+        show_interval: 0
         xlim: [0, 1]
         ylim: [0, 0.75]
-    -   name: c=0.1
-        type: IsoSurface
-        value: 0.1
-        field: c
-        file_name: '_c01.out'
-    -   name: c=0.9
-        type: IsoSurface
-        value: 0.9
-        field: c
-        file_name: '_c09.out'
 
 reporting:
-    reports_to_show: ['umax'] #['sum(c)', 'max(div(u)|Vc)']
+    _reports_to_show: ['umax'] #['sum(c)', 'max(div(u)|Vc)']
 
 #console_on_error: false
 #console_at_end: true
