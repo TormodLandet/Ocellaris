@@ -279,7 +279,7 @@ def contour_lines_from_endpoints(endpoints, crossing_points, connections):
                 contour.append(crossing_points.pop(facet_id))
                 queue.extend(connections[facet_id])
                 prev = facet_id
-            if facet_id == endpoint and prev in connections[endpoint]:
+            if facet_id == endpoint and prev in connections[endpoint] and len(contour) != 2:
                 contour.append(contour[0])
                 break
         
