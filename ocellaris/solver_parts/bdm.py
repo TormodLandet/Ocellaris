@@ -1,6 +1,6 @@
 # encoding: utf8
 import dolfin
-from dolfin import MixedFunctionSpace, VectorFunctionSpace, FunctionSpace
+from dolfin import FiniteElement, VectorElement, MixedElement, FunctionSpace, VectorFunctionSpace
 from dolfin import FacetNormal, TrialFunction, TestFunctions, Function 
 from dolfin import dot, as_vector, dx, ds, dS, LocalSolver
 
@@ -34,10 +34,11 @@ class VelocityBDMProjection():
         n = FacetNormal(mesh)
         
         # The mixed function space of the projection test functions
-        V1 = FunctionSpace(mesh, 'DGT', k)
-        V2 = VectorFunctionSpace(mesh, 'DG', k-2)
-        V3 = FunctionSpace(mesh, 'Bubble', 3)
-        W = MixedFunctionSpace([V1, V2, V3])
+        e1 = FiniteElement('DGT', mesh.ufl_cell(), k)
+        e2 = VectorElement('DG', mesh.ufl_cell(), k-2)
+        e3 = FiniteElement('Bubble', mesh.ufl_cell(), 3)
+        em = MixedElement([e1, e2, e3])
+        W = FunctionSpace(mesh, em)
         v1, v2, v3b = TestFunctions(W)
         u = TrialFunction(V)
         

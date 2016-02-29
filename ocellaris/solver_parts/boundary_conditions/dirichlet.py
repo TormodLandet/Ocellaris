@@ -148,7 +148,8 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         Store the boundary condition for use in the solver
         """
         description = 'boundary condititon for %s' % var_name
-        expr = OcellarisCppExpression(self.simulation, cpp_code, description, update=True)
+        P = self.func_space.ufl_element().degree()
+        expr = OcellarisCppExpression(self.simulation, cpp_code, description, P, update=True)
         bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)

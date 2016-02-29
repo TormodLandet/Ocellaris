@@ -1,17 +1,23 @@
 import dolfin
 from . import ocellaris_error
 
-def make_expression(simulation, cpp_code, description, element=None):
+def make_expression(simulation, cpp_code, description, element):
     """
     Create a C++ expression with parameters like time and all scalars in 
     simulation.data available (nu and rho for single phase simulations) 
     """
     if isinstance(cpp_code, (float, int, long)):
         cpp_code = repr(cpp_code)
+        
+    if isinstance(element, (int, long)):
+        degree = element
+        element = None
+    else:
+        degree = None
     
     available_vars = get_vars(simulation)    
     try:
-        return dolfin.Expression(cpp_code, element=element, **available_vars)
+        return dolfin.Expression(cpp_code, element=element, degree=degree, **available_vars)
     except Exception as e:
         vardesc = '\n  - '.join('%s (%s)' % (name, type(value)) for name, value in available_vars.items())
         errormsg  = str(e)
@@ -69,7 +75,7 @@ def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
         return function
 
 
-def OcellarisCppExpression(simulation, cpp_code, description, update=False):
+def OcellarisCppExpression(simulation, cpp_code, description, degree, update=False):
     """
     Create a dolfin.Expression and make sure it has variables like time
     available when executing.
@@ -89,7 +95,7 @@ def OcellarisCppExpression(simulation, cpp_code, description, update=False):
                 expression.user_parameters[name] = value
     
     # Create the expression
-    expression = make_expression(simulation, cpp_code, description)
+    expression = make_expression(simulation, cpp_code, description, degree)
     
     # Return the expression. Optionally register an update each time step
     if update:

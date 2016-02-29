@@ -38,7 +38,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     if sim.input.get_value('solver/timestepping_method') == 'CN':
         sim.input.set_value('initial_conditions/p/cpp_code', '-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*(t+dt/2))/4') 
         
-    if N == 24:
+    if N == 24 and False:
         sim.input.set_value('output/xdmf_write_interval', 1)
     
     say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'), sim.input.get_value('solver/function_space_velocity')))
@@ -52,11 +52,11 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     Vu = sim.data['Vu']
     Vp = sim.data['Vp']
     vals = dict(t=sim.time, dt=sim.dt, nu=sim.input['physical_properties']['nu0'], rho=sim.input['physical_properties']['rho0'])
-    u0e = dolfin.Expression(sim.input.get_value('initial_conditions/up0/cpp_code'), **vals)
-    u1e = dolfin.Expression(sim.input.get_value('initial_conditions/up1/cpp_code'), **vals)
+    u0e = dolfin.Expression(sim.input.get_value('initial_conditions/up0/cpp_code'), degree=polydeg_u, **vals)
+    u1e = dolfin.Expression(sim.input.get_value('initial_conditions/up1/cpp_code'), degree=polydeg_u, **vals)
     if sim.input.get_value('solver/timestepping_method') == 'CN':
         vals['t'] = sim.time - sim.dt
-    pe  = dolfin.Expression(sim.input.get_value('initial_conditions/p/cpp_code'), **vals)
+    pe  = dolfin.Expression(sim.input.get_value('initial_conditions/p/cpp_code'), degree=polydeg_p, **vals)
     
     #vals = dict(t=sim.time, nu=sim.input['physical_properties']['nu0'])
     #u0e = dolfin.Expression('-sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)', **vals)
