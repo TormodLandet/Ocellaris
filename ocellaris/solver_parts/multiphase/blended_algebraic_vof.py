@@ -1,10 +1,11 @@
 # encoding: utf-8
 from __future__ import division
 import dolfin
-from dolfin import Function, Constant, dot, div, grad, jump, dx, dS
+from dolfin import Function, Constant
 from . import register_multi_phase_model, MultiPhaseModel 
 from ..convection import get_convection_scheme, StaticScheme
 from .vof import VOFMixin
+from .advection_equation import AdvectionEquation
 
 
 # Default values, can be changed in the input file
@@ -128,7 +129,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         self.u_conv_comps = [dolfin.Function(Vu) for _ in range(self.simulation.ndim)]
         self.u_conv = dolfin.as_vector(self.u_conv_comps)
         beta_star = self.convection_scheme_star.blending_function
-        self.eq_star = AdvectionEquation(self.simulation, c, cp, self.u_conv, beta_star, self.time_coeffs, dirichlet_bcs)
+        self.eq_star = AdvectionEquation(self.simulation, self.simulation.data['Vc'],
+                                         c, cp, self.u_conv, beta_star,
+                                         self.time_coeffs, dirichlet_bcs)
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('c', c, clim=(0, 1))        
@@ -263,87 +266,3 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             div_u.vector().abs()
             maxdiv = div_u.vector().max()
             self.simulation.reporting.report_timestep_value('max(div(u)|%s)' % fspace_name, maxdiv)
-
-
-class AdvectionEquation(object):
-    def __init__(self, simulation, cp, cpp, u_conv, beta, time_coeffs, dirichlet_bcs):
-        """
-        This class assembles the advection equation for the colour function, both CG and DG 
-        """
-        self.simulation = simulation
-        self.cp = cp
-        self.cpp = cpp
-        self.u_conv = u_conv
-        self.beta = beta
-        self.time_coeffs = time_coeffs
-        self.dirichlet_bcs = dirichlet_bcs
-        
-        # Discontinuous or continuous elements
-        Vc_family = simulation.data['Vc'].ufl_element().family()
-        self.colour_is_discontinuous = (Vc_family == 'Discontinuous Lagrange')
-        
-        # Create UFL forms
-        self.define_advection_equation()
-    
-    def define_advection_equation(self):
-        """
-        Setup the advection equation for the colour function
-        
-        This implementation assembles the full LHS and RHS each time they are needed
-        """
-        sim = self.simulation
-        mesh = sim.data['mesh']
-        n = dolfin.FacetNormal(mesh)
-        
-        # Trial and test functions
-        Vc = sim.data['Vc']
-        c = dolfin.TrialFunction(Vc)
-        d = dolfin.TestFunction(Vc)
-        
-        c1, c2, c3 = self.time_coeffs
-        dt = sim.data['dt']
-        u_conv = self.u_conv
-        
-        if not self.colour_is_discontinuous:
-            # Continous Galerkin implementation of the advection equation
-            eq = (c1*c + c2*self.cp + c3*self.cpp)/dt*d*dx + div(c*u_conv)*d*dx
-        
-        else:
-            # Upstream and downstream normal velocities
-            flux_nU = c*(dot(u_conv, n) + abs(dot(u_conv, n)))/2
-            flux_nD = c*(dot(u_conv, n) - abs(dot(u_conv, n)))/2
-            
-            # Define the blended flux
-            # The blending factor beta is not DG, so beta('+') == beta('-')
-            b = self.beta('+')
-            flux = (1-b)*(flux_nU('+') - flux_nU('-')) + b*(flux_nD('+') - flux_nD('-'))
-            
-            # Discontinuous Galerkin implementation of the advection equation 
-            eq = (c1*c + c2*self.cp + c3*self.cpp)/dt*d*dx \
-                 - dot(c*u_conv, grad(d))*dx \
-                 + flux*jump(d)*dS
-            
-            # Enforce Dirichlet BCs weakly
-            for dbc in self.dirichlet_bcs:
-                eq += dot(u_conv, n)*d*(c - dbc.func())*dbc.ds()
-        
-        a, L = dolfin.system(eq)
-        self.form_lhs = a
-        self.form_rhs = L
-        self.tensor_lhs = None
-        self.tensor_rhs = None
-    
-    def assemble_lhs(self):
-        if self.tensor_lhs is None:
-            self.tensor_lhs = dolfin.assemble(self.form_lhs)
-        else:
-            dolfin.assemble(self.form_lhs, tensor=self.tensor_lhs)
-        return self.tensor_lhs
-
-    def assemble_rhs(self):
-        if self.tensor_rhs is None:
-            self.tensor_rhs = dolfin.assemble(self.form_rhs)
-        else:
-            dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
-        return self.tensor_rhs
-

@@ -7,6 +7,7 @@ from .plotting import Plotting
 from .reporting import Reporting
 from .log import Log
 from .io import InputOutputHandling
+from .solution_properties import SolutionProperties
 from .setup import setup_simulation
 
 
@@ -27,6 +28,7 @@ class Simulation(object):
         self.reporting = Reporting(self)
         self.log = Log(self)
         self.io = InputOutputHandling(self)
+        self.solution_properties = SolutionProperties(self)
         
         # Several parts of the code wants to know these things,
         # so we keep them in a central place
@@ -86,17 +88,21 @@ class Simulation(object):
         self.reporting.report_timestep_value('tottime', newtime-self.starttime)
         self.prevtime = newtime
         
-        # Report the maximum velocity
-        vels = 0
-        for d in range(self.ndim):
-            vels += self.data['u%d' % d].vector().get_local()**2
-        vel_max = vels.max()**0.5
-        vel_max = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_max))
-        self.reporting.report_timestep_value('umax', vel_max)
+        # Report the solution properties
+        Co_max = self.solution_properties.courant_number().vector().max()
+        div_dS_f, div_dx_f = self.solution_properties.divergences()
+        div_dS = div_dS_f.vector().max()
+        div_dx = div_dx_f.vector().max()
+        mass = self.solution_properties.total_mass()
+        Ek, Ep = self.solution_properties.total_energy()
+        self.reporting.report_timestep_value('div', div_dx+div_dS)
+        self.reporting.report_timestep_value('Co', Co_max)
+        self.reporting.report_timestep_value('mass', mass)
+        self.reporting.report_timestep_value('Ek', Ek)
+        self.reporting.report_timestep_value('Ep', Ep)
         
         # Write fields to output file
         self.io.write_fields()
         
         # Write timestep report
         self.reporting.log_timestep_reports()
-

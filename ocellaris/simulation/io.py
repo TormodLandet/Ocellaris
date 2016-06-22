@@ -66,11 +66,15 @@ class InputOutputHandling():
         for name, description in (('p', 'Pressure'),
                                   ('p_hydrostatic', 'Hydrostatic pressure'),
                                   ('c', 'Colour function'),
+                                  ('rho', 'Density'),
                                   ('u0', 'X-component of velocity'),
                                   ('u1', 'Y-component of velocity'),
                                   ('u2', 'Z-component of velocity')):
-            if name in sim.data:
-                sim.data[name].rename(name, description)
+            if not name in sim.data:
+                continue
+            func = sim.data[name]
+            if hasattr(func, 'rename'):
+                func.rename(name, description)
                 
         # Dump initial state
         self.write_fields()
@@ -152,20 +156,20 @@ class InputOutputHandling():
         for d in range(self.simulation.ndim):
             ui = self.simulation.data['up%d' % d]
             self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
-        self.xdmf_file << (self._vel_func, t)
+        self.xdmf_file.write(self._vel_func, t)
         
         # Write the mesh velocities (used in ALE calculations)
         if self.simulation.mesh_morpher.active:
             for d in range(self.simulation.ndim):
                 ui = self.simulation.data['u_mesh%d' % d]
                 self._mesh_vel_func_assigners[d].assign(self._mesh_vel_func.sub(d), ui)
-            self.xdmf_file << (self._mesh_vel_func, t)
+            self.xdmf_file.write(self._mesh_vel_func, t)
         
         # Write scalar functions
-        for name in ('p', 'p_hydrostatic', 'c'):
+        for name in ('p', 'p_hydrostatic', 'c', 'rho'):
             if name in self.simulation.data:
                 func = self.simulation.data[name] 
-                self.xdmf_file << (func, t)
+                self.xdmf_file.write(func, t)
     
     def _write_hdf5(self, h5_file_name=None):
         """

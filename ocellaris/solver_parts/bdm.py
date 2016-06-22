@@ -6,7 +6,7 @@ from dolfin import dot, as_vector, dx, ds, dS, LocalSolver
 
 
 class VelocityBDMProjection():
-    def __init__(self, w, incompressibility_flux_type='central', D12=None):
+    def __init__(self, simulation, w, incompressibility_flux_type='central', D12=None):
         """
         Implement equation 4a and 4b in "Two new techniques for generating exactly
         incompressible approximate velocities" by Bernardo Cocburn (2009)
@@ -29,6 +29,9 @@ class VelocityBDMProjection():
         assert w.ufl_shape == (2,)
         assert incompressibility_flux_type in ('central', 'upwind')
         
+        dirichlet_bcs = simulation.data['dirichlet_bcs'].get('u', [])
+        neumann_bcs = simulation.data['neumann_bcs'].get('u', [])
+        
         mesh = w[0].function_space().mesh()
         V = VectorFunctionSpace(mesh, 'DG', k)
         n = FacetNormal(mesh)
@@ -43,7 +46,6 @@ class VelocityBDMProjection():
         u = TrialFunction(V)
         
         # The same fluxes that are used in the incompressibility equation
-        u_hat_ds = w
         if incompressibility_flux_type == 'central':    
             u_hat_dS = dolfin.avg(w)
         elif incompressibility_flux_type == 'upwind':
@@ -56,11 +58,16 @@ class VelocityBDMProjection():
         
         # Equation 1 - flux through the sides
         a = dot(u, n)*v1*ds
-        L = dot(u_hat_ds, n)*v1*ds
+        L = 0
         for R in '+-':
             a += dot(u(R), n(R))*v1(R)*dS
             L += dot(u_hat_dS, n(R))*v1(R)*dS
-        
+        for dbc in dirichlet_bcs:
+            # FIXME: integrate only over inlet portions
+            L += dot(dbc.func(), n)*v1*dbc.ds()
+        for nbc in neumann_bcs:
+            L += dot(w, n)*v1*nbc.ds()
+         
         # Equation 2 - internal shape
         a += dot(u, v2)*dx
         L += dot(w, v2)*dx

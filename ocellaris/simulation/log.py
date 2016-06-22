@@ -2,6 +2,10 @@ import dolfin
 
 
 ALWAYS_WRITE = 1e10
+NO_COLOR = '%s'
+RED = '\033[91m%s\033[0m'    # ANSI escape code Bright Red
+YELLOW = '\033[93m%s\033[0m' # ANSI escape code Bright Yellow
+
 
 class Log(object):
     # Names for the available log levels in Dolfin and Ocellaris
@@ -21,7 +25,7 @@ class Log(object):
         self.write_stdout = False
         self._the_log = []
     
-    def write(self, message, msg_log_level=ALWAYS_WRITE):
+    def write(self, message, msg_log_level=ALWAYS_WRITE, color=NO_COLOR):
         """
         Write a message to the log without checking the log level
         """
@@ -31,7 +35,7 @@ class Log(object):
             if self.write_log:
                 self.log_file.write(message + '\n')
             if self.write_stdout:
-                print message
+                print color % message
         
         # Store all messages irrespective of the log level
         self._the_log.append(message)
@@ -45,11 +49,11 @@ class Log(object):
     
     def error(self, message):
         "Log an error message"
-        self.write(message, dolfin.ERROR)
+        self.write(message, dolfin.ERROR, RED)
     
     def warning(self, message=''):
         "Log a warning message"
-        self.write(message, dolfin.WARNING)
+        self.write(message, dolfin.WARNING, YELLOW)
     
     def info(self, message=''):
         "Log an info message"
