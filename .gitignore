@@ -12,6 +12,7 @@ syntax: glob
 *.vtu
 *.msh
 *.xml
+results/
 results_*
 documentation/_build
 output/

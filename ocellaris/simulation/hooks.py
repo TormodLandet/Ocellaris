@@ -1,5 +1,7 @@
+import traceback
 import dolfin
 from ocellaris.utils import timeit
+
 
 class Hooks(object):
     def __init__(self, simulation):
@@ -57,6 +59,7 @@ class Hooks(object):
                 hook()
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                self.simulation.log.error(traceback.format_exc())
                 raise
     
     @timeit
@@ -74,6 +77,7 @@ class Hooks(object):
                 hook(timestep_number, t, dt)
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                self.simulation.log.error(traceback.format_exc())
                 raise
             finally:
                 t.stop()
@@ -92,6 +96,7 @@ class Hooks(object):
                 hook()
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                self.simulation.log.error(traceback.format_exc())
                 raise
             finally:
                 t.stop()
@@ -114,6 +119,7 @@ class Hooks(object):
                 hook(success)
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
+                self.simulation.log.error(traceback.format_exc())
                 raise
     
     def show_hook_info(self):

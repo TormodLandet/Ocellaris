@@ -65,6 +65,9 @@ def setup_simulation(simulation):
     # Initialise the fields
     if not simulation.restarted:
         setup_initial_conditions(simulation)
+        
+    # Setup the solution properties
+    simulation.solution_properties.setup()
     
     # Setup any hooks that may be present on the input file
     setup_hooks(simulation)
@@ -196,15 +199,20 @@ def setup_function_spaces(simulation):
     simulation.data['Vu'] = Vu
     simulation.data['Vp'] = Vp
     
-    # Setup colour function if it is needed in the simulation
+    # Setup multiphase related function spaces
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
-    if multiphase_model_name != 'SinglePhase':
-        # Get the function space name and polynomial degree
+    if multiphase_model_name == 'VariableDensity':
+        Vr_name = simulation.input.get_value('multiphase_solver/function_space_rho',
+                                             'Discontinuous Lagrange', 'string')
+        Pr = simulation.input.get_value('multiphase_solver/polynomial_degree_rho', 1, 'int')
+        Vrho = dolfin.FunctionSpace(mesh, Vr_name, Pr, constrained_domain=cd)
+        simulation.data['Vrho'] = Vrho
+    
+    elif multiphase_model_name != 'SinglePhase':
+        # Assume we need a colour function
         Vc_name = simulation.input.get_value('multiphase_solver/function_space_colour',
                                              'Discontinuous Lagrange', 'string')
         Pc = simulation.input.get_value('multiphase_solver/polynomial_degree_colour', 0, 'int')
-        
-        # Create and store function space
         Vc = dolfin.FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
         simulation.data['Vc'] = Vc
         
@@ -221,18 +229,11 @@ def setup_physical_properties(simulation):
     # Get the density and viscosity properties from the multi phase model
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
     multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
-    simulation.data['rho'] = multiphase_model.get_density(0)
-    simulation.data['nu'] = multiphase_model.get_laminar_kinematic_viscosity(0)
-    simulation.data['mu'] = multiphase_model.get_laminar_dynamic_viscosity(0)
     simulation.multi_phase_model = multiphase_model
     
-    # Previous and forcasted values of the fluid parameters
-    simulation.data['rho_old'] = multiphase_model.get_density(-1)
-    simulation.data['rho_star'] = multiphase_model.get_density(1)
-    simulation.data['nu_old'] = multiphase_model.get_laminar_kinematic_viscosity(-1)
-    simulation.data['nu_star'] = multiphase_model.get_laminar_kinematic_viscosity(1)
-    simulation.data['mu_old'] = multiphase_model.get_laminar_dynamic_viscosity(-1)
-    simulation.data['mu_star'] = multiphase_model.get_laminar_dynamic_viscosity(1)
+    simulation.data['rho'] = simulation.multi_phase_model.get_density()
+    simulation.data['nu'] = simulation.multi_phase_model.get_laminar_kinematic_viscosity()
+    simulation.data['mu'] = simulation.multi_phase_model.get_laminar_dynamic_viscosity()
 
 
 def setup_boundary_conditions(simulation):
@@ -263,7 +264,7 @@ def setup_initial_conditions(simulation):
             ocellaris_error('Invalid initial condition',
                             'You have given initial conditions for %r but this does '
                             'not seem to be a previous or pressure field.\n\n'
-                            'Valid names: up0, up1, ... , p, cp, ...' % name)
+                            'Valid names: up0, up1, ... , p, cp, rp, ...' % name)
         
         if not 'cpp_code' in info:
             ocellaris_error('Invalid initial condition',
