@@ -9,7 +9,8 @@ class CoupledEquations(object):
     def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
                  use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator, 
                  pressure_continuity_factor, velocity_continuity_factor_D12,
-                 include_hydrostatic_pressure, incompressibility_flux_type):
+                 include_hydrostatic_pressure, incompressibility_flux_type,
+                 implicit_convection=True):
         """
         This class assembles the coupled Navier-Stokes equations, both CG and DG
         
@@ -26,6 +27,7 @@ class CoupledEquations(object):
         self.velocity_continuity_factor_D12 = velocity_continuity_factor_D12
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
         self.incompressibility_flux_type = incompressibility_flux_type
+        self.implicit_convection = implicit_convection
 
         assert self.incompressibility_flux_type in ('central', 'upwind')
         
@@ -86,6 +88,7 @@ class CoupledEquations(object):
         v = dolfin.as_vector(vlist)
         p = uc[ndim]
         q = vc[ndim]
+        ucei = u if self.implicit_convection else u_conv
         
         c1, c2, c3 = sim.data['time_coeffs']
         dt = sim.data['dt']
@@ -107,17 +110,18 @@ class CoupledEquations(object):
         eq = 0
         
         # ALE mesh velocities
+        u_mesh = dolfin.Constant([0]*sim.ndim)
         if sim.mesh_morpher.active:
             u_mesh = sim.data['u_mesh']
             
             # Modification of the convective velocity
-            u_conv -= u_mesh
-            
-            cvol_new = dolfin.CellVolume(mesh)
-            cvol_old = sim.data['cvolp']
+            #u_conv -= u_mesh
+            eq -= dot(div(rhos*dolfin.outer(u, u_mesh)), v)*dx
             
             # Divergence of u should balance expansion/contraction of the cell K
-            # ∇⋅u = -∂K/∂t       (See below for definition of the ∇⋅u term)  
+            # ∇⋅u = -∂x/∂t       (See below for definition of the ∇⋅u term)
+            cvol_new = dolfin.CellVolume(mesh)
+            cvol_old = sim.data['cvolp']  
             eq += (cvol_new - cvol_old)/dt*q*dx
         
         if self.vel_is_discontinuous:
@@ -152,7 +156,12 @@ class CoupledEquations(object):
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
-                eq += div(rhos*u[d]*u_conv)*v[d]*dx
+                eq += div(rhos*ucei[d]*u_conv)*v[d]*dx
+                
+                if sim.mesh_morpher.active:
+                    ud = up
+                    um = -u_mesh
+                    eq += div(rhos*ud*um)*v[d]*dx
                 
                 # Diffusion
                 # -∇⋅μ(∇u)
@@ -201,10 +210,19 @@ class CoupledEquations(object):
                 
                 # Convection:
                 # -w⋅∇(ρu)
-                flux_nU = rhos*u[d]*w_nU
+                flux_nU = rhos*ucei[d]*w_nU
                 flux = jump(flux_nU)
-                eq -= rhos*u[d]*div(v[d]*u_conv)*dx
+                eq -= rhos*ucei[d]*div(v[d]*u_conv)*dx
                 eq += flux*jump(v[d])*dS
+                
+                if False:#sim.mesh_morpher.active:
+                    ud = u[d]
+                    um = -u_mesh
+                    u_mesh_nU = (dot(um, n) + abs(dot(um, n)))/2.0
+                    flux_mesh_nU = rhos*ud*u_mesh_nU
+                    flux_mesh = jump(flux_mesh_nU)
+                    eq -= rhos*ud*div(v[d]*um)*dx
+                    eq += flux_mesh*jump(v[d])*dS
                 
                 # Diffusion:
                 # -∇⋅∇u
@@ -253,7 +271,7 @@ class CoupledEquations(object):
                         eq += q*u_bc*n[d]*dbc.ds()
                     
                     # Convection
-                    eq += rhos*u[d]*w_nU*v[d]*dbc.ds()
+                    eq += rhos*ucei[d]*w_nU*v[d]*dbc.ds()
                     eq += rhos*u_bc*w_nD*v[d]*dbc.ds()
                     
                     # SIPG for -∇⋅μ∇u
@@ -273,15 +291,15 @@ class CoupledEquations(object):
                 for nbc in neumann_bcs:
                     # Divergence free criterion
                     if self.use_grad_q_form:
-                        eq += q*u[d]*n[d]*dbc.ds()
+                        eq += q*u[d]*n[d]*nbc.ds()
                     else:
                         eq -= q*u[d]*n[d]*nbc.ds()
                     
                     # Convection
-                    eq += rhos*u[d]*w_nU*v[d]*nbc.ds()
+                    eq += rhos*ucei[d]*w_nU*v[d]*nbc.ds()
                     
                     # Diffusion
-                    eq -= mus*nbc.func()*v[d]*dbc.ds()
+                    eq -= mus*nbc.func()*v[d]*nbc.ds()
                     
                     # Pressure
                     if not self.use_grad_p_form:

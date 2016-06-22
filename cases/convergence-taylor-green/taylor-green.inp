@@ -25,11 +25,21 @@ mesh:
     endx: 2
     endy: 2
     diagonal: left/right
-    prescribed_velocity:
+    _prescribed_velocity:
         type: CppCodedValue
         cpp_code:
-        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
-        -   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
+        # A divergence free mesh deformation field which is zero at the boundaries
+        #-    cos(pi/2*x[1])*sin(pi/2*x[1])*pow(sin(pi/2*x[0]), 2.0)*sin(pi/2*t)*0.05
+        #-   -cos(pi/2*x[0])*sin(pi/2*x[0])*pow(sin(pi/2*x[1]), 2.0)*sin(pi/2*t)*0.05
+        # Another divergence free mesh deformation field
+        #-   -cos(pi/2*x[0])*sin(pi/2*x[1])*sin(pi/2*t)*0.05
+        #-    sin(pi/2*x[0])*cos(pi/2*x[1])*sin(pi/2*t)*0.05
+        # Diagonal displacement
+        - sin(pi/2*t)*0.05
+        - sin(pi/2*t)*0.05
+        # A non-divergence free mesh deformation field
+        #-   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
+        #-   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
 
 # Periodic boundary conditions. Not supported in FEniCS 1.5 for DG. Works for CG
 _boundary_conditions:
