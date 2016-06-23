@@ -1,0 +1,83 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2016-06-23
+    description: |
+        Implements the MMS test from Guermond & Salgado (2011), an exact solution
+        (with a given rhs) for the variable density incompressible Navier-Stokes
+        equations 
+        
+
+physical_properties:
+    g: [0, 0]
+    nu: 1e-6
+    rho_min: 1.0
+    rho_max: 3.0
+
+mesh:
+    type: XML
+    mesh_file: disk.xml
+
+
+# Dirichlet boundary conditions for u, Neumann for p
+boundary_conditions:
+-   name: walls
+    selector: code
+    inside_code: on_boundary
+    u:
+        type: CppCodedValue
+        cpp_code:
+        -   -x[1]*cos(t)
+        -   +x[0]*cos(t)
+    p:
+        type: ConstantGradient
+        value: 0
+
+initial_conditions:
+    up0:
+        cpp_code: -x[1]*cos(t)
+    up1:
+        cpp_code: +x[0]*cos(t)
+    upp0:
+        cpp_code: -x[1]*cos(t-dt)
+    upp1:
+        cpp_code: +x[0]*cos(t-dt)
+    p:
+        cpp_code: sin(x[0])*sin(x[1])*sin(t)
+    rho_p:
+        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) + sin(t))
+        
+momentum_sources:
+-   name: MMS
+    degree: 3
+    cpp_code:
+    -   (x[1]*sin(t) - x[0]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) + sin(t))) + cos(x[0])*sin(x[1])*sin(t)
+    -   -(x[0]*sin(t) + x[1]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) + sin(t))) + sin(x[0])*cos(x[1])*sin(t)
+
+time:
+    dt: overridden in script
+    tmax: overridden in script
+
+output:
+    prefix: variable_density_convergence
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: overridden in script
+    xdmf_write_interval: 0
+
+multiphase_solver:
+    type: VariableDensity
+    function_space_rho: DG
+    polynomial_degree_rho: 1
+
+solver:
+    type: Coupled
+    num_inner_iter: 100
+    allowable_error_inner: 1e-6
+    polynomial_degree_velocity: overridden in script
+    polynomial_degree_pressure: overridden in script
+    function_space_velocity: DG
+    function_space_pressure: DG
