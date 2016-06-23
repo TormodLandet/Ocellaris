@@ -70,6 +70,7 @@ class _ModuleCache(object):
 
 _MODULES = _ModuleCache()
 _MODULES.add_module('gradient_reconstruction', 'gradient_reconstruction', ['gradient_reconstruction.h'], [])
+_MODULES.add_module('slope_limiter_basic', 'slope_limiter', ['slope_limiter_basic.h'], [])
 
 def load_module(name, reload=False):
     """
