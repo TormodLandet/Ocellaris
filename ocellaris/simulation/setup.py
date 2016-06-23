@@ -2,7 +2,8 @@ import time
 import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.postprocess import setup_probes
-from ocellaris.utils import debug_console_hook, ocellaris_error, ocellaris_interpolate, log_timings, OcellarisConstant, RunnablePythonString
+from ocellaris.utils import debug_console_hook, ocellaris_error, ocellaris_interpolate, log_timings
+from ocellaris.utils import OcellarisConstant, RunnablePythonString, OcellarisCppExpression
 from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
 
 
@@ -53,6 +54,9 @@ def setup_simulation(simulation):
     # before creating the solver as the solver needs
     # the Neumann conditions to define weak forms
     setup_boundary_conditions(simulation)
+            
+    # Create momentum sources (usefull for MMS tests etc)
+    setup_sources(simulation)
     
     # Create the solver
     simulation.log.info('Creating Navier-Stokes solver')
@@ -216,6 +220,10 @@ def setup_function_spaces(simulation):
         Vc = dolfin.FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
         simulation.data['Vc'] = Vc
         
+    for name, V in simulation.data.items():
+        if isinstance(V, dolfin.FunctionSpace):
+            simulation.log.info('    Function space %s has dimension %d' % (name, V.dim()))
+
 
 def setup_physical_properties(simulation):
     """
@@ -250,6 +258,26 @@ def setup_boundary_conditions(simulation):
         region.create_boundary_conditions()
 
 
+def setup_sources(simulation):
+    """
+    Setup the momentum sources
+    """
+    simulation.log.info('Creating sources')
+    
+    ms = simulation.input.get_value('momentum_sources', {}, 'list(dict)')
+    sources = []
+    for i in range(len(ms)):
+        name = simulation.input.get_value('momentum_sources/%d/name' % i, required_type='string')
+        degree = simulation.input.get_value('momentum_sources/%d/degree' % i, required_type='int')
+        cpp_code = simulation.input.get_value('momentum_sources/%d/cpp_code' % i, required_type='list(string)')
+        description = 'momentum source %r' % name
+        simulation.log.info('    C++ %s' % description)
+        
+        expr = OcellarisCppExpression(simulation, cpp_code, description, degree, update=True)
+        sources.append(expr)
+    simulation.data['momentum_sources'] = sources
+
+
 def setup_initial_conditions(simulation):
     """
     Setup the initial values for the fields
@@ -264,7 +292,7 @@ def setup_initial_conditions(simulation):
             ocellaris_error('Invalid initial condition',
                             'You have given initial conditions for %r but this does '
                             'not seem to be a previous or pressure field.\n\n'
-                            'Valid names: up0, up1, ... , p, cp, rp, ...' % name)
+                            'Valid names: up0, up1, ... , p, cp, rho_p, ...' % name)
         
         if not 'cpp_code' in info:
             ocellaris_error('Invalid initial condition',

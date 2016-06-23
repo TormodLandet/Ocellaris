@@ -69,9 +69,8 @@ class SolverCoupled(Solver):
         self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
-            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'],
-                incompressibility_flux_type=self.incompressibility_flux_type,
-                D12=D12)
+            self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
+                incompressibility_flux_type=self.incompressibility_flux_type, D12=D12)
         
         # Store number of iterations
         self.niters = None

@@ -71,6 +71,7 @@ class CoupledEquations(object):
         This implementation assembles the full LHS and RHS each time they are needed
         """
         sim = self.simulation
+        mpm = sim.multi_phase_model
         mesh = sim.data['mesh']
         Vcoupled = sim.data['Vcoupled']
         u_conv = sim.data['u_conv']
@@ -95,12 +96,13 @@ class CoupledEquations(object):
         g = sim.data['g']
         n = dolfin.FacetNormal(mesh)
         
-        # Fluid properties at t^{n}, t^{n-1} and t^{n+1}*
-        rhos = sim.data['rho_star']
-        nus = sim.data['nu_star']
-        mus = sim.data['mu_star']
-        rho = sim.data['rho']
-        rho_old = sim.data['rho_old']
+        # Fluid properties at t^{n}, t^{n-1} and t^{n-2}
+        rho = mpm.get_density(0)
+        rho_p = mpm.get_density(-1)
+        rho_pp = mpm.get_density(-2)
+        nu = mpm.get_laminar_kinematic_viscosity()
+        mu = mpm.get_laminar_dynamic_viscosity()
+        rho_star = (rho + rho_p)/2
         
         # Hydrostatic pressure correction
         if self.include_hydrostatic_pressure:
@@ -116,7 +118,7 @@ class CoupledEquations(object):
             
             # Modification of the convective velocity
             #u_conv -= u_mesh
-            eq -= dot(div(rhos*dolfin.outer(u, u_mesh)), v)*dx
+            eq -= dot(div(rho*dolfin.outer(u, u_mesh)), v)*dx
             
             # Divergence of u should balance expansion/contraction of the cell K
             # ∇⋅u = -∂x/∂t       (See below for definition of the ∇⋅u term)
@@ -125,7 +127,7 @@ class CoupledEquations(object):
             eq += (cvol_new - cvol_old)/dt*q*dx
         
         if self.vel_is_discontinuous:
-            penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nus)
+            penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nu)
             
             # Upwind and downwind velocities
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
@@ -152,24 +154,24 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂u/∂t
-                eq += (rhos*c1*u[d] + rho*c2*up + rho_old*c3*upp)/dt*v[d]*dx
+                eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
-                eq += div(rhos*ucei[d]*u_conv)*v[d]*dx
+                eq += div(rho*ucei[d]*u_conv)*v[d]*dx
                 
                 if sim.mesh_morpher.active:
                     ud = up
                     um = -u_mesh
-                    eq += div(rhos*ud*um)*v[d]*dx
+                    eq += div(rho*ud*um)*v[d]*dx
                 
                 # Diffusion
                 # -∇⋅μ(∇u)
-                eq += mus*dot(grad(u[d]), grad(v[d]))*dx
+                eq += mu*dot(grad(u[d]), grad(v[d]))*dx
                 
                 # -∇⋅μ(∇u)^T
                 if self.use_stress_divergence_form:
-                    eq += mus*dot(u.dx(d), grad(v[d]))*dx
+                    eq += mu*dot(u.dx(d), grad(v[d]))*dx
                 
                 # Pressure
                 # ∇p
@@ -177,7 +179,11 @@ class CoupledEquations(object):
                 
                 # Body force (gravity)
                 # ρ g
-                eq -= rhos*g[d]*v[d]*dx
+                eq -= rho*g[d]*v[d]*dx
+                
+                # Other sources
+                for f in sim.data['momentum_sources']:
+                    eq -= f[d]*v[d]*dx
                 
                 # Neumann boundary conditions
                 neumann_bcs_pressure = sim.data['neumann_bcs'].get('p', [])
@@ -206,40 +212,40 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂(ρu)/∂t
-                eq += (rhos*c1*u[d] + rho*c2*up + rho_old*c3*upp)/dt*v[d]*dx
+                eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
                 
                 # Convection:
                 # -w⋅∇(ρu)
-                flux_nU = rhos*ucei[d]*w_nU
+                flux_nU = rho*ucei[d]*w_nU
                 flux = jump(flux_nU)
-                eq -= rhos*ucei[d]*div(v[d]*u_conv)*dx
+                eq -= rho*ucei[d]*div(v[d]*u_conv)*dx
                 eq += flux*jump(v[d])*dS
                 
                 if False:#sim.mesh_morpher.active:
                     ud = u[d]
                     um = -u_mesh
                     u_mesh_nU = (dot(um, n) + abs(dot(um, n)))/2.0
-                    flux_mesh_nU = rhos*ud*u_mesh_nU
+                    flux_mesh_nU = rho*ud*u_mesh_nU
                     flux_mesh = jump(flux_mesh_nU)
-                    eq -= rhos*ud*div(v[d]*um)*dx
+                    eq -= rho*ud*div(v[d]*um)*dx
                     eq += flux_mesh*jump(v[d])*dS
                 
                 # Diffusion:
                 # -∇⋅∇u
-                eq += mus*dot(grad(u[d]), grad(v[d]))*dx
+                eq += mu*dot(grad(u[d]), grad(v[d]))*dx
                 
                 # Symmetric Interior Penalty method for -∇⋅μ∇u
-                eq -= avg(mus)*dot(n('+'), avg(grad(u[d])))*jump(v[d])*dS
-                eq -= avg(mus)*dot(n('+'), avg(grad(v[d])))*jump(u[d])*dS
+                eq -= avg(mu)*dot(n('+'), avg(grad(u[d])))*jump(v[d])*dS
+                eq -= avg(mu)*dot(n('+'), avg(grad(v[d])))*jump(u[d])*dS
                 
                 # Symmetric Interior Penalty coercivity term
                 eq += penalty_dS*jump(u[d])*jump(v[d])*dS
                 
                 # -∇⋅μ(∇u)^T
                 if self.use_stress_divergence_form:
-                    eq += mus*dot(u.dx(d), grad(v[d]))*dx
-                    eq -= avg(mus)*dot(n('+'), avg(u.dx(d)))*jump(v[d])*dS
-                    eq -= avg(mus)*dot(n('+'), avg(v.dx(d)))*jump(u[d])*dS
+                    eq += mu*dot(u.dx(d), grad(v[d]))*dx
+                    eq -= avg(mu)*dot(n('+'), avg(u.dx(d)))*jump(v[d])*dS
+                    eq -= avg(mu)*dot(n('+'), avg(v.dx(d)))*jump(u[d])*dS
                 
                 # Pressure
                 # ∇p
@@ -256,7 +262,11 @@ class CoupledEquations(object):
                 
                 # Body force (gravity)
                 # ρ g
-                eq -= rhos*g[d]*v[d]*dx
+                eq -= rho*g[d]*v[d]*dx
+                
+                # Other sources
+                for f in sim.data['momentum_sources']:
+                    eq -= f[d]*v[d]*dx
                 
                 # Dirichlet boundary
                 dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
@@ -271,13 +281,13 @@ class CoupledEquations(object):
                         eq += q*u_bc*n[d]*dbc.ds()
                     
                     # Convection
-                    eq += rhos*ucei[d]*w_nU*v[d]*dbc.ds()
-                    eq += rhos*u_bc*w_nD*v[d]*dbc.ds()
+                    eq += rho*ucei[d]*w_nU*v[d]*dbc.ds()
+                    eq += rho*u_bc*w_nD*v[d]*dbc.ds()
                     
                     # SIPG for -∇⋅μ∇u
-                    eq -= mus*dot(n, grad(u[d]))*v[d]*dbc.ds()
-                    eq -= mus*dot(n, grad(v[d]))*u[d]*dbc.ds()
-                    eq += mus*dot(n, grad(v[d]))*u_bc*dbc.ds()
+                    eq -= mu*dot(n, grad(u[d]))*v[d]*dbc.ds()
+                    eq -= mu*dot(n, grad(v[d]))*u[d]*dbc.ds()
+                    eq += mu*dot(n, grad(v[d]))*u_bc*dbc.ds()
                     
                     # Weak Dirichlet
                     eq += penalty_ds*(u[d] - u_bc)*v[d]*dbc.ds()
@@ -296,10 +306,10 @@ class CoupledEquations(object):
                         eq -= q*u[d]*n[d]*nbc.ds()
                     
                     # Convection
-                    eq += rhos*ucei[d]*w_nU*v[d]*nbc.ds()
+                    eq += rho*ucei[d]*w_nU*v[d]*nbc.ds()
                     
                     # Diffusion
-                    eq -= mus*nbc.func()*v[d]*nbc.ds()
+                    eq -= mu*nbc.func()*v[d]*nbc.ds()
                     
                     # Pressure
                     if not self.use_grad_p_form:

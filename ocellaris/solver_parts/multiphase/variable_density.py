@@ -2,7 +2,8 @@
 from __future__ import division
 import dolfin
 from dolfin import Function, Constant
-from . import register_multi_phase_model, MultiPhaseModel 
+from . import register_multi_phase_model, MultiPhaseModel
+from ocellaris.solver_parts import SlopeLimiter
 from ocellaris.utils import linear_solver_from_input
 from .advection_equation import AdvectionEquation
 
@@ -26,6 +27,7 @@ class VariableDensityModel(MultiPhaseModel):
         visocisty mu (depending on rho)        
         """
         self.simulation = simulation
+        simulation.log.info('Creating variable density multiphase model')
         
         # Define function space and solution function
         V = simulation.data['Vrho']
@@ -43,8 +45,8 @@ class VariableDensityModel(MultiPhaseModel):
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'VariableDensityModel - update density field')
-
-        simulation.log.info('Creating variable density multiphase model')
+        
+        self.slope_limiter = SlopeLimiter(simulation, 'rho', self.rho)
     
     def on_simulation_start(self):
         """
@@ -59,9 +61,7 @@ class VariableDensityModel(MultiPhaseModel):
         # Coefficients for u, up and upp 
         self.time_coeffs = Constant([1, -1, 0])
         
-        
         # Make sure the convection scheme has something usefull in the first iteration
-        self.rho.assign(self.rho_p)
         self.rho.assign(self.rho_p)
         
         # Define equation for advection of the density
@@ -132,17 +132,18 @@ class VariableDensityModel(MultiPhaseModel):
         timer = dolfin.Timer('Ocellaris update rho')
         self.dt.assign(dt)
         
+        if it != 1:
+            # Update the previous values
+            self.rho_pp.assign(self.rho_p)
+            self.rho_p.assign(self.rho)
+            self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
+        
         A = self.eq.assemble_lhs()
         b = self.eq.assemble_rhs()
         self.solver.solve(A, self.rho.vector(), b)
+        self.slope_limiter.run()
+        
         self.simulation.reporting.report_timestep_value('min(rho)', self.rho.vector().min())
         self.simulation.reporting.report_timestep_value('max(rho)', self.rho.vector().max())
-        
-        # Update the previous values for the next time step
-        self.rho_pp.assign(self.rho_p)
-        self.rho_p.assign(self.rho)
-        
-        # Use second order backward time difference after the first time step
-        self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
         
         timer.stop()
