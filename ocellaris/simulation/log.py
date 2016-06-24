@@ -70,9 +70,10 @@ class Log(object):
         log_name = self.simulation.input.get_output_file_path('output/log_name', None)
         log_on_all_ranks = self.simulation.input.get_value('output/log_on_all_ranks', False, 'bool')
         stdout_on_all_ranks = self.simulation.input.get_value('output/stdout_on_all_ranks', False, 'bool')
+        stdout_enabled = self.simulation.input.get_value('output/stdout_enabled', True, 'bool')
         rank = self.simulation.rank
         
-        self.write_stdout = (rank == 0 or stdout_on_all_ranks)
+        self.write_stdout = (rank == 0 or stdout_on_all_ranks) and stdout_enabled
         self.write_log = False
         if log_name is not None:    
             if log_on_all_ranks and rank > 0:
