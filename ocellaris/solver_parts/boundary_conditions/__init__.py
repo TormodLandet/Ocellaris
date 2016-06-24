@@ -21,10 +21,9 @@ class BoundaryRegion(object):
         self.index = index
         self.conditions = {}
         
-        inp = simulation.input.get_value('boundary_conditions', required_type='list(dict)')[index]
-        self.name = inp['name']
-        self.selector_name = inp['selector']
-        self.input = inp
+        self.input = simulation.input.get_value('boundary_conditions/%d' % index, required_type='Input')
+        self.name = self.input.get_value('name', required_type='string')
+        self.selector_name = self.input.get_value('selector', required_type='string')
         
         # Let the default boundary marking 0 be for unmarked regions
         self.mark_id = index + 1
@@ -32,7 +31,7 @@ class BoundaryRegion(object):
         # Mark the region of the boundary covered by this boundary condition
         if self.selector_name == 'code':
             self.selector = RegionSelector(simulation)
-            code_string = inp['inside_code']
+            code_string = self.input.get_value('inside_code', required_type='string')
             self.selector.set_inside_code(code_string, self.name)
             try:
                 self.selector.mark(marker, self.mark_id)
@@ -49,7 +48,7 @@ class BoundaryRegion(object):
             # general be the same as the mesh facet region number
             array_mesh = mesh_facet_regions.array()
             array_ocellaris = marker.array() 
-            region_numbers = inp['mesh_facet_regions']
+            region_numbers = self.input.get_value('mesh_facet_regions', required_type='string')
             for num in region_numbers:
                 simulation.log.info('Applying boundary region number %d to mesh '
                                     'facet region number %d' %  (self.mark_id, num))

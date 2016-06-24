@@ -11,13 +11,21 @@ UNDEFINED = UndefinedParameter()
 
 
 class Input(collections.OrderedDict):
-    def __init__(self, simulation):
+    def __init__(self, simulation, values=None, basepath=''):
         """
         Holds the input values provided by the user
         """
-        super(Input, self).__init__()
+        if values:
+            super(Input, self).__init__(values.items())
+        else:
+            super(Input, self).__init__()
+        
         self.simulation = simulation
+        self.basepath = basepath
         self._already_logged = set()
+        
+        if basepath and not basepath.endswith('/'):
+            self.basepath = basepath + '/'
     
     def read_yaml(self, file_name=None, yaml_string=None):
         """
@@ -121,6 +129,9 @@ class Input(collections.OrderedDict):
             check_isinstance(d, basestring)
             # SWIG does not like Python 2 Unicode objects
             d = str(d)
+        elif required_type == 'Input':
+            check_isinstance(d, dict_types)
+            d = Input(self.simulation, d, basepath=pathstr)
         elif required_type == 'dict(string:any)':
             check_isinstance(d, dict_types)
             for key, val in d.items():
