@@ -2,7 +2,7 @@
 import dolfin
 from dolfin import FiniteElement, VectorElement, MixedElement, FunctionSpace, VectorFunctionSpace
 from dolfin import FacetNormal, TrialFunction, TestFunctions, Function 
-from dolfin import dot, as_vector, dx, ds, dS, LocalSolver
+from dolfin import dot, as_vector, dx, dS, LocalSolver
 
 
 class VelocityBDMProjection():
@@ -29,9 +29,6 @@ class VelocityBDMProjection():
         assert w.ufl_shape == (2,)
         assert incompressibility_flux_type in ('central', 'upwind')
         
-        dirichlet_bcs = simulation.data['dirichlet_bcs'].get('u', [])
-        neumann_bcs = simulation.data['neumann_bcs'].get('u', [])
-        
         mesh = w[0].function_space().mesh()
         V = VectorFunctionSpace(mesh, 'DG', k)
         n = FacetNormal(mesh)
@@ -57,17 +54,21 @@ class VelocityBDMProjection():
             u_hat_dS += dolfin.Constant([D12, D12])*dolfin.jump(w, n)
         
         # Equation 1 - flux through the sides
-        a = dot(u, n)*v1*ds
-        L = 0
+        a = L = 0
         for R in '+-':
             a += dot(u(R), n(R))*v1(R)*dS
             L += dot(u_hat_dS, n(R))*v1(R)*dS
-        for dbc in dirichlet_bcs:
-            # FIXME: integrate only over inlet portions
-            L += dot(dbc.func(), n)*v1*dbc.ds()
-        for nbc in neumann_bcs:
-            L += dot(w, n)*v1*nbc.ds()
-         
+        for d in range(2):
+            dirichlet_bcs = simulation.data['dirichlet_bcs']['u%d' % d]
+            neumann_bcs = simulation.data['neumann_bcs'].get('u%d' % d, [])
+            for dbc in dirichlet_bcs:
+                u_bc = dbc.func()
+                a += u[d]*n[d]*v1*dbc.ds()
+                L += u_bc*n[d]*v1*dbc.ds()
+            for nbc in neumann_bcs:
+                a += u[d]*n[d]*v1*nbc.ds()
+                L += w[d]*n[d]*v1*nbc.ds()
+        
         # Equation 2 - internal shape
         a += dot(u, v2)*dx
         L += dot(w, v2)*dx
