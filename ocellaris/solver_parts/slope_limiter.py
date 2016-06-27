@@ -233,14 +233,15 @@ class DoNothingSlopeLimiter(object):
         pass
 
 
-def SlopeLimiter(simulation, phi_name, phi):
-    method = simulation.input.get_value('slope_limiter/%s/method', LIMITER, 'string')
-    filter_method = simulation.input.get_value('slope_limiter/%s/filter', FILTER, 'string')
-    use_cpp = simulation.input.get_value('slope_limiter/%s/use_cpp', USE_CPP, 'boolean')
+def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_filter=FILTER, default_use_cpp=USE_CPP):
+    inp = simulation.input.get_value('slope_limiter/%s' % phi_name, {}, 'Input')
+    method = inp.get_value('method', default_limiter, 'string')
+    filter_method = inp.get_value('filter', default_filter, 'string')
+    use_cpp = inp.get_value('use_cpp', default_use_cpp, 'boolean')
     
     verify_key('slope limiter', method, _METHODS, '%s transport' % phi_name)
     
-    simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter, phi_name))
+    simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, phi_name))
     limiter = _METHODS[method](phi, filter_method, use_cpp)
     return limiter
 

@@ -98,6 +98,8 @@ class Input(collections.OrderedDict):
                     if not msg in self._already_logged:
                         self.simulation.log.debug(msg)
                         self._already_logged.add(msg)
+                    if required_type == 'Input':
+                        default_value = Input(self.simulation, default_value)
                     return default_value
             d = d[p]
         
