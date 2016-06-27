@@ -33,7 +33,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     sim.input.set_value('time/tmax', tmax)
     sim.input.set_value('solver/polynomial_degree_velocity', polydeg_u)
     sim.input.set_value('solver/polynomial_degree_pressure', polydeg_p)
-    sim.input.set_value('output/ocellaris_log_level', 'warning')
+    sim.input.set_value('output/stdout_enabled', False)
     
     if sim.input.get_value('solver/timestepping_method') == 'CN':
         sim.input.set_value('initial_conditions/p/cpp_code', '-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*(t+dt/2))/4') 

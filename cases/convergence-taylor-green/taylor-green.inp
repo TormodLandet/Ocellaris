@@ -94,7 +94,8 @@ output:
     prefix: taylor_green
     log_name: .log
     dolfin_log_level: warning
-    ocellaris_log_level: warning
+    ocellaris_log_level: info
+    stdout_enabled: overridden in script
     xdmf_write_interval: 0
 
 solver:
