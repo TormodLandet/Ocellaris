@@ -9,7 +9,7 @@ from ..solver_parts import HydrostaticPressure, VelocityBDMProjection
 
 
 # Default values, can be changed in the input file
-LU_SOLVER_1CPU = 'petsc'
+LU_SOLVER_1CPU = 'default'
 LU_SOLVER_NCPU = 'superlu_dist'
 LU_PARAMETERS = {}
 

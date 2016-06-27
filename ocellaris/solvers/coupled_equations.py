@@ -100,8 +100,8 @@ class CoupledEquations(object):
         rho = mpm.get_density(0)
         rho_p = mpm.get_density(-1)
         rho_pp = mpm.get_density(-2)
-        nu = mpm.get_laminar_kinematic_viscosity()
-        mu = mpm.get_laminar_dynamic_viscosity()
+        nu = mpm.get_laminar_kinematic_viscosity(0)
+        mu = mpm.get_laminar_dynamic_viscosity(0)
         rho_star = (rho + rho_p)/2
         
         # Hydrostatic pressure correction
