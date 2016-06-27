@@ -99,8 +99,9 @@ def load_mesh(simulation):
     """
     inp = simulation.input
     mesh_type = inp.get_value('mesh/type', required_type='string')
-    
     dolfin.parameters['ghost_mode'] = 'shared_vertex'
+    mesh_facet_regions = None
+    
     if mesh_type == 'Rectangle':
         simulation.log.info('Creating rectangular mesh')
         
@@ -115,7 +116,15 @@ def load_mesh(simulation):
         diagonal = inp.get_value('mesh/diagonal', 'right', required_type='string')
         
         mesh = dolfin.RectangleMesh(start, end, Nx, Ny, diagonal)
-        mesh_facet_regions = None
+        
+    elif mesh_type == 'UnitDisk':
+        simulation.log.info('Creating circular mesh')
+        
+        N = inp.get_value('mesh/N', required_type='int')
+        degree = inp.get_value('mesh/degree', 1, required_type='int')
+        gdim = inp.get_value('mesh/gdim', 2, required_type='int')
+        
+        mesh = dolfin.UnitDiscMesh(dolfin.mpi_comm_world(), N, degree, gdim)
     
     elif mesh_type == 'XML':
         simulation.log.info('Creating mesh from XML file')
@@ -155,12 +164,24 @@ def mark_boundaries(simulation):
     for index, _ in enumerate(simulation.input.get_value('boundary_conditions', required_type='list(dict)')):
         part = BoundaryRegion(simulation, marker, index, mesh_facet_regions)
         boundary.append(part)
+    
     simulation.data['boundary'] = boundary
     simulation.data['boundary_marker'] = marker
     
     # Create a boundary measure that is aware of the marked regions
-    ds = dolfin.Measure('ds')(subdomain_data=marker)
+    mesh = simulation.data['mesh']
+    ds = dolfin.Measure('ds', domain=mesh, subdomain_data=marker)
     simulation.data['ds'] = ds
+    
+    # Show region sizes
+    one = dolfin.Constant(1)
+    for region in boundary:
+        length = dolfin.assemble(one*ds(region.mark_id, domain=mesh))
+        pf = simulation.log.info if length > 0.0 else simulation.log.warning
+        pf('    Boundary region %s has size %f' % (region.name, length))
+    length0 = dolfin.assemble(one*ds(0, domain=mesh))
+    pf = simulation.log.info if length0 == 0.0 else simulation.log.warning
+    pf('    Boundary region UNMARKED has size %f' % length0)
 
 
 def setup_periodic_domain(simulation):
@@ -239,9 +260,9 @@ def setup_physical_properties(simulation):
     multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
     simulation.multi_phase_model = multiphase_model
     
-    simulation.data['rho'] = simulation.multi_phase_model.get_density()
-    simulation.data['nu'] = simulation.multi_phase_model.get_laminar_kinematic_viscosity()
-    simulation.data['mu'] = simulation.multi_phase_model.get_laminar_dynamic_viscosity()
+    simulation.data['rho'] = simulation.multi_phase_model.get_density(0)
+    simulation.data['nu'] = simulation.multi_phase_model.get_laminar_kinematic_viscosity(0)
+    simulation.data['mu'] = simulation.multi_phase_model.get_laminar_dynamic_viscosity(0)
 
 
 def setup_boundary_conditions(simulation):

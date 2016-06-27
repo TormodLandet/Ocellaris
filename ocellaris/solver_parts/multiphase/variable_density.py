@@ -51,12 +51,9 @@ class VariableDensityModel(MultiPhaseModel):
     def on_simulation_start(self):
         """
         This runs when the simulation starts. It does not run in __init__
-        since the solver needs the density and viscosity we define, and
+        since the N-S solver needs the density and viscosity we define, and
         we need the velocity that is defined by the solver
         """
-        # The time step (real value to be supplied later)
-        self.dt = Constant(1.0)
-        
         # Use first order backward time difference on the first time step
         # Coefficients for u, up and upp 
         self.time_coeffs = Constant([1, -1, 0])
@@ -78,7 +75,7 @@ class VariableDensityModel(MultiPhaseModel):
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))        
     
-    def get_density(self, k=0):
+    def get_density(self, k):
         """
         Return the function as defined on timestep t^{n+k}
         """
@@ -89,13 +86,13 @@ class VariableDensityModel(MultiPhaseModel):
         elif k == -2:
             return self.rho_pp
     
-    def get_laminar_kinematic_viscosity(self, k=0):
+    def get_laminar_kinematic_viscosity(self, k):
         """
         It is assumed that the kinematic viscosity is constant
         """
         return Constant(self.nu)
     
-    def get_laminar_dynamic_viscosity(self, k=0):
+    def get_laminar_dynamic_viscosity(self, k):
         """
         Calculate the blended dynamic viscosity function as a function
         of the (constant) nu and (variable) rho
@@ -130,7 +127,6 @@ class VariableDensityModel(MultiPhaseModel):
         using the given divergence free velocity field
         """
         timer = dolfin.Timer('Ocellaris update rho')
-        self.dt.assign(dt)
         
         if it != 1:
             # Update the previous values

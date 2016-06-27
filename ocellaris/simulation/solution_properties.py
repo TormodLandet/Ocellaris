@@ -97,8 +97,8 @@ class SolutionProperties(object):
         """
         Calculate kinetic and potential energy
         """
-        self._form_E_k = 1/2*rho*dot(vel, vel)*dx
-        self._form_E_p = rho*dot(-gvec, x0)*dx
+        self._form_E_k = 1/2*rho*dot(vel, vel)*dx(domain=self.mesh)
+        self._form_E_p = rho*dot(-gvec, x0)*dx(domain=self.mesh)
         
     def _setup_mass(self, rho):
         """
