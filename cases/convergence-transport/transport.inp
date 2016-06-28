@@ -1,0 +1,69 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2016-06-28
+    description: |
+        Tests the multiphase solver in a known velocity field
+        (same known fields as in the variable density disk case) 
+        
+
+physical_properties:
+    g: [0, 0]
+    nu: 1e-6
+    rho_min: 1.0
+    rho_max: 3.0
+
+mesh:
+    #type: XML
+    #mesh_file: disk.xml
+    type: UnitDisk
+    N: overridden in script
+    degree: 1
+
+initial_conditions:
+    up0:
+        cpp_code: -x[1]*cos(t)
+    up1:
+        cpp_code: +x[0]*cos(t)
+    rho_p:
+        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+    rho_pp:
+        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t-dt))
+
+boundary_conditions:
+-   name: all
+    selector: code
+    inside_code: on_boundary
+    rho:
+        type: CppCodedValue
+        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+time:
+    dt: overridden in script
+    tmax: overridden in script
+
+output:
+    prefix: transport_convergence
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    stdout_enabled: overridden in script
+    xdmf_write_interval: 0
+
+multiphase_solver:
+    type: VariableDensity
+    function_space_rho: DG
+    polynomial_degree_rho: overridden in script
+
+slope_limiter:
+    rho:
+        method: none
+
+solver:
+    type: AnalyticalSolution
+    polynomial_degree_velocity: 2
+    polynomial_degree_pressure: 1
+    function_space_velocity: DG
+    function_space_pressure: DG

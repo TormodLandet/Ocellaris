@@ -51,7 +51,6 @@ class AnalyticalSolution(Solver):
         """
         Read initial conditions for up0, up1 and p to update the fields
         """
-        print 'analytical solution ...'
         sim = self.simulation
         
         funcs = {'up0': sim.data['u0'] if 'u0' in sim.data else None,

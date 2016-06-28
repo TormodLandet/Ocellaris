@@ -12,7 +12,7 @@ from .advection_equation import AdvectionEquation
 SOLVER = 'gmres'
 PRECONDITIONER = 'default'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'relative_tolerance': 1e-10,
+                     'relative_tolerance': 1e-15,
                      'absolute_tolerance': 1e-15}
 
 
@@ -54,12 +54,13 @@ class VariableDensityModel(MultiPhaseModel):
         since the N-S solver needs the density and viscosity we define, and
         we need the velocity that is defined by the solver
         """
-        # Use first order backward time difference on the first time step
-        # Coefficients for u, up and upp 
-        self.time_coeffs = Constant([1, -1, 0])
-        
-        # Make sure the convection scheme has something usefull in the first iteration
-        self.rho.assign(self.rho_p)
+        if dolfin.norm(self.rho_pp.vector()) > 0:
+            # Use BDF2 from the start
+            self.time_coeffs = Constant([3/2, -2, 1/2])
+            self.simulation.log.info('Using second order timestepping from the start in VariableDensity')
+        else:
+            # Use backward euler (BDF1) for timestep 1 
+            self.time_coeffs = Constant([1, -1, 0])
         
         # Define equation for advection of the density
         #    ∂ρ/∂t +  ∇⋅(ρ u) = 0   
@@ -73,7 +74,7 @@ class VariableDensityModel(MultiPhaseModel):
         self.solver = linear_solver_from_input(self.simulation, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)
         
         # Add some debugging plots to show results in 2D
-        self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))        
+        self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))
     
     def get_density(self, k):
         """

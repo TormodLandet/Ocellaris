@@ -59,8 +59,8 @@ def setup_simulation(simulation):
     setup_sources(simulation)
     
     # Create the solver
-    simulation.log.info('Creating Navier-Stokes solver')
     solver_name = simulation.input.get_value('solver/type', required_type='string')
+    simulation.log.info('Creating Navier-Stokes solver %s' % solver_name)
     simulation.solver = get_solver(solver_name)(simulation)
     
     # Setup postprocessing probes
@@ -243,7 +243,10 @@ def setup_function_spaces(simulation):
         
     for name, V in simulation.data.items():
         if isinstance(V, dolfin.FunctionSpace):
-            simulation.log.info('    Function space %s has dimension %d' % (name, V.dim()))
+            family = V.ufl_element().family()
+            degree = V.ufl_element().degree()
+            simulation.log.info('    Function space %s has dimension %d (%s degree %d)' % 
+                                (name, V.dim(), family, degree))
 
 
 def setup_physical_properties(simulation):
