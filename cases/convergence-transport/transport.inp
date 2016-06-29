@@ -18,10 +18,10 @@ physical_properties:
 
 mesh:
     #type: XML
-    #mesh_file: disk.xml
-    type: UnitDisk
+    #mesh_file: disc.xml
+    type: UnitDisc
     N: overridden in script
-    degree: 1
+    degree: 2
 
 initial_conditions:
     up0:
@@ -39,7 +39,7 @@ boundary_conditions:
     inside_code: on_boundary
     rho:
         type: CppCodedValue
-        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+        cpp_code: 0 #2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
 time:
     dt: overridden in script
     tmax: overridden in script
@@ -48,9 +48,10 @@ output:
     prefix: transport_convergence
     log_name: .log
     dolfin_log_level: warning
-    ocellaris_log_level: info
+    ocellaris_log_level: debug
     stdout_enabled: overridden in script
     xdmf_write_interval: 0
+    solution_properties: yes
 
 multiphase_solver:
     type: VariableDensity
@@ -65,5 +66,5 @@ solver:
     type: AnalyticalSolution
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
-    function_space_velocity: DG
-    function_space_pressure: DG
+    function_space_velocity: CG
+    function_space_pressure: CG

@@ -2,11 +2,12 @@ from __future__ import division, print_function
 import time, subprocess, os
 from math import log
 import numpy
+from matplotlib import pyplot
 import dolfin
 from ocellaris import Simulation, setup_simulation, run_simulation
 
 
-def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
+def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     """
     Run Ocellaris and return L2 & H1 errors in the last time step
     """
@@ -14,22 +15,25 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     
     # Setup and run simulation
     sim = Simulation()
-    sim.input.read_yaml('disk.inp')
+    sim.input.read_yaml('disc.inp')
     
-    # Create unstructured mesh with gmsh
-    cmd1 = ['gmsh', '-string', 'lc = %f;' % (2/N),
-            '-o', 'disk_%d.msh' % N, '-2', 'disk.geo']
-    cmd2 = ['dolfin-convert', 'disk_%d.msh' % N, 'disk.xml']
-    with open('/dev/null', 'w') as devnull:
-        for cmd in (cmd1, cmd2):
-            say(' '.join(cmd))
-            subprocess.call(cmd, stdout=devnull, stderr=devnull)
-
+    if sim.input.get_value('mesh/type') == 'XML':
+        # Create unstructured mesh with gmsh
+        cmd1 = ['gmsh', '-string', 'lc = %f;' % (3.14/N),
+                '-o', 'disc_%d.msh' % N, '-2', 'disc.geo']
+        cmd2 = ['dolfin-convert', 'disc_%d.msh' % N, 'disc.xml']
+        with open('/dev/null', 'w') as devnull:
+            for cmd in (cmd1, cmd2):
+                say(' '.join(cmd))
+                subprocess.call(cmd, stdout=devnull, stderr=devnull)
+    else:
+        sim.input.set_value('mesh/N', N//2)
+    
     sim.input.set_value('time/dt', dt)
     sim.input.set_value('time/tmax', tmax)
     sim.input.set_value('solver/polynomial_degree_velocity', polydeg_u)
     sim.input.set_value('solver/polynomial_degree_pressure', polydeg_p)
-    sim.input.set_value('output/ocellaris_log_level', 'warning')
+    sim.input.set_value('output/stdout_enabled', False)
     
     say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'), sim.input.get_value('solver/function_space_velocity')))
     t1 = time.time()
@@ -66,55 +70,50 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     err_u1_H1 = calc_err(sim.data['u1'], u1a, 'H1')
     err_p_H1 = calc_err(sim.data['p'], pa, 'H1')
     
+    mesh = sim.data['mesh']
+    n = dolfin.FacetNormal(mesh)
+    
     reports = sim.reporting.timestep_xy_reports
     say('Num time steps:', sim.timestep)
+    say('Num cells:', mesh.num_cells())
     say('Co_max:', numpy.max(reports['Co']))
     say('rho_min went from %r to %r' % (reports['min(rho)'][0], reports['min(rho)'][-1]))
     say('rho_max went from %r to %r' % (reports['max(rho)'][0], reports['max(rho)'][-1]))
+    m0, m1 = reports['mass'][0], reports['mass'][-1]
+    say('mass error %.3e (%.3e)' % (m1 - m0, (m1 - m0)/m0))
+    say('vel repr error %.3e' % dolfin.assemble(abs(dolfin.dot(sim.data['u'], n))*dolfin.ds))
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
     say('p*dx', int_p)
     div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
     say('div(u)|Vp', div_u_Vp)
     div_u_Vu = abs(dolfin.project(dolfin.div(sim.data['u']), Vu).vector().array()).max()
     say('div(u)|Vu', div_u_Vu)
-    Vdg0 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 0)
+    Vdg0 = dolfin.FunctionSpace(mesh, "DG", 0)
     div_u_DG0 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg0).vector().array()).max()
     say('div(u)|DG0', div_u_DG0)
-    Vdg1 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 1)
+    Vdg1 = dolfin.FunctionSpace(mesh, "DG", 1)
     div_u_DG1 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg1).vector().array()).max()
     say('div(u)|DG1', div_u_DG1)
     
-    if 'u_mesh' in sim.data:
-        Vmesh = sim.data['Vmesh']
-        div_u_mesh_Vmesh = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vmesh).vector().array()).max()
-        say('div(u_mesh)|V_mesh', div_u_mesh_Vmesh)
-        div_u_mesh_DG0 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg0).vector().array()).max()
-        say('div(u_mesh)|DG0', div_u_mesh_DG0)
-        div_u_mesh_DG1 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg1).vector().array()).max()
-        say('div(u_mesh)|DG1', div_u_mesh_DG1)
-    
-    if False:
+    isoparam = mesh.ufl_coordinate_element().degree() > 1
+    if last and (not isoparam or sim.input.get_value('mesh/type') == 'UnitDisc'):
         # Plot the results
-        for fa, name in ((u0a, 'u0'), (u1a, 'u1'), (pa, 'p')): 
-            p1 = dolfin.plot(sim.data[name] - fa, title='%s_diff' % name, key='%s_diff' % name)
-            p2 = dolfin.plot(fa, title=name+' analytical', key=name)
-            p1.write_png('%g_%g_%s_diff' % (N, dt, name))
-            p2.write_png('%g_%g_%s' % (N, dt, name))
-        dolfin.interactive()
-        
-        
-    if N == 40:
-        dolfin.plot(sim.data['u0'], title='u0')
-        dolfin.plot(sim.data['u1'], title='u1')
-        dolfin.plot(sim.data['p'], title='p')
-        dolfin.plot(u0a, title='u0a')
-        dolfin.plot(u1a, title='u1a')
-        dolfin.plot(pa, title='pa')
-        plot_err(sim.data['u0'], u0a, 'u0a - u0')
-        plot_err(sim.data['u1'], u1a, 'u1a - u1')
-        plot_err(sim.data['p'], pa, 'pa - p')
+        for fa, name in ((u0a, 'u0'), (u1a, 'u1'), (pa, 'p'), (rho_a, 'rho')):
+            fh = sim.data[name]
+            if isoparam:
+                # Bug in matplotlib plotting for isoparametric elements
+                mesh2 = dolfin.UnitDiscMesh(dolfin.mpi_comm_world(), N//2, 1, 2)
+                ue = fa.function_space().ufl_element()
+                V2 = dolfin.FunctionSpace(mesh2, ue.family(), ue.degree())
+                fa2, fh2 = dolfin.Function(V2), dolfin.Function(V2)
+                fa2.vector().set_local(fa.vector().get_local())
+                fh2.vector().set_local(fh.vector().get_local())
+                fa, fh = fa2, fh2
+            plot(fa, name + ' analytical', '%g_%g_%s_1analytical' % (N, dt, name))
+            plot(fh, name + ' numerical', '%g_%g_%s_2numerical' % (N, dt, name))
+            plot(fh - fa, name + ' diff', '%g_%g_%s_3diff' % (N, dt, name))
     
-    hmin = sim.data['mesh'].hmin()
+    hmin = mesh.hmin()
     return err_rho, err_u0, err_u1, err_p, err_rho_H1, err_u0_H1, err_u1_H1, err_p_H1, hmin, dt, duration
 
 
@@ -130,10 +129,13 @@ def calc_err(f_num, f_ana, normtype='l2'):
         return dolfin.norm(f_err, normtype)
 
 
-def plot_err(f_num, f_ana, title):
-    f_err = dolfin.Function(f_num.function_space())
-    f_err.vector()[:] = f_ana.vector()[:] - f_num.vector()[:]
-    dolfin.plot(f_err, title=title)
+def plot(func, title, filename):
+    fig = pyplot.figure()
+    ax = fig.add_subplot(111)
+    p = dolfin.plot(func, title=title, backend='matplotlib')
+    fig.colorbar(p)
+    fig.savefig(filename+'.png')
+    pyplot.close(fig)
 
 
 def print_results(results, indices, restype):
@@ -181,13 +183,14 @@ def say(*args, **kwargs):
 
 
 def run_convergence_space(N_list):
-    dt = 0.01
-    tmax = 1.0
+    dt = 0.002
+    tmax = numpy.pi/4
     results = {}
     prev_N = None
     for N in N_list:
         say('Running N = %g with dt = %g' % (N, dt))
-        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1)
+        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1,
+                                             last=(N == N_list[-1]))
         print_results(results, N_list, 'h')
 
 
@@ -198,7 +201,8 @@ def run_convergence_time(dt_list):
     for dt in dt_list:
         t1 = time.time()
         say('Running dt =', dt)
-        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1)
+        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1,
+                                              last=(dt == dt_list[-1]))
         print_results(results, dt_list, 'dt')
 
 

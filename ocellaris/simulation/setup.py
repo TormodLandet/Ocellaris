@@ -21,6 +21,9 @@ def setup_simulation(simulation):
                         'which is needed by Ocellaris.')
     dolfin.parameters["linear_algebra_backend"] = "PETSc"
     
+    # UFLACS needed for isoparametric elements
+    dolfin.parameters["form_compiler"]["representation"] = "uflacs"
+    
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')
     simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
@@ -117,7 +120,7 @@ def load_mesh(simulation):
         
         mesh = dolfin.RectangleMesh(start, end, Nx, Ny, diagonal)
         
-    elif mesh_type == 'UnitDisk':
+    elif mesh_type == 'UnitDisc':
         simulation.log.info('Creating circular mesh')
         
         N = inp.get_value('mesh/N', required_type='int')

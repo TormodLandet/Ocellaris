@@ -1,7 +1,7 @@
 ocellaris:
     type: input
     version: 1.0
-    
+
 metadata:
     author: Tormod Landet
     date: 2016-06-23
@@ -9,7 +9,6 @@ metadata:
         Implements the MMS test from Guermond & Salgado (2011), an exact solution
         (with a given rhs) for the variable density incompressible Navier-Stokes
         equations 
-        
 
 physical_properties:
     g: [0, 0]
@@ -18,9 +17,11 @@ physical_properties:
     rho_max: 3.0
 
 mesh:
-    type: XML
-    mesh_file: disk.xml
-
+    #type: XML
+    #mesh_file: disc.xml
+    type: UnitDisc
+    N: overridden in script
+    degree: 2
 
 # Dirichlet boundary conditions for u, Neumann for p
 boundary_conditions:
@@ -48,14 +49,14 @@ initial_conditions:
     p:
         cpp_code: sin(x[0])*sin(x[1])*sin(t)
     rho_p:
-        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) + sin(t))
+        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
         
 momentum_sources:
 -   name: MMS
     degree: 3
     cpp_code:
-    -   (x[1]*sin(t) - x[0]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) + sin(t))) + cos(x[0])*sin(x[1])*sin(t)
-    -   -(x[0]*sin(t) + x[1]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) + sin(t))) + sin(x[0])*cos(x[1])*sin(t)
+    -   (x[1]*sin(t) - x[0]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))) + cos(x[0])*sin(x[1])*sin(t)
+    -   -(x[0]*sin(t) + x[1]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))) + sin(x[0])*cos(x[1])*sin(t)
 
 time:
     dt: overridden in script
@@ -65,7 +66,8 @@ output:
     prefix: variable_density_convergence
     log_name: .log
     dolfin_log_level: warning
-    ocellaris_log_level: overridden in script
+    ocellaris_log_level: info
+    stdout_enabled: overridden in script
     xdmf_write_interval: 0
 
 multiphase_solver:
@@ -73,9 +75,13 @@ multiphase_solver:
     function_space_rho: DG
     polynomial_degree_rho: 1
 
+slsope_limiter:
+    rho:
+        method: basic
+
 solver:
     type: Coupled
-    num_inner_iter: 100
+    num_inner_iter: 10
     allowable_error_inner: 1e-6
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
