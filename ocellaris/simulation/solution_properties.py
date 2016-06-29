@@ -12,11 +12,17 @@ class SolutionProperties(object):
         """
         self.simulation = simulation
         self.divergence_method = divergence
+        self.active = False
     
     def setup(self):
         sim = self.simulation
-        self.mesh = sim.data['mesh']
         
+        self.active = sim.input.get_value('output/solution_properties',
+                                          True, 'bool') 
+        if not self.active:
+            return
+        
+        self.mesh = sim.data['mesh']
         u = sim.data['u']
         dt = sim.data['dt']
         rho = sim.data['rho']
@@ -35,7 +41,8 @@ class SolutionProperties(object):
         Co = a*dt/h where a = mag(vel)
         """
         V = df.FunctionSpace(self.mesh, 'DG', 0)
-        h = df.CellSize(self.mesh)
+        h = self.simulation.data['h']
+        
         u, v = df.TrialFunction(V), df.TestFunction(V)
         a = u*v*dx
         vmag = sqrt(dot(vel, vel))
@@ -51,7 +58,7 @@ class SolutionProperties(object):
         Pe = a*h/(2*nu) where a = mag(vel)
         """
         V = df.FunctionSpace(self.mesh, 'DG', 0)
-        h = df.CellSize(self.mesh)
+        h = self.simulation.data['h']
         df_nu = df.Constant(nu)
         u, v = df.TrialFunction(V), df.TestFunction(V)
         a = u*v*dx

@@ -77,6 +77,16 @@ class Simulation(object):
         precompute_cell_data(self)
         precompute_facet_data(self)
         
+        # Work around uflacs missing CellSize and CellVolume etc for isoparametric elements
+        mesh = self.data['mesh']
+        if mesh.ufl_coordinate_element().degree() > 1:
+            # FIXME: this is only valid for uniform meshes!
+            area = dolfin.assemble(1.0*dolfin.dx(mesh, degree=2))
+            h = dolfin.Constant((area / mesh.num_cells())**(1.0 / mesh.topology().dim()))
+        else:
+            h = dolfin.CellSize(mesh)
+        self.data['h'] = h
+    
     def _at_start_of_timestep(self, timestep_number, t, dt):
         self.timestep = timestep_number
         self.time = t
@@ -90,17 +100,18 @@ class Simulation(object):
         self.prevtime = newtime
         
         # Report the solution properties
-        Co_max = self.solution_properties.courant_number().vector().max()
-        div_dS_f, div_dx_f = self.solution_properties.divergences()
-        div_dS = div_dS_f.vector().max()
-        div_dx = div_dx_f.vector().max()
-        mass = self.solution_properties.total_mass()
-        Ek, Ep = self.solution_properties.total_energy()
-        self.reporting.report_timestep_value('div', div_dx+div_dS)
-        self.reporting.report_timestep_value('Co', Co_max)
-        self.reporting.report_timestep_value('mass', mass)
-        self.reporting.report_timestep_value('Ek', Ek)
-        self.reporting.report_timestep_value('Ep', Ep)
+        if self.solution_properties.active:
+            Co_max = self.solution_properties.courant_number().vector().max()
+            div_dS_f, div_dx_f = self.solution_properties.divergences()
+            div_dS = div_dS_f.vector().max()
+            div_dx = div_dx_f.vector().max()
+            mass = self.solution_properties.total_mass()
+            Ek, Ep = self.solution_properties.total_energy()
+            self.reporting.report_timestep_value('div', div_dx+div_dS)
+            self.reporting.report_timestep_value('Co', Co_max)
+            self.reporting.report_timestep_value('mass', mass)
+            self.reporting.report_timestep_value('Ek', Ek)
+            self.reporting.report_timestep_value('Ep', Ep)
         
         # Write fields to output file
         self.io.write_fields()
