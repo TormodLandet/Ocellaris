@@ -56,7 +56,7 @@ class Reporting(object):
         Write all reports for the finished time step to the log
         """
         info = []
-        for report_name in sorted(self.timestep_xy_reports):
+        for report_name in self.timestep_xy_reports:
             value = self.timestep_xy_reports[report_name][-1]
             info.append('%s = %10g' % (report_name, value))
         it, t = self.simulation.timestep, self.simulation.time

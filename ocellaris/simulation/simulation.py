@@ -102,13 +102,15 @@ class Simulation(object):
         # Report the solution properties
         if self.solution_properties.active:
             Co_max = self.solution_properties.courant_number().vector().max()
+            Pe_max = self.solution_properties.peclet_number().vector().max()
             div_dS_f, div_dx_f = self.solution_properties.divergences()
             div_dS = div_dS_f.vector().max()
             div_dx = div_dx_f.vector().max()
             mass = self.solution_properties.total_mass()
             Ek, Ep = self.solution_properties.total_energy()
-            self.reporting.report_timestep_value('div', div_dx+div_dS)
             self.reporting.report_timestep_value('Co', Co_max)
+            self.reporting.report_timestep_value('Pe', Pe_max)
+            self.reporting.report_timestep_value('div', div_dx+div_dS)
             self.reporting.report_timestep_value('mass', mass)
             self.reporting.report_timestep_value('Ek', Ek)
             self.reporting.report_timestep_value('Ep', Ep)
