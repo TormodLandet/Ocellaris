@@ -19,10 +19,11 @@ def setup_simulation(simulation):
         ocellaris_error('Missing PETSc',
                         'DOLFIN has not been configured with PETSc '
                         'which is needed by Ocellaris.')
-    dolfin.parameters["linear_algebra_backend"] = "PETSc"
+    dolfin.parameters['linear_algebra_backend'] = 'PETSc'
     
-    # UFLACS needed for isoparametric elements
-    dolfin.parameters["form_compiler"]["representation"] = "uflacs"
+    # Form compiler "uflacs" needed for isoparametric elements
+    form_compiler = simulation.input.get_value('solver/form_compiler', 'auto', 'string')
+    dolfin.parameters['form_compiler']['representation'] = form_compiler
     
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')
@@ -128,6 +129,9 @@ def load_mesh(simulation):
         gdim = inp.get_value('mesh/gdim', 2, required_type='int')
         
         mesh = dolfin.UnitDiscMesh(dolfin.mpi_comm_world(), N, degree, gdim)
+        
+        if degree > 1 and dolfin.parameters['form_compiler']['representation'] != 'uflacs':
+            simulation.log.warning('Using isoparametric elements without uflacs!')
     
     elif mesh_type == 'XML':
         simulation.log.info('Creating mesh from XML file')

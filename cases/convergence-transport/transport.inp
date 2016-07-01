@@ -68,3 +68,4 @@ solver:
     polynomial_degree_pressure: 1
     function_space_velocity: CG
     function_space_pressure: CG
+    form_compiler: uflacs
