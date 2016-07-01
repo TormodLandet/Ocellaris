@@ -4,7 +4,7 @@ import dolfin
 from dolfin import Function, Constant
 from . import register_multi_phase_model, MultiPhaseModel
 from ocellaris.solver_parts import SlopeLimiter
-from ocellaris.utils import linear_solver_from_input
+from ocellaris.utils import linear_solver_from_input, ocellaris_interpolate
 from .advection_equation import AdvectionEquation
 
 
@@ -47,6 +47,7 @@ class VariableDensityModel(MultiPhaseModel):
         simulation.hooks.add_pre_timestep_hook(self.update, 'VariableDensityModel - update density field')
         
         self.slope_limiter = SlopeLimiter(simulation, 'rho', self.rho)
+        self.use_analytic_solution = simulation.input.get_value('multiphase_solver/analytic_solution', False, 'bool') 
     
     def on_simulation_start(self):
         """
@@ -54,13 +55,16 @@ class VariableDensityModel(MultiPhaseModel):
         since the N-S solver needs the density and viscosity we define, and
         we need the velocity that is defined by the solver
         """
+        # Use backward euler (BDF1) for timestep 1 
+        self.time_coeffs = Constant([1, -1, 0])
+        
+        if self.use_analytic_solution:
+            return
+        
         if dolfin.norm(self.rho_pp.vector()) > 0:
             # Use BDF2 from the start
             self.time_coeffs = Constant([3/2, -2, 1/2])
             self.simulation.log.info('Using second order timestepping from the start in VariableDensity')
-        else:
-            # Use backward euler (BDF1) for timestep 1 
-            self.time_coeffs = Constant([1, -1, 0])
         
         # Define equation for advection of the density
         #    ∂ρ/∂t +  ∇⋅(ρ u) = 0   
@@ -135,10 +139,19 @@ class VariableDensityModel(MultiPhaseModel):
             self.rho_p.assign(self.rho)
             self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
         
-        A = self.eq.assemble_lhs()
-        b = self.eq.assemble_rhs()
-        self.solver.solve(A, self.rho.vector(), b)
-        self.slope_limiter.run()
+        if self.use_analytic_solution:
+            # Use the prescribed field for testing
+            cpp_code = self.simulation.input.get_value('initial_conditions/rho_p/cpp_code',
+                                                       required_type='string')
+            description = 'initial condition for rho_p'
+            V = self.simulation.data['Vrho']
+            ocellaris_interpolate(self.simulation, cpp_code, description, V, self.rho)
+        else:
+            # Solve the advection equation for the density rho
+            A = self.eq.assemble_lhs()
+            b = self.eq.assemble_rhs()
+            dolfin.solve(A, self.rho.vector(), b)
+            self.slope_limiter.run()
         
         self.simulation.reporting.report_timestep_value('min(rho)', self.rho.vector().min())
         self.simulation.reporting.report_timestep_value('max(rho)', self.rho.vector().max())
