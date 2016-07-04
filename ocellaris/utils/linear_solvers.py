@@ -1,4 +1,5 @@
 import dolfin
+import contextlib
 
 
 def linear_solver_from_input(simulation, path, default_solver, default_preconditioner,
@@ -73,7 +74,7 @@ def make_linear_solver(solver_method, preconditioner=None, lu_method=None, param
 
 def apply_settings(parameters, new_values):
     """
-    This functiuon does almost the same as::
+    This function does almost the same as::
     
         parameters.update(new_values)
         
@@ -85,3 +86,74 @@ def apply_settings(parameters, new_values):
             apply_settings(parameters[key], value)
         else:
             parameters[key] = value
+
+
+@contextlib.contextmanager
+def petsc_options(opts):
+    """
+    A context manager to set PETSc options for a limited amount of code.
+    The parameter opts is a dictionary of PETSc/SLEPc options 
+    """
+    from petsc4py import PETSc
+    orig_opts = PETSc.Options().getAll()
+    for key, val in opts.iteritems():
+        PETSc.Options().setValue(key, val)
+    
+    yield # run the code
+    
+    for key in opts.iterkeys():
+        if key in orig_opts:
+            PETSc.Options().setValue(key, orig_opts[key])
+        else:
+            PETSc.Options().delValue(key)
+
+
+def condition_number(A):
+    """
+    Calculate the condition number of the given PetscMatrix A by use
+    of SLEPSc solvers
+    """
+    from petsc4py import PETSc
+    from slepc4py import SLEPc
+
+    # Get the petc4py matrix
+    PA = dolfin.as_backend_type(A).mat()
+
+    # Calculate the largest and smallest singular value
+    opts = {
+        'svd_type': 'cross',
+        'svd_eps_type': 'gd',
+        'svd_converged_reason': 'ascii::ascii_info_detail',
+        'svd_implicittranspose': True,
+        'svd_tol': 1e-4,
+        'svd_eps_refined': True,
+        #'help': 'svd_type'
+    }
+    with petsc_options(opts):
+        S = SLEPc.SVD()
+        S.create()
+        S.setOperator(PA)
+        S.setFromOptions()
+        S.setDimensions(1, PETSc.DEFAULT, PETSc.DEFAULT)
+        S.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
+        S.solve()
+        if S.getConverged() == 1:
+            sigma_1 = S.getSingularTriplet(0)
+        else:
+            raise ValueError('Could not find the highest singular value')
+        print 'Highest singular value:', sigma_1
+        
+        S.setWhichSingularTriplets(SLEPc.SVD.Which.SMALLEST)
+        S.solve()
+        if S.getConverged() == 1:
+            sigma_n = S.getSingularTriplet(0)
+        else:
+            #raise ValueError('Could not find the lowest singular value')
+            print S.getConvergedReason()
+            sigma_n = 1
+        print 'Lowest singular value:', sigma_n
+        print PETSc.Options().getAll()
+    print PETSc.Options().getAll()
+    
+    exit()
+    return sigma_1/sigma_n
