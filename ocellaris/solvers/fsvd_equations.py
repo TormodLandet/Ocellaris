@@ -58,7 +58,7 @@ class MomentumPredictionEquation(BaseEquation):
         # Fluid properties
         rho = mpm.get_density(0)
         rho_p = mpm.get_density(-1)
-        mu = mpm.get_laminar_dynamic_viscosity()
+        mu = mpm.get_laminar_dynamic_viscosity(0)
         
         # Values at previous time steps
         up = sim.data['up%d' % self.component]
@@ -106,6 +106,10 @@ class MomentumPredictionEquation(BaseEquation):
         # Body force (gravity)
         # ρ g
         eq -= rho*g[self.component]*v*dx
+        
+        # Other sources
+        for f in sim.data['momentum_sources']:
+            eq -= f[self.component]*v*dx
         
         # Dirichlet boundary
         dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % self.component, [])
@@ -235,19 +239,16 @@ class PressureCorrectionEquation(BaseEquation):
         #for nbc in neumann_bcs:
         #    L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
         
-        # Dirichlet boundary conditions for velocity
-        # FIXME: should only integrate over inlets, not outlets
-        dirichlet_bcs = sim.data['dirichlet_bcs'].get('u', [])
-        for dbc in dirichlet_bcs:
-            u_bc = dbc.func()
-            # From integration by parts of div(u_star)
-            L -= c1/dt*dot(u_bc, n)*q*dbc.ds()
-        
-        # Neumann boundary conditions for velocity
-        neumann_bcs = sim.data['neumann_bcs'].get('u', [])
-        for nbc in neumann_bcs:
-            # From integration by parts of div(u_star)
-            L -= c1/dt*dot(u_star, n)*q*nbc.ds()
+        # Use boundary conditions for the velocity for the
+        # term from integration by parts of div(u_star)
+        for d in range(sim.ndim):
+            dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
+            neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+            for dbc in dirichlet_bcs:
+                u_bc = dbc.func()
+                L -= c1/dt*u_bc*n[d]*q*dbc.ds()
+            for nbc in neumann_bcs:
+                L -= c1/dt*u_star[d]*n[d]*q*nbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
