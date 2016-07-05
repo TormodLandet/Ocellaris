@@ -313,6 +313,7 @@ class SolverCoupled(Solver):
         # Apply strong boundary conditions (this list is empty for DG)
         for dbc in self.dirichlet_bcs:
             dbc.apply(A, b)
+        self.simulation.hooks.matrix_ready('Coupled', A, b)
         
         if self.remove_null_space:
             if self.pressure_null_space is None:
@@ -410,12 +411,8 @@ class SolverCoupled(Solver):
             # Solve for the new time step
             self.solve_coupled()
             
-            #sim.io.write_restart_file('output/test_hydrostatic_%03da.h5' % it)
-            
             # Postprocess the solution velocity field
             self.postprocess_velocity()
-            
-            #sim.io.write_restart_file('output/test_hydrostatic_%03db.h5' % it)
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0

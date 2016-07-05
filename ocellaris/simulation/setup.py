@@ -357,13 +357,14 @@ def setup_hooks(simulation):
         runnable = RunnablePythonString(simulation, code_string, description)
         hook_data = {}
         def hook(*args, **kwargs):
-            runnable.run(hook_data=hook_data)
+            runnable.run(hook_data=hook_data, **kwargs)
         return hook
     
-    hook_types = [('pre-simulation', simulation.hooks.add_pre_simulation_hook),
-                  ('post-simulation', simulation.hooks.add_post_simulation_hook),
+    hook_types = [('pre_simulation', simulation.hooks.add_pre_simulation_hook),
+                  ('post_simulation', simulation.hooks.add_post_simulation_hook),
                   ('pre_timestep', simulation.hooks.add_pre_timestep_hook),
-                  ('post_timestep', simulation.hooks.add_post_timestep_hook)]
+                  ('post_timestep', simulation.hooks.add_post_timestep_hook),
+                  ('matrix_ready', simulation.hooks.add_matrix_ready_hook)]
     
     for hook_name, register_hook in hook_types:
         for hook_info in hooks.get(hook_name, []):

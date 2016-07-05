@@ -126,14 +126,14 @@ class VariableDensityModel(MultiPhaseModel):
         """
         return self.nu*self.rho_min, self.nu*self.rho_max
     
-    def update(self, it, t, dt):
+    def update(self, timestep_number, t, dt):
         """
         Update the density field by advecting it for a time dt
         using the given divergence free velocity field
         """
         timer = dolfin.Timer('Ocellaris update rho')
         
-        if it != 1:
+        if timestep_number != 1:
             # Update the previous values
             self.rho_pp.assign(self.rho_p)
             self.rho_p.assign(self.rho)

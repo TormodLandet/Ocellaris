@@ -12,10 +12,16 @@ class Hooks(object):
         after each time step or clean up after the simulation
         """
         self.simulation = simulation
+        
+        # Main hooks
         self._pre_simulation_hooks = []
         self._pre_timestep_hooks = []
         self._post_timestep_hooks = []
         self._post_simulation_hooks = []
+        
+        # More specialized hooks
+        self._matrix_ready_hooks = []
+        
     
     # ------------------------------------------
     # Hook adders:
@@ -43,7 +49,13 @@ class Hooks(object):
         Add a function that will run after the simulation is done
         """
         self._post_simulation_hooks.append((hook, description))
-        
+    
+    def add_matrix_ready_hook(self, hook, description):
+        """
+        Add a function that will run after matrix assembly
+        """
+        self._matrix_ready_hooks.append((hook, description))
+    
     # ------------------------------------------
     # Hook runners:
     
@@ -74,7 +86,7 @@ class Hooks(object):
         for hook, description in self._pre_timestep_hooks[::-1]:
             t = dolfin.Timer('Ocellaris hook %s' % description)
             try:
-                hook(timestep_number, t, dt)
+                hook(timestep_number=timestep_number, t=t, dt=dt)
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 self.simulation.log.error(traceback.format_exc())
@@ -116,11 +128,29 @@ class Hooks(object):
         self.simulation.success = success
         for hook, description in self._post_simulation_hooks[::-1]:
             try:
-                hook(success)
+                hook(success=success)
             except:
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 self.simulation.log.error(traceback.format_exc())
                 raise
+    
+    @timeit
+    def matrix_ready(self, Aname, A, b=None):
+        """
+        Called by the solver after assembly and before a linear
+        solve. Can be used i.e for studies of condition numbers
+        and reporting matrix sizes etc
+        """
+        for hook, description in self._matrix_ready_hooks[::-1]:
+            t = dolfin.Timer('Ocellaris hook %s' % description)
+            try:
+                hook(Aname=Aname, A=A, b=b)
+            except:
+                self.simulation.log.error('Got exception in hook: %s' % description)
+                self.simulation.log.error(traceback.format_exc())
+                raise
+            finally:
+                t.stop()
     
     def show_hook_info(self):
         """
@@ -131,7 +161,8 @@ class Hooks(object):
         for hook_type, hooks in [('Pre-simulation', self._pre_simulation_hooks),
                                  ('Pre-timestep', self._pre_timestep_hooks),
                                  ('Post-timestep:', self._post_timestep_hooks),
-                                 ('Post-simulation', self._post_simulation_hooks)]:
+                                 ('Post-simulation', self._post_simulation_hooks),
+                                 ('Matrix ready', self._matrix_ready_hooks)]:
             show('    %s:' % hook_type)
             for _hook, description in hooks[::-1]:
                 show('        - %s' % description)

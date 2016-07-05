@@ -174,7 +174,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         return c
     
-    def update(self, it, t, dt):
+    def update(self, timestep_number, t, dt):
         """
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field
