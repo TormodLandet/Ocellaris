@@ -77,7 +77,6 @@ class SolverFSVD(Solver):
                                                         PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
         self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p', SOLVER_P,
                                                         PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
-        self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
         self.u_upd_solver = None
         
         # Get the class to be used for the equation system assembly
@@ -161,13 +160,11 @@ class SolverFSVD(Solver):
             if self.inner_iteration == 1:
                 # Assemble the A matrix only the first inner iteration
                 self.Au[d] = eq.assemble_lhs()
-                self.velocity_solver.parameters['preconditioner']['structure'] = 'same_nonzero_pattern'
-            else:
-                self.velocity_solver.parameters['preconditioner']['structure'] = 'same'
             
             A = self.Au[d]
             b = eq.assemble_rhs()
             
+            self.simulation.hooks.matrix_ready('Au%d' % d, A, b)
             self.niters_u[d] = solver.solve(A, u.vector(), b)
             
             self.u_tmp.vector().axpy(-1, u.vector())
@@ -208,6 +205,7 @@ class SolverFSVD(Solver):
         p_hat.vector().axpy(-1, p.vector())
         
         # Solve for new pressure
+        self.simulation.hooks.matrix_ready('Ap', A, b)
         self.niters_p = self.pressure_solver.solve(A, p.vector(), b)
         
         # Removing the null space of the matrix system is not strictly the same as removing
@@ -325,13 +323,10 @@ class SolverFSVD(Solver):
                 
                 if diverr < allowable_div_inner:
                     break
-                elif self.inner_iteration > 3 and diverr > 1:
+                elif self.inner_iteration > 3 and diverr > 1e4:
                     ocellaris_error('Iteration diverged', 'Inner iterations diverged')
                 
                 self.inner_iteration += 1
-            
-            #self.velocity_update()
-            #self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(sim.ndim):
