@@ -1,5 +1,7 @@
 import time
+import numpy
 import dolfin
+from ocellaris.utils import ocellaris_error
 from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
@@ -114,6 +116,10 @@ class Simulation(object):
             self.reporting.report_timestep_value('mass', mass)
             self.reporting.report_timestep_value('Ek', Ek)
             self.reporting.report_timestep_value('Ep', Ep)
+            
+            if not numpy.isfinite(Co_max):
+                ocellaris_error('Non finite Courant number',
+                                'Found Co = %g' % Co_max)
         
         # Write fields to output file
         self.io.write_fields()
