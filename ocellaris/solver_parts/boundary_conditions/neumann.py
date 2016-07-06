@@ -107,6 +107,7 @@ class CppCodedNeumannBoundary(BoundaryCondition):
         C++ coded Neumann condition
         """
         self.simulation = simulation
+        self.func_space = simulation.data['V%s' % var_name]
         cpp_code = inp_dict['cpp_code']
         
         if isinstance(cpp_code, list):
@@ -122,7 +123,8 @@ class CppCodedNeumannBoundary(BoundaryCondition):
         Add a C++ coded Neumann condition to this variable
         """
         description = 'boundary condititon for %s' % var_name
-        expr = OcellarisCppExpression(self.simulation, cpp_code, description, update=True)
+        P = self.func_space.ufl_element().degree()
+        expr = OcellarisCppExpression(self.simulation, cpp_code, description, P, update=True)
         bc = OcellarisNeumannBC(self.simulation, expr, subdomain_id)
         bcs = self.simulation.data['neumann_bcs']
         bcs.setdefault(var_name, []).append(bc)
