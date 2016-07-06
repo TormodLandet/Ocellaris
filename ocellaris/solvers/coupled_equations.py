@@ -152,11 +152,13 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂u/∂t
-                eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
+                #eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
+                eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
-                eq += div(rho*u[d]*u_conv)*v[d]*dx
+                #eq += div(rho*u[d]*u_conv)*v[d]*dx
+                eq += rho*dot(u_conv, grad(u[d]))*v[d]*dx
                 
                 if sim.mesh_morpher.active:
                     ud = up
@@ -210,14 +212,16 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂(ρu)/∂t
-                eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
+                #eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
+                eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
                 
                 # Convection:
                 # -w⋅∇(ρu)
-                flux_nU = rho*u[d]*w_nU
+                flux_nU = u[d]*w_nU
                 flux = jump(flux_nU)
-                eq -= rho*u[d]*div(v[d]*u_conv)*dx
-                eq += flux*jump(v[d])*dS
+                #eq -= rho*u[d]*div(v[d]*u_conv)*dx
+                eq -= u[d]*div(rho*v[d]*u_conv)*dx
+                eq += flux*jump(rho*v[d])*dS
                 
                 # ALE terms
                 if sim.mesh_morpher.active:

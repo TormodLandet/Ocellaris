@@ -74,14 +74,16 @@ class MomentumPredictionEquation(BaseEquation):
         
         # Time derivative
         # ∂(ρu)/∂t
-        rho_s = (rho + rho_p)/2
-        eq = (rho_s*c1*u + rho_p*c2*up + rho_pp*c3*upp)/dt*v*dx
+        #rho_s = (rho + rho_p)/2
+        #eq = (rho_s*c1*u + rho_p*c2*up + rho_pp*c3*upp)/dt*v*dx
+        eq = rho*(c1*u + c2*up + c3*upp)/dt*v*dx
         
         # Convection:
         # w⋅∇(ρu)    
         flux_nU = u*w_nU
         flux = jump(flux_nU)
-        eq -= rho*u*div(v*u_conv)*dx
+        #eq -= rho*u*div(v*u_conv)*dx
+        eq -= u*div(rho*v*u_conv)*dx
         eq += flux*jump(rho*v)*dS
         
         # Diffusion:
