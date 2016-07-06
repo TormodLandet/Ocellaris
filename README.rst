@@ -51,4 +51,4 @@ The documentation can be found on the `Ocellaris web page <http://trlandet.bitbu
 Copyright and license
 ---------------------
 
-Ocellaris is copyright Tormod Landet, 2015. Ocellaris is licensed under the Apache 2.0 license.
+Ocellaris is copyright Tormod Landet, 2015-2016. Ocellaris is licensed under the Apache 2.0 license.

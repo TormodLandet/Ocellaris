@@ -1,4 +1,5 @@
 from __future__ import division
+import numpy
 import dolfin
 from ocellaris.utils import verify_key, timeit, linear_solver_from_input, ocellaris_error
 from . import Solver, register_solver
@@ -16,6 +17,7 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'absolute_tolerance': 1e-15}
 EQUATION_SUBTYPE = 'Default'
 USE_GRAD_P_FORM = False
+FIX_PRESSURE_DOF = True
 
 
 @register_solver('FSVD')
@@ -55,6 +57,7 @@ class SolverFSVD(Solver):
         self.Au = [None]*sim.ndim
         self.Ap = None
         self.pressure_null_space = None
+        self.pressure_row_to_fix = numpy.array([0], dtype=numpy.intc)
         
         # Store the number of iterations used in the linear solvers
         self.niters_u = [None] * sim.ndim
@@ -88,6 +91,7 @@ class SolverFSVD(Solver):
         
         # Control the form of the governing equations 
         self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+        self.fix_pressure_dof = sim.input.get_value('solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool')
     
     def create_functions(self):
         """
@@ -190,7 +194,9 @@ class SolverFSVD(Solver):
         A = self.Ap
         b = self.eq_pressure.assemble_rhs()
         
-        if self.remove_null_space:
+        if self.fix_pressure_dof:
+            A.ident(self.pressure_row_to_fix)
+        elif self.remove_null_space:  
             if self.pressure_null_space is None:
                 null_vec = dolfin.Vector(p.vector())
                 null_vec[:] = 1
@@ -198,7 +204,7 @@ class SolverFSVD(Solver):
                 self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
                 dolfin.as_backend_type(A).set_nullspace(self.pressure_null_space)
             self.pressure_null_space.orthogonalize(b)
-        
+    
         # Temporarily store the old pressure
         p_hat = self.simulation.data['p_hat']
         p_hat.vector().zero()
@@ -266,7 +272,7 @@ class SolverFSVD(Solver):
         if has_upp_start_values:
             sim.log.info('Initial values for upp are found and used')
             self.is_first_timestep = False
-            #self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+            self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
         
         # Give reasonable starting guesses for the solvers
         for d in range(sim.ndim):
@@ -337,7 +343,7 @@ class SolverFSVD(Solver):
                 up.assign(u_new)
             
             # Change time coefficient to second order
-            #sim.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+            sim.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
             
             # Postprocess this time step
             sim.hooks.end_timestep()

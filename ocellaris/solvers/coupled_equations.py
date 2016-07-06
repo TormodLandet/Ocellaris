@@ -9,8 +9,7 @@ class CoupledEquations(object):
     def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
                  use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator, 
                  pressure_continuity_factor, velocity_continuity_factor_D12,
-                 include_hydrostatic_pressure, incompressibility_flux_type,
-                 implicit_convection=True):
+                 include_hydrostatic_pressure, incompressibility_flux_type):
         """
         This class assembles the coupled Navier-Stokes equations, both CG and DG
         
@@ -27,7 +26,6 @@ class CoupledEquations(object):
         self.velocity_continuity_factor_D12 = velocity_continuity_factor_D12
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
         self.incompressibility_flux_type = incompressibility_flux_type
-        self.implicit_convection = implicit_convection
 
         assert self.incompressibility_flux_type in ('central', 'upwind')
         
@@ -57,7 +55,8 @@ class CoupledEquations(object):
             D12 = Constant([0, 0])
         
         if self.pressure_continuity_factor != 0:
-            h = dolfin.CellSize(mesh)
+            h = self.simulation.data['h']
+            h = Constant(1.0)
             D11 = avg(h/nu)*Constant(self.pressure_continuity_factor)
         else:
             D11 = None
@@ -89,7 +88,6 @@ class CoupledEquations(object):
         v = dolfin.as_vector(vlist)
         p = uc[ndim]
         q = vc[ndim]
-        ucei = u if self.implicit_convection else u_conv
         
         c1, c2, c3 = sim.data['time_coeffs']
         dt = sim.data['dt']
@@ -158,7 +156,7 @@ class CoupledEquations(object):
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
-                eq += div(rho*ucei[d]*u_conv)*v[d]*dx
+                eq += div(rho*u[d]*u_conv)*v[d]*dx
                 
                 if sim.mesh_morpher.active:
                     ud = up
@@ -216,12 +214,13 @@ class CoupledEquations(object):
                 
                 # Convection:
                 # -w⋅∇(ρu)
-                flux_nU = rho*ucei[d]*w_nU
+                flux_nU = rho*u[d]*w_nU
                 flux = jump(flux_nU)
-                eq -= rho*ucei[d]*div(v[d]*u_conv)*dx
+                eq -= rho*u[d]*div(v[d]*u_conv)*dx
                 eq += flux*jump(v[d])*dS
                 
-                if False:#sim.mesh_morpher.active:
+                # ALE terms
+                if sim.mesh_morpher.active:
                     ud = u[d]
                     um = -u_mesh
                     u_mesh_nU = (dot(um, n) + abs(dot(um, n)))/2.0
@@ -281,7 +280,7 @@ class CoupledEquations(object):
                         eq += q*u_bc*n[d]*dbc.ds()
                     
                     # Convection
-                    eq += rho*ucei[d]*w_nU*v[d]*dbc.ds()
+                    eq += rho*u[d]*w_nU*v[d]*dbc.ds()
                     eq += rho*u_bc*w_nD*v[d]*dbc.ds()
                     
                     # SIPG for -∇⋅μ∇u
@@ -306,7 +305,7 @@ class CoupledEquations(object):
                         eq -= q*u[d]*n[d]*nbc.ds()
                     
                     # Convection
-                    eq += rho*ucei[d]*w_nU*v[d]*nbc.ds()
+                    eq += rho*u[d]*w_nU*v[d]*nbc.ds()
                     
                     # Diffusion
                     eq -= mu*nbc.func()*v[d]*nbc.ds()

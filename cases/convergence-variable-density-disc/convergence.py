@@ -14,10 +14,13 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     say(N, dt, tmax, polydeg_u, polydeg_p)
     
     # Setup and run simulation
+    timingtypes = [dolfin.TimingType_user, dolfin.TimingType_system, dolfin.TimingType_wall]
+    dolfin.timings(dolfin.TimingClear_clear, timingtypes)
     sim = Simulation()
     sim.input.read_yaml('disc.inp')
     
-    if sim.input.get_value('mesh/type') == 'XML':
+    mesh_type = sim.input.get_value('mesh/type')
+    if mesh_type == 'XML':
         # Create unstructured mesh with gmsh
         cmd1 = ['gmsh', '-string', 'lc = %f;' % (3.14/N),
                 '-o', 'disc_%d.msh' % N, '-2', 'disc.geo']
@@ -26,8 +29,11 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
             for cmd in (cmd1, cmd2):
                 say(' '.join(cmd))
                 subprocess.call(cmd, stdout=devnull, stderr=devnull)
-    else:
+    elif mesh_type == 'UnitDisc':
         sim.input.set_value('mesh/N', N//2)
+    else:
+        sim.input.set_value('mesh/Nx', N)
+        sim.input.set_value('mesh/Ny', N)
     
     sim.input.set_value('time/dt', dt)
     sim.input.set_value('time/tmax', tmax)
@@ -47,7 +53,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     Vp = sim.data['Vp']
     Vr = sim.data['Vrho']
     polydeg_r = Vr.ufl_element().degree()
-    vals = dict(t=sim.time, dt=sim.dt)
+    vals = dict(t=sim.time, dt=sim.dt, Q=sim.input.get_value('user_code/constants/Q'))
     rho_e  = dolfin.Expression(sim.input.get_value('initial_conditions/rho_p/cpp_code'), degree=polydeg_r, **vals)
     u0e = dolfin.Expression(sim.input.get_value('initial_conditions/up0/cpp_code'), degree=polydeg_u, **vals)
     u1e = dolfin.Expression(sim.input.get_value('initial_conditions/up1/cpp_code'), degree=polydeg_u, **vals)
@@ -57,6 +63,16 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     u0a = dolfin.project(u0e, Vu)
     u1a = dolfin.project(u1e, Vu)
     pa = dolfin.project(pe, Vp)
+    
+    mesh = sim.data['mesh']
+    n = dolfin.FacetNormal(mesh)
+    
+    # Correct for possible non-zero average p
+    int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
+    int_pa = dolfin.assemble(pa*dolfin.dx)
+    vol = dolfin.assemble(dolfin.Constant(1.0)*dolfin.dx(domain=mesh))
+    pa_avg = int_pa/vol
+    sim.data['p'].vector()[:] += pa_avg
     
     # Calculate L2 errors
     err_rho = calc_err(sim.data['rho'], rho_a)
@@ -70,19 +86,16 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     err_u1_H1 = calc_err(sim.data['u1'], u1a, 'H1')
     err_p_H1 = calc_err(sim.data['p'], pa, 'H1')
     
-    mesh = sim.data['mesh']
-    n = dolfin.FacetNormal(mesh)
-    
     reports = sim.reporting.timestep_xy_reports
     say('Num time steps:', sim.timestep)
     say('Num cells:', mesh.num_cells())
     say('Co_max:', numpy.max(reports['Co']))
+    say('Pe_max:', numpy.max(reports['Pe']))
     say('rho_min went from %r to %r' % (reports['min(rho)'][0], reports['min(rho)'][-1]))
     say('rho_max went from %r to %r' % (reports['max(rho)'][0], reports['max(rho)'][-1]))
     m0, m1 = reports['mass'][0], reports['mass'][-1]
     say('mass error %.3e (%.3e)' % (m1 - m0, (m1 - m0)/m0))
-    say('vel repr error %.3e' % dolfin.assemble(abs(dolfin.dot(sim.data['u'], n))*dolfin.ds))
-    int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
+    say('vel repr error %.3e' % dolfin.assemble(dolfin.dot(sim.data['u'], n)*dolfin.ds))
     say('p*dx', int_p)
     div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
     say('div(u)|Vp', div_u_Vp)
@@ -96,7 +109,8 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     say('div(u)|DG1', div_u_DG1)
     
     isoparam = mesh.ufl_coordinate_element().degree() > 1
-    if last and (not isoparam or sim.input.get_value('mesh/type') == 'UnitDisc'):
+    allways_plot = True
+    if (last or allways_plot) and (not isoparam or sim.input.get_value('mesh/type') == 'UnitDisc'):
         # Plot the results
         for fa, name in ((u0a, 'u0'), (u1a, 'u1'), (pa, 'p'), (rho_a, 'rho')):
             fh = sim.data[name]
@@ -109,9 +123,10 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
                 fa2.vector().set_local(fa.vector().get_local())
                 fh2.vector().set_local(fh.vector().get_local())
                 fa, fh = fa2, fh2
-            plot(fa, name + ' analytical', '%g_%g_%s_1analytical' % (N, dt, name))
-            plot(fh, name + ' numerical', '%g_%g_%s_2numerical' % (N, dt, name))
-            plot(fh - fa, name + ' diff', '%g_%g_%s_3diff' % (N, dt, name))
+            discr = '' # '%g_%g_' % (N, dt)
+            plot(fa, name + ' analytical', '%s%s_1analytical' % (discr, name))
+            plot(fh, name + ' numerical', '%s%s_2numerical' % (discr, name))
+            plot(fh - fa, name + ' diff', '%s%s_3diff' % (discr, name))
     
     hmin = mesh.hmin()
     return err_rho, err_u0, err_u1, err_p, err_rho_H1, err_u0_H1, err_u1_H1, err_p_H1, hmin, dt, duration
@@ -206,7 +221,7 @@ def run_convergence_time(dt_list):
         print_results(results, dt_list, 'dt')
 
 
-run_convergence_space([8, 16, 24])
+run_convergence_space([4, 8, 16])#, 24])
 #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
 #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
 #dolfin.interactive()

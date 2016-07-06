@@ -12,16 +12,31 @@ metadata:
 
 physical_properties:
     g: [0, 0]
-    nu: 1e-6
+    nu: 1
     rho_min: 1.0
     rho_max: 3.0
 
 mesh:
     #type: XML
     #mesh_file: disc.xml
-    type: UnitDisc
-    N: overridden in script
-    degree: 2
+    #type: UnitDisc
+    #N: overridden in script
+    #degree: 2
+    type: Rectangle
+    Nx: overridden in script
+    Ny: overridden in script
+    startx: -1
+    endx: 1
+    starty: -1
+    endy: 1
+    diagonal: left/right
+    
+user_code:
+    constants:
+        # Control flag for test case
+        # Q = 0  =>  constant density 2.0
+        # Q = 1  =>  varying density between 1.0 and 3.0
+        Q: 0
 
 # Dirichlet boundary conditions for u, Neumann for p
 boundary_conditions:
@@ -34,8 +49,11 @@ boundary_conditions:
         -   -x[1]*cos(t)
         -   +x[0]*cos(t)
     p:
-        type: ConstantGradient
-        value: 0
+        type: CppCodedGradient
+        cpp_code: 0
+    rho:
+        type: CppCodedValue
+        cpp_code: 2 + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
 
 initial_conditions:
     up0:
@@ -49,14 +67,16 @@ initial_conditions:
     p:
         cpp_code: sin(x[0])*sin(x[1])*sin(t)
     rho_p:
-        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
-        
+        cpp_code: 2 + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+    rho_pp:
+        cpp_code: 2 + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t-dt))
+
 momentum_sources:
 -   name: MMS
-    degree: 3
+    degree: 2
     cpp_code:
-    -   (x[1]*sin(t) - x[0]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))) + cos(x[0])*sin(x[1])*sin(t)
-    -   -(x[0]*sin(t) + x[1]*pow(cos(t), 2))*(2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))) + sin(x[0])*cos(x[1])*sin(t)
+    -   Q*nu*sin(sin(t))*cos(t) - (x[0]*cos(t)*cos(t) - x[1]*sin(t))*(Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(sin(t) - atan2(x[1], x[0])) + 2) + sin(t)*sin(x[1])*cos(x[0])
+    -   -Q*nu*cos(t)*cos(sin(t)) - (x[0]*sin(t) + x[1]*cos(t)*cos(t))*(Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(sin(t) - atan2(x[1], x[0])) + 2) + sin(t)*sin(x[0])*cos(x[1])
 
 time:
     dt: overridden in script
@@ -74,8 +94,9 @@ multiphase_solver:
     type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 1
+    analytic_solution: yes
 
-slsope_limiter:
+_slope_limiter:
     rho:
         method: basic
 
@@ -87,3 +108,22 @@ solver:
     polynomial_degree_pressure: overridden in script
     function_space_velocity: DG
     function_space_pressure: DG
+    #pressure_continuity_factor: 1
+    #form_compiler: uflacs
+    #velocity_postprocessing: none
+    #use_lagrange_multiplicator: yes
+
+hooks:
+    matrix_ready:
+    -   name: condition number
+        enabled: yes
+        code: |
+            if simulation.timestep == 10 and Aname not in hook_data:
+                from ocellaris.utils import condition_number
+                N, M = A.size(0), A.size(1)
+                if max(N, M) < 1000:
+                    K = '%.2e' % condition_number(A, 'numpy')
+                else:
+                    K = '?'
+                print 'Matrix %s size: %dx%d condition number %s' % (Aname, N, M, K)
+                hook_data[Aname] = 1

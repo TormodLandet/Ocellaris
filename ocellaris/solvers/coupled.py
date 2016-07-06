@@ -1,5 +1,6 @@
 # encoding: utf8
 from __future__ import division
+import numpy
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
@@ -20,6 +21,7 @@ TIMESTEPPING_METHODS = (BDF,)
 EQUATION_SUBTYPE = 'Conservative'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
+FIX_PRESSURE_DOF = True
 USE_GRAD_P_FORM = False
 USE_GRAD_Q_FORM = True
 PRESSURE_CONTINUITY_FACTOR = 0
@@ -71,6 +73,10 @@ class SolverCoupled(Solver):
             D12 = self.velocity_continuity_factor_D12
             self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
                 incompressibility_flux_type=self.incompressibility_flux_type, D12=D12)
+            
+        if self.fix_pressure_dof:
+            pdof = get_global_row_number(self.subspaces[-1])
+            self.pressure_row_to_fix = numpy.array([pdof], dtype=numpy.intc)
         
         # Store number of iterations
         self.niters = None
@@ -113,7 +119,8 @@ class SolverCoupled(Solver):
         self.pressure_null_space = None
         self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
                                                               USE_LAGRANGE_MULTIPLICATOR, 'bool')
-        if self.use_lagrange_multiplicator:
+        self.fix_pressure_dof = sim.input.get_value('solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool')
+        if self.use_lagrange_multiplicator or self.fix_pressure_dof:
             self.remove_null_space = False
         
         # Check if the solver supports removing null spaces, otherwise we can enable a hack
@@ -313,9 +320,10 @@ class SolverCoupled(Solver):
         # Apply strong boundary conditions (this list is empty for DG)
         for dbc in self.dirichlet_bcs:
             dbc.apply(A, b)
-        self.simulation.hooks.matrix_ready('Coupled', A, b)
         
-        if self.remove_null_space:
+        if self.fix_pressure_dof:
+            A.ident(self.pressure_row_to_fix)
+        elif self.remove_null_space:
             if self.pressure_null_space is None:
                 # Create null space vector in Vp Space
                 null_func = dolfin.Function(self.simulation.data['Vp'])
@@ -339,6 +347,7 @@ class SolverCoupled(Solver):
             self.pressure_null_space.orthogonalize(b)
         
         # Solve the equation system
+        self.simulation.hooks.matrix_ready('Coupled', A, b)
         self.coupled_solver.solve(A, self.coupled_func.vector(), b)
         
         # Assign into the regular (split) functions from the coupled function
@@ -350,7 +359,7 @@ class SolverCoupled(Solver):
         # Some solvers cannot remove the null space, so we just normalize the pressure instead.
         # If we remove the null space of the matrix system this will not be the exact same as
         # removing the proper null space of the equation, so we also fix this here
-        if self.normalize_pressure or self.remove_null_space:
+        if self.normalize_pressure or self.remove_null_space or self.fix_pressure_dof:
             p = self.simulation.data['p']
             dx2 = dolfin.dx(domain=p.function_space().mesh())
             vol = dolfin.assemble(dolfin.Constant(1)*dx2)
@@ -445,3 +454,16 @@ class SolverCoupled(Solver):
         
         # We are done
         sim.hooks.simulation_ended(success=True)
+
+
+def get_global_row_number(V):
+    """
+    Get the lowest global matrix row number belonging to the
+    function space V and local cell 0
+    If V is a not a subspace then 0 will normally be returned
+    (since dof 0 will typically belong to cell 0)
+    """
+    dm = V.dofmap()
+    dof = dm.cell_dofs(0).min()
+    gdof = dm.local_to_global_index(dof)
+    return dolfin.MPI.min(dolfin.mpi_comm_world(), int(gdof))

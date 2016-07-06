@@ -58,11 +58,12 @@ class MomentumPredictionEquation(BaseEquation):
         # Fluid properties
         rho = mpm.get_density(0)
         rho_p = mpm.get_density(-1)
+        rho_pp = mpm.get_density(-2)
         mu = mpm.get_laminar_dynamic_viscosity(0)
         
         # Values at previous time steps
         up = sim.data['up%d' % self.component]
-        #upp = sim.data['upp%d' % self.component]
+        upp = sim.data['upp%d' % self.component]
         
         # Upwind and downwind velocities
         w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
@@ -74,7 +75,7 @@ class MomentumPredictionEquation(BaseEquation):
         # Time derivative
         # ∂(ρu)/∂t
         rho_s = (rho + rho_p)/2
-        eq = (rho_s*c1*u + rho_p*c2*up)/dt*v*dx
+        eq = (rho_s*c1*u + rho_p*c2*up + rho_pp*c3*upp)/dt*v*dx
         
         # Convection:
         # w⋅∇(ρu)    
