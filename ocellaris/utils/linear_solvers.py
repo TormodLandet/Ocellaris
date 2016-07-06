@@ -108,52 +108,91 @@ def petsc_options(opts):
             PETSc.Options().delValue(key)
 
 
-def condition_number(A):
+def condition_number(A, method='simplified'):
     """
-    Calculate the condition number of the given PetscMatrix A by use
-    of SLEPSc solvers
+    Estimate the condition number of the matrix A
     """
-    from petsc4py import PETSc
-    from slepc4py import SLEPc
-
-    # Get the petc4py matrix
-    PA = dolfin.as_backend_type(A).mat()
-
-    # Calculate the largest and smallest singular value
-    opts = {
-        'svd_type': 'cross',
-        'svd_eps_type': 'gd',
-        'svd_converged_reason': 'ascii::ascii_info_detail',
-        'svd_implicittranspose': True,
-        'svd_tol': 1e-4,
-        'svd_eps_refined': True,
-        #'help': 'svd_type'
-    }
-    with petsc_options(opts):
-        S = SLEPc.SVD()
-        S.create()
-        S.setOperator(PA)
-        S.setFromOptions()
-        S.setDimensions(1, PETSc.DEFAULT, PETSc.DEFAULT)
-        S.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
-        S.solve()
-        if S.getConverged() == 1:
-            sigma_1 = S.getSingularTriplet(0)
-        else:
-            raise ValueError('Could not find the highest singular value')
-        print 'Highest singular value:', sigma_1
-        
-        S.setWhichSingularTriplets(SLEPc.SVD.Which.SMALLEST)
-        S.solve()
-        if S.getConverged() == 1:
-            sigma_n = S.getSingularTriplet(0)
-        else:
-            #raise ValueError('Could not find the lowest singular value')
-            print S.getConvergedReason()
-            sigma_n = 1
-        print 'Lowest singular value:', sigma_n
-        print PETSc.Options().getAll()
-    print PETSc.Options().getAll()
+    if method == 'simplified':
+        # Calculate max(abs(A))/min(abs(A))
+        amin, amax = 1e10, -1e10
+        for irow in range(A.size(0)):
+            _indices, values = A.getrow(irow)
+            aa = abs(values)
+            amax = max(amax, aa.max())
+            aa[aa==0] = amax
+            amin = min(amin, aa.min())
+        amin = dolfin.MPI.min(dolfin.mpi_comm_world(), float(amin))
+        amax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(amax))
+        return amax/amin
     
-    exit()
-    return sigma_1/sigma_n
+    elif method == 'numpy':
+        from numpy.linalg import cond
+        A = mat_to_scipy_csr(A).todense()
+        return cond(A)
+    
+    elif method == 'SLEPc':
+        from petsc4py import PETSc
+        from slepc4py import SLEPc
+        
+        # Get the petc4py matrix
+        PA = dolfin.as_backend_type(A).mat()
+        
+        # Calculate the largest and smallest singular value
+        opts = {
+            'svd_type': 'cross',
+            'svd_eps_type': 'gd',
+            #'help': 'svd_type'
+        }
+        with petsc_options(opts):
+            S = SLEPc.SVD()
+            S.create()
+            S.setOperator(PA)
+            S.setFromOptions()
+            S.setDimensions(1, PETSc.DEFAULT, PETSc.DEFAULT)
+            S.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
+            S.solve()
+            if S.getConverged() == 1:
+                sigma_1 = S.getSingularTriplet(0)
+            else:
+                raise ValueError('Could not find the highest singular value (%d)'
+                                 % S.getConvergedReason())
+            print 'Highest singular value:', sigma_1
+            
+            S.setWhichSingularTriplets(SLEPc.SVD.Which.SMALLEST)
+            S.solve()
+            if S.getConverged() == 1:
+                sigma_n = S.getSingularTriplet(0)
+            else:
+                raise ValueError('Could not find the lowest singular value (%d)'
+                                 % S.getConvergedReason())
+            print 'Lowest singular value:', sigma_n
+            print PETSc.Options().getAll()
+        print PETSc.Options().getAll()
+        
+        return sigma_1/sigma_n
+
+
+def mat_to_scipy_csr(dolfin_matrix):
+    """
+    Convert any dolfin.Matrix to csr matrix in scipy.
+    Based on code by Miroslav Kuchta
+    """
+    assert dolfin.MPI.size(dolfin.mpi_comm_world()) == 1, 'mat_to_csr assumes single process'
+    import scipy.sparse
+    import numpy
+    
+    rows = [0]
+    cols = []
+    values = []
+    for irow in range(dolfin_matrix.size(0)):
+        indices, values_ = dolfin_matrix.getrow(irow)
+        rows.append(len(indices)+rows[-1])
+        cols.extend(indices)
+        values.extend(values_)
+
+    shape = dolfin_matrix.size(0), dolfin_matrix.size(1)
+        
+    return scipy.sparse.csr_matrix((numpy.array(values, dtype='float'),
+                                    numpy.array(cols, dtype='int'),
+                                    numpy.array(rows, dtype='int')),
+                                    shape)
