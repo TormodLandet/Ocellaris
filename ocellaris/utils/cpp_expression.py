@@ -37,11 +37,18 @@ def get_vars(simulation):
                       'dt': simulation.dt,
                       'it': simulation.timestep,
                       'ndim': simulation.ndim}
+    
+    # Simulation fields etc
     for name, value in simulation.data.items():
         if isinstance(value, (float, int, long)):
             available_vars[name] = value
         elif isinstance(value, dolfin.Constant) and value.ufl_shape == ():
             available_vars[name] = value
+    
+    # User constants
+    user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:float)')
+    for name, value in user_constants.iteritems():
+        available_vars[name] = value
     
     # Sanity check of variable names
     for name in available_vars:

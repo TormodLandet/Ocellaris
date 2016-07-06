@@ -148,6 +148,11 @@ class Input(collections.OrderedDict):
             for key, val in d.items():
                 check_isinstance(key, basestring)
                 check_isinstance(val, list)
+        elif required_type == 'dict(string:float)':
+            check_isinstance(d, dict_types)
+            for key, val in d.items():
+                check_isinstance(key, basestring)
+                check_isinstance(val, number)
         elif required_type == 'list(float)':
             check_isinstance(d, list)
             for elem in d:
