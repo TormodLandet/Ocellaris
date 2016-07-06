@@ -94,13 +94,10 @@ class CoupledEquations(object):
         g = sim.data['g']
         n = dolfin.FacetNormal(mesh)
         
-        # Fluid properties at t^{n}, t^{n-1} and t^{n-2}
+        # Fluid properties
         rho = mpm.get_density(0)
-        rho_p = mpm.get_density(-1)
-        rho_pp = mpm.get_density(-2)
         nu = mpm.get_laminar_kinematic_viscosity(0)
         mu = mpm.get_laminar_dynamic_viscosity(0)
-        rho_star = (rho + rho_p)/2
         
         # Hydrostatic pressure correction
         if self.include_hydrostatic_pressure:
@@ -152,12 +149,10 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂u/∂t
-                #eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
                 eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
                 
                 # Convection
                 # ∇⋅(ρ u ⊗ u_conv)
-                #eq += div(rho*u[d]*u_conv)*v[d]*dx
                 eq += rho*dot(u_conv, grad(u[d]))*v[d]*dx
                 
                 if sim.mesh_morpher.active:
@@ -212,15 +207,13 @@ class CoupledEquations(object):
                 
                 # Time derivative
                 # ∂(ρu)/∂t
-                #eq += (rho_star*c1*u[d] + rho_p*c2*up + rho_pp*c3*upp)/dt*v[d]*dx
                 eq += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
                 
                 # Convection:
                 # -w⋅∇(ρu)
                 flux_nU = u[d]*w_nU
                 flux = jump(flux_nU)
-                #eq -= rho*u[d]*div(v[d]*u_conv)*dx
-                eq -= u[d]*div(rho*v[d]*u_conv)*dx
+                eq -= u[d]*dot(grad(rho*v[d]), u_conv)*dx
                 eq += flux*jump(rho*v[d])*dS
                 
                 # ALE terms
