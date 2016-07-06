@@ -72,6 +72,7 @@ class MomentumPredictionEquation(BaseEquation):
         This implementation assembles the full LHS and RHS each time they are needed
         """
         sim = self.simulation
+        mpm = sim.multi_phase_model
         mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
         ni = n[self.component]
@@ -95,12 +96,11 @@ class MomentumPredictionEquation(BaseEquation):
         if self.include_hydrostatic_pressure:
             p += sim.data['p_hydrostatic']
         
-        # Fluid properties at t^{n+1}*
-        rhos = sim.data['rho_star']
+        # Fluid properties
         rho = sim.data['rho']
-        rho_old = sim.data['rho_old']
-        nus = sim.data['nu_star']
-        mus = sim.data['mu_star']
+        rho_old = mpm.get_density(-1)
+        nu = mpm.get_laminar_kinematic_viscosity(0)
+        mu = mpm.get_laminar_dynamic_viscosity(0)
         
         # Include (∇u)^T term?
         assert not self.use_stress_divergence_form
@@ -114,16 +114,16 @@ class MomentumPredictionEquation(BaseEquation):
             
             # Time derivative
             # ∂u/∂t
-            a = rhos*c1*u/dt*v*dx
+            a = rho*c1*u/dt*v*dx
             L = -(rho*c2*up + rho_old*c3*upp)/dt*v*dx
             
             # Convection
             # ρ∇⋅(u ⊗ u_conv)
-            a += rhos*div(u*u_conv)*v*dx
+            a += rho*div(u*u_conv)*v*dx
             
             # Diffusion
             # -∇⋅μ∇u
-            a += mus*dot(grad(u), grad(v))*dx
+            a += mu*dot(grad(u), grad(v))*dx
             
             # Pressure
             # ∇p
@@ -134,12 +134,12 @@ class MomentumPredictionEquation(BaseEquation):
             
             # Body force (gravity)
             # ρ g
-            L += rhos*g[self.component]*v*dx
+            L += rho*g[self.component]*v*dx
             
             # Neumann boundary
             neumann_bcs = sim.data['neumann_bcs'].get('u%d' % self.component, [])
             for nbc in neumann_bcs:
-                L += mus*nbc.func()*v*nbc.ds()
+                L += mu*nbc.func()*v*nbc.ds()
                 
                 if not self.use_grad_p_form:
                     L -= p*v*ni*nbc.ds()
@@ -153,27 +153,27 @@ class MomentumPredictionEquation(BaseEquation):
             w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
             
             # Penalties
-            penalty_dS, penalty_ds, D12 = self.calculate_penalties(nus)
+            penalty_dS, penalty_ds, D12 = self.calculate_penalties(nu)
             
             # Time derivative
             # ∂(ρu)/∂t
-            a = rhos*c1*u/dt*v*dx
+            a = rho*c1*u/dt*v*dx
             L = -(rho*c2*up + rho_old*c3*upp)/dt*v*dx
             
             # Convection:
             # w⋅∇(ρu)    
-            flux_nU = rhos*u*w_nU
+            flux_nU = rho*u*w_nU
             flux = jump(flux_nU)
-            a -= rhos*u*div(v*u_conv)*dx
+            a -= rho*u*div(v*u_conv)*dx
             a += flux*jump(v)*dS
             
             # Diffusion:
             # -∇⋅∇u
-            a += mus*dot(grad(u), grad(v))*dx
+            a += mu*dot(grad(u), grad(v))*dx
             
             # Symmetric Interior Penalty method for -∇⋅μ∇u
-            a -= avg(mus)*dot(n('+'), avg(grad(u)))*jump(v)*dS
-            a -= avg(mus)*dot(n('+'), avg(grad(v)))*jump(u)*dS
+            a -= avg(mu)*dot(n('+'), avg(grad(u)))*jump(v)*dS
+            a -= avg(mu)*dot(n('+'), avg(grad(v)))*jump(u)*dS
             
             # Symmetric Interior Penalty coercivity term
             a += penalty_dS*jump(u)*jump(v)*dS
@@ -189,7 +189,7 @@ class MomentumPredictionEquation(BaseEquation):
             
             # Body force (gravity)
             # ρ g
-            L += rhos*g[self.component]*v*dx
+            L += rho*g[self.component]*v*dx
             
             # Dirichlet boundary
             dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % self.component, [])
@@ -197,13 +197,13 @@ class MomentumPredictionEquation(BaseEquation):
                 u_bc = dbc.func()
                 
                 # Convection
-                a += rhos*u*w_nU*v*dbc.ds()
-                L -= rhos*u_bc*w_nD*v*dbc.ds()
+                a += rho*u*w_nU*v*dbc.ds()
+                L -= rho*u_bc*w_nD*v*dbc.ds()
                 
                 # SIPG for -∇⋅μ∇u
-                a -= mus*dot(n, grad(u))*v*dbc.ds()
-                a -= mus*dot(n, grad(v))*u*dbc.ds()
-                L -= mus*dot(n, grad(v))*u_bc*dbc.ds()
+                a -= mu*dot(n, grad(u))*v*dbc.ds()
+                a -= mu*dot(n, grad(v))*u*dbc.ds()
+                L -= mu*dot(n, grad(v))*u_bc*dbc.ds()
                 
                 # Weak Dirichlet
                 a += penalty_ds*u*v*dbc.ds()
@@ -216,7 +216,7 @@ class MomentumPredictionEquation(BaseEquation):
             # Neumann boundary
             neumann_bcs = sim.data['neumann_bcs'].get('u%d' % self.component, [])
             for nbc in neumann_bcs:
-                L -= mus*nbc.func()*v*nbc.ds()
+                L -= mu*nbc.func()*v*nbc.ds()
                 
                 if not self.use_grad_p_form:
                     L -= p*v*ni*nbc.ds()
@@ -276,8 +276,8 @@ class PressureCorrectionEquation(BaseEquation):
         mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
         
-        # Fluid properties at t^{n+1}*
-        rhos = sim.data['rho_star']
+        # Fluid properties
+        rho = sim.data['rho']
         
         # Lagrange multiplicator to remove the pressure null space
         # ∫ p dx = 0
@@ -288,14 +288,14 @@ class PressureCorrectionEquation(BaseEquation):
             # -∇⋅∇p = - γ_1/Δt ρ ∇⋅u^* 
             a = dot(grad(p), grad(q))*dx
             L = dot(grad(p_star), grad(q))*dx
-            L -= c1/dt*rhos*div(u_star)*q*dx
+            L -= c1/dt*rho*div(u_star)*q*dx
             
             # Neumann boundary conditions on p and p_star cancel
         
         else:
             # Weak form of the Poisson eq. with discontinuous elements
             # -∇⋅∇p = - γ_1/Δt ρ ∇⋅u^*
-            K = 1.0/rhos
+            K = 1.0/rho
             a = K*dot(grad(p), grad(q))*dx
             L = K*dot(grad(p_star), grad(q))*dx
 
@@ -327,9 +327,6 @@ class PressureCorrectionEquation(BaseEquation):
             dirichlet_bcs = sim.data['dirichlet_bcs'].get('p', [])
             for dbc in dirichlet_bcs:
                 p_bc = dbc.func()
-
-                # From integration by parts of RHS
-                L -= c1/dt*dot(u_star, n)*q*dbc.ds()
                 
                 # SIPG for -∇⋅∇p
                 a -= dot(n, K*grad(p))*q*dbc.ds()
@@ -353,9 +350,18 @@ class PressureCorrectionEquation(BaseEquation):
             for nbc in neumann_bcs:
                 # Neumann boundary conditions on p and p_star cancel
                 #L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
-
-                # From integration by parts of RHS
-                L -= c1/dt*dot(u_star, n)*q*nbc.ds()
+                pass
+        
+            # Use boundary conditions for the velocity for the
+            # term from integration by parts of div(u_star)
+            for d in range(sim.ndim):
+                dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
+                neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                for dbc in dirichlet_bcs:
+                    u_bc = dbc.func()
+                    L -= c1/dt*u_bc*n[d]*q*dbc.ds()
+                for nbc in neumann_bcs:
+                    L -= c1/dt*u_star[d]*n[d]*q*nbc.ds()
         
         # ALE mesh velocities
         if sim.mesh_morpher.active:
@@ -387,7 +393,7 @@ class VelocityUpdateEquation(BaseEquation):
     
     def define_update_equation(self):
         sim = self.simulation
-        rho = sim.data['rho_star']
+        rho = sim.data['rho']
         c1 = sim.data['time_coeffs'][0]
         dt = sim.data['dt']
         

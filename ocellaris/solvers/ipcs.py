@@ -74,7 +74,7 @@ class SolverIPCS(Solver):
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
-            self.velocity_postprocessor = VelocityBDMProjection(sim.data['u'], 
+            self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'], 
                 incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Storage for preassembled matrices
@@ -103,7 +103,7 @@ class SolverIPCS(Solver):
                                                         PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
         self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p', SOLVER_P,
                                                         PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
-        self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
+        #self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
         
         # Velocity update can be performed with local solver for DG velocities
         self.use_local_solver_for_update = sim.input.get_value('solver/u_upd', self.vel_is_discontinuous, 'bool')
@@ -292,9 +292,9 @@ class SolverIPCS(Solver):
             if self.inner_iteration == 1:
                 # Assemble the A matrix only the first inner iteration
                 self.Au[d] = eq.assemble_lhs()
-                self.velocity_solver.parameters['preconditioner']['structure'] = 'same_nonzero_pattern'
+                #self.velocity_solver.parameters['preconditioner']['structure'] = 'same_nonzero_pattern'
             else:
-                self.velocity_solver.parameters['preconditioner']['structure'] = 'same'
+                pass#self.velocity_solver.parameters['preconditioner']['structure'] = 'same'
             
             A = self.Au[d]
             b = eq.assemble_rhs()
