@@ -63,7 +63,7 @@ def make_linear_solver(solver_method, preconditioner=None, lu_method=None, param
         solver.prec = precon # Keep from going out of scope
     
     for parameter_set in parameters:
-        apply_settings(solver.parameters, parameter_set)
+        apply_settings(solver_method, solver.parameters, parameter_set)
     
     solver.created_with_preconditioner = preconditioner
     solver.created_with_lu_method = lu_method
@@ -72,7 +72,7 @@ def make_linear_solver(solver_method, preconditioner=None, lu_method=None, param
     return solver
 
 
-def apply_settings(parameters, new_values):
+def apply_settings(solver_method, parameters, new_values):
     """
     This function does almost the same as::
     
@@ -81,9 +81,17 @@ def apply_settings(parameters, new_values):
     The difference is that subdictionaries are handled
     recursively and not replaced outright
     """
+    skip = set()
+    if solver_method == 'lu':
+        skip.update(['nonzero_initial_guess',
+                     'relative_tolerance',
+                     'absolute_tolerance'])
+    
     for key, value in new_values.items():
-        if isinstance(value, dict):
-            apply_settings(parameters[key], value)
+        if key in skip:
+            continue
+        elif isinstance(value, dict):
+            apply_settings(solver_method, parameters[key], value)
         else:
             parameters[key] = value
 
