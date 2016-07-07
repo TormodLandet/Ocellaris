@@ -17,6 +17,7 @@ class InputOutputHandling():
         handled here
         """
         self.simulation = sim = simulation
+        self.ready = False
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
         close = lambda success: self._close_files()
         sim.hooks.add_post_simulation_hook(close, 'Close files')
@@ -77,12 +78,15 @@ class InputOutputHandling():
                 func.rename(name, description)
                 
         # Dump initial state
+        self.ready = True
         self.write_fields()
         
     def _close_files(self):
         """
         Close open files
         """
+        if not self.ready:
+            return
         if self.xdmf_write_interval > 0:
             del self.xdmf_file
     
