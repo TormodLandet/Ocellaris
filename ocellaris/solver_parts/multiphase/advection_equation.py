@@ -46,10 +46,10 @@ class AdvectionEquation(object):
         
         if not self.colour_is_discontinuous:
             # Continous Galerkin implementation of the advection equation
-            # FIXME: add SUPG
+            # FIXME: add stabilization
             eq = (c1*c + c2*self.cp + c3*self.cpp)/dt*d*dx + div(c*u_conv)*d*dx
         
-        else:
+        elif self.beta is not None:
             # Upstream and downstream normal velocities
             w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2
             w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2
@@ -71,6 +71,27 @@ class AdvectionEquation(object):
             for dbc in self.dirichlet_bcs:
                 eq += w_nD*dbc.func()*d*dbc.ds()
                 eq += w_nU*c*d*dbc.ds()
+        
+        else:
+            # Downstream normal velocities
+            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2
+            
+            # Discontinuous Galerkin implementation of the advection equation
+            eq = (c1*c + c2*self.cp + c3*self.cpp)/dt*d*dx
+            
+            # Convection integrated by parts two times to bring back the original
+            # div form (this means we must subtract and add all fluxes)
+            eq += div(c*u_conv)*d*dx
+            
+            # Replace downwind flux with upwind flux on downwind internal facets
+            eq -= jump(w_nD*d)*jump(c)*dS
+            
+            # Replace downwind flux with upwind BC flux on downwind external facets
+            for dbc in self.dirichlet_bcs:
+                # Subtract the "normal" downwind flux
+                eq -= w_nD*c*d*dbc.ds()
+                # Add the boundary value upwind flux
+                eq += w_nD*dbc.func()*d*dbc.ds()
         
         a, L = dolfin.system(eq)
         self.form_lhs = a
