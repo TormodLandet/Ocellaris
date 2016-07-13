@@ -76,10 +76,10 @@ class Input(collections.OrderedDict):
         """
         # Allow path to be a list or a "/" separated string
         if isinstance(path, basestring):
-            pathstr = path
+            pathstr = self.basepath + path
             path = path.split('/')
         else:
-            pathstr = '/'.join(path)
+            pathstr = self.basepath + '/'.join(path)
         
         d = self
         for p in path:
