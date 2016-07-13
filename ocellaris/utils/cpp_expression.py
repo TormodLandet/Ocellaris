@@ -34,7 +34,7 @@ def get_vars(simulation):
     time "t" and any scalar quantity in simulation.data
     """
     available_vars = {'t': simulation.time,
-                      'dt': simulation.dt,
+                      'dt': dolfin.Constant(simulation.dt),
                       'it': simulation.timestep,
                       'ndim': simulation.ndim}
     
