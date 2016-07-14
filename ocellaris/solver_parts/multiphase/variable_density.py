@@ -48,7 +48,7 @@ class VariableDensityModel(MultiPhaseModel):
         
         self.slope_limiter = SlopeLimiter(simulation, 'rho', self.rho)
         self.use_analytical_solution = simulation.input.get_value('multiphase_solver/analytical_solution', False, 'bool')
-        self.use_rk_method = simulation.input.get_value('multiphase_solver/explicit_rk_method', True, 'bool')
+        self.use_rk_method = simulation.input.get_value('multiphase_solver/explicit_rk_method', False, 'bool')
     
     def on_simulation_start(self):
         """
@@ -56,17 +56,27 @@ class VariableDensityModel(MultiPhaseModel):
         since the N-S solver needs the density and viscosity we define, and
         we need the velocity that is defined by the solver
         """
-        vel = dolfin.Constant(2.0)*self.simulation.data['u'] + dolfin.Constant(-1.0)*self.simulation.data['upp']
-        dirichlet_bcs = self.simulation.data['dirichlet_bcs']['rho']#.get('rho', [])
-        
         if self.use_analytical_solution:
             return
         
-        elif self.use_rk_method:
+        sim = self.simulation
+        dirichlet_bcs = sim.data['dirichlet_bcs'].get('rho', [])
+        
+        if self.use_rk_method:
             V = self.simulation.data['Vrho']
             if not V.ufl_element().family() == 'Discontinuous Lagrange':
                 ocellaris_error('VariableDensity timestepping error',
                                 'Can only use explicit SSP Runge-Kutta method with DG space for rho')
+            
+            Vu = sim.data['Vu']
+            u_conv, self.funcs_to_extrapolate = [], []
+            for d in range(sim.ndim):
+                ux = Function(Vu)
+                up = sim.data['up%d' % d]
+                upp = sim.data['upp%d' % d]
+                self.funcs_to_extrapolate.append((ux, up, upp))
+                u_conv.append(ux)
+            u_conv = dolfin.as_vector(u_conv)
             
             from dolfin import dot, div, jump, dS
             mesh = self.simulation.data['mesh']
@@ -74,14 +84,14 @@ class VariableDensityModel(MultiPhaseModel):
             re = self.rho_explicit = dolfin.Function(V)
             c, d = dolfin.TrialFunction(V), dolfin.TestFunction(V)
             n = dolfin.FacetNormal(mesh)
-            w_nD = (dot(vel, n) - abs(dot(vel, n)))/2
+            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2
             dx = dolfin.dx(domain=mesh)
             
             eq = c*d*dx
             
             # Convection integrated by parts two times to bring back the original
             # div form (this means we must subtract and add all fluxes)
-            eq += div(re*vel)*d*dx
+            eq += div(re*u_conv)*d*dx
             
             # Replace downwind flux with upwind flux on downwind internal facets
             eq -= jump(w_nD*d)*jump(re)*dS
@@ -95,7 +105,9 @@ class VariableDensityModel(MultiPhaseModel):
             
             a, L = dolfin.system(eq)
             self.rk = RungeKuttaDGTimestepping(self.simulation, a, L, self.rho,
-                                               self.rho_explicit, order=None)
+                                               self.rho_explicit, order=None,
+                                               explicit_funcs=self.funcs_to_extrapolate,
+                                               bcs=dirichlet_bcs)
         
         else:
             # Use backward euler (BDF1) for timestep 1 
@@ -109,8 +121,9 @@ class VariableDensityModel(MultiPhaseModel):
             # Define equation for advection of the density
             #    ∂ρ/∂t +  ∇⋅(ρ u) = 0
             beta = None
+            u_conv = Constant(2.0)*sim.data['up'] + Constant(-1.0)*sim.data['upp'] 
             self.eq = AdvectionEquation(self.simulation, self.simulation.data['Vrho'],
-                                        self.rho_p, self.rho_pp, vel, beta, 
+                                        self.rho_p, self.rho_pp, u_conv, beta, 
                                         self.time_coeffs, dirichlet_bcs)
             
             self.solver = linear_solver_from_input(self.simulation, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)

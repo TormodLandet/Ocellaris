@@ -2,7 +2,7 @@ from dolfin import Function, LocalSolver
 
 
 class RungeKuttaDGTimestepping(object):
-    def __init__(self, simulation, a, L, u, up, order=None):
+    def __init__(self, simulation, a, L, u, up, order=None, explicit_funcs=None, bcs=None):
         """
         RKDG timestepping. A is a block diagonal mass matrix form (u*v*dx),
         L is the form of the right hand side of du/dt = L. The functions
@@ -15,12 +15,18 @@ class RungeKuttaDGTimestepping(object):
         value afterwords, while the u function will contain the time integrated
         value after the time step. The up function should contain the value of
         u at the beginning of the time step before running .step()
+        
+        Explicit functions are other functions that are a part of L. They will
+        be extrapolated. The API is: give [ux, up, upp, ... uppp] where ux is the
+        function that is explicit in L and will be extrapolated to the fractional
+        RK time step based on the values at previous time steps. The order of
+        extrapolation depends on the number of previous values upp...pps given.
         """
         self.simulation = simulation
         
         V = u.function_space()
         if order is None:
-            order = V.ufl_element().degree() + 0
+            order = V.ufl_element().degree() + 1
         self.order = order
         
         # Number of stages
@@ -31,6 +37,8 @@ class RungeKuttaDGTimestepping(object):
             S = len(self.A)
         simulation.log.info('    Preparing SSP RK method of order %d with %d stages' % (order, S))
         
+        self.funcs_to_extrapolate = explicit_funcs
+        self.bcs = bcs
         self.u = u
         self.up = up
         self.us = [Function(V) for _ in range(S-1)]
@@ -43,9 +51,49 @@ class RungeKuttaDGTimestepping(object):
             self.up_store = Function(V)
             
     def _solve(self, du, fdt, uexpl):
+        """
+        Assemble L and use the block diagonality of the mass matrix to run
+        the pre-factorized local solver instead of a global solve
+        
+        We first update any explicit functions (uexpl which we get from the
+        previous RK step and self.funcs_to_extrapolate which we extrapolate).
+        We also update the boundary conditions in case they are time dependent
+        """
         if uexpl is not self.up:
             self.up.assign(uexpl)
+        
+        # The RK sub time step
+        orig_t = self.simulation.time
+        t = orig_t - (1 - fdt)*self.simulation.dt
+        self.simulation.time = t
+        
+        # Update time dependent explicit functions in L to the RK sub time step
+        for funcs in self.funcs_to_extrapolate:
+            ux = funcs[0]
+            ups = funcs[1:]
+            
+            ux.vector().zero()
+            if len(ups) == 2:
+                old1, old2 = ups
+                ux.vector().axpy(fdt + 1, old1.vector())
+                ux.vector().axpy(-fdt, old2.vector())
+            
+            elif len(ups) == 3:
+                old1, old2, old3 = ups    
+                ux.vector().axpy(fdt**2/2 + 3*fdt/2 + 1, old1.vector())
+                ux.vector().axpy(-fdt**2 - 2*fdt, old2.vector())
+                ux.vector().axpy(fdt**2/2 + fdt/2, old3.vector())
+            
+            else:
+                raise NotImplementedError('Extrapolation of degree %d not implemented'
+                                          % (len(ups)-1))
+        
+        # Update time dependent BCs in L to the RK sub time step
+        for bc in self.bcs:
+            bc.update()
+        
         self.solver.solve_local_rhs(du)
+        self.simulation.time = orig_t
     
     def step(self, dt):
         """
@@ -93,6 +141,7 @@ class RungeKuttaDGTimestepping(object):
             S = len(A) # number of stages
             
             for i in range(S):
+                # FIXME: use the _solve() method ... we must first calculate the effective time step
                 if i > 0:
                     up.assign(us[i-1])
                 ls.solve_local_rhs(dus[i])

@@ -6,9 +6,8 @@ metadata:
     author: Tormod Landet
     date: 2016-06-28
     description: |
-        Tests the multiphase solver in a known velocity field
+        Tests the variable density solver in a known velocity field
         (same known fields as in the variable density disk case) 
-        
 
 physical_properties:
     g: [0, 0]
@@ -19,15 +18,27 @@ physical_properties:
 mesh:
     #type: XML
     #mesh_file: disc.xml
-    type: UnitDisc
-    N: overridden in script
-    degree: 2
+    #type: UnitDisc
+    #N: overridden in script
+    #degree: 2
+    type: Rectangle
+    Nx: overridden in script
+    Ny: overridden in script
+    startx: -1
+    endx: 1
+    starty: -1
+    endy: 1
+    diagonal: left/right
 
 initial_conditions:
     up0:
         cpp_code: -x[1]*cos(t)
     up1:
         cpp_code: +x[0]*cos(t)
+    upp0:
+        cpp_code: -x[1]*cos(t-dt)
+    upp1:
+        cpp_code: +x[0]*cos(t-dt)
     rho_p:
         cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
     rho_pp:
@@ -39,7 +50,8 @@ boundary_conditions:
     inside_code: on_boundary
     rho:
         type: CppCodedValue
-        cpp_code: 0 #2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+        cpp_code: 2 + sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+
 time:
     dt: overridden in script
     tmax: overridden in script
@@ -51,7 +63,6 @@ output:
     ocellaris_log_level: debug
     stdout_enabled: overridden in script
     xdmf_write_interval: 0
-    solution_properties: yes
 
 multiphase_solver:
     type: VariableDensity
@@ -66,6 +77,6 @@ solver:
     type: AnalyticalSolution
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
-    function_space_velocity: CG
-    function_space_pressure: CG
-    form_compiler: uflacs
+    function_space_velocity: DG
+    function_space_pressure: DG
+    #form_compiler: uflacs

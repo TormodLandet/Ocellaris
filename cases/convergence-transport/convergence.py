@@ -20,7 +20,8 @@ def run_and_calculate_error(N, dt, tmax, polydeg_rho, last=False):
     sim = Simulation()
     sim.input.read_yaml('transport.inp')
     
-    if sim.input.get_value('mesh/type') == 'XML':
+    mesh_type = sim.input.get_value('mesh/type')
+    if mesh_type == 'XML':
         # Create unstructured mesh with gmsh
         cmd1 = ['gmsh', '-string', 'lc = %f;' % (3.14/N),
                 '-o', 'disc_%d.msh' % N, '-2',
@@ -31,8 +32,11 @@ def run_and_calculate_error(N, dt, tmax, polydeg_rho, last=False):
                 say(' '.join(cmd))
                 if ISROOT:
                     subprocess.call(cmd, stdout=devnull, stderr=devnull)
-    else:
+    elif mesh_type == 'UnitDisc':
         sim.input.set_value('mesh/N', N//2)
+    else:
+        sim.input.set_value('mesh/Nx', N)
+        sim.input.set_value('mesh/Ny', N)
     
     sim.input.set_value('time/dt', dt)
     sim.input.set_value('time/tmax', tmax)
@@ -51,7 +55,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_rho, last=False):
     Vp = sim.data['Vp']
     Vr = sim.data['Vrho']
     polydeg_r = Vr.ufl_element().degree()
-    vals = dict(t=sim.time+0.5*sim.dt, dt=sim.dt)
+    vals = dict(t=sim.time, dt=sim.dt)
     rho_e  = dolfin.Expression(sim.input.get_value('initial_conditions/rho_p/cpp_code'), degree=polydeg_r, **vals)
     rho_a = dolfin.project(rho_e, Vr)
     
@@ -75,7 +79,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_rho, last=False):
     say('rho_max went from %r to %r' % (reports['max(rho)'][0], reports['max(rho)'][-1]))
     m0, m1 = reports['mass'][0], reports['mass'][-1]
     say('mass error %.3e (%.3e)' % (m1 - m0, (m1 - m0)/m0))
-    say('vel repr error %.3e' % dolfin.assemble(abs(dolfin.dot(sim.data['u'], n))*dolfin.ds))
+    say('vel compat error %.3e' % dolfin.assemble(dolfin.dot(sim.data['u'], n)*dolfin.ds))
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
     say('p*dx', int_p)
     div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
@@ -177,13 +181,17 @@ def say(*args, **kwargs):
 
 
 def run_convergence_space(N_list):
-    dt = 0.002
+    dt = 0.01
+    P = 1
     tmax = numpy.pi/4
     results = {}
     prev_N = None
     for N in N_list:
+        dx = 2/N/5
+        Co = 1/(2*P+1)
+        dt = Co*dx/2**0.5
         say('Running N = %g with dt = %g' % (N, dt))
-        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_rho=1,
+        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_rho=P,
                                              last=(N == N_list[-1]))
         print_results(results, N_list, 'h')
 
@@ -195,12 +203,12 @@ def run_convergence_time(dt_list):
     for dt in dt_list:
         t1 = time.time()
         say('Running dt =', dt)
-        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_rho=1,
+        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_rho=3,
                                               last=(dt == dt_list[-1]))
         print_results(results, dt_list, 'dt')
 
 
-run_convergence_space([8, 16, 24, 48])
-#run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
+run_convergence_space([4, 8, 16, 24])#, 48, 96])
+#run_convergence_time([5e-1, 2.5e-1, 1.25e-1])#, 6.25e-2, 3.12e-2])
 #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
 #dolfin.interactive()
