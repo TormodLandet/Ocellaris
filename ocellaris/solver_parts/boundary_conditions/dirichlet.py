@@ -4,7 +4,7 @@ from ocellaris.utils import CodedExpression, OcellarisCppExpression
 
 
 class OcellarisDirichletBC(dolfin.DirichletBC):
-    def __init__(self, simulation, V, value, subdomain_marker, subdomain_id):
+    def __init__(self, simulation, V, value, subdomain_marker, subdomain_id, updater=None):
         """
         A simple storage class for Dirichlet conditions. This is
         used when defining the linear part of the weak forms and
@@ -15,7 +15,8 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         self._value = value
         self.subdomain_marker = subdomain_marker
         self.subdomain_id = subdomain_id
-        
+        self._updater = updater
+    
     def func(self):
         """
         The boundary value derivative function 
@@ -35,6 +36,16 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         """
         return OcellarisDirichletBC(self.simulation, V, self._value,
                                     self.subdomain_marker, self.subdomain_id)
+    
+    def update(self):
+        """
+        Update the time and other parameters used in the BC.
+        This is used every timestep and for all RK substeps
+        """
+        if self._updater:
+            self._updater(self.simulation.timestep,
+                          self.simulation.time,
+                          self.simulation.dt)
     
     def __repr__(self):
         return '<OcellarisDirichletBC on subdomain %d>' % self.subdomain_id
@@ -149,8 +160,12 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         """
         description = 'boundary condititon for %s' % var_name
         P = self.func_space.ufl_element().degree()
-        expr = OcellarisCppExpression(self.simulation, cpp_code, description, P, update=True)
-        bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
+        expr, updater = OcellarisCppExpression(self.simulation, cpp_code, description,
+                                               P, return_updater=True)
+        self.simulation.hooks.add_pre_timestep_hook(updater, 'Update C++ Dirichlet BC for %s' % var_name)
+        
+        bc = OcellarisDirichletBC(self.simulation, self.func_space, expr,
+                                  subdomains, subdomain_id, updater=updater)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
         self.simulation.log.info('    C++ coded value for %s' % var_name)

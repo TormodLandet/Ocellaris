@@ -82,7 +82,7 @@ def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
         return function
 
 
-def OcellarisCppExpression(simulation, cpp_code, description, degree, update=False):
+def OcellarisCppExpression(simulation, cpp_code, description, degree, update=False, return_updater=False):
     """
     Create a dolfin.Expression and make sure it has variables like time
     available when executing.
@@ -108,4 +108,7 @@ def OcellarisCppExpression(simulation, cpp_code, description, degree, update=Fal
     if update:
         simulation.hooks.add_pre_timestep_hook(updater, 'Update C++ expression "%s"' % description)
     
-    return expression
+    if return_updater:
+        return expression, updater
+    else:
+        return expression
