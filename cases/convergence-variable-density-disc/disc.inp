@@ -36,7 +36,7 @@ user_code:
         # Control flag for test case
         # Q = 0  =>  constant density 2.0
         # Q = 1  =>  varying density between 1.0 and 3.0
-        Q: 0
+        Q: 1
 
 # Dirichlet boundary conditions for u, Neumann for p
 boundary_conditions:
@@ -49,8 +49,8 @@ boundary_conditions:
         -   -x[1]*cos(t)
         -   +x[0]*cos(t)
     p:
-        type: CppCodedGradient
-        cpp_code: 0
+        type: ConstantGradient
+        value: 0
     rho:
         type: CppCodedValue
         cpp_code: 2 + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
@@ -94,7 +94,8 @@ multiphase_solver:
     type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 1
-    analytic_solution: yes
+    #analytical_solution: yes
+    #explicit_rk_method: yes
 
 _slope_limiter:
     rho:
