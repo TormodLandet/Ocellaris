@@ -1,3 +1,6 @@
+# encoding: utf8
+from __future__ import division
+import os
 import dolfin
 
 
@@ -67,6 +70,12 @@ class Log(object):
         """
         Setup logging to file if requested in the simulation input
         """
+        # Ensure that the output directory exist
+        tmp = self.simulation.input.get_output_file_path('BOGUS', 'xxxxx')
+        output_dir = os.path.split(tmp)[0]
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
         log_name = self.simulation.input.get_output_file_path('output/log_name', None)
         log_on_all_ranks = self.simulation.input.get_value('output/log_on_all_ranks', False, 'bool')
         stdout_on_all_ranks = self.simulation.input.get_value('output/stdout_on_all_ranks', False, 'bool')
