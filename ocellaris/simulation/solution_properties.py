@@ -59,10 +59,9 @@ class SolutionProperties(object):
         """
         V = df.FunctionSpace(self.mesh, 'DG', 0)
         h = self.simulation.data['h']
-        df_nu = df.Constant(nu)
         u, v = df.TrialFunction(V), df.TestFunction(V)
         a = u*v*dx
-        L = dot(vel, vel)**0.5*h/(2*df_nu)*v*dx
+        L = dot(vel, vel)**0.5*h/(2*nu)*v*dx
         
         # Pre-factorize matrices and store for usage in projection
         self._peclet_solver = df.LocalSolver(a, L)
