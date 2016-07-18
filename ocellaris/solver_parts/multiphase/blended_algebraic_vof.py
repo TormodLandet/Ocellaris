@@ -82,10 +82,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'BlendedAlgebraicVofModel - update colour field')
-    
-        # Report divergence of the velocity field after each time step
-        simulation.hooks.add_post_timestep_hook(self.report_divergence, 'BlendedAlgebraicVofModel - report velocity divergence')
-
+        
         simulation.log.info('Creating blended VOF multiphase model')
         simulation.log.info('    Using convection scheme %s for the colour function' % scheme)
         simulation.log.info('    Using continuous rho and nu fields: %r' % self.continuous_fields)
@@ -121,8 +118,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         #    ∂c/∂t +  ∇⋅(c u) = 0
         
         # At the previous time step (known advecting velocity "up")   
-        vel = self.simulation.data['up']            
-        self.eq = AdvectionEquation(self.simulation, cp, cpp, vel, beta, self.time_coeffs, dirichlet_bcs)
+        vel = self.simulation.data['up']
+        Vc = self.simulation.data['Vc']
+        self.eq = AdvectionEquation(self.simulation, Vc, cp, cpp, vel, beta, self.time_coeffs, dirichlet_bcs)
         
         # At the next time step (extrapolated advecting velocity)
         Vu = self.simulation.data['Vu']
@@ -200,7 +198,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         c_star = self.simulation.data['c_star']
         
         # Solve the advection equations for the colour field
-        if it == 1 or is_static:
+        if timestep_number == 1 or is_static:
             c.assign(cp)
         else:
             A = self.eq.assemble_lhs()
@@ -251,18 +249,3 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         self.extrapolation_coeffs = [2, -1]
         
         timer.stop()
-    
-    def report_divergence(self):
-        """
-        It is very important in VOF that the velocity field is divergence free.
-        We report the divergence in the function space of the colour function
-        so that this can be checked
-        """
-        vel = self.simulation.data['up']
-        
-        for fspace_name in ('Vc', 'Vu', 'Vp'):
-            V = self.simulation.data[fspace_name]
-            div_u = dolfin.project(dolfin.nabla_div(vel), V)
-            div_u.vector().abs()
-            maxdiv = div_u.vector().max()
-            self.simulation.reporting.report_timestep_value('max(div(u)|%s)' % fspace_name, maxdiv)

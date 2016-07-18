@@ -172,8 +172,9 @@ class InputOutputHandling():
         # Write scalar functions
         for name in ('p', 'p_hydrostatic', 'c', 'rho'):
             if name in self.simulation.data:
-                func = self.simulation.data[name] 
-                self.xdmf_file.write(func, t)
+                func = self.simulation.data[name]
+                if isinstance(func, dolfin.Function): 
+                    self.xdmf_file.write(func, t)
     
     def _write_hdf5(self, h5_file_name=None):
         """
