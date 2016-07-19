@@ -64,7 +64,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             # Velocity at the midpoint (do not care which side of the face)
             ump = numpy.zeros(ndim, float)
             for d in range(ndim):
-                velocity[d].eval(ump[d:], finfo.midpoint)
+                velocity[d].eval(ump[d:d+1], finfo.midpoint)
             
             # Midpoint of local cells
             cell0_mp = cell_info[ic0].midpoint
