@@ -73,7 +73,7 @@ class Log(object):
         # Ensure that the output directory exist
         tmp = self.simulation.input.get_output_file_path('BOGUS', 'xxxxx')
         output_dir = os.path.split(tmp)[0]
-        if not os.path.exists(output_dir):
+        if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
         log_name = self.simulation.input.get_output_file_path('output/log_name', None)
