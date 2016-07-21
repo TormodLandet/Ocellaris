@@ -1,3 +1,4 @@
+import traceback
 import dolfin
 from . import ocellaris_error
 
@@ -8,7 +9,7 @@ def make_expression(simulation, cpp_code, description, element):
     """
     if isinstance(cpp_code, (float, int, long)):
         cpp_code = repr(cpp_code)
-        
+    
     if isinstance(element, (int, long)):
         degree = element
         element = None
@@ -18,9 +19,9 @@ def make_expression(simulation, cpp_code, description, element):
     available_vars = get_vars(simulation)    
     try:
         return dolfin.Expression(cpp_code, element=element, degree=degree, **available_vars)
-    except Exception as e:
+    except Exception:
         vardesc = '\n  - '.join('%s (%s)' % (name, type(value)) for name, value in available_vars.items())
-        errormsg  = str(e)
+        errormsg = traceback.format_exc()
         ocellaris_error('Error in C++ code',
                         'The C++ code for %s does not compile.'
                         '\n\nCode:\n%s'
