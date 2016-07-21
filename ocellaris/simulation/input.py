@@ -55,7 +55,8 @@ class Input(collections.OrderedDict):
         self.update(inp)
         self.file_name = file_name
     
-    def get_value(self, path, default_value=UNDEFINED, required_type='any', mpi_root_value=False):
+    def get_value(self, path, default_value=UNDEFINED, required_type='any',
+                  mpi_root_value=False, safe_mode=False):
         """
         Get an input value by its path in the input dictionary
         
@@ -70,6 +71,7 @@ class Input(collections.OrderedDict):
             required_type: expected type of the variable. Giving 
                 type="any" does no type checking
             mpi_root_value: get the value on the root MPI process
+            safe_mode: do not evaluate python expressions "py$ xxx"
         
         Returns:
             The input value if it exist otherwise the default value
@@ -102,21 +104,83 @@ class Input(collections.OrderedDict):
                         default_value = Input(self.simulation, default_value)
                     return default_value
             d = d[p]
+            
+        def eval_python_expression(value):
+            """
+            We run eval with the math functions and user constants available
+            """
+            if not isinstance(value, basestring) or not value.startswith('py$'):
+                return value
+            
+            if safe_mode:
+                ocellaris_error('Cannot have Python expression here',
+                                'Not allowed to have Python expression here:  %s' % pathstr)  
+            
+            # remove "py$" prefix
+            expr = value[3:]
+            
+            # Build dictionary of locals for evaluating the expression    
+            eval_locals = {}
+            
+            import math
+            for name in dir(math):
+                if not name.startswith('_'):
+                    eval_locals[name] = getattr(math, name)
+            
+            global_inp = self.simulation.input
+            user_constants = global_inp.get_value('user_code/constants', {}, 'dict(string:float)',
+                                                  safe_mode=True)
+            for name, const_value in user_constants.iteritems():
+                eval_locals[name] = const_value
+            
+            try:
+                value = eval(expr, globals(), eval_locals)
+            except Exception:
+                self.simulation.log.error('Cannot evaluate python code for %s' % pathstr)
+                self.simulation.log.error('Python code is %s' % expr)
+                raise
+            return value
         
         def check_isinstance(value, classes):
             """
             Give error if the input data is not of the required type
             """
+            value = eval_python_expression(value)
+            
             if not isinstance(value, classes):
                 ocellaris_error('Malformed data on input file',
                                 'Parameter %s should be of type %s,\nfound %r %r' % 
                                 (pathstr, required_type, value, type(value)))
+            return value
+        
+        def check_dict(d, keytype, valtype):
+            """
+            Check dict and eval any python expressions in the values
+            """
+            d = check_isinstance(d, dict_types)
+            d_new = collections.OrderedDict()
+            for key, val in d.items():
+                check_isinstance(key, keytype)
+                d_new[key] = check_isinstance(val, valtype)
+            return d_new
+        
+        def check_list(d, valtype):
+            """
+            Check list and eval any python expressions in the values
+            """
+            d = check_isinstance(d, list)
+            d_new = []
+            for val in d:
+                d_new.append(check_isinstance(val, valtype))
+            return d_new
         
         # Validate according to required data type
         number = (int, long, float)
         dict_types = (dict, collections.OrderedDict)
+        anytype = (int, long, float, basestring, list, tuple, dict,
+                   collections.OrderedDict, bool)
         if required_type == 'bool':
-            check_isinstance(d, bool)
+            d = check_isinstance(d, bool)
         elif required_type == 'float':
             # The YAML parser annoyingly thinks 1e-3 is a string (while 1.0e-3 is a float)
             if isinstance(d, str):
@@ -124,49 +188,32 @@ class Input(collections.OrderedDict):
                     d = float(d)
                 except ValueError:
                     pass
-            check_isinstance(d, number)
+            d = check_isinstance(d, number)
         elif required_type == 'int':
-            check_isinstance(d, int)
+            d = check_isinstance(d, int)
         elif required_type == 'string':
-            check_isinstance(d, basestring)
+            d = check_isinstance(d, basestring)
             # SWIG does not like Python 2 Unicode objects
             d = str(d)
         elif required_type == 'Input':
-            check_isinstance(d, dict_types)
+            d = check_isinstance(d, dict_types)
             d = Input(self.simulation, d, basepath=pathstr)
         elif required_type == 'dict(string:any)':
-            check_isinstance(d, dict_types)
-            for key, val in d.items():
-                check_isinstance(key, basestring)
+            d = check_dict(d, basestring, anytype)
         elif required_type == 'dict(string:dict)':
-            check_isinstance(d, dict_types)
-            for key, val in d.items():
-                check_isinstance(key, basestring)
-                check_isinstance(val, dict_types)
+            d = check_dict(d, basestring, dict_types)
         elif required_type == 'dict(string:list)':
-            check_isinstance(d, dict_types)
-            for key, val in d.items():
-                check_isinstance(key, basestring)
-                check_isinstance(val, list)
+            d = check_dict(d, basestring, list)
         elif required_type == 'dict(string:float)':
-            check_isinstance(d, dict_types)
-            for key, val in d.items():
-                check_isinstance(key, basestring)
-                check_isinstance(val, number)
+            d = check_dict(d, basestring, number)
         elif required_type == 'list(float)':
-            check_isinstance(d, list)
-            for elem in d:
-                check_isinstance(elem, number)
+            d = check_list(d, number)
         elif required_type == 'list(string)':
-            check_isinstance(d, list)
-            for elem in d:
-                check_isinstance(elem, basestring)
+            d = check_list(d, basestring)
         elif required_type == 'list(dict)':
-            check_isinstance(d, list)
-            for elem in d:
-                check_isinstance(elem, dict_types)
+            d = check_list(d, dict_types)
         elif required_type == 'any':
-            pass
+            d = check_isinstance(d, anytype)
         else:
             raise ValueError('Unknown required_type %s' % required_type)
         

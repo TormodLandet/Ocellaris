@@ -38,7 +38,7 @@ class NeumannBoundary(BoundaryCondition):
         Neumann condition
         """
         self.simulation = simulation
-        value = inp_dict['value']
+        value = inp_dict.get_value('value', required_type='any')
         
         if isinstance(value, list):
             assert len(value) == simulation.ndim
@@ -74,14 +74,15 @@ class CodedNeumannBoundary(BoundaryCondition):
         self.simulation = simulation
         
         # Make a dolfin Expression object that runs the code string
-        code = inp_dict['code']
+        code = inp_dict.get_value('code', required_type='any')
         
         if isinstance(code, list):
             assert len(code) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
                 description = 'coded gradient boundary condition for %s' % name
-                expr = CodedExpression(simulation, code[0], description)
+                sub_code =  inp_dict.get_value('code/%d' % d, required_type='string')
+                expr = CodedExpression(simulation, sub_code, description)
                 self.register_neumann_condition(name, expr, subdomains, subdomain_id)
         else:
             description = 'coded gradient boundary condition for %s' % var_name
@@ -108,13 +109,14 @@ class CppCodedNeumannBoundary(BoundaryCondition):
         """
         self.simulation = simulation
         self.func_space = simulation.data['V%s' % var_name]
-        cpp_code = inp_dict['cpp_code']
+        cpp_code = inp_dict.get_value('cpp_code', required_type='any')
         
         if isinstance(cpp_code, list):
             assert len(cpp_code) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
-                self.register_neumann_condition(name, cpp_code[d], subdomain_id)
+                sub_code =  inp_dict.get_value('cpp_code/%d' % d, required_type='string')
+                self.register_neumann_condition(name, sub_code, subdomain_id)
         else:
             self.register_neumann_condition(var_name, cpp_code, subdomain_id)
     

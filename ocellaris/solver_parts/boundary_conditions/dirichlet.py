@@ -67,7 +67,7 @@ class ConstantDirichletBoundary(BoundaryCondition):
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
         
-        value = inp_dict['value']
+        value = inp_dict.get_value('value', required_type='any')
         if isinstance(value, list):
             assert len(value) == simulation.ndim
             for d in range(simulation.ndim):
@@ -108,14 +108,15 @@ class CodedDirichletBoundary(BoundaryCondition):
             self.func_space = simulation.data['V%s' % var_name]
         
         # Make a dolfin Expression object that runs the code string
-        code = inp_dict['code']
+        code = inp_dict.get_value('code', required_type='any')
         
         if isinstance(code, list):
             assert len(code) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
                 description = 'coded value boundary condition for %s' % name
-                expr = CodedExpression(simulation, code[0], description)
+                sub_code = inp_dict.get_value('code/%d' % d, required_type='string')
+                expr = CodedExpression(simulation, sub_code, description)
                 self.register_dirichlet_condition(name, expr, subdomains, subdomain_id)
         else:
             description = 'coded value boundary condition for %s' % var_name
@@ -144,13 +145,14 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         self.func_space = simulation.data['V%s' % var_name]
         
         # Make a dolfin Expression object that runs the code string
-        code = inp_dict['cpp_code']
+        code = inp_dict.get_value('cpp_code', required_type='any')
         
         if isinstance(code, list):
             assert len(code) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
-                self.register_dirichlet_condition(name, code[d], subdomains, subdomain_id)
+                sub_code = inp_dict.get_value('cpp_code/%d' % d, required_type='string')
+                self.register_dirichlet_condition(name, sub_code, subdomains, subdomain_id)
         else:
             self.register_dirichlet_condition(var_name, code, subdomains, subdomain_id)
     

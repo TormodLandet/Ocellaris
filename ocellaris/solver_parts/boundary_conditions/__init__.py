@@ -96,11 +96,12 @@ class BoundaryRegion(object):
             if not isinstance(value, dict) or 'type' not in value:
                 continue
             
-            bc_type = value['type']
+            inp = self.input.get_value(key, required_type='Input')
+            bc_type = inp.get_value('type', required_type='string')
             sim.log.info('Applying %s boundary condition for %s on %s' % 
                          (bc_type, key, self.name))
             bc_class = get_boundary_condition(bc_type)
-            bc = bc_class(sim, key, value, self.marker, self.mark_id)
+            bc = bc_class(sim, key, inp, self.marker, self.mark_id)
             self.conditions[key] = bc
 
 
