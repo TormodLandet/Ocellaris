@@ -354,8 +354,6 @@ class SolverCoupled(Solver):
         # Assign into the regular (split) functions from the coupled function
         funcs = [self.simulation.data[name] for name in self.subspace_names]
         self.assigner.assign(funcs, self.coupled_func)
-        for func in funcs:
-            func.vector().apply('insert') # dolfin bug #587
         
         # Some solvers cannot remove the null space, so we just normalize the pressure instead.
         # If we remove the null space of the matrix system this will not be the exact same as
