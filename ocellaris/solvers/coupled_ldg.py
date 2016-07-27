@@ -2,7 +2,7 @@
 from __future__ import division
 import numpy
 import dolfin
-from dolfin import dx, dS, div, grad, dot, jump, avg, Constant
+from dolfin import dx, dS, div, grad, dot, inner, outer, jump, avg, Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDM
 from ..solver_parts import VelocityBDMProjection
@@ -105,7 +105,7 @@ class SolverCoupledLDG(Solver):
         
         # Create stress tensor space
         P = Vu.ufl_element().degree()
-        Vs = dolfin.FunctionSpace(sim.data['mesh'], "DG", P, constrained_domain=cd)
+        Vs = dolfin.FunctionSpace(sim.data['mesh'], 'DG', P, constrained_domain=cd)
         for i in range(sim.ndim**2):
             stress_name = 'stress_%d' % i
             sim.data[stress_name] = dolfin.Function(Vs)
@@ -225,8 +225,6 @@ class SolverCoupledLDG(Solver):
         # Assign into the regular (split) functions from the coupled function
         funcs = [self.simulation.data[name] for name in self.subspace_names]
         self.assigner.assign(funcs, self.coupled_func)
-        for func in funcs:
-            func.vector().apply('insert') # dolfin bug #587
         
         # If we remove the null space of the matrix system this will not be the exact same as
         # removing the proper null space of the equation, so we fix this here
@@ -259,7 +257,7 @@ class SolverCoupledLDG(Solver):
         maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
         has_upp_start_values = maxabs > 0
         
-        # Previous-previous values are provided so we can start up with second order time stepping 
+        # Previous-previous values are provided so we can start up with second order time stepping
         if has_upp_start_values:
             sim.log.info('Initial values for upp are found and used')
             self.is_first_timestep = False
@@ -297,7 +295,7 @@ class SolverCoupledLDG(Solver):
                 upp = self.simulation.data['upp%d' % d]
                 
                 if self.is_steady:
-                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max() 
+                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
                     vel_diff = max(vel_diff, diff)
                 
                 upp.assign(up)
@@ -504,3 +502,195 @@ class CoupledEquationsLDG(object):
         else:
             dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
         return self.tensor_rhs
+
+
+class CoupledEquationsLDG2(object):
+    def __init__(self, simulation):
+        """
+        This class assembles the coupled Navier-Stokes equations with LDG discretization
+        
+        :type simulation: ocellaris.Simulation
+        """
+        self.simulation = simulation
+        self.use_grad_p_form = False
+        self.use_grad_q_form = True
+        self.define_coupled_equation()
+    
+    def define_coupled_equation(self):
+        """
+        Setup the coupled Navier-Stokes equation
+        
+        This implementation assembles the full LHS and RHS each time they are needed
+        """
+        sim = self.simulation
+        mpm = sim.multi_phase_model
+        mesh = sim.data['mesh']
+        Vcoupled = sim.data['Vcoupled']
+        u_conv = sim.data['u_conv']
+        
+        # Unpack the coupled trial and test functions
+        uc = dolfin.TrialFunction(Vcoupled)
+        vc = dolfin.TestFunction(Vcoupled)
+        ulist = []; vlist = []
+        sigmas, taus = [],[]
+        for d in range(sim.ndim):
+            ulist.append(uc[d])
+            vlist.append(vc[d])
+            indices = range(1+sim.ndim*(d+1), 1+sim.ndim*(d+2))
+            sigmas.append([uc[i] for i in indices])
+            taus.append([vc[i] for i in indices])
+        
+        u = dolfin.as_vector(ulist)
+        v = dolfin.as_vector(vlist)
+        p = uc[sim.ndim]
+        q = vc[sim.ndim]
+        sigma = dolfin.as_tensor(sigmas)
+        tau = dolfin.as_tensor(taus)
+        
+        c1, c2, c3 = sim.data['time_coeffs']
+        dt = sim.data['dt']
+        g = sim.data['g']
+        n = dolfin.FacetNormal(mesh)
+        h = dolfin.FacetArea(mesh)
+        
+        # Fluid properties
+        rho = mpm.get_density(0)
+        mu = mpm.get_laminar_dynamic_viscosity(0)
+        
+        # Upwind and downwind velocities
+        w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
+        w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
+        u_uw_s = dolfin.conditional(dolfin.gt(dot(u_conv, n), 0.0), 1.0, 0.0)('+')
+        u_uw = u_uw_s*u('+') + (1 - u_uw_s)*u('-')
+        
+        # LDG penalties
+        #kappa_0 = Constant(4.0)
+        #kappa = mu*kappa_0/h
+        C11 = avg(mu/h)
+        D11 = avg(h/mu)
+        C12 = 0.2*n('+')
+        D12 = 0.2*n('+')
+        
+        ojump = lambda v, n: outer(v, n)('+') + outer(v, n)('-') 
+        
+        # Interior facet fluxes
+        #u_hat_dS = avg(u)
+        #sigma_hat_dS = avg(sigma) - avg(kappa)*ojump(u, n)
+        #p_hat_dS = avg(p)
+        u_hat_s_dS = avg(u) + dot(ojump(u, n), C12)
+        u_hat_p_dS = avg(u) + D11*jump(p, n) + D12*jump(u, n)
+        sigma_hat_dS = avg(sigma) - C11*ojump(u, n) - outer(jump(sigma, n), C12)
+        p_hat_dS = avg(p) - dot(D12, jump(p, n))
+        
+        # Time derivative
+        up = sim.data['up']
+        upp = sim.data['upp']
+        eq = rho*dot(c1*u + c2*up + c3*upp, v)/dt*dx
+        
+        # LDG equation 1
+        eq += inner(sigma, tau)*dx
+        eq += dot(u, div(mu*tau))*dx
+        eq -= dot(u_hat_s_dS, jump(mu*tau, n))*dS
+        
+        # LDG equation 2
+        eq += (inner(sigma, grad(v)) - p*div(v))*dx
+        eq -= (inner(sigma_hat_dS, ojump(v, n)) - p_hat_dS*jump(v, n))*dS
+        eq -= dot(u, div(outer(v, rho*u_conv)))*dx
+        eq += rho('+')*dot(u_conv('+'), n('+'))*dot(u_uw, v('+'))*dS
+        eq += rho('-')*dot(u_conv('-'), n('-'))*dot(u_uw, v('-'))*dS
+        momentum_sources = sim.data['momentum_sources'] + [rho*g]
+        eq -= dot(sum(momentum_sources), v)*dx
+        
+        # LDG equation 3
+        eq -= dot(u, grad(q))*dx
+        eq += dot(u_hat_p_dS, jump(q, n))*dS
+        
+        # Dirichlet boundary
+        dirichlet_bcs = get_collected_velocity_bcs(sim, 'dirichlet_bcs')
+        for ds, u_bc in dirichlet_bcs.items():
+            #sigma_hat_ds = sigma - kappa*outer(u, n)
+            sigma_hat_ds = sigma - C11*outer(u - u_bc, n)
+            u_hat_ds = u_bc
+            p_hat_ds = p
+            
+            # LDG equation 1
+            eq -= dot(u_hat_ds, dot(mu*tau, n))*ds
+            
+            # LDG equation 2
+            eq -= (inner(sigma_hat_ds, outer(v, n)) - p_hat_ds*dot(v, n))*ds
+            eq += rho*w_nU*dot(u, v)*ds
+            eq += rho*w_nD*dot(u_bc, v)*ds
+            
+            # LDG equation 3
+            eq += dot(u_hat_ds, q*n)*ds
+        
+        # Neumann boundary
+        neumann_bcs = get_collected_velocity_bcs(sim, 'neumann_bcs')
+        assert not neumann_bcs
+        for ds, du_bc in neumann_bcs.items():
+            # Divergence free criterion
+            if self.use_grad_q_form:
+                eq += q*dot(u, n)*ds
+            else:
+                eq -= q*dot(u, n)*ds
+            
+            # Convection
+            eq += rho*w_nU*dot(u, v)*ds
+            
+            # Diffusion
+            u_hat_ds = u
+            sigma_hat_ds = outer(du_bc, n)/mu
+            eq -= dot(u_hat_ds, dot(mu*tau, n))*ds
+            eq -= inner(sigma_hat_ds, outer(v, n))*ds
+            
+            # Pressure
+            if not self.use_grad_p_form:
+                eq += p*dot(v, n)*ds
+        
+        a, L = dolfin.system(eq)
+        self.form_lhs = a
+        self.form_rhs = L
+        self.tensor_lhs = None
+        self.tensor_rhs = None
+    
+    def assemble_lhs(self):
+        if self.tensor_lhs is None:
+            self.tensor_lhs = dolfin.assemble(self.form_lhs)
+        else:
+            dolfin.assemble(self.form_lhs, tensor=self.tensor_lhs)
+        return self.tensor_lhs
+    
+    def assemble_rhs(self):
+        if self.tensor_rhs is None:
+            self.tensor_rhs = dolfin.assemble(self.form_rhs)
+        else:
+            dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
+        return self.tensor_rhs
+
+
+def get_collected_velocity_bcs(simulation, name):
+    """
+    When mixed Dirichlet/Neumann BCs on the same facet (for different velocity
+    components) is not supported it can be convenient to get all BCs collected
+    by boundary region. This function returns a dictionary for Dirichlet or
+    Neumann BCs where the "ds" meassure is the key and a vector of boundary
+    values for each velocity component is the value
+    
+    The "name" parameter must be 'dirichlet_bcs' or 'neumann_bcs'
+    """
+    # Collect BCs
+    bc_dict = {}
+    for d in range(simulation.ndim):
+        for bc in simulation.data[name].get('u%d' % d, []):
+            if d == 0:
+                bc_dict[bc.ds()] = [bc.func()]
+            else:
+                bc_dict[bc.ds()].append(bc.func())
+    
+    # Verify that all components are present and convert to vector
+    for ds, u_bc in bc_dict.items():
+        assert len(u_bc) == simulation.ndim
+        bc_dict[ds] = dolfin.as_vector(u_bc)
+    
+    simulation.log.debug('    Found %d %s boundary regions' % (len(bc_dict), name))
+    return bc_dict
