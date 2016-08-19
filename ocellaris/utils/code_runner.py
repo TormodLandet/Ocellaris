@@ -9,7 +9,9 @@ from math import *
 from numpy import *
 from dolfin import *
 
+
 __all__ = ['RunnablePythonString', 'CodedExpression']
+
 
 class RunnablePythonString(object):
     def __init__(self, simulation, code_string, description, var_name=None):
@@ -60,9 +62,9 @@ class RunnablePythonString(object):
         """
         Run the code
         """
-        # Make sure the simulation data is available 
-        locals().update(self.simulation.data)
-        simulation = self.simulation
+        # Make sure the simulation data is available
+        simulation = self.simulation 
+        locals().update(simulation.data)
         t = time = simulation.time
         it = timestep = simulation.timestep
         dt = simulation.dt
@@ -70,6 +72,13 @@ class RunnablePythonString(object):
         
         # Make sure the keyword arguments accessible
         locals().update(kwargs)
+        
+        # Make sure the user constants are accessible
+        user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:float)')
+        constants = {}
+        for name, value in user_constants.iteritems():
+            constants[name] = value
+        locals().update(constants)
         
         if self.needs_exec:
             exec(self.code)
@@ -82,6 +91,7 @@ class RunnablePythonString(object):
         else:
             # Return the result of evaluating the expression
             return eval(self.code)
+
 
 def CodedExpression(simulation, code_string, description, value_shape=()):
     """
@@ -100,10 +110,14 @@ def CodedExpression(simulation, code_string, description, value_shape=()):
     expr.runnable = RunnablePythonString(simulation, code_string, description, 'value')
     return expr
 
+
+################################################################################
 # We need to subclass once per value_shape() for some reason
+
 class CodedExpression0(dolfin.Expression):
     def eval_cell(self, value, x, ufc_cell):
         self.runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+
 
 class CodedExpression2(dolfin.Expression):
     def eval_cell(self, value, x, ufc_cell):
@@ -111,6 +125,7 @@ class CodedExpression2(dolfin.Expression):
     
     def value_shape(self):
         return (2,)
+
 
 class CodedExpression3(dolfin.Expression):
     def eval_cell(self, value, x, ufc_cell):
