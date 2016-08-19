@@ -40,10 +40,11 @@ def setup_probes(simulation):
     def hook_final(probe):
         return lambda success: probe.end_of_simulation()
     
-    probe_inputs = simulation.input.get_value('probes', [])
-    for inp in probe_inputs:
-        probe_name = inp.get('name', 'unnamed')
-        probe_type = inp['type']
+    Nprobes = len(simulation.input.get_value('probes', []))
+    for i in range(Nprobes):
+        inp = simulation.input.get_value('probes/%d' % i, required_type='Input')
+        probe_name = inp.get_value('name', 'unnamed', 'string')
+        probe_type = inp.get_value('type', required_type='string')
         probe_class = get_probe(probe_type)
         probe = probe_class(simulation, inp)
         simulation.hooks.add_post_timestep_hook(hook_timestep(probe), 'Probe "%s"' % probe_name)

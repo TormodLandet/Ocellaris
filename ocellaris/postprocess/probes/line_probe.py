@@ -2,6 +2,7 @@ import numpy
 from matplotlib import pyplot
 from . import Probe, register_probe
 
+
 @register_probe('LineProbe')
 class LineProbe(Probe):
     def __init__(self, simulation, probe_input):
@@ -9,35 +10,32 @@ class LineProbe(Probe):
         self.input = probe_input
 
         # Read input
-        name = self.input['name']
-        startpos = self.input['startpos']
-        endpos = self.input['endpos']
-        N = self.input['Npoints']
-        self.field_name = self.input['field']
+        name = self.input.get_value('name', required_type='string')
+        startpos = self.input.get_value('startpos', required_type='list(float)')
+        endpos = self.input.get_value('endpos', required_type='list(float)')
+        N = self.input.get_value('Npoints', required_type='int')
+        self.field_name = self.input.get_value('field', required_type='string')
         self.field = simulation.data[self.field_name]
         
         # Should we write the data to a file
-        prefix = simulation.input.get_value('output/prefix', None, 'string')
-        file_name = self.input.get('file_name', '')
+        prefix = simulation.input.get_value('output/prefix', '', 'string')
+        file_name = self.input.get_value('file_name', None, 'string')
         self.write_file = file_name is not None
         if self.write_file:
-            if prefix is not None:
-                self.file_name = prefix + file_name
-            else:
-                self.file_name = file_name
-            self.write_interval = self.input.get('write_interval', 1)
+            self.file_name = prefix + file_name
+            self.write_interval = self.input.get_value('write_interval', 1, 'int')
         
         # Should we pop up a matplotlib window when running?
-        self.show_interval = self.input.get('show_interval', 0)
+        self.show_interval = self.input.get_value('show_interval', 0, 'float')
         self.show = self.show_interval != 0
         
         # Plot target values if provided
         self.has_target = False
         if 'target_abcissa' in self.input:
             self.has_target = True
-            self.target_abcissa = self.input['target_abcissa']
-            self.target_ordinate = self.input['target_ordinate']
-            self.target_name = self.input.get('target_name', 'Target')
+            self.target_abcissa = self.input.get_value('target_abcissa', required_type='list(float)')
+            self.target_ordinate = self.input.get_value('target_ordinate', required_type='list(float)')
+            self.target_name = self.input.get_value('target_name', 'Target', 'string')
         
         # Handle 2D positions
         if len(startpos) == 2:
