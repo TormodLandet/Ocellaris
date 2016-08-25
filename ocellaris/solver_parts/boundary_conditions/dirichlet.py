@@ -142,7 +142,12 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         Dirichlet condition with C++ coded value
         """
         self.simulation = simulation
-        self.func_space = simulation.data['V%s' % var_name]
+        if var_name[-1].isdigit():
+            # A var_name like "u0" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name[:-1]] 
+        else:
+            # A var_name like "u" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name]
         
         # Make a dolfin Expression object that runs the code string
         code = inp_dict.get_value('cpp_code', required_type='any')
