@@ -2,7 +2,7 @@ from __future__ import division, print_function
 import time, subprocess, os
 from math import log
 import dolfin
-from ocellaris import Simulation, run_simulation
+from ocellaris import Simulation, setup_simulation, run_simulation
 
 
 def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
@@ -21,11 +21,12 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     sim.input.set_value('time/tmax', tmax)
     sim.input.set_value('solver/polynomial_degree_velocity', polydeg_u)
     sim.input.set_value('solver/polynomial_degree_pressure', polydeg_p)
-    sim.input.set_value('output/ocellaris_log_level', 'warning')
+    sim.input.set_value('output/stdout_enabled', False)
     
     say('Running ...')
     try:
         t1 = time.time()
+        setup_simulation(sim)
         run_simulation(sim)
         duration = time.time() - t1
     except KeyboardInterrupt:

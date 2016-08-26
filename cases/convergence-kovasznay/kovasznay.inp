@@ -70,10 +70,10 @@ output:
     prefix: kovasznay
     log_name: .log
     dolfin_log_level: warning
-    ocellaris_log_level: info  # Overridden in convergence.py
+    ocellaris_log_level: info
 
 solver:
-    type: IPCS
+    type: Coupled
     num_inner_iter: 4
     polynomial_degree_velocity: 2  # Overridden in convergence.py
     polynomial_degree_pressure: 1  # Overridden in convergence.py
