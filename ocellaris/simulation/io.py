@@ -262,8 +262,8 @@ class InputOutputHandling():
             mesh = dolfin.Mesh()
             h5.read(mesh, '/mesh', False)
             if h5.has_dataset('/mesh_facet_regions'):
-                mesh_facet_regions = dolfin.FacetFunction()
-                h5.read(mesh_facet_regions, '/mesh_facet_regions', False)
+                mesh_facet_regions = dolfin.FacetFunction('size_t', mesh)
+                h5.read(mesh_facet_regions, '/mesh_facet_regions')
             else:
                 mesh_facet_regions = None
             sim.set_mesh(mesh, mesh_facet_regions)
