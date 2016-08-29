@@ -1,0 +1,122 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2016-08-19
+    description: |
+        Flow in a 2D pipe
+    
+user_code:
+    constants:
+        L1: 2
+        L2: 8
+        H1: 1
+        H2: 1
+
+physical_properties:
+    g: [0, 0]
+    nu0: 0.01
+    rho0: 1.0
+
+mesh:
+    type: XML
+    mesh_file: datafiles/backward_facing_step.xml
+    facet_region_file: datafiles/backward_facing_step_facet_region.xml
+
+boundary_conditions:
+-   name: Inlet
+    selector: mesh_facet_region
+    mesh_facet_regions: [1]
+    u0:
+        type: CppCodedValue
+        cpp_code: 1 # - x[1]*x[1]*4/H/H
+    u1:
+        type: ConstantValue
+        value: 0
+    p:
+        type: ConstantGradient
+        value: 0
+
+-   name: Walls
+    selector: mesh_facet_region
+    mesh_facet_regions: [2, 3, 4, 6]
+    u0:
+        type: ConstantValue
+        value: 0
+    u1:
+        type: ConstantValue
+        value: 0
+    p:
+        type: ConstantGradient
+        value: 0
+        
+-   name: Outlet
+    selector: mesh_facet_region
+    mesh_facet_regions: [5]
+#    u0:
+#        type: CppCodedValue
+#        cpp_code: 1 
+#    u1:
+#        type: ConstantValue
+#        value: 0
+#    p:
+#        type: ConstantGradient
+#        value: 0
+    u:
+        type: OpenOutletBoundary
+        #type: CppCodedValue
+        #cpp_code: ['1 - x[1]*x[1]*4/H/H', '0']
+
+time:
+    dt: 0.01
+    tmax: 20.0
+
+output:
+    prefix: output/bfs
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+
+solver:
+    type: Coupled
+    num_inner_iter: 20
+    polynomial_degree_pressure: 1
+    polynomial_degree_velocity: 2
+    function_space_pressure: DG
+    function_space_velocity: DG
+
+probes:
+-   name: velocity at step
+    type: LineProbe
+    startpos: py$ [0.001,  H1]
+    endpos:   py$ [0.001, -H2]
+    Npoints: 100
+    field: u0
+    
+    file_name: velocity1
+    write_interval: 1
+    show_interval: 1
+    
+-   name: velocity at after step
+    type: LineProbe
+    startpos: py$ [2*H1,  H1]
+    endpos:   py$ [2*H1, -H2]
+    Npoints: 100
+    field: u0
+    
+    file_name: velocity2
+    write_interval: 1
+    show_interval: 1
+    
+-   name: velocity before outlet
+    type: LineProbe
+    startpos: py$ [L2 - H1,  H1]
+    endpos:   py$ [L2 - H1, -H2]
+    Npoints: 100
+    field: u0
+    
+    file_name: velocity3
+    write_interval: 1
+    show_interval: 1
