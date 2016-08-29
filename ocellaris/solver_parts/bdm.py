@@ -61,11 +61,12 @@ class VelocityBDMProjection():
         for d in range(2):
             dirichlet_bcs = simulation.data['dirichlet_bcs']['u%d' % d]
             neumann_bcs = simulation.data['neumann_bcs'].get('u%d' % d, [])
+            outlet_bcs = simulation.data['outlet_bcs']
             for dbc in dirichlet_bcs:
                 u_bc = dbc.func()
                 a += u[d]*n[d]*v1*dbc.ds()
                 L += u_bc*n[d]*v1*dbc.ds()
-            for nbc in neumann_bcs:
+            for nbc in neumann_bcs + outlet_bcs:
                 a += u[d]*n[d]*v1*nbc.ds()
                 L += w[d]*n[d]*v1*nbc.ds()
         

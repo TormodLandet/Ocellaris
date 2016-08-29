@@ -132,7 +132,7 @@ class SolverCoupled(Solver):
             self.remove_null_space = False
         
         # No need for any tricks if the pressure is set via Dirichlet conditions somewhere
-        if self.simulation.data['dirichlet_bcs'].get('p', []):
+        if sim.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']:
             self.remove_null_space = False
             self.use_lagrange_multiplicator = False
             self.fix_pressure_dof = False
@@ -354,6 +354,8 @@ class SolverCoupled(Solver):
         # Assign into the regular (split) functions from the coupled function
         funcs = [self.simulation.data[name] for name in self.subspace_names]
         self.assigner.assign(funcs, self.coupled_func)
+        for func in funcs:
+            func.vector().apply('insert') # dolfin bug #587
         
         # Some solvers cannot remove the null space, so we just normalize the pressure instead.
         # If we remove the null space of the matrix system this will not be the exact same as

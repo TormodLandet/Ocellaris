@@ -311,6 +311,26 @@ class CoupledEquations(object):
                     if not self.use_grad_p_form:
                         eq += p*v[d]*n[d]*nbc.ds()
                 
+                # Outlet boundary
+                for obc in sim.data['outlet_bcs']:
+                    # Divergence free criterion
+                    if self.use_grad_q_form:
+                        eq += q*u[d]*n[d]*obc.ds()
+                    else:
+                        eq -= q*u[d]*n[d]*obc.ds()
+                    
+                    # Convection
+                    eq += rho*u[d]*w_nU*v[d]*obc.ds()
+                    
+                    # Diffusion
+                    mu_dudn = p*n[d]
+                    eq -= mu_dudn*v[d]*obc.ds()
+                    
+                    # Pressure
+                    if not self.use_grad_p_form:
+                        p_ = mu*dot(dot(grad(u), n), n)
+                        eq += p_*n[d]*v[d]*obc.ds()
+                
         a, L = dolfin.system(eq)
         self.form_lhs = a
         self.form_rhs = L
