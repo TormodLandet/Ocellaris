@@ -48,7 +48,7 @@ class BoundaryRegion(object):
             # general be the same as the mesh facet region number
             array_mesh = mesh_facet_regions.array()
             array_ocellaris = marker.array() 
-            region_numbers = self.input.get_value('mesh_facet_regions', required_type='string')
+            region_numbers = self.input.get_value('mesh_facet_regions', required_type='list(int)')
             for num in region_numbers:
                 simulation.log.info('Applying boundary region number %d to mesh '
                                     'facet region number %d' %  (self.mark_id, num))

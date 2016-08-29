@@ -208,6 +208,8 @@ class Input(collections.OrderedDict):
             d = check_dict(d, basestring, number)
         elif required_type == 'list(float)':
             d = check_list(d, number)
+        elif required_type == 'list(int)':
+            d = check_list(d, int)
         elif required_type == 'list(string)':
             d = check_list(d, basestring)
         elif required_type == 'list(dict)':
