@@ -215,11 +215,20 @@ class InputOutputHandling():
         h5.attributes('/ocellaris')['iteration'] = sim.timestep
         h5.attributes('/ocellaris')['restart_file_format'] = 1
         h5.attributes('/ocellaris')['input_file'] = str(sim.input)
-        h5.attributes('/ocellaris')['full_log'] = sim.log.get_full_log()
         h5.attributes('/ocellaris')['functions'] = ','.join(funcnames)
         
+        # Save the log taking into account that older HDF5 formats
+        # have limits on attribute size 
+        full_log = sim.log.get_full_log()
+        N = len(full_log)
+        M = 64*1000 # the HDF5 limit prior to 1.8.0
+        i = 0
+        while i*M < N:
+            log_part = full_log[i*M:(i+1)*M]
+            h5.attributes('/ocellaris')['full_log_%d' % i] = log_part
+            i += 1    
         h5.close()
-        
+    
     def _read_hdf5(self, h5_file_name, read_input=True, read_results=True):
         """
         Read an HDF5 restart file on the format written by _write_hdf5()
