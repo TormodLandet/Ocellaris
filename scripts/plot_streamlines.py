@@ -121,7 +121,15 @@ def load_simulation(h5_file_name):
     h5.read(u0, '/u0')
     h5.read(u1, '/u1')
     
-    res = {'u0': u0, 'u1': u1}
+    inp = h5.attributes('/ocellaris')['input_file']
+    time = h5.attributes('/ocellaris')['time']
+    h5.close()
+    
+    res = {'u0': u0,
+           'u1': u1,
+           'input': inp,
+           'file_name': h5_file_name,
+           'time': time}
     
     return res
 

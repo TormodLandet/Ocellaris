@@ -6,16 +6,16 @@ metadata:
     author: Tormod Landet
     date: 2016-08-19
     description: |
-        Flow in a 2D pipe
+        Flow in a 2D channel
     
 user_code:
     constants:
-        H: 0.1
-        L: 3.0
+        H: 1.0
+        L: 10.0
 
 physical_properties:
     g: [0, 0]
-    nu0: 0.01
+    nu0: 1e-8
     rho0: 1.0
 
 mesh:
@@ -24,19 +24,16 @@ mesh:
     endx: py$ L
     starty: py$ -H/2
     endy: py$ H/2
-    Nx: 50
+    Nx: 100
     Ny: 5
 
 boundary_conditions:
 -   name: Inlet
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
-    u0:
+    u:
         type: CppCodedValue
-        cpp_code: 1 - x[1]*x[1]*4/H/H
-    u1:
-        type: ConstantValue
-        value: 0
+        cpp_code: ["1.5 - 6*x[1]*x[1]", "0"]
     p:
         type: ConstantGradient
         value: 0
@@ -44,12 +41,9 @@ boundary_conditions:
 -   name: Walls
     selector: code
     inside_code: 'on_boundary and (x[1] < -H/2 + 1e-5 or x[1] > H/2 - 1e-5)'
-    u0:
+    u:
         type: ConstantValue
-        value: 0
-    u1:
-        type: ConstantValue
-        value: 0
+        value: [0, 0]
     p:
         type: ConstantGradient
         value: 0
@@ -57,26 +51,16 @@ boundary_conditions:
 -   name: Outlet
     selector: code
     inside_code: 'on_boundary and x[0] > L - 1e-5'
-#    u0:
-#        type: CppCodedValue
-#        cpp_code: 1 
-#    u1:
-#        type: ConstantValue
-#        value: 0
-#    p:
-#        type: ConstantGradient
-#        value: 0
     u:
         type: OpenOutletBoundary
-        #type: CppCodedValue
-        #cpp_code: ['1 - x[1]*x[1]*4/H/H', '0']
+
 
 time:
-    dt: 0.01
-    tmax: 20.0
+    dt: 0.1
+    tmax: 10000.0
 
 output:
-    prefix: output/pipe2D
+    prefix: output/channel
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -90,17 +74,28 @@ solver:
     function_space_velocity: DG
 
 probes:
--   name: velocity
+-   name: velocity near inlet
+    type: LineProbe
+    startpos: py$ [2*H, -H/2]
+    endpos:   py$ [2*H,  H/2]
+    Npoints: 100
+    field: u0
+    
+    file_name: velocity
+    write_interval: 10
+    show_interval: 5
+
+-   name: velocity near outlet
     type: LineProbe
     startpos: py$ [L-2*H, -H/2]
     endpos:   py$ [L-2*H,  H/2]
     Npoints: 100
     field: u0
     
-    file_name: velocity
-    write_interval: 1
-    show_interval: 1
-    
+    file_name: velocity2
+    write_interval: 10
+    show_interval: 5
+
 -   name: pressure
     type: LineProbe
     startpos: py$ [0, -H/4]
@@ -109,5 +104,5 @@ probes:
     field: p
     
     file_name: pressure
-    write_interval: 1
-    show_interval: 1
+    write_interval: 10
+    show_interval: 5
