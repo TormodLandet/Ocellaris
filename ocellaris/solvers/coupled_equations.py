@@ -184,7 +184,17 @@ class CoupledEquations(object):
                 neumann_bcs_pressure = sim.data['neumann_bcs'].get('p', [])
                 for nbc in neumann_bcs_pressure:
                     eq += p*v[d]*n[d]*nbc.ds()
-                
+                    
+                # Outlet boundary
+                for obc in sim.data['outlet_bcs']:     
+                    # Diffusion
+                    mu_dudn = p*n[d]
+                    eq -= mu_dudn*v[d]*obc.ds()
+                       
+                    # Pressure
+                    p_ = mu*dot(dot(grad(u), n), n)
+                    eq += p_*v[d]*n[d]*obc.ds()
+            
             else:
                 # Weak form of the Navier-Stokes eq. with discontinuous elements
                 assert self.flux_type == UPWIND

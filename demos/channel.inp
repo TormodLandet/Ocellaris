@@ -15,7 +15,7 @@ user_code:
 
 physical_properties:
     g: [0, 0]
-    nu0: 1e-8
+    nu0: 1e-4
     rho0: 1.0
 
 mesh:
@@ -57,7 +57,7 @@ boundary_conditions:
 
 time:
     dt: 0.1
-    tmax: 10000.0
+    tmax: 100.0
 
 output:
     prefix: output/channel
