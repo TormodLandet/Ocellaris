@@ -7,6 +7,7 @@ from ocellaris.utils import ocellaris_error
 # Default values, can be changed in the input file
 XDMF_WRITE_INTERVAL = 0
 HDF5_WRITE_INTERVAL = 0
+SAVE_RESTART_AT_END = True
 
 
 class InputOutputHandling():
@@ -20,10 +21,11 @@ class InputOutputHandling():
         self.ready = False
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
         close = lambda success: self._close_files()
-        sim.hooks.add_post_simulation_hook(close, 'Close files')
+        sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
     
     def _setup_io(self):
         sim = self.simulation
+        sim.log.info('Setting up simulation IO')
         self.xdmf_write_interval = sim.input.get_value('output/xdmf_write_interval',
                                                        XDMF_WRITE_INTERVAL, 'int')
         self.hdf5_write_interval = sim.input.get_value('output/hdf5_write_interval',
@@ -34,11 +36,17 @@ class InputOutputHandling():
         if self.xdmf_write_interval > 0:
             create_vec_func = True
             file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
+            file_name2 = os.path.splitext(file_name)[0] + '.h5'
             
-            # Remove previous file
+            # Remove previous files
             if os.path.isfile(file_name):
+                sim.log.info('    Removing existing XDMF file %s' % file_name)
                 os.remove(file_name)
+            if os.path.isfile(file_name2):
+                sim.log.info('    Removing existing XDMF file %s' % file_name2)
+                os.remove(file_name2)
             
+            sim.log.info('    Creating XDMF file %s' % file_name)
             self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
         
         def create_vec_func(V):
@@ -83,10 +91,18 @@ class InputOutputHandling():
         
     def _close_files(self):
         """
-        Close open files
+        Save final restart file and close open files
         """
         if not self.ready:
             return
+        
+        sim = self.simulation
+        if sim.input.get_value('output/save_restart_file_at_end',
+                               SAVE_RESTART_AT_END, 'boolean'):
+            h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_endpoint_%08d.h5') 
+            h5_file_name = h5_file_name % sim.timestep
+            self.write_restart_file(h5_file_name)
+        
         if self.xdmf_write_interval > 0:
             del self.xdmf_file
     
@@ -187,6 +203,7 @@ class InputOutputHandling():
             h5_file_name = h5_file_name % sim.timestep
         
         # Create HDF5 file object
+        sim.log.info('Creating HDF5 restart file %s' % h5_file_name)
         h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'w')
         
         # Skip these functions
@@ -226,7 +243,17 @@ class InputOutputHandling():
         while i*M < N:
             log_part = full_log[i*M:(i+1)*M]
             h5.attributes('/ocellaris')['full_log_%d' % i] = log_part
-            i += 1    
+            i += 1
+        
+        # Save reports
+        timesteps = numpy.array(sim.reporting.timesteps, dtype=float)
+        h5.write(timesteps, '/reports/timesteps')
+        for rep_name, values in sim.reporting.timestep_xy_reports.items():
+            assert ',' not in rep_name
+            values = numpy.array(values, dtype=float)
+            h5.write(values, '/reports/%s' % rep_name)
+        h5.attributes('/reports')['report_names'] = ','.join(sim.reporting.timestep_xy_reports)
+        
         h5.close()
     
     def _read_hdf5(self, h5_file_name, read_input=True, read_results=True):
