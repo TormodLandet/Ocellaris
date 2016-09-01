@@ -20,7 +20,7 @@ def read_reports(h5_file_name):
 def plot_reports(file_name):
     reps = read_reports(file_name)
     report_names = sorted(reps.keys())
-    print report_names
+    N = len(report_names)
     
     fig = pyplot.figure()
     ax = fig.add_subplot(111)
@@ -29,7 +29,7 @@ def plot_reports(file_name):
     line, = pyplot.plot([0], [0])
     
     ax_slider = fig.add_axes([0.15, 0.1, 0.65, 0.03])
-    slider = Slider(ax_slider, 'Report', 0.5, len(report_names)+0.499999, valinit=4)
+    slider = Slider(ax_slider, 'Report', 0.5, N+0.499999, valinit=N/2)
     
     def update(val):
         i = int(round(val)-1)
@@ -39,8 +39,9 @@ def plot_reports(file_name):
         
         line.set_data(x[-len(y):], y)
         ax.relim()
-        ax.autoscale_view(True,True,True)
-        ax.set_title(rep_name)
+        ax.autoscale_view()
+        ax.set_title('Ocellaris report %s' % rep_name)
+        ax.set_ylabel(rep_name)
         slider.valtext.set_text(rep_name)
         
         fig.canvas.draw()
