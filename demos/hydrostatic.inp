@@ -4,9 +4,9 @@ ocellaris:
 
 physical_properties:
     rho0: 1000.0
-    nu0: 1.0e-6
-    rho1: 20. # 1.225
-    nu1: 1.5e-5 # 1.5e-5
+    nu0: 1.0 #1.0e-6
+    rho1: 1.225
+    nu1: 1.0 # 1.5e-5 # 1.5e-5
     g: [0, -9.81]
 
 mesh:
@@ -56,7 +56,7 @@ initial_conditions:
 
 time:
     dt: 0.01
-    tmax: 1.0
+    tmax: 10.0
 
 output:
     prefix: output/hydrostatic
@@ -68,10 +68,9 @@ multiphase_solver:
     type: BlendedAlgebraicVOF
     function_space_colour: DG
     polynomial_degree_colour: 0
-    sky_location: 1.0
 
 solver:
-    type: IPCS
+    type: Coupled
     num_inner_iter: 20
     allowable_error_inner: 1e-3
     function_space_velocity: DG
@@ -164,7 +163,7 @@ hooks:
             #hook_data['cf'] << (c_star, t)
 
 reporting:
-    _reports_to_show: ['sum(c)']#, 'max(div(u)|Vc)']
+    reports_to_show: ['sum(c)', 'Co']
 
 #console_on_error: false
 #console_at_end: True

@@ -12,9 +12,9 @@ metadata:
 
 physical_properties:
     g: [0, 0]
-    nu: 1
+    nu: overridden in script
     rho_min: 1.0
-    rho_max: 3.0
+    rho_max: py$ 1.0 + 2*Q
 
 mesh:
     #type: XML
@@ -34,9 +34,10 @@ mesh:
 user_code:
     constants:
         # Control flag for test case
-        # Q = 0  =>  constant density 2.0
-        # Q = 1  =>  varying density between 1.0 and 3.0
-        Q: 1
+        # Q = 0  =>  constant density 1.0
+        # Q = 1  =>  varying density between 1.0 and 2*Q
+        Q: 0
+        R: 5
 
 # Dirichlet boundary conditions for u, Neumann for p
 boundary_conditions:
@@ -53,7 +54,7 @@ boundary_conditions:
         value: 0
     rho:
         type: CppCodedValue
-        cpp_code: 2 + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+        cpp_code: 1 + Q + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
 
 initial_conditions:
     up0:
@@ -67,16 +68,16 @@ initial_conditions:
     p:
         cpp_code: sin(x[0])*sin(x[1])*sin(t)
     rho_p:
-        cpp_code: 2 + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
+        cpp_code: 1 + Q + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t))
     rho_pp:
-        cpp_code: 2 + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t-dt))
+        cpp_code: 1 + Q + Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(atan2(x[1], x[0]) - sin(t-dt))
 
 momentum_sources:
 -   name: MMS
     degree: 2
     cpp_code:
-    -   Q*nu*sin(sin(t))*cos(t) - (x[0]*cos(t)*cos(t) - x[1]*sin(t))*(Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(sin(t) - atan2(x[1], x[0])) + 2) + sin(t)*sin(x[1])*cos(x[0])
-    -   -Q*nu*cos(t)*cos(sin(t)) - (x[0]*sin(t) + x[1]*cos(t)*cos(t))*(Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(sin(t) - atan2(x[1], x[0])) + 2) + sin(t)*sin(x[0])*cos(x[1])
+    -   Q*nu*sin(sin(t))*cos(t) - (x[0]*cos(t)*cos(t) - x[1]*sin(t))*(Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(sin(t) - atan2(x[1], x[0])) + 1 + Q) + sin(t)*sin(x[1])*cos(x[0])
+    -   -Q*nu*cos(t)*cos(sin(t)) - (x[0]*sin(t) + x[1]*cos(t)*cos(t))*(Q*sqrt(x[0]*x[0] + x[1]*x[1])*cos(sin(t) - atan2(x[1], x[0])) + 1 + Q) + sin(t)*sin(x[0])*cos(x[1])
 
 time:
     dt: overridden in script
@@ -86,7 +87,7 @@ output:
     prefix: variable_density_convergence
     log_name: .log
     dolfin_log_level: warning
-    ocellaris_log_level: info
+    ocellaris_log_level: debug
     stdout_enabled: overridden in script
     xdmf_write_interval: 0
 
@@ -102,7 +103,7 @@ _slope_limiter:
         method: basic
 
 solver:
-    type: Coupled
+    type: Coupled #LDG
     num_inner_iter: 10
     allowable_error_inner: 1e-6
     polynomial_degree_velocity: overridden in script
@@ -122,7 +123,7 @@ hooks:
             if simulation.timestep == 10 and Aname not in hook_data:
                 from ocellaris.utils import condition_number
                 N, M = A.size(0), A.size(1)
-                if max(N, M) < 1000:
+                if max(N, M) < 1300:
                     K = '%.2e' % condition_number(A, 'numpy')
                 else:
                     K = '?'

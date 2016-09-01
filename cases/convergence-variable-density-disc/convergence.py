@@ -7,7 +7,7 @@ import dolfin
 from ocellaris import Simulation, setup_simulation, run_simulation
 
 
-def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
+def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, nu, last=False):
     """
     Run Ocellaris and return L2 & H1 errors in the last time step
     """
@@ -39,6 +39,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     sim.input.set_value('time/tmax', tmax)
     sim.input.set_value('solver/polynomial_degree_velocity', polydeg_u)
     sim.input.set_value('solver/polynomial_degree_pressure', polydeg_p)
+    sim.input.set_value('physical_properties/nu', nu)
     sim.input.set_value('output/stdout_enabled', False)
     
     say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'), sim.input.get_value('solver/function_space_velocity')))
@@ -89,8 +90,9 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
     reports = sim.reporting.timestep_xy_reports
     say('Num time steps:', sim.timestep)
     say('Num cells:', mesh.num_cells())
-    say('Co_max:', numpy.max(reports['Co']))
-    say('Pe_max:', numpy.max(reports['Pe']))
+    Co_max, Pe_max = numpy.max(reports['Co']), numpy.max(reports['Pe']) 
+    say('Co_max:', Co_max)
+    say('Pe_max:', Pe_max)
     say('rho_min went from %r to %r' % (reports['min(rho)'][0], reports['min(rho)'][-1]))
     say('rho_max went from %r to %r' % (reports['max(rho)'][0], reports['max(rho)'][-1]))
     m0, m1 = reports['mass'][0], reports['mass'][-1]
@@ -129,7 +131,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, last=False):
             plot(fh - fa, name + ' diff', '%s%s_3diff' % (discr, name))
     
     hmin = mesh.hmin()
-    return err_rho, err_u0, err_u1, err_p, err_rho_H1, err_u0_H1, err_u1_H1, err_p_H1, hmin, dt, duration
+    return err_rho, err_u0, err_u1, err_p, err_rho_H1, err_u0_H1, err_u1_H1, err_p_H1, hmin, dt, Co_max, Pe_max, duration
 
 
 def calc_err(f_num, f_ana, normtype='l2'):
@@ -164,16 +166,24 @@ def print_results(results, indices, restype):
         for i, idx in enumerate(indices):
             if idx not in results:
                 break
-            hmin, dt, duration = results[idx][-3:]
+            hmin, dt, Co, Pe, duration = results[idx][-5:]
             erho, eu0, eu1, ep = results[idx][selected]
-            discr = hmin if restype == 'h' else dt
-            say('%7.5f %10.2e %10.2e %10.2e %10.2e' % (discr, erho, eu0, eu1, ep), end=' ')
+            if restype == 'h':
+                discr = hmin
+                discr_s = '%7.5f' % discr
+            elif restype == 'dt':
+                discr = dt
+                discr_s = '%7.5f' % discr
+            elif restype == 'Pe': 
+                discr = Pe
+                discr_s = ('%.7f' % discr)[:7]
+            say('%-7s %10.2e %10.2e %10.2e %10.2e' % (discr_s, erho, eu0, eu1, ep), end=' ')
             if i > 0:
                 prev_idx = indices[i-1]
                 prev_erho, prev_eu0, prev_eu1, prev_ep = results[prev_idx][selected]
-                prev_hmin, prev_dt, prev_duration = results[prev_idx][-3:]
-                prev_discr = prev_hmin if restype == 'h' else prev_dt
-                fac = log(prev_discr/discr) 
+                prev_hmin, prev_dt, prev_Co, prev_Pe, prev_duration = results[prev_idx][-5:]
+                prev_discr = prev_hmin if restype == 'h' else (prev_dt if restype == 'dt' else prev_Pe)
+                fac = log(prev_discr/discr)
                 say('%5.2f %5.2f %5.2f %5.2f' % (log(prev_erho/erho)/fac, log(prev_eu0/eu0)/fac,
                                                  log(prev_eu1/eu1)/fac, log(prev_ep/ep)/fac), end=' ')
                 say('%9s %5.2f' % (seconds_as_string(duration), log(duration/prev_duration)/fac))
@@ -201,10 +211,9 @@ def run_convergence_space(N_list):
     dt = 0.002
     tmax = numpy.pi/4
     results = {}
-    prev_N = None
     for N in N_list:
         say('Running N = %g with dt = %g' % (N, dt))
-        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1,
+        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1, nu=1,
                                              last=(N == N_list[-1]))
         print_results(results, N_list, 'h')
 
@@ -216,12 +225,25 @@ def run_convergence_time(dt_list):
     for dt in dt_list:
         t1 = time.time()
         say('Running dt =', dt)
-        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1,
+        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1, nu=1,
                                               last=(dt == dt_list[-1]))
         print_results(results, dt_list, 'dt')
+        
+
+def run_convergence_peclet(nu_list):
+    dt = 0.01
+    tmax = numpy.pi/4
+    N = 4
+    results = {}
+    for nu in nu_list:
+        say('Running nu =  %g with N = %g and dt = %g' % (nu, N, dt))
+        results[nu] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1, nu=nu,
+                                              last=(nu == nu_list[-1]))
+        print_results(results, nu_list, 'Pe')
 
 
-run_convergence_space([4, 8, 16])#, 24])
+#run_convergence_space([4, 8, 16])#, 24])
 #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
 #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
+run_convergence_peclet([1e-6, 1e-4, 1e-2, 1e+0, 1e+2, 1e+4])
 #dolfin.interactive()
