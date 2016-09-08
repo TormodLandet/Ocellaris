@@ -4,6 +4,7 @@ syntax: glob
 *.pyc
 *.png
 *.avi
+*.ogv
 *.out
 *.log
 *.h5

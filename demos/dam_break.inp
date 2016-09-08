@@ -1,12 +1,20 @@
 ocellaris:
     type: input
     version: 1.0
+    
+user_code:
+    constants:
+        NU: 1.0e-4
+        RHO: 100.0
 
 physical_properties:
-    rho0: 1000.0
-    nu0: 1.0e-6
-    rho1: 1.225
-    nu1: 1.5e-5
+    #rho0: 1000.0
+    #nu0: 1.0 #1.0e-6
+    #rho1: 1.225
+    #nu1: 1.0 #1.5e-5
+    nu: py$ NU
+    rho_min: 1.0
+    rho_max: py$ RHO
     g: [0, -9.81]
 
 mesh:
@@ -52,29 +60,37 @@ boundary_conditions:
         value: 0
 
 initial_conditions:
-    cp:
-        _cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
-        cpp_code: |
-            (((x[0] < 0.25-0.04+1e-5 && x[1] < 0.5-0.04+1e-5) ? 0.2 : 0.0) +
-             ((x[0] < 0.25-0.02+1e-5 && x[1] < 0.5-0.02+1e-5) ? 0.2 : 0.0) +
-             ((x[0] < 0.25-0.00+1e-5 && x[1] < 0.5-0.00+1e-5) ? 0.2 : 0.0) +
-             ((x[0] < 0.25+0.02+1e-5 && x[1] < 0.5+0.02+1e-5) ? 0.2 : 0.0) +
-             ((x[0] < 0.25+0.04+1e-5 && x[1] < 0.5+0.04+1e-5) ? 0.2 : 0.0))
+    #cp:
+    #    cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
+    #    _cpp_code: |
+    #        (((x[0] < 0.25-0.04+1e-5 && x[1] < 0.5-0.04+1e-5) ? 0.2 : 0.0) +
+    #         ((x[0] < 0.25-0.02+1e-5 && x[1] < 0.5-0.02+1e-5) ? 0.2 : 0.0) +
+    #         ((x[0] < 0.25-0.00+1e-5 && x[1] < 0.5-0.00+1e-5) ? 0.2 : 0.0) +
+    #         ((x[0] < 0.25+0.02+1e-5 && x[1] < 0.5+0.02+1e-5) ? 0.2 : 0.0) +
+    #         ((x[0] < 0.25+0.04+1e-5 && x[1] < 0.5+0.04+1e-5) ? 0.2 : 0.0))
+    rho_p:
+        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? RHO : 1.0'
+    rho_pp:
+        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? RHO : 1.0'
+
 time:
     dt: 0.001
     tmax: 1.0
 
 output:
-    prefix: output/dam_break_test
+    prefix: py$ 'output/dam_break_nu%.0e_rho%d' % (NU, RHO)
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
+    xdmf_write_interval: 10
 
 multiphase_solver:
-    type: BlendedAlgebraicVOF
-    function_space_colour: DG
-    polynomial_degree_colour: 0
-    sky_location: 0.75
+    #type: BlendedAlgebraicVOF
+    #function_space_colour: DG
+    #polynomial_degree_colour: 0
+    type: VariableDensity
+    function_space_rho: DG
+    polynomial_degree_rho: 1
 
 solver:
     type: Coupled
@@ -85,19 +101,21 @@ solver:
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
 
-convection:
-    u:
-        convection_scheme: Upwind
-    c:
-        convection_scheme: Upwind
+#convection:
+#    c:
+#        convection_scheme: HRIC
 
-probes:
+slope_limiter:
+    rho:
+        method: basic
+
+_probes:
     -   name: c=0.5
         type: IsoSurface
         value: 0.5
         field: c
         file_name: '_c05.out'
-        show_interval: 1
+        show_interval: 0
         xlim: [0, 1]
         ylim: [0, 0.75]
     -   name: c=0.1
@@ -111,7 +129,7 @@ probes:
         field: c
         file_name: '_c09.out'
 
-hooks:
+_hooks:
     post_timestep:
 
     -   name: plot p
@@ -170,9 +188,3 @@ hooks:
             hook_data['cf'] << (rho, t)
             hook_data['cf'] << (p, t)
             #hook_data['cf'] << (c_star, t)
-
-reporting:
-    reports_to_show: ['sum(c)']#, 'max(div(u)|Vc)']
-
-console_on_error: false
-#console_at_end: True
