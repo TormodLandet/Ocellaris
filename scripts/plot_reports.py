@@ -7,12 +7,16 @@ from matplotlib import pyplot
 from matplotlib.widgets import Slider
 
 
-def read_reports(h5_file_name):
+def read_reports(h5_file_name, derived=True):
     hdf = h5py.File(h5_file_name, 'r')
     
     reps = {}
     for rep_name in hdf['/reports']:
         reps[rep_name] = numpy.array(hdf['/reports'][rep_name])
+    
+    if derived:
+        if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
+            reps['Et'] = reps['Ek'] + reps['Ep']  
     
     return reps
 

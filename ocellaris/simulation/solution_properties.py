@@ -98,14 +98,15 @@ class SolutionProperties(object):
         self._div_dx_solver.factorize()
         self._div_dS = df.Function(V)
         self._div_dx = df.Function(V)
-        
+    
     def _setup_energy(self, rho, vel, gvec, x0):
         """
         Calculate kinetic and potential energy
         """
+        x = df.SpatialCoordinate(self.mesh)
         self._form_E_k = 1/2*rho*dot(vel, vel)*dx(domain=self.mesh)
-        self._form_E_p = rho*dot(-gvec, x0)*dx(domain=self.mesh)
-        
+        self._form_E_p = rho*dot(-gvec, x - x0)*dx(domain=self.mesh)
+    
     def _setup_mass(self, rho):
         """
         Calculate mass
