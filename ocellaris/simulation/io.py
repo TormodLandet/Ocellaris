@@ -252,7 +252,9 @@ class InputOutputHandling():
             assert ',' not in rep_name
             values = numpy.array(values, dtype=float)
             h5.write(values, '/reports/%s' % rep_name)
-        h5.attributes('/reports')['report_names'] = ','.join(sim.reporting.timestep_xy_reports)
+        repnames = ','.join(sim.reporting.timestep_xy_reports)
+        if repnames: # Size of a HDF5 string  value must be > 0
+            h5.attributes('/reports')['report_names'] = repnames 
         
         h5.close()
     
