@@ -2,17 +2,15 @@
 from __future__ import division
 import numpy
 import dolfin as df
-from dolfin import dot, dx
 from ocellaris.cpp import load_module
-from ocellaris.utils import verify_key
+from ocellaris.utils import ocellaris_error
+from . import register_slope_limiter, SlopeLimiterBase
 
 
-LIMITER = 'none'
-FILTER = 'nofilter'
-USE_CPP = True
-
-
-class SlopeLimiterBasic(object):
+@register_slope_limiter('nodal')
+class SlopeLimiterNodal(SlopeLimiterBase):
+    description = 'Ensures dof node values are not creating local extrema'
+    
     def __init__(self, phi, filter_method='nofilter', use_cpp=True):
         """
         Limit the slope of the given scalar to obtain boundedness
@@ -31,22 +29,14 @@ class SlopeLimiterBasic(object):
         
         # Intermediate function spaces used in the limiter
         self.DG0 = df.FunctionSpace(self.mesh, 'DG', 0)
-        self.DG1 = df.FunctionSpace(self.mesh, 'DG', 1)
+        self.DGX = df.FunctionSpace(self.mesh, 'DG', self.degree)
         self.excedance = df.Function(self.DG0)
         
-        # Projection to DG1 with pre factorized matrices for quick application
-        if self.degree > 1:
-            u, v = df.TrialFunction(self.DG1), df.TestFunction(self.DG1)
-            a = dot(u, v)*dx
-            L = dot(phi, v)*dx
-            self.local_solver1 = df.LocalSolver(a, L)
-            self.local_solver1.factorize()
-        
         # Fast access to cell dofs
-        dm0, dm1 = self.DG0.dofmap(), self.DG1.dofmap()
+        dm0, dmX = self.DG0.dofmap(), self.DGX.dofmap()
         indices = range(self.mesh.num_cells())
         self.cell_dofs_DG0 = list(int(dm0.cell_dofs(i)) for i in indices)
-        self.cell_dofs_DG1 = list(tuple(dm1.cell_dofs(i)) for i in indices)
+        self.cell_dofs_DGX = list(tuple(dmX.cell_dofs(i)) for i in indices)
         
         # Connectivity from cell to vertex and vice versa
         self.mesh.init(2, 0)
@@ -68,11 +58,11 @@ class SlopeLimiterBasic(object):
         
         self._filter_cache = None
         
-        # Get indices for get_local on the DG1 vector
-        im = dm1.index_map()
+        # Get indices for get_local on the DGX vector
+        im = dmX.index_map()
         n_local_and_ghosts = im.size(im.MapSize_ALL)
         intc = numpy.intc
-        self.local_indices_dg1 = numpy.arange(n_local_and_ghosts, dtype=intc)
+        self.local_indices_dgX = numpy.arange(n_local_and_ghosts, dtype=intc)
         
         self.use_cpp = use_cpp
         if use_cpp:
@@ -81,7 +71,7 @@ class SlopeLimiterBasic(object):
             self.flat_neighbours = numpy.zeros(len(self.neighbours)*Nnmax, dtype=intc) - 1
             for i, nbs in enumerate(self.neighbours):
                 self.flat_neighbours[i*Nnmax:i*Nnmax + self.num_neighbours[i]] = self.neighbours[i]
-            self.flat_cell_dofs = numpy.array(self.cell_dofs_DG1, dtype=intc).flatten()
+            self.flat_cell_dofs = numpy.array(self.cell_dofs_DGX, dtype=intc).flatten()
             self.flat_cell_dofs_dg0 = numpy.array(self.cell_dofs_DG0, dtype=intc).flatten()
             self.flat_vertices = numpy.array(self.vertices, dtype=intc).flatten()
             self.cpp_mod = load_module('slope_limiter_basic')
@@ -93,19 +83,20 @@ class SlopeLimiterBasic(object):
         assert self.degree == 1, 'Slope limiter only implemented for linear elements'
         
         # Get local values + the ghost values
-        results = numpy.zeros(len(self.local_indices_dg1), float)
-        self.phi.vector().get_local(results, self.local_indices_dg1)
+        results = numpy.zeros(len(self.local_indices_dgX), float)
+        self.phi.vector().get_local(results, self.local_indices_dgX)
         
-        if self.degree > 0:
-            if self.use_cpp:
-                self._run_basic_limiter_cpp(results)
-            else:
-                self._run_basic_limiter(results)
+        # Run the slope limiter
+        if self.use_cpp:
+            self._run_basic_limiter_cpp(results)
+        else:
+            self._run_basic_limiter_python(results)
         
+        # Run post processing filter
         if self.filter == 'minmax':
             self._run_minmax_filter(results)
         
-        self.phi.vector().set_local(results, self.local_indices_dg1)
+        self.phi.vector().set_local(results, self.local_indices_dgX)
         self.phi.vector().apply('insert')
     
     def _run_basic_limiter_cpp(self, results):
@@ -113,20 +104,41 @@ class SlopeLimiterBasic(object):
         tdim = self.mesh.topology().dim()
         num_cells_owned = self.mesh.topology().ghost_offset(tdim)
         exceedances = self.excedance.vector().get_local()
-        self.cpp_mod.slope_limiter_basic_cg1(self.num_neighbours,
-                                             num_cells_all,
-                                             num_cells_owned,
-                                             self.max_neighbours,
-                                             self.flat_neighbours,
-                                             self.flat_cell_dofs,
-                                             self.flat_cell_dofs_dg0,
-                                             self.flat_vertices,
-                                             exceedances,
-                                             results)
+        
+        if self.degree == 1:
+            limiter = self.cpp_mod.slope_limiter_basic_dg1
+        else:
+            ocellaris_error('Slope limiter error',
+                            'C++ slope limiter does not support degree %d' % self.degree)
+        
+        limiter(self.num_neighbours,
+                num_cells_all,
+                num_cells_owned,
+                self.max_neighbours,
+                self.flat_neighbours,
+                self.flat_cell_dofs,
+                self.flat_cell_dofs_dg0,
+                self.flat_vertices,
+                exceedances,
+                results)
+        
         self.excedance.vector().set_local(exceedances)
         self.excedance.vector().apply('insert')
     
-    def _run_basic_limiter(self, results):
+    def _run_basic_limiter_python(self, results):
+        if self.degree == 1:
+            limiter = self._run_basic_limiter_dg1
+        else:
+            ocellaris_error('Slope limiter error',
+                            'Python slope limiter does not support degree %d' % self.degree)
+        
+        # Run the slope limiter
+        exceedances = limiter(results)
+        
+        self.excedance.vector().set_local(exceedances)
+        self.excedance.vector().apply('insert')
+    
+    def _run_basic_limiter_dg1(self, results):
         """
         Perform basic slope limiting
         """
@@ -139,7 +151,7 @@ class SlopeLimiterBasic(object):
         # Cell averages
         averages = []
         for ic in range(self.mesh.num_cells()):
-            dofs = self.cell_dofs_DG1[ic]
+            dofs = self.cell_dofs_DGX[ic]
             vals = [results[dof] for dof in dofs]
             averages.append(sum(vals)/3)
         
@@ -147,7 +159,7 @@ class SlopeLimiterBasic(object):
         onetwothree = range(3)
         for ic in range(ncells):
             vertices = self.vertices[ic]
-            dofs = self.cell_dofs_DG1[ic]
+            dofs = self.cell_dofs_DGX[ic]
             vals = [results[dof] for dof in dofs]
             avg = sum(vals)/3
             
@@ -208,8 +220,7 @@ class SlopeLimiterBasic(object):
             for iv in onetwothree:
                 results[dofs[iv]] = vals[iv] + eps*moddable[iv]
         
-        self.excedance.vector().set_local(exceedances)
-        self.excedance.vector().apply('insert')
+        return exceedances
     
     def _run_minmax_filter(self, results):
         """
@@ -224,28 +235,3 @@ class SlopeLimiterBasic(object):
         minval, maxval = self._filter_cache
         numpy.clip(results, minval, maxval, results)
 
-
-class DoNothingSlopeLimiter(object):
-    def __init__(self, *argv, **kwargs):
-        pass
-    
-    def run(self):
-        pass
-
-
-def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_filter=FILTER, default_use_cpp=USE_CPP):
-    inp = simulation.input.get_value('slope_limiter/%s' % phi_name, {}, 'Input')
-    method = inp.get_value('method', default_limiter, 'string')
-    filter_method = inp.get_value('filter', default_filter, 'string')
-    use_cpp = inp.get_value('use_cpp', default_use_cpp, 'boolean')
-    
-    verify_key('slope limiter', method, _METHODS, '%s transport' % phi_name)
-    
-    simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, phi_name))
-    limiter = _METHODS[method](phi, filter_method, use_cpp)
-    return limiter
-
-
-_METHODS = {}
-_METHODS['none'] = DoNothingSlopeLimiter
-_METHODS['basic'] = SlopeLimiterBasic

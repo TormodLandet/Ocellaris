@@ -9,7 +9,7 @@
 namespace dolfin
 {
 
-void slope_limiter_basic_cg1(const Array<int>& num_neighbours,
+void slope_limiter_basic_dg1(const Array<int>& num_neighbours,
                              const int num_cells_all,
                              const int num_cells_owned,
                              const int max_neighbours,
