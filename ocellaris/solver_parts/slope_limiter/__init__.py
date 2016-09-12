@@ -4,7 +4,7 @@ from ocellaris.utils import ocellaris_error
 
 LIMITER = 'none'
 FILTER = 'nofilter'
-USE_CPP = False
+USE_CPP = True
 _SLOPE_LIMITERS = {}
 
 

@@ -16,7 +16,6 @@ void slope_limiter_basic_dg1(const Array<int>& num_neighbours,
                              const Array<int>& neighbours,
                              const Array<int>& cell_dofs,
                              const Array<int>& cell_dofs_dg0,
-                             const Array<int>& vertices,
                              double* exceedances,
                              double* results)
 {
@@ -25,53 +24,53 @@ void slope_limiter_basic_dg1(const Array<int>& num_neighbours,
   for (int ic = 0; ic < num_cells_all; ic++)
   {
     double avg = 0.0;
-    for (int iv = 0; iv < 3; iv++)
+    for (int id = 0; id < 3; id++)
     {
-      avg += results[cell_dofs[ic*3 + iv]];
+      avg += results[cell_dofs[ic*3 + id]];
     }
     averages[ic] = avg/3.0;
   }
 
-  // Modify vertex values
+  // Modify dof values
   for (int ic = 0; ic < num_cells_owned; ic++)
   {
     double avg = averages[ic];
     double exceedance = 0.0;
     double vals[3];
 
-    // Check each vertex in this cell
-    for (int iv = 0; iv < 3; iv++)
+    // Check each dof in this cell
+    for (int id = 0; id < 3; id++)
     {
-      int vtx = vertices[ic*3 + iv];
-      double vtx_val = results[cell_dofs[ic*3 + iv]];
+      int dof = cell_dofs[ic*3 + id];
+      double dof_val = results[dof];
 
       // Find highest and lowest value in the connected neighbour cells
-      double lo = 1e100;
-      double hi = -1e100;
-      for (int inb = 0; inb < num_neighbours[vtx]; inb++)
+      double lo = avg;
+      double hi = avg;
+      for (int inb = 0; inb < num_neighbours[dof]; inb++)
       {
-        int nb = neighbours[vtx*max_neighbours + inb];
+        int nb = neighbours[dof*max_neighbours + inb];
         double nb_avg = averages[nb];
         lo = std::min(lo, nb_avg);
         hi = std::max(hi, nb_avg);
       }
 
       // Treat out of bounds values
-      if (vtx_val < lo)
+      if (dof_val < lo)
       {
-        vals[iv] = lo;
-        double ex = vtx_val - lo;
+        vals[id] = lo;
+        double ex = dof_val - lo;
         if (std::abs(ex) > std::abs(exceedance)) exceedance = ex;
       }
-      else if (vtx_val > hi)
+      else if (dof_val > hi)
       {
-        vals[iv] = hi;
-        double ex = vtx_val - hi;
+        vals[id] = hi;
+        double ex = dof_val - hi;
         if (std::abs(ex) > std::abs(exceedance)) exceedance = ex;
       }
       else
       {
-        vals[iv] = vtx_val;
+        vals[id] = dof_val;
       }
     }
 
@@ -85,9 +84,9 @@ void slope_limiter_basic_dg1(const Array<int>& num_neighbours,
     bool moddable[3] = {false, false, false};
     if (std::abs(avg - new_avg) > 1e-15)
     {
-     for(int iv = 0; iv < 3; iv++)
+     for(int id = 0; id < 3; id++)
      {
-       moddable[iv] = (new_avg > avg && vals[iv] > avg) || (new_avg < avg and vals[iv] < avg);
+       moddable[id] = (new_avg > avg && vals[id] > avg) || (new_avg < avg and vals[id] < avg);
      }
      // Get number of vertex values that can be modified
      int nmod = ((int) moddable[0]) + ((int) moddable[1]) + ((int) moddable[2]);
@@ -101,9 +100,9 @@ void slope_limiter_basic_dg1(const Array<int>& num_neighbours,
     }
 
     // Update the result array
-    for(int iv = 0; iv < 3; iv++)
+    for(int id = 0; id < 3; id++)
     {
-      results[cell_dofs[ic*3 + iv]] = vals[iv] + eps*((int)moddable[iv]);
+      results[cell_dofs[ic*3 + id]] = vals[id] + eps*((int)moddable[id]);
     }
   }
 }

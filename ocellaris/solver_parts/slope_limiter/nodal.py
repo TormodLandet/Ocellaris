@@ -33,53 +33,36 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         self.filter = filter_method
         self.use_cpp = use_cpp
         
-        # Intermediate function spaces used in the limiter
-        DG0 = df.FunctionSpace(self.mesh, 'DG', 0)
-        DGX = df.FunctionSpace(self.mesh, 'DG', self.degree)
-        self.excedance = df.Function(DG0)
+        # Exceedance is a secondary output of the limiter and is calculated
+        # as the maximum correction performed for each cell 
+        V0 = df.FunctionSpace(self.mesh, 'DG', 0)
+        self.excedance = df.Function(V0)
         
         # Fast access to cell dofs
-        dm0, dmX = DG0.dofmap(), DGX.dofmap()
+        dm, dm0 = V.dofmap(), V0.dofmap()
         indices = range(self.mesh.num_cells())
-        cell_dofs_DG0 = [int(dm0.cell_dofs(i)) for i in indices]
-        cell_dofs_DGX = [tuple(dmX.cell_dofs(i)) for i in indices]
+        cell_dofs_V = [tuple(dm.cell_dofs(i)) for i in indices]
+        cell_dofs_V0 = [int(dm0.cell_dofs(i)) for i in indices]
         
-        # Connectivity from cell to vertex and vice versa
-        self.mesh.init(2, 0)
-        self.mesh.init(0, 2)
-        connectivity_CV = self.mesh.topology()(2, 0)
-        connectivity_VC = self.mesh.topology()(0, 2)
-        
-        # Find the neighbours cells for each vertex
-        neighbours = []
-        for iv in range(self.mesh.num_vertices()):
-            cnbs = tuple(connectivity_VC(iv))
-            neighbours.append(cnbs)
-        
-        # Find vertices for each cell
-        vertices = []
-        for ic in range(self.mesh.num_cells()):
-            vnbs = tuple(connectivity_CV(ic))
-            vertices.append(vnbs)
-        
-        self._filter_cache = None
+        # Find the neighbour cells for each dof
+        num_neighbours, neighbours = get_dof_neighbours(V)
         
         # Get indices for get_local on the DGX vector
-        im = dmX.index_map()
+        im = dm.index_map()
         n_local_and_ghosts = im.size(im.MapSize_ALL)
         intc = numpy.intc
         self.local_indices_dgX = numpy.arange(n_local_and_ghosts, dtype=intc)
         
-        # Reformat data such that it can be easily transfered to C++
-        self.num_neighbours = numpy.array([len(nbs) for nbs in neighbours], dtype=intc)
-        self.max_neighbours = Nnmax = self.num_neighbours.max()
-        self.flat_neighbours = numpy.zeros(len(neighbours) * Nnmax, dtype=intc) - 1
-        for i, nbs in enumerate(neighbours):
-            self.flat_neighbours[i * Nnmax: i * Nnmax + self.num_neighbours[i]] = neighbours[i]
-        self.flat_cell_dofs = numpy.array(cell_dofs_DGX, dtype=intc).flatten()
-        self.flat_cell_dofs_dg0 = numpy.array(cell_dofs_DG0, dtype=intc).flatten()
-        self.flat_vertices = numpy.array(vertices, dtype=intc).flatten()
+        # Flatten 2D arrays for easy transfer to C++
+        self.num_neighbours = num_neighbours
+        self.max_neighbours = neighbours.shape[1]
+        self.flat_neighbours = neighbours.flatten()
+        self.flat_cell_dofs = numpy.array(cell_dofs_V, dtype=intc).flatten()
+        self.flat_cell_dofs_dg0 = numpy.array(cell_dofs_V0, dtype=intc).flatten()
         self.cpp_mod = load_module('slope_limiter_basic')
+        
+        # The initial maximum and minimum values in the boundeness filter are cached
+        self._filter_cache = None
     
     def run(self):
         """
@@ -119,7 +102,6 @@ class SlopeLimiterNodal(SlopeLimiterBase):
                 self.flat_neighbours,
                 self.flat_cell_dofs,
                 self.flat_cell_dofs_dg0,
-                self.flat_vertices,
                 exceedances,
                 results)
         
@@ -147,6 +129,54 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         numpy.clip(results, minval, maxval, results)
 
 
+def get_dof_neighbours(V):
+    """
+    Given a DG function space find, for each dof, the indices
+    of the cells with dofs at the same locations
+    """
+    dm = V.dofmap()
+    gdim = V.mesh().geometry().dim()
+    num_cells_all = V.mesh().num_cells()
+    dof_coordinates = V.tabulate_dof_coordinates().reshape((-1, gdim))
+    
+    # Get "owning cell" indices for all dofs
+    cell_for_dof = [None] * V.dim()
+    for ic in xrange(num_cells_all):
+        dofs = dm.cell_dofs(ic)
+        for dof in dofs:
+            assert cell_for_dof[dof] is None
+            cell_for_dof[dof] = ic
+    
+    # Map dof coordinate to dofs, this is for DG so multiple dofs
+    # will share the same location
+    coord_to_dofs = {}
+    max_neighbours = 0
+    for dof in xrange(len(dof_coordinates)):
+        coord = tuple(round(x, 5) for x in dof_coordinates[dof])
+        dofs = coord_to_dofs.setdefault(coord, [])
+        dofs.append(dof)
+        max_neighbours = max(max_neighbours, len(dofs)-1)
+    
+    # Find number of neighbour cells and their indices for each dof
+    num_neighbours = numpy.zeros(V.dim(), numpy.intc)
+    neighbours = numpy.zeros((V.dim(), max_neighbours), numpy.intc) - 1
+    for nbs in coord_to_dofs.values():
+        # Loop through dofs at this location
+        for dof in nbs:
+            # Loop through the dofs neighbours
+            for nb in nbs:
+                # Skip the dof itself
+                if dof == nb:
+                    continue
+                # Get the neighbours "owning cell" index and store this
+                nb_cell = cell_for_dof[nb]
+                nn_prev = num_neighbours[dof]
+                neighbours[dof,nn_prev] = nb_cell
+                num_neighbours[dof] += 1
+    
+    return num_neighbours, neighbours
+
+
 ###################################################################################################
 # Python implementations of nodal slope limiters
 #
@@ -156,7 +186,7 @@ class SlopeLimiterNodal(SlopeLimiterBase):
 
 
 def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, max_neighbours,
-                            flat_neighbours, flat_cell_dofs, flat_cell_dofs_dg0, flat_vertices,
+                            flat_neighbours, flat_cell_dofs, flat_cell_dofs_dg0,
                             exceedances, results):
     """
     Perform nodal slope limiting of a DG1 function
@@ -168,35 +198,34 @@ def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, max_
         vals = [results[dof] for dof in dofs]
         averages[ic] = sum(vals) / 3
     
-    # Modify vertex values
+    # Modify dof values
     onetwothree = range(3)
     for ic in range(num_cells_owned):
-        vertices = flat_vertices[ic * 3: (ic + 1)*3]
         dofs = flat_cell_dofs[ic * 3: (ic + 1)*3]
         vals = [results[dof] for dof in dofs]
         avg = sum(vals) / 3
         
         excedance = 0
-        for ivertex in onetwothree:
-            vtx = vertices[ivertex]
-            n_nbs = num_neighbours[vtx]
-            nbs = flat_neighbours[vtx * max_neighbours: vtx * max_neighbours + n_nbs]
+        for idof in onetwothree:
+            dof = dofs[idof]
+            n_nbs = num_neighbours[dof]
+            nbs = flat_neighbours[dof * max_neighbours: dof * max_neighbours + n_nbs]
             nb_vals = [averages[nb] for nb in nbs]
             
             # Find highest and lowest value in the connected cells
-            lo, hi = 1e100, -1e100
+            lo = hi = avg
             for cell_avg in nb_vals:
                 lo = min(lo, cell_avg)
                 hi = max(hi, cell_avg)
             
-            vtx_val = vals[ivertex]
+            vtx_val = vals[idof]
             if vtx_val < lo:
-                vals[ivertex] = lo
+                vals[idof] = lo
                 ex = vtx_val - lo
                 if abs(excedance) < abs(ex):
                     excedance = ex
             elif vtx_val > hi:
-                vals[ivertex] = hi
+                vals[idof] = hi
                 ex = vtx_val - hi
                 if abs(excedance) < abs(ex):
                     excedance = ex
@@ -213,13 +242,13 @@ def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, max_
         moddable = [0, 0, 0]
         if abs(avg - new_avg) > 1e-15:
             if new_avg > avg:
-                for ivertex in onetwothree:
-                    if vals[ivertex] > avg:
-                        moddable[ivertex] = 1
+                for idof in onetwothree:
+                    if vals[idof] > avg:
+                        moddable[idof] = 1
             else:
-                for ivertex in onetwothree:
-                    if vals[ivertex] < avg:
-                        moddable[ivertex] = 1
+                for idof in onetwothree:
+                    if vals[idof] < avg:
+                        moddable[idof] = 1
             
             # Get number of vertex values that can be modified and catch
             # possible floating point problems with the above comparisons
@@ -231,8 +260,7 @@ def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, max_
                 eps = (avg - new_avg) * 3 / nmod
         
         # Modify the vertices to obtain the correct average
-        for iv in onetwothree:
-            results[dofs[iv]] = vals[iv] + eps * moddable[iv]
+        for idof in onetwothree:
+            results[dofs[idof]] = vals[idof] + eps * moddable[idof]
     
     return exceedances
-
