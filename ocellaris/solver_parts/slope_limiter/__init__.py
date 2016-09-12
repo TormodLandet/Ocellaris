@@ -4,7 +4,7 @@ from ocellaris.utils import ocellaris_error
 
 LIMITER = 'none'
 FILTER = 'nofilter'
-USE_CPP = True
+USE_CPP = False
 _SLOPE_LIMITERS = {}
 
 
@@ -34,7 +34,7 @@ def get_slope_limiter(name):
     except KeyError:
         ocellaris_error('Slope limiter "%s" not found' % name,
                         'Available slope limiters:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description) 
+                        '\n'.join('  %-20s - %s' % (n, s.description)
                                   for n, s in sorted(_SLOPE_LIMITERS.items())))
         raise
 
@@ -62,8 +62,8 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
     
     simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, phi_name))
     limiter_class = get_slope_limiter(method)
-    limiter = limiter_class(phi, filter_method, use_cpp)
+    limiter = limiter_class(phi_name, phi, filter_method, use_cpp)
     return limiter
 
 
-from . import basic_slope_limiter
+from . import nodal
