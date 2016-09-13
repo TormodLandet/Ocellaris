@@ -8,7 +8,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         """
         A simple storage class for Dirichlet conditions. This is
         used when defining the linear part of the weak forms and
-        for normal boundary strong conditions 
+        for normal boundary strong conditions
         """
         super(OcellarisDirichletBC, self).__init__(V, value, subdomain_marker, subdomain_id, method='geometric')
         self.simulation = simulation
@@ -19,7 +19,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
     
     def func(self):
         """
-        The boundary value derivative function 
+        The boundary value derivative function
         """
         return self._value
     
@@ -32,7 +32,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
     def copy_and_change_function_space(self, V):
         """
         Return a copy with a new function space. Used when converting from
-        BCs for a segregated solver (default) to BCs for a coupled solver  
+        BCs for a segregated solver (default) to BCs for a coupled solver
         """
         return OcellarisDirichletBC(self.simulation, V, self._value,
                                     self.subdomain_marker, self.subdomain_id)
@@ -62,7 +62,7 @@ class ConstantDirichletBoundary(BoundaryCondition):
         self.simulation = simulation
         if var_name[-1].isdigit():
             # A var_name like "u0" was given. Look up "Vu"
-            self.func_space = simulation.data['V%s' % var_name[:-1]] 
+            self.func_space = simulation.data['V%s' % var_name[:-1]]
         else:
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
@@ -102,7 +102,7 @@ class CodedDirichletBoundary(BoundaryCondition):
         self.simulation = simulation
         if var_name[-1].isdigit():
             # A var_name like "u0" was given. Look up "Vu"
-            self.func_space = simulation.data['V%s' % var_name[:-1]] 
+            self.func_space = simulation.data['V%s' % var_name[:-1]]
         else:
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
@@ -144,7 +144,7 @@ class CppCodedDirichletBoundary(BoundaryCondition):
         self.simulation = simulation
         if var_name[-1].isdigit():
             # A var_name like "u0" was given. Look up "Vu"
-            self.func_space = simulation.data['V%s' % var_name[:-1]] 
+            self.func_space = simulation.data['V%s' % var_name[:-1]]
         else:
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]

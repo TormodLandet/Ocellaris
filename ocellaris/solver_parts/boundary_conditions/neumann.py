@@ -15,7 +15,7 @@ class OcellarisNeumannBC(object):
         
     def func(self):
         """
-        The boundary value derivative function 
+        The boundary value derivative function
         """
         return self._value
     
@@ -81,7 +81,7 @@ class CodedNeumannBoundary(BoundaryCondition):
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
                 description = 'coded gradient boundary condition for %s' % name
-                sub_code =  inp_dict.get_value('code/%d' % d, required_type='string')
+                sub_code = inp_dict.get_value('code/%d' % d, required_type='string')
                 expr = CodedExpression(simulation, sub_code, description)
                 self.register_neumann_condition(name, expr, subdomains, subdomain_id)
         else:
@@ -115,7 +115,7 @@ class CppCodedNeumannBoundary(BoundaryCondition):
             assert len(cpp_code) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
-                sub_code =  inp_dict.get_value('cpp_code/%d' % d, required_type='string')
+                sub_code = inp_dict.get_value('cpp_code/%d' % d, required_type='string')
                 self.register_neumann_condition(name, sub_code, subdomain_id)
         else:
             self.register_neumann_condition(var_name, cpp_code, subdomain_id)

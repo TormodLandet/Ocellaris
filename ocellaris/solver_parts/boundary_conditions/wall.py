@@ -3,6 +3,7 @@ import dolfin
 from . import register_boundary_condition, BoundaryCondition
 from .neumann import OcellarisNeumannBC
 
+
 @register_boundary_condition('WallPressure')
 class WallPressureBoundaryCondition(BoundaryCondition):
     description = 'Boundary condition for pressure at a wall, dp/dn = ρ g⋅n'
@@ -12,7 +13,7 @@ class WallPressureBoundaryCondition(BoundaryCondition):
         Wall pressure boundary condition
         """
         mesh = simulation.data['mesh']
-        n = dolfin.FacetNormal(mesh)        
+        n = dolfin.FacetNormal(mesh)
         g = simulation.data['g']
         rho = simulation.data['rho']
         bc_val = rho * dolfin.inner(n, g)
