@@ -11,7 +11,7 @@ from . import register_slope_limiter, SlopeLimiterBase
 class SlopeLimiterNodal(SlopeLimiterBase):
     description = 'Ensures dof node values are not creating local extrema'
     
-    def __init__(self, phi_name, phi, filter_method='nofilter', use_cpp=True):
+    def __init__(self, phi_name, phi, boundary_condition, filter_method='nofilter', use_cpp=True):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -19,8 +19,10 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         V = phi.function_space()
         mesh = V.mesh()
         family = V.ufl_element().family()
+        degree = V.ufl_element().degree()
         loc = 'nodal slope limiter'
         verify_key('slope limited function', family, ['Discontinuous Lagrange'], loc)
+        verify_key('slope limited degree', degree, (0, 1, 2), loc)
         verify_key('function shape', phi.ufl_shape, [()], loc)
         verify_key('topological dimension', mesh.topology().dim(), [2], loc)
         verify_key('filter', filter_method, ('nofilter', 'minmax'), loc)
@@ -28,7 +30,7 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         # Store input
         self.phi_name = phi_name
         self.phi = phi
-        self.degree = V.ufl_element().degree()
+        self.degree = degree
         self.mesh = mesh
         self.filter = filter_method
         self.use_cpp = use_cpp
@@ -38,6 +40,10 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         V0 = df.FunctionSpace(self.mesh, 'DG', 0)
         self.excedance = df.Function(V0)
         
+        # No limiter needed for piecewice constant functions
+        if degree == 0:
+            return
+        
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
         indices = range(self.mesh.num_cells())
@@ -46,6 +52,9 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         
         # Find the neighbour cells for each dof
         num_neighbours, neighbours = get_dof_neighbours(V)
+        
+        # Remove boundary dofs from limiter
+        num_neighbours[boundary_condition != 0] = 0
         
         # Get the quadrature weights for each dof in each cell
         # (needed to compute the average value)
@@ -74,7 +83,9 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         """
         Perform the slope limiting and filtering
         """
-        assert self.degree == 1, 'Slope limiter only implemented for linear elements'
+        # No limiter needed for piecewice constant functions
+        if self.degree == 0:
+            return
         
         # Get local values + the ghost values
         results = numpy.zeros(len(self.local_indices_dgX), float)
@@ -84,14 +95,14 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         # and the implementation language (Python prototype or the
         # default faster C++ implementation)
         if self.use_cpp:
-            if self.degree == 1:
+            if self.degree in (1,):
                 limiter = self.cpp_mod.slope_limiter_basic_dg1
             else:
                 ocellaris_error('Slope limiter error',
                                 'C++ slope limiter does not support degree %d' % self.degree)
         else:
-            if self.degree == 1:
-                limiter = slope_limiter_basic_dg1
+            if self.degree in (1, 2):
+                limiter = slope_limiter_nodal_dg
             else:
                 ocellaris_error('Slope limiter error',
                                 'Python slope limiter does not support degree %d' % self.degree)
@@ -194,13 +205,46 @@ def get_quadrature_weights(V):
     N = V.mesh().num_cells()
     
     if degree == 1:
-        weights = numpy.ones((N, 3), float)/3 
+        weights = numpy.zeros((N, 3), float)
+        points, point_weights = BT_QUADRATURE_TABLE[degree]
+        for x, w in zip(points, point_weights):
+            L0, L1, L2 = x[0], x[1], 1 - x[0] - x[1]
+            weights[:,0] += w * L0
+            weights[:,1] += w * L1
+            weights[:,2] += w * L2
+    
+    elif degree == 2:
+        weights = numpy.zeros((N, 6), float)
+        points, point_weights = BT_QUADRATURE_TABLE[degree]
+        for x, w in zip(points, point_weights):
+            L0, L1, L2 = x[0], x[1], 1 - x[0] - x[1]
+            weights[:,0] += w * 2*L0*(L0 - 0.5)
+            weights[:,1] += w * 2*L1*(L1 - 0.5)
+            weights[:,2] += w * 2*L2*(L2 - 0.5)
+            weights[:,3] += w * 4*L1*L2
+            weights[:,4] += w * 4*L2*L0
+            weights[:,5] += w * 4*L0*L1
+    
     else:
         ocellaris_error('Quadrature weight error',
                         'Cannot compute quadrature weights on degree %d function' % degree)
-        
+    
+    print '   '.join(repr(w) for w in weights[0])
+    print '   '.join(repr(w) for w in (numpy.ones((N, 3), float)/3)[0])
+    exit()
+    
     return weights
 
+
+# Dunavanant's barycentric triangle quadrature rules
+# A more complete table can be found in phonyx.assembly.quadrature
+BT_QUADRATURE_TABLE = {}
+BT_QUADRATURE_TABLE[1] = ([[1/3, 1/3]],
+                          [1.0])
+BT_QUADRATURE_TABLE[2] = ([[2/3, 1/6], [1/6, 2/3], [1/6, 1/6]],
+                          [1/3, 1/3, 1/3])
+BT_QUADRATURE_TABLE[3] = ([[1/3, 1/3], [.6, .2], [.2, .6], [.2, .2]],
+                          [-9/16, 25/48, 25/48, 25/48])
 
 ###################################################################################################
 # Python implementations of nodal slope limiters
@@ -210,32 +254,44 @@ def get_quadrature_weights(V):
 # implementations are meant to be prototypes and QA of the C++ implementations
 
 
-def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, num_cell_dofs,
-                            max_neighbours, flat_neighbours, flat_cell_dofs, flat_cell_dofs_dg0,
-                            flat_weights, exceedances, results):
+def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_cell_dofs,
+                           max_neighbours, flat_neighbours, flat_cell_dofs, flat_cell_dofs_dg0,
+                           flat_weights, exceedances, results):
     """
-    Perform nodal slope limiting of a DG1 function
+    Perform nodal slope limiting of a DG1 function. Also works for DG2
+    functions, but since the local minimum or maximum may be in between
+    dof locations the slope limits are not as strict as they should be
+    since this implementation only limits dof values. 
     """
+    C = num_cell_dofs
+    
     # Cell averages
     averages = numpy.zeros(num_cells_all, float)
     for ic in range(num_cells_all):
-        dofs = flat_cell_dofs[ic * 3: (ic + 1)*3]
+        dofs = flat_cell_dofs[ic * C: (ic + 1)*C]
         vals = [results[dof] for dof in dofs]
-        weights = flat_weights[ic * 3: (ic + 1)*3]
+        weights = flat_weights[ic * C: (ic + 1)*C]
         averages[ic] = numpy.dot(vals, weights)
     
     # Modify dof values
-    dof_range = range(3)
+    dof_range = range(C)
     for ic in range(num_cells_owned):
-        dofs = flat_cell_dofs[ic * 3: (ic + 1)*3]
+        dofs = flat_cell_dofs[ic * C: (ic + 1)*C]
         vals = [results[dof] for dof in dofs]
-        weights = flat_weights[ic * 3: (ic + 1)*3]
-        avg = sum(vals) / 3
+        weights = flat_weights[ic * C: (ic + 1)*C]
+        avg = numpy.dot(vals, weights)
         
         excedance = 0
+        cell_on_boundary = False
         for idof in dof_range:
             dof = dofs[idof]
             n_nbs = num_neighbours[dof]
+            
+            if n_nbs == 0:
+                # Skip boundary dofs which are marked with zero neighbours
+                cell_on_boundary = True
+                break
+            
             nbs = flat_neighbours[dof * max_neighbours: dof * max_neighbours + n_nbs]
             nb_vals = [averages[nb] for nb in nbs]
             
@@ -257,6 +313,9 @@ def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, num_
                 if abs(excedance) < abs(ex):
                     excedance = ex
         
+        if cell_on_boundary:
+            continue
+        
         exceedances[flat_cell_dofs_dg0[ic]] = excedance
         if excedance == 0:
             continue
@@ -267,15 +326,21 @@ def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, num_
         new_avg = numpy.dot(vals, weights)
         eps = 0
         moddable = [0]*len(dof_range)
+        mod_weight = 0.0
+        mod_weight2 = 0.0
         if abs(avg - new_avg) > 1e-15:
             if new_avg > avg:
                 for idof in dof_range:
                     if vals[idof] > avg:
                         moddable[idof] = 1
+                        mod_weight += weights[idof]
+                        mod_weight2 += weights[idof]**2
             else:
                 for idof in dof_range:
                     if vals[idof] < avg:
                         moddable[idof] = 1
+                        mod_weight += weights[idof]
+                        mod_weight2 += weights[idof]**2
             
             # Get number of vertex values that can be modified and catch
             # possible floating point problems with the above comparisons
@@ -284,10 +349,10 @@ def slope_limiter_basic_dg1(num_neighbours, num_cells_all, num_cells_owned, num_
             if nmod == 0:
                 assert abs(excedance) < 1e-14, 'Nmod=0 with exceedance=%r' % excedance
             else:
-                eps = (avg - new_avg) * 3 / nmod
+                eps = (avg - new_avg) * mod_weight / mod_weight2 
         
         # Modify the vertices to obtain the correct average
         for idof in dof_range:
-            results[dofs[idof]] = vals[idof] + eps * moddable[idof]
+            results[dofs[idof]] = vals[idof] + eps * moddable[idof] * weights[idof] / mod_weight
     
     return exceedances

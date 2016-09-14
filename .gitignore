@@ -1,6 +1,7 @@
 syntax: glob
 .*
 !/.gitignore
+!/.flake8
 *.pyc
 *.png
 *.avi
@@ -17,3 +18,4 @@ results/
 results_*
 documentation/_build
 output/
+tmp_*
