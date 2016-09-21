@@ -3,7 +3,7 @@ from __future__ import division
 import numpy
 import dolfin as df
 from ocellaris.cpp import load_module
-from ocellaris.utils import ocellaris_error, verify_key
+from ocellaris.utils import ocellaris_error, verify_key, get_dof_neighbours
 from . import register_slope_limiter, SlopeLimiterBase
 
 
@@ -20,7 +20,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         mesh = V.mesh()
         family = V.ufl_element().family()
         degree = V.ufl_element().degree()
-        loc = 'nodal slope limiter'
+        loc = 'NaiveNodal slope limiter'
         verify_key('slope limited function', family, ['Discontinuous Lagrange'], loc)
         verify_key('slope limited degree', degree, (0, 1, 2), loc)
         verify_key('function shape', phi.ufl_shape, [()], loc)
@@ -93,13 +93,13 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
             if self.degree in (1,):
                 limiter = self.cpp_mod.slope_limiter_basic_dg1
             else:
-                ocellaris_error('Slope limiter error',
+                ocellaris_error('NaiveNodal slope limiter error',
                                 'C++ slope limiter does not support degree %d' % self.degree)
         else:
             if self.degree in (1, 2):
                 limiter = slope_limiter_nodal_dg
             else:
-                ocellaris_error('Slope limiter error',
+                ocellaris_error('NaiveNodal slope limiter error',
                                 'Python slope limiter does not support degree %d' % self.degree)
         
         num_cells_all = self.mesh.num_cells()
@@ -140,54 +140,6 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
             return
         minval, maxval = self._filter_cache
         numpy.clip(results, minval, maxval, results)
-
-
-def get_dof_neighbours(V):
-    """
-    Given a DG function space find, for each dof, the indices
-    of the cells with dofs at the same locations
-    """
-    dm = V.dofmap()
-    gdim = V.mesh().geometry().dim()
-    num_cells_all = V.mesh().num_cells()
-    dof_coordinates = V.tabulate_dof_coordinates().reshape((-1, gdim))
-    
-    # Get "owning cell" indices for all dofs
-    cell_for_dof = [None] * V.dim()
-    for ic in xrange(num_cells_all):
-        dofs = dm.cell_dofs(ic)
-        for dof in dofs:
-            assert cell_for_dof[dof] is None
-            cell_for_dof[dof] = ic
-    
-    # Map dof coordinate to dofs, this is for DG so multiple dofs
-    # will share the same location
-    coord_to_dofs = {}
-    max_neighbours = 0
-    for dof in xrange(len(dof_coordinates)):
-        coord = tuple(round(x, 5) for x in dof_coordinates[dof])
-        dofs = coord_to_dofs.setdefault(coord, [])
-        dofs.append(dof)
-        max_neighbours = max(max_neighbours, len(dofs)-1)
-    
-    # Find number of neighbour cells and their indices for each dof
-    num_neighbours = numpy.zeros(V.dim(), numpy.intc)
-    neighbours = numpy.zeros((V.dim(), max_neighbours), numpy.intc) - 1
-    for nbs in coord_to_dofs.values():
-        # Loop through dofs at this location
-        for dof in nbs:
-            # Loop through the dofs neighbours
-            for nb in nbs:
-                # Skip the dof itself
-                if dof == nb:
-                    continue
-                # Get the neighbours "owning cell" index and store this
-                nb_cell = cell_for_dof[nb]
-                nn_prev = num_neighbours[dof]
-                neighbours[dof,nn_prev] = nb_cell
-                num_neighbours[dof] += 1
-    
-    return num_neighbours, neighbours
 
 
 ###################################################################################################

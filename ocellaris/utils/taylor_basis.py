@@ -1,9 +1,100 @@
+# encoding: utf-8
 """
 Convert to and from a Taylor basis
 """
 from __future__ import division
 import numpy
 from dolfin import cells
+from ocellaris.utils import ocellaris_error
+
+
+def lagrange_to_taylor(u, t):
+    """
+    Convert a Lagrange function space function into a DG Taylor
+    function space function. The results are stored in t which
+    should be a function space with an appropriate number of dofs
+    per cell (t in DG2 if u in DG2 etc)
+    """
+    degree = u.function_space().ufl_element().degree()
+    if degree == 1:
+        return DG1_to_taylor(u, t)
+    elif degree == 2:
+        return DG2_to_taylor(u, t)
+    else:
+        ocellaris_error('DG Lagrange to DG Taylor converter error',
+                        'Polynomial degree %d not supported' % degree)
+
+
+def taylor_to_lagrange(t, u):
+    """
+    Convert a DG Taylor function space function into a Lagrange
+    function space function. The results are stored in u which
+    should be a function space with an appropriate number of dofs
+    per cell (u in DG2 if t in DG2 etc)
+    """
+    degree = t.function_space().ufl_element().degree()
+    if degree == 1:
+        return taylor_to_DG1(t, u)
+    if degree == 2:
+        return taylor_to_DG2(t, u)
+    else:
+        ocellaris_error('DG Taylor to DG Lagrange converter error',
+                        'Polynomial degree %d not supported' % degree)
+
+
+##############################################################################
+
+
+def DG1_to_taylor(u, t):
+    """
+    Convert a function u (which is a DG1 function in 2D) to a DG Taylor basis
+    which is stored in the DG1 function t. Most operations on the function t
+    will be wrong since dolfin does not support Taylor basis DG elements. The
+    t function should hence be read and modified by specially crafted code only! 
+    """
+    V = u.function_space()
+    mesh = V.mesh()
+    vertices = mesh.coordinates()
+    dm = V.dofmap()
+    dof_vals = u.vector().get_local()
+    dof_vals_taylor = numpy.zeros_like(dof_vals)
+    
+    taylor_vals = numpy.zeros(3, float)
+    
+    for cell in cells(mesh):
+        dofs = dm.cell_dofs(cell.index())
+        vals = dof_vals[dofs]
+        
+        verts = cell.entities(0)
+        x = numpy.zeros((3, 2), float)
+        x[0] = vertices[verts[0]]
+        x[1] = vertices[verts[1]]
+        x[2] = vertices[verts[2]]
+                
+        ###############################
+        # From sympy code gen
+        
+        ((x1, y1), (x2, y2), (x3, y3)) = x
+        D = (y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3)
+        
+        # Value at xc
+        taylor_vals[0] = (1/3)*vals[0]
+        taylor_vals[0] += (1/3)*vals[1]
+        taylor_vals[0] += (1/3)*vals[2]
+        
+        # d/dx
+        taylor_vals[1] = ((y2 - y3)/D)*vals[0]
+        taylor_vals[1] += ((-y1 + y3)/D)*vals[1]
+        taylor_vals[1] += ((y1 - y2)/D)*vals[2]
+        
+        # d/dy
+        taylor_vals[2] = ((-x2 + x3)/D)*vals[0]
+        taylor_vals[2] += ((x1 - x3)/D)*vals[1]
+        taylor_vals[2] += ((-x1 + x2)/D)*vals[2]
+        
+        dof_vals_taylor[dofs] = taylor_vals
+    
+    t.vector().set_local(dof_vals_taylor)
 
 
 def DG2_to_taylor(u, t):
@@ -35,7 +126,7 @@ def DG2_to_taylor(u, t):
         x[4] = (x[0] +  x[2])/2
         x[5] = (x[0] +  x[1])/2
                 
-        ###############################3
+        ###############################
         # From sympy code gen
         
         ((x1, y1), (x2, y2), (x3, y3)) = x[:3]
@@ -94,12 +185,47 @@ def DG2_to_taylor(u, t):
     t.vector().set_local(dof_vals_taylor)
 
 
+def taylor_to_DG1(t, u):
+    """
+    Take a function t as produced by DG1_to_taylor and convert it back
+    to a standard Lagrange DG1 function, u.
+    """
+    V = t.function_space()
+    mesh = V.mesh()
+    vertices = mesh.coordinates()
+    dm = V.dofmap()
+    dof_vals_taylor = t.vector().get_local()
+    dof_vals = numpy.zeros_like(dof_vals_taylor)
+    
+    vals = numpy.zeros(3, float)
+    
+    for cell in cells(mesh):
+        dofs = dm.cell_dofs(cell.index())
+        taylor_vals = dof_vals_taylor[dofs]
+        
+        # Corner and center coordinates
+        verts = cell.entities(0)
+        x = numpy.zeros((3, 2), float)
+        x[0] = vertices[verts[0]]
+        x[1] = vertices[verts[1]]
+        x[2] = vertices[verts[2]]
+        xc = (x[0] + x[1] +  x[2])/3
+        
+        # Evaluate the Taylor basis at each node
+        for i in range(3):
+            dx, dy = x[i,0] - xc[0], x[i,1] - xc[1]
+            vals[i] = taylor_vals[0] + dx*taylor_vals[1] + dy*taylor_vals[2]
+        dof_vals[dofs] = vals
+    
+    u.vector().set_local(dof_vals)
+
+
 def taylor_to_DG2(t, u):
     """
     Take a function t as produced by DG2_to_taylor and convert it back
     to a standard Lagrange DG2 function, u.
     """
-    V = u.function_space()
+    V = t.function_space()
     mesh = V.mesh()
     vertices = mesh.coordinates()
     dm = V.dofmap()
@@ -131,7 +257,7 @@ def taylor_to_DG2(t, u):
                       + dx*dy*taylor_vals[5]
         dof_vals[dofs] = vals
     
-    u2.vector().set_local(dof_vals)
+    u.vector().set_local(dof_vals)
 
 
 #########################################################################################
@@ -179,7 +305,56 @@ def DG2_to_taylor_numpy(u, t):
     t.vector().set_local(dof_vals_taylor)
 
 
-def produce_code_with_sympy():
+def produce_code_with_sympy_DG1():
+    """
+    Use sympy to derive the coefficients needed to convert from DG1 polynomials
+    on a triangle to a Taylor basis by expressing the derivatives at the centre
+    point of the triangle
+    (Only used for generating the code above, not used while running Ocellaris)
+    """
+    from sympy import Symbol, symbols, S
+    x1, x2, x3, y1, y2, y3 = symbols('x1 x2 x3 y1 y2 y3')
+    x, y, D = symbols('x y D')
+    
+    # Barycentric coordinates from cartesian corner coordinates
+    L1f = ((y2 - y3)*(x - x3) + (x3 - x2)*(y - y3))/D
+    L2f = ((y3 - y1)*(x - x3) + (x1 - x3)*(y - y3))/D
+    L3f = 1 - L1f - L2f
+    L1, L2, L3 = Symbol('L1')(x, y), Symbol('L2')(x, y), Symbol('L3')(x, y)
+    
+    replacements = [(L1.diff(x),  L1f.diff(x)),
+                    (L2.diff(x),  L2f.diff(x)),
+                    (L3.diff(x),  L3f.diff(x)),
+                    (L1.diff(y),  L1f.diff(y)),
+                    (L2.diff(y),  L2f.diff(y)),
+                    (L3.diff(y),  L3f.diff(y)),
+                    (L1, 1/S(3)),
+                    (L2, 1/S(3)),
+                    (L3, 1/S(3))]
+    
+    # Barycentric quadratic shape functions on a triangle
+    phi = [L1, L2, L3]
+    
+    def print_code(name, func, index):
+        code = ['# %s' % name]
+        for i in range(3):
+            v = func(phi[i])
+            v = v.subs(replacements)
+            v = v.simplify()
+            
+            s = 'taylor_vals[%d]' % index
+            s += ' = ' if i == 0 else ' += '
+            s += '(%s)*vals[%d]' % (str(v), i)
+            code.append(s)
+        code.append('')
+        print '\n'.join(code)
+    
+    print_code('Value at xc', lambda q: q, 0)
+    print_code('d/dx', lambda q: q.diff(x), 1)
+    print_code('d/dy', lambda q: q.diff(y), 2)
+
+
+def produce_code_with_sympy_DG2():
     """
     Use sympy to derive the coefficients needed to convert from DG2 polynomials
     on a triangle to a Taylor basis by expressing the derivatives at the centre
@@ -247,7 +422,9 @@ def produce_code_with_sympy():
 
 
 if __name__ == '__main__':
-    produce_code_with_sympy()
+    produce_code_with_sympy_DG1()
+    print '-------------------------------------------------------------\n'
+    produce_code_with_sympy_DG2()
     print '-------------------------------------------------------------\n'
     
     from dolfin import UnitTriangleMesh, FunctionSpace, Function, errornorm

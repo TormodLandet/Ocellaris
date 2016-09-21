@@ -4,9 +4,9 @@ import numpy
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
+from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiter
 from . import Solver, register_solver, BDF, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
-from ..solver_parts import HydrostaticPressure, VelocityBDMProjection
 
 
 # Default values, can be changed in the input file
@@ -67,13 +67,16 @@ class SolverCoupled(Solver):
                                     include_hydrostatic_pressure=self.hydrostatic_pressure_correction,
                                     incompressibility_flux_type=self.incompressibility_flux_type)
         
+        # Velocity slope limiter
+        self.slope_limiters = [SlopeLimiter(simulation, 'u', sim.data['u%d' % d]) for d in range(sim.ndim)]
+        
         # Velocity post_processing
         self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
             self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
                 incompressibility_flux_type=self.incompressibility_flux_type, D12=D12)
-            
+        
         if self.fix_pressure_dof:
             pdof = get_global_row_number(self.subspaces[-1])
             self.pressure_row_to_fix = numpy.array([pdof], dtype=numpy.intc)
@@ -89,14 +92,14 @@ class SolverCoupled(Solver):
         
         # Solver for the coupled system
         default_lu_solver = LU_SOLVER_1CPU if sim.ncpu == 1 else LU_SOLVER_NCPU
-        self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu', 
+        self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu',
                                                        None, default_lu_solver, LU_PARAMETERS)
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
-        if not self.equation_subtype in EQUATION_SUBTYPES:
+        if self.equation_subtype not in EQUATION_SUBTYPES:
             available_methods = '\n'.join(' - %s' % m for m in EQUATION_SUBTYPES)
-            ocellaris_error('Unknown equation sub-type', 
+            ocellaris_error('Unknown equation sub-type',
                             'Equation sub-type %s not available for coupled solver, please use one of:\n%s' %
                             (self.equation_subtype, EQUATION_SUBTYPES))
         
@@ -108,9 +111,9 @@ class SolverCoupled(Solver):
         
         # Coefficients for u, up and upp
         self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
-        if not self.timestepping_method in TIMESTEPPING_METHODS:
+        if self.timestepping_method not in TIMESTEPPING_METHODS:
             available_methods = '\n'.join(' - %s' % m for m in TIMESTEPPING_METHODS)
-            ocellaris_error('Unknown timestepping method', 
+            ocellaris_error('Unknown timestepping method',
                             'Timestepping method %s not recognised, please use one of:\n%s' %
                             (self.timestepping_method, available_methods))
         
@@ -124,10 +127,10 @@ class SolverCoupled(Solver):
             self.remove_null_space = False
         
         # Check if the solver supports removing null spaces, otherwise we can enable a hack
-        # that works better than nothing, but is most definitely not preferred  
+        # that works better than nothing, but is most definitely not preferred
         self.normalize_pressure = False
         does_not_support_null_space = ('mumps', )
-        if self.remove_null_space and self.coupled_solver.created_with_lu_method in does_not_support_null_space:    
+        if self.remove_null_space and self.coupled_solver.created_with_lu_method in does_not_support_null_space:
             self.normalize_pressure = True
             self.remove_null_space = False
         
@@ -137,7 +140,7 @@ class SolverCoupled(Solver):
             self.use_lagrange_multiplicator = False
             self.fix_pressure_dof = False
         
-        # Control the form of the governing equations 
+        # Control the form of the governing equations
         self.flux_type = sim.input.get_value('convection/u/flux_type', UPWIND, 'string')
         self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
                                                               USE_STRESS_DIVERGENCE, 'bool')
@@ -145,16 +148,16 @@ class SolverCoupled(Solver):
         self.use_grad_q_form = sim.input.get_value('solver/use_grad_q_form', USE_GRAD_Q_FORM, 'bool')
         self.incompressibility_flux_type = sim.input.get_value('solver/incompressibility_flux_type',
                                                                INCOMPRESSIBILITY_FLUX_TYPE, 'string')
-        self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor', 
-                                                                 PRESSURE_CONTINUITY_FACTOR, 'float')
-        self.velocity_continuity_factor_D12 = sim.input.get_value('solver/velocity_continuity_factor_D12', 
-                                                                 VELOCITY_CONTINUITY_FACTOR_D12, 'float')
+        self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor',
+                                                              PRESSURE_CONTINUITY_FACTOR, 'float')
+        self.velocity_continuity_factor_D12 = sim.input.get_value('solver/velocity_continuity_factor_D12',
+                                                                  VELOCITY_CONTINUITY_FACTOR_D12, 'float')
         
         # Representation of velocity
         Vu_family = sim.data['Vu'].ufl_element().family()
         self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
         
-        # Local DG velocity postprocessing 
+        # Local DG velocity postprocessing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing_method = sim.input.get_value('solver/velocity_postprocessing',
                                                                   default_postprocessing, 'string')
@@ -225,7 +228,7 @@ class SolverCoupled(Solver):
             return
         
         # We only calculate the hydrostatic pressure if asked
-        ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep', 
+        ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep',
                                                 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP, required_type='float')
         if not ph_every_timestep:
             return
@@ -269,8 +272,8 @@ class SolverCoupled(Solver):
         """
         Set the time stepping coefficients used for the temporal derivative
         """
-        if not 'time_coeffs' in self.simulation.data:
-            self.is_first_timestep = True 
+        if 'time_coeffs' not in self.simulation.data:
+            self.is_first_timestep = True
             self.simulation.data['time_coeffs'] = Constant(coeffs)
             self.simulation.data['time_coeffs_py'] = coeffs
         else:
@@ -288,19 +291,27 @@ class SolverCoupled(Solver):
         # Update convective velocity field components
         for d in range(ndim):
             uic = data['u_conv%d' % d]
-            uip =  data['up%d' % d]
+            uip = data['up%d' % d]
             uipp = data['upp%d' % d]
             
             if self.is_first_timestep:
                 uic.assign(uip)
             else:
-                # Backwards difference formulation - standard linear extrapolation 
+                # Backwards difference formulation - standard linear extrapolation
                 uic.vector().zero()
                 uic.vector().axpy(2.0, uip.vector())
                 uic.vector().axpy(-1.0, uipp.vector())
         
         self.is_first_timestep = False
-        
+    
+    @timeit
+    def slope_limit_velocity(self):
+        """
+        Apply a slope limiter to the given velocity field
+        """
+        for sl in self.slope_limiters:
+            sl.run()
+    
     @timeit
     def postprocess_velocity(self):
         """
@@ -330,7 +341,7 @@ class SolverCoupled(Solver):
                 null_func = dolfin.Function(self.simulation.data['Vp'])
                 null_vec = null_func.vector()
                 null_vec[:] = 1
-                null_vec *= 1/null_vec.norm("l2")
+                null_vec *= 1 / null_vec.norm("l2")
                 
                 # Convert null space vector to coupled space
                 null_func2 = dolfin.Function(self.simulation.data['Vcoupled'])
@@ -355,7 +366,7 @@ class SolverCoupled(Solver):
         funcs = [self.simulation.data[name] for name in self.subspace_names]
         self.assigner.assign(funcs, self.coupled_func)
         for func in funcs:
-            func.vector().apply('insert') # dolfin bug #587
+            func.vector().apply('insert')  # dolfin bug #587
         
         # Some solvers cannot remove the null space, so we just normalize the pressure instead.
         # If we remove the null space of the matrix system this will not be the exact same as
@@ -363,12 +374,12 @@ class SolverCoupled(Solver):
         if self.normalize_pressure or self.remove_null_space or self.fix_pressure_dof:
             p = self.simulation.data['p']
             dx2 = dolfin.dx(domain=p.function_space().mesh())
-            vol = dolfin.assemble(dolfin.Constant(1)*dx2)
+            vol = dolfin.assemble(dolfin.Constant(1) * dx2)
             # Perform correction multiple times due to round-of error. The first correction
             # can be i.e 1e14 while the next correction is around unity
             pavg = 1e10
-            while abs(pavg) > 1000: 
-                pavg = dolfin.assemble(p*dx2)/vol
+            while abs(pavg) > 1000:
+                pavg = dolfin.assemble(p * dx2) / vol
                 p.vector()[:] -= pavg
     
     @timeit
@@ -376,7 +387,7 @@ class SolverCoupled(Solver):
         """
         Run the simulation
         """
-        sim = self.simulation        
+        sim = self.simulation
         sim.hooks.simulation_started()
         t = sim.time
         it = sim.timestep
@@ -389,7 +400,7 @@ class SolverCoupled(Solver):
         maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
         has_upp_start_values = maxabs > 0
         
-        # Previous-previous values are provided so we can start up with second order time stepping 
+        # Previous-previous values are provided so we can start up with second order time stepping
         if has_upp_start_values:
             sim.log.info('Initial values for upp are found and used')
             self.is_first_timestep = False
@@ -402,7 +413,7 @@ class SolverCoupled(Solver):
             tmax = sim.input.get_value('time/tmax', required_type='float')
             
             # Check if the simulation is done
-            if t+dt > tmax + 1e-6:
+            if t + dt > tmax + 1e-6:
                 break
             
             # Advance one time step
@@ -424,6 +435,9 @@ class SolverCoupled(Solver):
             # Postprocess the solution velocity field
             self.postprocess_velocity()
             
+            # Slope limit the velocities
+            self.slope_limit_velocity()
+                        
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0
             for d in range(self.simulation.ndim):
@@ -432,7 +446,7 @@ class SolverCoupled(Solver):
                 upp = self.simulation.data['upp%d' % d]
                 
                 if self.is_steady:
-                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max() 
+                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
                     vel_diff = max(vel_diff, diff)
                 
                 upp.assign(up)
@@ -441,7 +455,7 @@ class SolverCoupled(Solver):
             # Change time coefficient to second order
             if self.timestepping_method == BDF:
                 self.set_timestepping_coefficients([3/2, -2, 1/2])
-                
+            
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
                 vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
