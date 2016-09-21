@@ -24,7 +24,7 @@ class VariableDensityModel(MultiPhaseModel):
         """
         A variable density scheme solving D/Dt(rho)=0 with a
         constant kinematic vosicsity nu and a variable dynamic
-        visocisty mu (depending on rho)        
+        visocisty mu (depending on rho)
         """
         self.simulation = simulation
         simulation.log.info('Creating variable density multiphase model')
@@ -36,19 +36,30 @@ class VariableDensityModel(MultiPhaseModel):
         self.rho_pp = simulation.data['rho_pp'] = Function(V)
         
         # Get the physical properties
-        self.rho_min = self.simulation.input.get_value('physical_properties/rho_min', required_type='float')
-        self.rho_max = self.simulation.input.get_value('physical_properties/rho_max', required_type='float')
-        self.nu = self.simulation.input.get_value('physical_properties/nu', required_type='float')
+        inp = simulation.input
+        self.rho_min = inp.get_value('physical_properties/rho_min', required_type='float')
+        self.rho_max = inp.get_value('physical_properties/rho_max', required_type='float')
+        self.nu = inp.get_value('physical_properties/nu', required_type='float')
         
         # Create the equations when the simulation starts
-        self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'VariableDensityModel setup equations')
+        simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'VariableDensityModel setup equations')
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'VariableDensityModel - update density field')
         
         self.slope_limiter = SlopeLimiter(simulation, 'rho', self.rho)
-        self.use_analytical_solution = simulation.input.get_value('multiphase_solver/analytical_solution', False, 'bool')
-        self.use_rk_method = simulation.input.get_value('multiphase_solver/explicit_rk_method', False, 'bool')
+        self.use_analytical_solution = inp.get_value('multiphase_solver/analytical_solution', False, 'bool')
+        self.use_rk_method = inp.get_value('multiphase_solver/explicit_rk_method', False, 'bool')
+        
+    @classmethod
+    def create_function_space(cls, simulation):
+        mesh = simulation.data['mesh']
+        cd = simulation.data['constrained_domain']
+        Vr_name = simulation.input.get_value('multiphase_solver/function_space_rho',
+                                             'Discontinuous Lagrange', 'string')
+        Pr = simulation.input.get_value('multiphase_solver/polynomial_degree_rho', 1, 'int')
+        Vrho = dolfin.FunctionSpace(mesh, Vr_name, Pr, constrained_domain=cd)
+        simulation.data['Vrho'] = Vrho
     
     def on_simulation_start(self):
         """
@@ -84,24 +95,24 @@ class VariableDensityModel(MultiPhaseModel):
             re = self.rho_explicit = dolfin.Function(V)
             c, d = dolfin.TrialFunction(V), dolfin.TestFunction(V)
             n = dolfin.FacetNormal(mesh)
-            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2
+            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n))) / 2
             dx = dolfin.dx(domain=mesh)
             
-            eq = c*d*dx
+            eq = c * d * dx
             
             # Convection integrated by parts two times to bring back the original
             # div form (this means we must subtract and add all fluxes)
-            eq += div(re*u_conv)*d*dx
+            eq += div(re * u_conv) * d * dx
             
             # Replace downwind flux with upwind flux on downwind internal facets
-            eq -= jump(w_nD*d)*jump(re)*dS
+            eq -= jump(w_nD * d) * jump(re) * dS
             
             # Replace downwind flux with upwind BC flux on downwind external facets
             for dbc in dirichlet_bcs:
                 # Subtract the "normal" downwind flux
-                eq -= w_nD*re*d*dbc.ds()
+                eq -= w_nD * re * d * dbc.ds()
                 # Add the boundary value upwind flux
-                eq += w_nD*dbc.func()*d*dbc.ds()
+                eq += w_nD * dbc.func() * d * dbc.ds()
             
             a, L = dolfin.system(eq)
             self.rk = RungeKuttaDGTimestepping(self.simulation, a, L, self.rho,
@@ -110,7 +121,7 @@ class VariableDensityModel(MultiPhaseModel):
                                                bcs=dirichlet_bcs)
         
         else:
-            # Use backward euler (BDF1) for timestep 1 
+            # Use backward euler (BDF1) for timestep 1
             self.time_coeffs = Constant([1, -1, 0])
             
             if dolfin.norm(self.rho_pp.vector()) > 0:
@@ -121,12 +132,11 @@ class VariableDensityModel(MultiPhaseModel):
             # Define equation for advection of the density
             #    ∂ρ/∂t +  ∇⋅(ρ u) = 0
             beta = None
-            u_conv = Constant(2.0)*sim.data['up'] + Constant(-1.0)*sim.data['upp'] 
-            self.eq = AdvectionEquation(self.simulation, self.simulation.data['Vrho'],
-                                        self.rho_p, self.rho_pp, u_conv, beta, 
+            u_conv = Constant(2.0) * sim.data['up'] + Constant(-1.0) * sim.data['upp']
+            self.eq = AdvectionEquation(sim, sim.data['Vrho'], self.rho_p, self.rho_pp, u_conv, beta,
                                         self.time_coeffs, dirichlet_bcs)
             
-            self.solver = linear_solver_from_input(self.simulation, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)
+            self.solver = linear_solver_from_input(sim, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))
@@ -157,7 +167,7 @@ class VariableDensityModel(MultiPhaseModel):
         """
         nu = self.get_laminar_kinematic_viscosity(k)
         rho = self.get_density(k)
-        return nu*rho
+        return nu * rho
     
     def get_density_range(self):
         """
@@ -169,13 +179,13 @@ class VariableDensityModel(MultiPhaseModel):
         """
         Return the maximum and minimum kinematic viscosities, nu
         """
-        return self.nu, self.nu 
+        return self.nu, self.nu
     
     def get_laminar_dynamic_viscosity_range(self):
         """
         The minimum and maximum laminar dynamic viscosities, mu.
         """
-        return self.nu*self.rho_min, self.nu*self.rho_max
+        return self.nu * self.rho_min, self.nu * self.rho_max
     
     def update(self, timestep_number, t, dt):
         """

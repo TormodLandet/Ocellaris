@@ -1,7 +1,8 @@
 # encoding: utf-8
 from __future__ import division
 import numpy
-from dolfin import Constant
+from dolfin import Constant, FunctionSpace
+
 
 class VOFMixin(object):
     """
@@ -11,6 +12,16 @@ class VOFMixin(object):
     controls the way mu is calculated, "calculate_mu_directly_from_colour_function".
     """
     calculate_mu_directly_from_colour_function = True
+    
+    @classmethod
+    def create_function_space(cls, simulation):
+        mesh = simulation.data['mesh']
+        cd = simulation.data['constrained_domain']
+        Vc_name = simulation.input.get_value('multiphase_solver/function_space_colour',
+                                             'Discontinuous Lagrange', 'string')
+        Pc = simulation.input.get_value('multiphase_solver/polynomial_degree_colour', 0, 'int')
+        Vc = FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
+        simulation.data['Vc'] = Vc
     
     def get_colour_function(self, k):
         """
@@ -31,7 +42,7 @@ class VOFMixin(object):
             c = self.get_colour_function(k)
         else:
             assert k is None
-        return Constant(self.rho0)*c + Constant(self.rho1)*(1 - c)
+        return Constant(self.rho0) * c + Constant(self.rho1) * (1 - c)
     
     def get_laminar_kinematic_viscosity(self, k=None, c=None):
         """
@@ -46,7 +57,7 @@ class VOFMixin(object):
             c = self.get_colour_function(k)
         else:
             assert k is None
-        return Constant(self.nu0)*c + Constant(self.nu1)*(1 - c)
+        return Constant(self.nu0) * c + Constant(self.nu1) * (1 - c)
     
     def get_laminar_dynamic_viscosity(self, k=None, c=None):
         """
@@ -62,20 +73,20 @@ class VOFMixin(object):
                 c = self.get_colour_function(k)
             else:
                 assert k is None
-            mu0 = self.nu0*self.rho0
-            mu1 = self.nu1*self.rho1
-            return Constant(mu0)*c + Constant(mu1)*(1 - c)
+            mu0 = self.nu0 * self.rho0
+            mu1 = self.nu1 * self.rho1
+            return Constant(mu0) * c + Constant(mu1) * (1 - c)
         
         else:
             nu = self.get_laminar_kinematic_viscosity(k, c)
             rho = self.get_density(k, c)
-            return nu*rho
+            return nu * rho
     
     def get_density_range(self):
         """
         Return the maximum and minimum densities, rho
         """
-        return min(self.rho0, self.rho1), max(self.rho0, self.rho1) 
+        return min(self.rho0, self.rho1), max(self.rho0, self.rho1)
                
     def get_laminar_kinematic_viscosity_range(self):
         """
@@ -93,13 +104,13 @@ class VOFMixin(object):
         and air) have maximum value in the middle of the range c ∈ (0, 1)
         """
         if self.calculate_mu_directly_from_colour_function:
-            mu0 = self.nu0*self.rho0
-            mu1 = self.nu1*self.rho1
+            mu0 = self.nu0 * self.rho0
+            mu1 = self.nu1 * self.rho1
             return min(mu0, mu1), max(mu0, mu1)
         else:
             c = numpy.linspace(0, 1, 1000)
-            nu = self.nu0*c + self.nu1*(1 - c)
-            rho = self.rho0*c + self.rho1*(1 - c)
-            mu = nu*rho
+            nu = self.nu0 * c + self.nu1 * (1 - c)
+            rho = self.rho0 * c + self.rho1 * (1 - c)
+            mu = nu * rho
             return mu.min(), mu.max()
     

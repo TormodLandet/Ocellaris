@@ -70,6 +70,9 @@ def run_simulation(simulation, catch_exceptions=False):
     except KeyboardInterrupt as e:
         simulation.hooks.simulation_ended(success)
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
+    except SystemExit as e:
+        simulation.success = False  # this is just used for debugging, no fancy summary needed
+        simulation.log.error('========== SystemExit - exit() was called ==========')
     except BaseException as e:
         simulation.hooks.simulation_ended(success)
         simulation.log.error('=== EXCEPTION =='*5)    

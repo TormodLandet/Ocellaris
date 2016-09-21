@@ -2,7 +2,7 @@
 from __future__ import division
 import dolfin
 from dolfin import Function, Constant
-from . import register_multi_phase_model, MultiPhaseModel 
+from . import register_multi_phase_model, MultiPhaseModel
 from ..convection import get_convection_scheme, StaticScheme
 from .vof import VOFMixin
 from .advection_equation import AdvectionEquation
@@ -23,13 +23,13 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
     
     def __init__(self, simulation):
         """
-        A blended algebraic VOF scheme works by using a specific 
+        A blended algebraic VOF scheme works by using a specific
         convection scheme in the advection of the colour function
         that ensures a sharp interface.
         
         * The convection scheme should be the name of a convection
-          scheme that is tailored for advection of the colour 
-          function, i.e "HRIC", "MHRIC", "RHRIC" etc, 
+          scheme that is tailored for advection of the colour
+          function, i.e "HRIC", "MHRIC", "RHRIC" etc,
         * The velocity field should be divergence free
         
         The colour function is unity when rho=rho0 and nu=nu0 and
@@ -42,7 +42,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         simulation.data['c'] = Function(V)
         simulation.data['cp'] = Function(V)
         simulation.data['cpp'] = Function(V)
-        simulation.data['c_star']= Function(V)
+        simulation.data['c_star'] = Function(V)
 
         # The projected density and viscosity functions for the new time step can be made continuous
         self.continuous_fields = simulation.input.get_value('multiphase_solver/continuous_fields',
@@ -50,7 +50,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if self.continuous_fields:
             mesh = simulation.data['mesh']
             P = V.ufl_element().degree()
-            V_star = dolfin.FunctionSpace(mesh, 'CG', P+1)
+            V_star = dolfin.FunctionSpace(mesh, 'CG', P + 1)
             self.continuous_c_star = dolfin.Function(V_star)
             self.continuous_c = dolfin.Function(V_star)
             self.continuous_c_old = dolfin.Function(V_star)
@@ -78,7 +78,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         self.need_gradient = scheme_class.need_alpha_gradient
     
         # Create the equations when the simulation starts
-        self.simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
+        simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'BlendedAlgebraicVofModel - update colour field')
@@ -99,7 +99,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         self.dt = Constant(1.0)
         
         # Use first order backward time difference on the first time step
-        # Coefficients for u, up and upp 
+        # Coefficients for u, up and upp
         self.time_coeffs = Constant([1, -1, 0])
         self.extrapolation_coeffs = [1, 0]
         
@@ -117,7 +117,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
         
-        # At the previous time step (known advecting velocity "up")   
+        # At the previous time step (known advecting velocity "up")
         vel = self.simulation.data['up']
         Vc = self.simulation.data['Vc']
         self.eq = AdvectionEquation(self.simulation, Vc, cp, cpp, vel, beta, self.time_coeffs, dirichlet_bcs)
@@ -132,7 +132,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
                                          self.time_coeffs, dirichlet_bcs)
         
         # Add some debugging plots to show results in 2D
-        self.simulation.plotting.add_plot('c', c, clim=(0, 1))        
+        self.simulation.plotting.add_plot('c', c, clim=(0, 1))
         self.simulation.plotting.add_plot('c_beta', beta)
         
         if self.need_gradient:
@@ -211,7 +211,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             # Update the extrapolated convecting velocity
             e1, e2 = self.extrapolation_coeffs
             for d, uci in enumerate(self.u_conv_comps):
-                uciv = uci.vector() 
+                uciv = uci.vector()
                 uciv.zero()
                 uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
                 uciv.axpy(e2, self.simulation.data['upp%d' % d].vector())
@@ -226,13 +226,13 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         # Optionally use a continuous predicted colour field
         if self.continuous_fields:
-            Vcg = self.continuous_c.function_space()          
+            Vcg = self.continuous_c.function_space()
             dolfin.project(c_star, Vcg, function=self.continuous_c_star)
             dolfin.project(c, Vcg, function=self.continuous_c)
             dolfin.project(cp, Vcg, function=self.continuous_c_old)
         
         # Report properties of the colour field
-        sum_c = dolfin.assemble(c*dolfin.dx)
+        sum_c = dolfin.assemble(c * dolfin.dx)
         arr_c = c.vector().get_local()
         min_c = dolfin.MPI.min(dolfin.mpi_comm_world(), float(arr_c.min()))
         max_c = dolfin.MPI.max(dolfin.mpi_comm_world(), float(arr_c.max()))

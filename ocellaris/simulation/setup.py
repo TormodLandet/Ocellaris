@@ -31,6 +31,10 @@ def setup_simulation(simulation):
     simulation.dt = simulation.input.get_value('time/dt', required_type='float')
     assert simulation.dt > 0
     
+    # Get the multi phase model class
+    multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
+    multiphase_class = get_multi_phase_model(multiphase_model_name)
+        
     if not simulation.restarted:
         # Load the mesh. The mesh determines if we are in 2D or 3D
         load_mesh(simulation)
@@ -46,13 +50,13 @@ def setup_simulation(simulation):
     
     # Create function spaces. This must be done before
     # creating Dirichlet boundary conditions
-    setup_function_spaces(simulation)
+    setup_function_spaces(simulation, multiphase_class)
     
     # Load the mesh morpher used for prescribed mesh velocities and ALE multiphase solvers
     simulation.mesh_morpher = MeshMorpher(simulation)
     
     # Setup physical constants and multi-phase model (g, rho, nu, mu)
-    setup_physical_properties(simulation)
+    setup_physical_properties(simulation, multiphase_class)
     
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs
@@ -205,7 +209,7 @@ def setup_periodic_domain(simulation):
         region.create_periodic_boundary_conditions()
 
 
-def setup_function_spaces(simulation):
+def setup_function_spaces(simulation, multiphase_class):
     """
     Create function spaces for velocity and pressure
     """
@@ -224,30 +228,16 @@ def setup_function_spaces(simulation):
     else:
         simulation.log.info('Creating function spaces with periodic boundaries')
     
-    # Create the function spaces
+    # Create the Navier-Stokes function spaces
     mesh = simulation.data['mesh']
     Vu = dolfin.FunctionSpace(mesh, Vu_name, Pu, constrained_domain=cd)
     Vp = dolfin.FunctionSpace(mesh, Vp_name, Pp, constrained_domain=cd)
     simulation.data['Vu'] = Vu
     simulation.data['Vp'] = Vp
     
-    # Setup multiphase related function spaces
-    multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
-    if multiphase_model_name == 'VariableDensity':
-        Vr_name = simulation.input.get_value('multiphase_solver/function_space_rho',
-                                             'Discontinuous Lagrange', 'string')
-        Pr = simulation.input.get_value('multiphase_solver/polynomial_degree_rho', 1, 'int')
-        Vrho = dolfin.FunctionSpace(mesh, Vr_name, Pr, constrained_domain=cd)
-        simulation.data['Vrho'] = Vrho
+    # Create multi phase related function spaces (density or colour function etc)
+    multiphase_class.create_function_space(simulation)
     
-    elif multiphase_model_name != 'SinglePhase':
-        # Assume we need a colour function
-        Vc_name = simulation.input.get_value('multiphase_solver/function_space_colour',
-                                             'Discontinuous Lagrange', 'string')
-        Pc = simulation.input.get_value('multiphase_solver/polynomial_degree_colour', 0, 'int')
-        Vc = dolfin.FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
-        simulation.data['Vc'] = Vc
-        
     for name, V in simulation.data.items():
         if isinstance(V, dolfin.FunctionSpace):
             family = V.ufl_element().family()
@@ -256,7 +246,7 @@ def setup_function_spaces(simulation):
                                 (name, V.dim(), family, degree))
 
 
-def setup_physical_properties(simulation):
+def setup_physical_properties(simulation, multiphase_class):
     """
     Gravity vector and rho/nu/mu fields are created here
     """
@@ -266,9 +256,7 @@ def setup_physical_properties(simulation):
     simulation.data['g'] = OcellarisConstant(g)
     
     # Get the density and viscosity properties from the multi phase model
-    multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
-    multiphase_model = get_multi_phase_model(multiphase_model_name)(simulation)
-    simulation.multi_phase_model = multiphase_model
+    simulation.multi_phase_model = multiphase_class(simulation)
     
     simulation.data['rho'] = simulation.multi_phase_model.get_density(0)
     simulation.data['nu'] = simulation.multi_phase_model.get_laminar_kinematic_viscosity(0)
