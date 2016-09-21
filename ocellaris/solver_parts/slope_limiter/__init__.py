@@ -45,7 +45,7 @@ class SlopeLimiterBase(object):
     description = 'No description available'
 
 
-@register_slope_limiter('none')
+@register_slope_limiter('None')
 class DoNothingSlopeLimiter(SlopeLimiterBase):
     description = 'No slope limiter'
     
@@ -81,4 +81,5 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
     return limiter
 
 
-from . import nodal
+from . import naive_nodal
+from . import hierarchal_taylor

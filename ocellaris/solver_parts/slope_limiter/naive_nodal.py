@@ -7,9 +7,9 @@ from ocellaris.utils import ocellaris_error, verify_key
 from . import register_slope_limiter, SlopeLimiterBase
 
 
-@register_slope_limiter('nodal')
-class SlopeLimiterNodal(SlopeLimiterBase):
-    description = 'Ensures dof node values are not creating local extrema'
+@register_slope_limiter('NaiveNodal')
+class NaiveNodalSlopeLimiter(SlopeLimiterBase):
+    description = 'Ensures dof node values are not themselves a local extrema'
     
     def __init__(self, phi_name, phi, boundary_condition, filter_method='nofilter', use_cpp=True):
         """
@@ -56,10 +56,6 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         # Remove boundary dofs from limiter
         num_neighbours[boundary_condition != 0] = 0
         
-        # Get the quadrature weights for each dof in each cell
-        # (needed to compute the average value)
-        quadrature_weights = get_quadrature_weights(V)
-        
         # Get indices for get_local on the DGX vector
         im = dm.index_map()
         n_local_and_ghosts = im.size(im.MapSize_ALL)
@@ -69,11 +65,10 @@ class SlopeLimiterNodal(SlopeLimiterBase):
         # Flatten 2D arrays for easy transfer to C++
         self.num_neighbours = num_neighbours
         self.max_neighbours = neighbours.shape[1]
-        self.num_cell_dofs = quadrature_weights.shape[1]
+        self.num_cell_dofs = 3 if self.degree == 1 else 6
         self.flat_neighbours = neighbours.flatten()
         self.flat_cell_dofs = numpy.array(cell_dofs_V, dtype=intc).flatten()
         self.flat_cell_dofs_dg0 = numpy.array(cell_dofs_V0, dtype=intc).flatten()
-        self.flat_weights = quadrature_weights.flatten()
         self.cpp_mod = load_module('slope_limiter_basic')
         
         # The initial maximum and minimum values in the boundeness filter are cached
@@ -120,7 +115,6 @@ class SlopeLimiterNodal(SlopeLimiterBase):
                 self.flat_neighbours,
                 self.flat_cell_dofs,
                 self.flat_cell_dofs_dg0,
-                self.flat_weights,
                 exceedances,
                 results)
         
@@ -196,56 +190,6 @@ def get_dof_neighbours(V):
     return num_neighbours, neighbours
 
 
-def get_quadrature_weights(V):
-    """
-    Get quadrature weights needed to compute the cell average
-    of the functions given the dof values
-    """
-    degree = V.ufl_element().degree()
-    N = V.mesh().num_cells()
-    
-    if degree == 1:
-        weights = numpy.zeros((N, 3), float)
-        points, point_weights = BT_QUADRATURE_TABLE[degree]
-        for x, w in zip(points, point_weights):
-            L0, L1, L2 = x[0], x[1], 1 - x[0] - x[1]
-            weights[:,0] += w * L0
-            weights[:,1] += w * L1
-            weights[:,2] += w * L2
-    
-    elif degree == 2:
-        weights = numpy.zeros((N, 6), float)
-        points, point_weights = BT_QUADRATURE_TABLE[degree]
-        for x, w in zip(points, point_weights):
-            L0, L1, L2 = x[0], x[1], 1 - x[0] - x[1]
-            weights[:,0] += w * 2*L0*(L0 - 0.5)
-            weights[:,1] += w * 2*L1*(L1 - 0.5)
-            weights[:,2] += w * 2*L2*(L2 - 0.5)
-            weights[:,3] += w * 4*L1*L2
-            weights[:,4] += w * 4*L2*L0
-            weights[:,5] += w * 4*L0*L1
-    
-    else:
-        ocellaris_error('Quadrature weight error',
-                        'Cannot compute quadrature weights on degree %d function' % degree)
-    
-    print '   '.join(repr(w) for w in weights[0])
-    print '   '.join(repr(w) for w in (numpy.ones((N, 3), float)/3)[0])
-    exit()
-    
-    return weights
-
-
-# Dunavanant's barycentric triangle quadrature rules
-# A more complete table can be found in phonyx.assembly.quadrature
-BT_QUADRATURE_TABLE = {}
-BT_QUADRATURE_TABLE[1] = ([[1/3, 1/3]],
-                          [1.0])
-BT_QUADRATURE_TABLE[2] = ([[2/3, 1/6], [1/6, 2/3], [1/6, 1/6]],
-                          [1/3, 1/3, 1/3])
-BT_QUADRATURE_TABLE[3] = ([[1/3, 1/3], [.6, .2], [.2, .6], [.2, .2]],
-                          [-9/16, 25/48, 25/48, 25/48])
-
 ###################################################################################################
 # Python implementations of nodal slope limiters
 #
@@ -256,7 +200,7 @@ BT_QUADRATURE_TABLE[3] = ([[1/3, 1/3], [.6, .2], [.2, .6], [.2, .2]],
 
 def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_cell_dofs,
                            max_neighbours, flat_neighbours, flat_cell_dofs, flat_cell_dofs_dg0,
-                           flat_weights, exceedances, results):
+                           exceedances, results):
     """
     Perform nodal slope limiting of a DG1 function. Also works for DG2
     functions, but since the local minimum or maximum may be in between
@@ -265,21 +209,20 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
     """
     C = num_cell_dofs
     
-    # Cell averages
+    # Compute cell averages before any modification
     averages = numpy.zeros(num_cells_all, float)
     for ic in range(num_cells_all):
         dofs = flat_cell_dofs[ic * C: (ic + 1)*C]
         vals = [results[dof] for dof in dofs]
-        weights = flat_weights[ic * C: (ic + 1)*C]
-        averages[ic] = numpy.dot(vals, weights)
+        averages[ic] = sum(vals[-3:]) / 3
     
     # Modify dof values
     dof_range = range(C)
+    dof_range_modable = dof_range[-3:]
     for ic in range(num_cells_owned):
         dofs = flat_cell_dofs[ic * C: (ic + 1)*C]
         vals = [results[dof] for dof in dofs]
-        weights = flat_weights[ic * C: (ic + 1)*C]
-        avg = numpy.dot(vals, weights)
+        avg = averages[ic]
         
         excedance = 0
         cell_on_boundary = False
@@ -323,36 +266,52 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
         # Modify the results to limit the slope
         
         # Find the new average and which vertices can be adjusted to obtain the correct average
-        new_avg = numpy.dot(vals, weights)
+        new_avg = sum(vals[-3:]) / 3
         eps = 0
         moddable = [0]*len(dof_range)
-        mod_weight = 0.0
-        mod_weight2 = 0.0
         if abs(avg - new_avg) > 1e-15:
             if new_avg > avg:
-                for idof in dof_range:
+                for idof in dof_range_modable:
                     if vals[idof] > avg:
                         moddable[idof] = 1
-                        mod_weight += weights[idof]
-                        mod_weight2 += weights[idof]**2
             else:
-                for idof in dof_range:
+                for idof in dof_range_modable:
                     if vals[idof] < avg:
                         moddable[idof] = 1
-                        mod_weight += weights[idof]
-                        mod_weight2 += weights[idof]**2
             
             # Get number of vertex values that can be modified and catch
             # possible floating point problems with the above comparisons
             nmod = sum(moddable)
+            assert nmod <= 3
             
             if nmod == 0:
                 assert abs(excedance) < 1e-14, 'Nmod=0 with exceedance=%r' % excedance
             else:
-                eps = (avg - new_avg) * mod_weight / mod_weight2 
+                eps = (avg - new_avg) * 3 / nmod 
         
         # Modify the vertices to obtain the correct average
-        for idof in dof_range:
-            results[dofs[idof]] = vals[idof] + eps * moddable[idof] * weights[idof] / mod_weight
+        for idof, dof in enumerate(dofs):
+            results[dof] = vals[idof] + eps * moddable[idof]
+        
+        # Verify that the average was not changed
+        vals_final = [results[dof] for dof in dofs]
+        final_avg = sum(vals_final[-3:]) / 3
+        error = abs(averages[ic] - final_avg)/averages[ic]
+        if error > 1e-10:
+            new_vals = [vals[i] + eps*moddable[i] for i in dof_range]
+            print num_cell_dofs, repr(error)
+            print repr(avg), repr(new_avg)
+            print repr(avg - new_avg), repr(eps), 'sssssssssssssssssssssssssssss'
+            print dofs, dof_range, dof_range_modable
+            print '%r %r %r' % (averages[ic], new_avg, final_avg)
+            print moddable, eps, nmod
+            print repr(averages[ic] - (sum(vals[-3:]) + eps*nmod)/3)
+            print vals
+            print new_vals
+            print [results[dof] for dof in dofs]
+            print  repr(averages[ic] - sum(new_vals) / 3)
+            print '--------------------------------------------------------------------------'
+            exit()
+        assert error < 1e-12, 'Got large difference in old and new average: %r' % error 
     
     return exceedances

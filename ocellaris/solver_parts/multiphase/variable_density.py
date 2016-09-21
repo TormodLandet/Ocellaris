@@ -121,7 +121,7 @@ class VariableDensityModel(MultiPhaseModel):
                                                bcs=dirichlet_bcs)
         
         else:
-            # Use backward euler (BDF1) for timestep 1
+            # Use backward Euler (BDF1) for timestep 1
             self.time_coeffs = Constant([1, -1, 0])
             
             if dolfin.norm(self.rho_pp.vector()) > 0:
@@ -140,6 +140,9 @@ class VariableDensityModel(MultiPhaseModel):
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))
+        
+        # Make sure the initial value is included in XDMF results from timestep 0
+        self.rho.assign(self.rho_p)
     
     def get_density(self, k):
         """

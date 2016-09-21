@@ -1,0 +1,76 @@
+ocellaris:
+    type: input
+    version: 1.0
+    
+metadata:
+    author: Tormod Landet
+    date: 2016-09-21
+    description: |
+        Advection in the x direction of a discontinuous function with curvature
+        that looks like a pipe flange joint. Test case from Cotter & Kuzmin 2016
+
+physical_properties:
+    nu: 1.0
+    rho_min: 0.0
+    rho_max: 2.0
+
+# Structured mesh
+mesh:
+    type: Rectangle
+    Nx: 100
+    Ny: 100
+    diagonal: left/right
+
+boundary_conditions:
+-   name: all
+    selector: code
+    inside_code: on_boundary
+    rho:
+        type: CppCodedValue
+        cpp_code: 4*x[1]*(1 - x[1])
+
+initial_conditions:
+    up0:
+        cpp_code: '1.0'
+    up1:
+        cpp_code: '0.0'
+    rho_pp:
+        cpp_code: '4*x[1]*(1 - x[1]) + (x[0] > 0.2 + t && x[0] < 0.4 + t ? 1.0 : 0.0)'
+    rho_p:
+        cpp_code: '4*x[1]*(1 - x[1]) + (x[0] > 0.2 + t && x[0] < 0.4 + t ? 1.0 : 0.0)'
+
+time:
+    dt: 0.01
+    tmax: 0.4
+
+output:
+    prefix: output/advection_of_pipe_flange_joint
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    xdmf_write_interval: 1
+
+multiphase_solver:
+    type: VariableDensity
+    function_space_rho: DG
+    polynomial_degree_rho: 1
+
+solver:
+    type: AnalyticalSolution
+    function_space_velocity: DG
+    function_space_pressure: DG
+    polynomial_degree_velocity: 2
+    polynomial_degree_pressure: 1
+    
+slope_limiter:
+    rho:
+        method: HierarchalTaylor
+
+hooks:
+    post_simulation:
+    -   name: calculate error
+        enabled: yes
+        code: |
+            cpp = simulation.input.get_value('initial_conditions/rho_p/cpp_code')
+            rho_e = Expression(cpp, t=simulation.time)
+            print 'L2 ERROR:', errornorm(rho_e, simulation.data['rho'])

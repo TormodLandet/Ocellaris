@@ -71,7 +71,7 @@ multiphase_solver:
 
 slope_limiter:
     rho:
-        method: none
+        method: NaiveNodal
 
 solver:
     type: AnalyticalSolution

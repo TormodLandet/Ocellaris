@@ -5,7 +5,7 @@ ocellaris:
 user_code:
     constants:
         NU: 1.0e-4
-        RHO: 100.0
+        RHO: 1000.0
 
 physical_properties:
     #rho0: 1000.0
@@ -60,29 +60,23 @@ boundary_conditions:
         value: 0
 
 initial_conditions:
-    #cp:
-    #    cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
-    #    _cpp_code: |
-    #        (((x[0] < 0.25-0.04+1e-5 && x[1] < 0.5-0.04+1e-5) ? 0.2 : 0.0) +
-    #         ((x[0] < 0.25-0.02+1e-5 && x[1] < 0.5-0.02+1e-5) ? 0.2 : 0.0) +
-    #         ((x[0] < 0.25-0.00+1e-5 && x[1] < 0.5-0.00+1e-5) ? 0.2 : 0.0) +
-    #         ((x[0] < 0.25+0.02+1e-5 && x[1] < 0.5+0.02+1e-5) ? 0.2 : 0.0) +
-    #         ((x[0] < 0.25+0.04+1e-5 && x[1] < 0.5+0.04+1e-5) ? 0.2 : 0.0))
     rho_p:
         cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? RHO : 1.0'
+        #cpp_code: '(RHO-1)*(1 - min(max((max(x[0]-0.25, x[1]-0.5)*10 + 0.5), 0.0), 1.0)) + 1.0'
     rho_pp:
         cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? RHO : 1.0'
+        #cpp_code: '(RHO-1)*(1 - min(max((max(x[0]-0.25, x[1]-0.5)*10 + 0.5), 0.0), 1.0)) + 1.0'
 
 time:
-    dt: 0.001
-    tmax: 1.0
+    dt: 0.0001
+    tmax: 0.5
 
 output:
-    prefix: py$ 'output/dam_break_nu%.0e_rho%d' % (NU, RHO)
+    prefix: py$ 'output/dam_break_nu%.0e_rho%d_limited_afterBDM' % (NU, RHO)
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 10
+    xdmf_write_interval: 100
 
 multiphase_solver:
     #type: BlendedAlgebraicVOF
@@ -107,7 +101,9 @@ solver:
 
 slope_limiter:
     rho:
-        method: basic
+        method: NaiveNodal
+    u:
+        method: NaiveNodal
 
 _probes:
     -   name: c=0.5
