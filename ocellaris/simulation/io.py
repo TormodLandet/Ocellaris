@@ -98,7 +98,7 @@ class InputOutputHandling():
         
         sim = self.simulation
         if sim.input.get_value('output/save_restart_file_at_end',
-                               SAVE_RESTART_AT_END, 'boolean'):
+                               SAVE_RESTART_AT_END, 'bool'):
             h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_endpoint_%08d.h5') 
             h5_file_name = h5_file_name % sim.timestep
             self.write_restart_file(h5_file_name)

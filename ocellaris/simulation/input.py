@@ -83,47 +83,11 @@ class Input(collections.OrderedDict):
         else:
             pathstr = self.basepath + '/'.join(path)
         
-        def eval_python_expression(value):
-            """
-            We run eval with the math functions and user constants available
-            """
-            if not isinstance(value, basestring) or not value.startswith('py$'):
-                return value
-            
-            if safe_mode:
-                ocellaris_error('Cannot have Python expression here',
-                                'Not allowed to have Python expression here:  %s' % pathstr)  
-            
-            # remove "py$" prefix
-            expr = value[3:]
-            
-            # Build dictionary of locals for evaluating the expression    
-            eval_locals = {}
-            
-            import math
-            for name in dir(math):
-                if not name.startswith('_'):
-                    eval_locals[name] = getattr(math, name)
-            
-            global_inp = self.simulation.input
-            user_constants = global_inp.get_value('user_code/constants', {}, 'dict(string:float)',
-                                                  safe_mode=True)
-            for name, const_value in user_constants.iteritems():
-                eval_locals[name] = const_value
-            
-            try:
-                value = eval(expr, globals(), eval_locals)
-            except Exception:
-                self.simulation.log.error('Cannot evaluate python code for %s' % pathstr)
-                self.simulation.log.error('Python code is %s' % expr)
-                raise
-            return value
-        
         def check_isinstance(value, classes):
             """
             Give error if the input data is not of the required type
             """
-            value = eval_python_expression(value)
+            value = eval_python_expression(self.simulation, value, pathstr, safe_mode)
             
             if not isinstance(value, classes):
                 ocellaris_error('Malformed data on input file',
@@ -311,3 +275,42 @@ class Input(collections.OrderedDict):
     def __str__(self):
         inp = collections.OrderedDict(self.items())
         return yaml.dump(inp, indent=4)
+
+
+def eval_python_expression(simulation, value, pathstr, safe_mode=False):
+    """
+    We run eval with the math functions and user constants available on string
+    values that are prefixed with "py$" indicating that they are dynamic
+    expressions and not just static strings
+    """
+    if not isinstance(value, basestring) or not value.startswith('py$'):
+        return value
+    
+    if safe_mode:
+        ocellaris_error('Cannot have Python expression here',
+                        'Not allowed to have Python expression here:  %s' % pathstr)
+     
+    # remove "py$" prefix
+    expr = value[3:]
+    
+    # Build dictionary of locals for evaluating the expression    
+    eval_locals = {}
+    
+    import math
+    for name in dir(math):
+        if not name.startswith('_'):
+            eval_locals[name] = getattr(math, name)
+    
+    global_inp = simulation.input
+    user_constants = global_inp.get_value('user_code/constants', {}, 'dict(string:float)',
+                                          safe_mode=True)
+    for name, const_value in user_constants.iteritems():
+        eval_locals[name] = const_value
+    
+    try:
+        value = eval(expr, globals(), eval_locals)
+    except Exception:
+        simulation.log.error('Cannot evaluate python code for %s' % pathstr)
+        simulation.log.error('Python code is %s' % expr)
+        raise
+    return value
