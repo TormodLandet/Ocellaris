@@ -69,7 +69,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         self.flat_neighbours = neighbours.flatten()
         self.flat_cell_dofs = numpy.array(cell_dofs_V, dtype=intc).flatten()
         self.flat_cell_dofs_dg0 = numpy.array(cell_dofs_V0, dtype=intc).flatten()
-        self.cpp_mod = load_module('slope_limiter_basic')
+        self.cpp_mod = load_module('naive_nodal')
         
         # The initial maximum and minimum values in the boundeness filter are cached
         self._filter_cache = None
@@ -91,7 +91,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         # default faster C++ implementation)
         if self.use_cpp:
             if self.degree in (1,):
-                limiter = self.cpp_mod.slope_limiter_basic_dg1
+                limiter = self.cpp_mod.naive_nodal_slope_limiter_dg1
             else:
                 ocellaris_error('NaiveNodal slope limiter error',
                                 'C++ slope limiter does not support degree %d' % self.degree)

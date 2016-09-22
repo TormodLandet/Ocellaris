@@ -9,18 +9,21 @@
 namespace dolfin
 {
 
-void slope_limiter_basic_dg1(const Array<int>& num_neighbours,
-                             const int num_cells_all,
-                             const int num_cells_owned,
-                             const int num_cell_dofs,
-                             const int max_neighbours,
-                             const Array<int>& neighbours,
-                             const Array<int>& cell_dofs,
-                             const Array<int>& cell_dofs_dg0,
-                             const Array<double>& dof_weights,
-                             double* exceedances,
-                             double* results)
+void naive_nodal_slope_limiter_dg1(const Array<int>& num_neighbours,
+                                   const int num_cells_all,
+                                   const int num_cells_owned,
+                                   const int num_cell_dofs,
+                                   const int max_neighbours,
+                                   const Array<int>& neighbours,
+                                   const Array<int>& cell_dofs,
+                                   const Array<int>& cell_dofs_dg0,
+                                   double* exceedances,
+                                   double* results)
 {
+  if (num_cell_dofs != 3)
+    dolfin_error("naive_nodal.h", "naive nodal slope limiter",
+                 "C++ NaiveNodal slope limiter only supports DG1");
+
   // Calculate cell averages (which we will make sure to keep unchanged)
   std::vector<double> averages(num_cells_all);
   for (int ic = 0; ic < num_cells_all; ic++)
