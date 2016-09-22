@@ -39,6 +39,9 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         # as the maximum correction performed for each cell 
         V0 = df.FunctionSpace(self.mesh, 'DG', 0)
         self.exceedance = df.Function(V0)
+        name = 'SlopeLimiterExceedance_%s' % phi_name
+        self.exceedance.rename(name, name)
+        self.additional_plot_funcs = [self.exceedance]
         
         # No limiter needed for piecewice constant functions
         if degree == 0:

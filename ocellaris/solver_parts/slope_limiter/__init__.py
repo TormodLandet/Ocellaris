@@ -50,7 +50,7 @@ class DoNothingSlopeLimiter(SlopeLimiterBase):
     description = 'No slope limiter'
     
     def __init__(self, *argv, **kwargs):
-        pass
+        self.additional_plot_funcs = []
     
     def run(self):
         pass
@@ -81,12 +81,8 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
     limiter = limiter_class(phi_name, phi, boundary_condition, filter_method, use_cpp)
     
     if plot_exceedance:
-        if hasattr(limiter, 'exceedance'):
-            name = 'SlopeLimiter_%s' % phi_name
-            limiter.exceedance.rename(name, name)
-            simulation.io.add_extra_output_function(limiter.exceedance)
-        else:
-            simulation.log.warning('Cannot plot slope limiter %s' % method)
+        for func in limiter.additional_plot_funcs:
+            simulation.io.add_extra_output_function(func)
     
     return limiter
 
