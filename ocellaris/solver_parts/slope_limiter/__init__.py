@@ -6,7 +6,7 @@ from ocellaris.solver_parts import get_dof_region_marks
 
 LIMITER = 'none'
 FILTER = 'nofilter'
-USE_CPP = False
+USE_CPP = True
 _SLOPE_LIMITERS = {}
 
 
@@ -65,7 +65,7 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
     inp = simulation.input.get_value('slope_limiter/%s' % phi_name, {}, 'Input')
     method = inp.get_value('method', default_limiter, 'string')
     filter_method = inp.get_value('filter', default_filter, 'string')
-    use_cpp = inp.get_value('use_cpp', default_use_cpp, 'boolean')
+    use_cpp = inp.get_value('use_cpp', default_use_cpp, 'bool')
     
     # Get the region markers
     V = phi.function_space()

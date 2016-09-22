@@ -83,28 +83,6 @@ class Input(collections.OrderedDict):
         else:
             pathstr = self.basepath + '/'.join(path)
         
-        d = self
-        for p in path:
-            if isinstance(d, list):
-                try:
-                    p = int(p)
-                except ValueError:
-                    ocellaris_error('List index not integer',
-                                    'Not a valid list index:  %s' % p)    
-            elif p not in d:
-                if default_value is UNDEFINED:
-                    ocellaris_error('Missing parameter on input file',
-                                    'Missing required input parameter:\n  %s' % pathstr)
-                else:
-                    msg  = '    No value set for "%s", using default value %r' % (pathstr, default_value)
-                    if not msg in self._already_logged:
-                        self.simulation.log.debug(msg)
-                        self._already_logged.add(msg)
-                    if required_type == 'Input':
-                        default_value = Input(self.simulation, default_value)
-                    return default_value
-            d = d[p]
-            
         def eval_python_expression(value):
             """
             We run eval with the math functions and user constants available
@@ -174,50 +152,79 @@ class Input(collections.OrderedDict):
                 d_new.append(check_isinstance(val, valtype))
             return d_new
         
-        # Validate according to required data type
+        # Get validation function according to required data type
         number = (int, long, float)
         dict_types = (dict, collections.OrderedDict)
         anytype = (int, long, float, basestring, list, tuple, dict,
                    collections.OrderedDict, bool)
         if required_type == 'bool':
-            d = check_isinstance(d, bool)
+            def validate_and_convert(d): return check_isinstance(d, bool)
         elif required_type == 'float':
             # The YAML parser annoyingly thinks 1e-3 is a string (while 1.0e-3 is a float)
-            if isinstance(d, str):
-                try:
-                    d = float(d)
-                except ValueError:
-                    pass
-            d = check_isinstance(d, number)
+            def validate_and_convert(d):
+                if isinstance(d, str):
+                    try:
+                        d = float(d)
+                    except ValueError:
+                        pass
+                return check_isinstance(d, number)
         elif required_type == 'int':
-            d = check_isinstance(d, int)
+            def validate_and_convert(d): return check_isinstance(d, int)
         elif required_type == 'string':
-            d = check_isinstance(d, basestring)
-            # SWIG does not like Python 2 Unicode objects
-            d = str(d)
+            def validate_and_convert(d):
+                d = check_isinstance(d, basestring)
+                # SWIG does not like Python 2 Unicode objects
+                return str(d)
         elif required_type == 'Input':
-            d = check_isinstance(d, dict_types)
-            d = Input(self.simulation, d, basepath=pathstr)
+            def validate_and_convert(d):
+                d = check_isinstance(d, dict_types)
+                return Input(self.simulation, d, basepath=pathstr)
         elif required_type == 'dict(string:any)':
-            d = check_dict(d, basestring, anytype)
+            def validate_and_convert(d): return check_dict(d, basestring, anytype)
         elif required_type == 'dict(string:dict)':
-            d = check_dict(d, basestring, dict_types)
+            def validate_and_convert(d): return check_dict(d, basestring, dict_types)
         elif required_type == 'dict(string:list)':
-            d = check_dict(d, basestring, list)
+            def validate_and_convert(d): return check_dict(d, basestring, list)
         elif required_type == 'dict(string:float)':
-            d = check_dict(d, basestring, number)
+            def validate_and_convert(d): return check_dict(d, basestring, number)
         elif required_type == 'list(float)':
-            d = check_list(d, number)
+            def validate_and_convert(d): return check_list(d, number)
         elif required_type == 'list(int)':
-            d = check_list(d, int)
+            def validate_and_convert(d): return check_list(d, int)
         elif required_type == 'list(string)':
-            d = check_list(d, basestring)
+            def validate_and_convert(d): return check_list(d, basestring)
         elif required_type == 'list(dict)':
-            d = check_list(d, dict_types)
+            def validate_and_convert(d): return check_list(d, dict_types)
         elif required_type == 'any':
-            d = check_isinstance(d, anytype)
+            def validate_and_convert(d): return check_isinstance(d, anytype)
         else:
             raise ValueError('Unknown required_type %s' % required_type)
+        
+        # Look for the requested key
+        d = self
+        for p in path:
+            if isinstance(d, list):
+                try:
+                    p = int(p)
+                except ValueError:
+                    ocellaris_error('List index not integer',
+                                    'Not a valid list index:  %s' % p)    
+            elif p not in d:
+                if default_value is UNDEFINED:
+                    ocellaris_error('Missing parameter on input file',
+                                    'Missing required input parameter:\n  %s' % pathstr)
+                else:
+                    msg  = '    No value set for "%s", using default value %r' % (pathstr, default_value)
+                    if not msg in self._already_logged:
+                        self.simulation.log.debug(msg)
+                        self._already_logged.add(msg)
+                    if required_type == 'Input':
+                        default_value = Input(self.simulation, default_value)
+                    return default_value
+            d = d[p]
+        
+        # Validate the input data and convert to the requested type
+        d = validate_and_convert(d)
         
         # Get the value on the root process
         if mpi_root_value:
