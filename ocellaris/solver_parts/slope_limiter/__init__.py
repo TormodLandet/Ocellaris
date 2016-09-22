@@ -66,6 +66,7 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
     method = inp.get_value('method', default_limiter, 'string')
     filter_method = inp.get_value('filter', default_filter, 'string')
     use_cpp = inp.get_value('use_cpp', default_use_cpp, 'bool')
+    plot_exceedance = inp.get_value('plot', False, 'bool')  
     
     # Get the region markers
     V = phi.function_space()
@@ -78,6 +79,15 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
     simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, phi_name))
     limiter_class = get_slope_limiter(method)
     limiter = limiter_class(phi_name, phi, boundary_condition, filter_method, use_cpp)
+    
+    if plot_exceedance:
+        if hasattr(limiter, 'exceedance'):
+            name = 'SlopeLimiter_%s' % phi_name
+            limiter.exceedance.rename(name, name)
+            simulation.io.add_extra_output_function(limiter.exceedance)
+        else:
+            simulation.log.warning('Cannot plot slope limiter %s' % method)
+    
     return limiter
 
 

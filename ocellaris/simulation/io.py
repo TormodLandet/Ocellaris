@@ -22,6 +22,14 @@ class InputOutputHandling():
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
         close = lambda success: self._close_files()
         sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
+        self.extra_xdmf_functions = []
+        
+    def add_extra_output_function(self, function):
+        """
+        The output files (XDMF) normally only contain u, p and potentially rho or c. Other
+        custom fields can be added  
+        """
+        self.extra_xdmf_functions.append(function)
     
     def _setup_io(self):
         sim = self.simulation
@@ -191,6 +199,10 @@ class InputOutputHandling():
                 func = self.simulation.data[name]
                 if isinstance(func, dolfin.Function): 
                     self.xdmf_file.write(func, t)
+        
+        # Write extra functions
+        for func in self.extra_xdmf_functions:
+            self.xdmf_file.write(func, t)
     
     def _write_hdf5(self, h5_file_name=None):
         """

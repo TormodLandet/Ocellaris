@@ -38,7 +38,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         # Exceedance is a secondary output of the limiter and is calculated
         # as the maximum correction performed for each cell 
         V0 = df.FunctionSpace(self.mesh, 'DG', 0)
-        self.excedance = df.Function(V0)
+        self.exceedance = df.Function(V0)
         
         # No limiter needed for piecewice constant functions
         if degree == 0:
@@ -105,7 +105,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         num_cells_all = self.mesh.num_cells()
         tdim = self.mesh.topology().dim()
         num_cells_owned = self.mesh.topology().ghost_offset(tdim)
-        exceedances = self.excedance.vector().get_local()
+        exceedances = self.exceedance.vector().get_local()
         
         limiter(self.num_neighbours,
                 num_cells_all,
@@ -118,8 +118,8 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
                 exceedances,
                 results)
         
-        self.excedance.vector().set_local(exceedances)
-        self.excedance.vector().apply('insert')
+        self.exceedance.vector().set_local(exceedances)
+        self.exceedance.vector().apply('insert')
         
         # Run post processing filter
         if self.filter == 'minmax':

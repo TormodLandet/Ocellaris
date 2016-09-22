@@ -95,6 +95,7 @@ def DG1_to_taylor(u, t):
         dof_vals_taylor[dofs] = taylor_vals
     
     t.vector().set_local(dof_vals_taylor)
+    t.vector().apply('insert')
 
 
 def DG2_to_taylor(u, t):
@@ -183,6 +184,7 @@ def DG2_to_taylor(u, t):
         dof_vals_taylor[dofs] = taylor_vals
     
     t.vector().set_local(dof_vals_taylor)
+    t.vector().apply('insert')
 
 
 def taylor_to_DG1(t, u):
@@ -218,6 +220,7 @@ def taylor_to_DG1(t, u):
         dof_vals[dofs] = vals
     
     u.vector().set_local(dof_vals)
+    u.vector().apply('insert')
 
 
 def taylor_to_DG2(t, u):
@@ -258,6 +261,7 @@ def taylor_to_DG2(t, u):
         dof_vals[dofs] = vals
     
     u.vector().set_local(dof_vals)
+    u.vector().apply('insert')
 
 
 #########################################################################################
@@ -303,6 +307,7 @@ def DG2_to_taylor_numpy(u, t):
         dof_vals_taylor[dofs] = taylor_vals
     
     t.vector().set_local(dof_vals_taylor)
+    t.vector().apply('insert')
 
 
 def produce_code_with_sympy_DG1():
