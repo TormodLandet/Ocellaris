@@ -8,21 +8,62 @@ from dolfin import cells
 from ocellaris.utils import ocellaris_error
 
 
+CACHE = {}
+
+
 def lagrange_to_taylor(u, t):
     """
     Convert a Lagrange function space function into a DG Taylor
     function space function. The results are stored in t which
     should be a function space with an appropriate number of dofs
     per cell (t in DG2 if u in DG2 etc)
+    
+    Note: Most possible dolfin operations on the function t will
+    be wrong since dolfin does not support Taylor basis DG elements.
+    The t function should hence be read and modified by specially
+    crafted code only! 
     """
-    degree = u.function_space().ufl_element().degree()
-    if degree == 1:
-        return DG1_to_taylor(u, t)
-    elif degree == 2:
-        return DG2_to_taylor(u, t)
-    else:
-        ocellaris_error('DG Lagrange to DG Taylor converter error',
-                        'Polynomial degree %d not supported' % degree)
+    V = u.function_space()
+    mesh = V.mesh()
+    degree = V.ufl_element().degree()
+    
+    if 'mesh_hash' not in CACHE or CACHE['mesh_hash'] != mesh.hash():
+        CACHE.clear()
+        CACHE['mesh'] = mesh
+        CACHE['mesh_hash'] = mesh.hash()
+    
+    # Get cached conversion matrices
+    key = ('lagrange_to_taylor_matrices', degree)
+    if key not in CACHE:
+        if degree == 1:
+            CACHE[key] = DG1_to_taylor_matrix(V)
+        elif degree == 2:
+            CACHE[key] = DG2_to_taylor_matrix(V)
+        else:
+            ocellaris_error('DG Lagrange to DG Taylor converter error',
+                            'Polynomial degree %d not supported' % degree)
+    lagrange_to_taylor_matrices = CACHE[key]
+    Ncells = lagrange_to_taylor_matrices.shape[0]
+    
+    # Get cached cell dofs
+    key2 = ('cell_dofs', degree)
+    if key2 not in CACHE:
+        dm = V.dofmap()
+        cell_dofs = [dm.cell_dofs(i) for i in xrange(Ncells)]
+        CACHE[key2] = numpy.array(cell_dofs, int)
+    cell_dofs = CACHE[key2]
+    
+    # Apply the conversion matrices for all cells by use of the stacked dot
+    # behaviour of matmul (slightly faster than einsum 'ijk,ik->ij')
+    all_vals_lagrange = u.vector().get_local()
+    lagrange_vectors = all_vals_lagrange.take(cell_dofs)
+    res = numpy.matmul(lagrange_to_taylor_matrices, lagrange_vectors[:,:,None]).squeeze()
+    
+    # Put the results into the right indices in the Taylor function's vector
+    all_vals_taylor = numpy.zeros_like(all_vals_lagrange)
+    all_vals_taylor[cell_dofs] = res
+    t.vector().set_local(all_vals_taylor)
+    t.vector().apply('insert')
 
 
 def taylor_to_lagrange(t, u):
@@ -32,38 +73,67 @@ def taylor_to_lagrange(t, u):
     should be a function space with an appropriate number of dofs
     per cell (u in DG2 if t in DG2 etc)
     """
-    degree = t.function_space().ufl_element().degree()
-    if degree == 1:
-        return taylor_to_DG1(t, u)
-    if degree == 2:
-        return taylor_to_DG2(t, u)
-    else:
-        ocellaris_error('DG Taylor to DG Lagrange converter error',
-                        'Polynomial degree %d not supported' % degree)
+    V = u.function_space()
+    mesh = V.mesh()
+    degree = V.ufl_element().degree()
+    
+    if 'mesh_hash' not in CACHE or CACHE['mesh_hash'] != mesh.hash():
+        CACHE.clear()
+        CACHE['mesh'] = mesh
+        CACHE['mesh_hash'] = mesh.hash()
+    
+    # Get cached conversion matrices
+    key = ('taylor_to_lagrange_matrices', degree)
+    if key not in CACHE:
+        if degree == 1:
+            CACHE[key] = taylor_to_DG1_matrix(V)
+        elif degree == 2:
+            CACHE[key] = taylor_to_DG2_matrix(V)
+        else:
+            ocellaris_error('DG Taylor to DG Lagrange converter error',
+                            'Polynomial degree %d not supported' % degree)
+    taylor_to_lagrange_matrices = CACHE[key]
+    Ncells = taylor_to_lagrange_matrices.shape[0]
+    
+    # Get cached cell dofs
+    key2 = ('cell_dofs', degree)
+    if key2 not in CACHE:
+        dm = V.dofmap()
+        cell_dofs = [dm.cell_dofs(i) for i in xrange(Ncells)]
+        CACHE[key2] = numpy.array(cell_dofs, int)
+    cell_dofs = CACHE[key2]
+    
+    # Apply the conversion matrices for all cells by use of the stacked dot
+    # behaviour of matmul (slightly faster than einsum 'ijk,ik->ij')
+    all_vals_taylor = t.vector().get_local()
+    taylor_vectors = all_vals_taylor.take(cell_dofs)
+    res = numpy.matmul(taylor_to_lagrange_matrices, taylor_vectors[:,:,None]).squeeze()
+    
+    # Put the results into the right indices in the Taylor function's vector
+    all_vals_lagrange = numpy.zeros_like(all_vals_taylor)
+    all_vals_lagrange[cell_dofs] = res
+    u.vector().set_local(all_vals_lagrange)
+    u.vector().apply('insert')
 
 
 ##############################################################################
 
 
-def DG1_to_taylor(u, t):
+def DG1_to_taylor_matrix(V):
     """
-    Convert a function u (which is a DG1 function in 2D) to a DG Taylor basis
-    which is stored in the DG1 function t. Most operations on the function t
-    will be wrong since dolfin does not support Taylor basis DG elements. The
-    t function should hence be read and modified by specially crafted code only! 
+    Create the per cell matrices that when matrix multiplied with the
+    Lagrange cell dofs return a vector of Taylor cell dofs.
+    This implementation handles DG1 function space V
     """
-    V = u.function_space()
     mesh = V.mesh()
     vertices = mesh.coordinates()
-    dm = V.dofmap()
-    dof_vals = u.vector().get_local()
-    dof_vals_taylor = numpy.zeros_like(dof_vals)
     
-    taylor_vals = numpy.zeros(3, float)
+    tdim = mesh.topology().dim()
+    num_cells_owned = mesh.topology().ghost_offset(tdim)
     
+    A = numpy.zeros((num_cells_owned, 3, 3), float)
     for cell in cells(mesh):
-        dofs = dm.cell_dofs(cell.index())
-        vals = dof_vals[dofs]
+        icell = cell.index()
         
         verts = cell.entities(0)
         x = numpy.zeros((3, 2), float)
@@ -78,172 +148,152 @@ def DG1_to_taylor(u, t):
         D = (y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3)
         
         # Value at xc
-        taylor_vals[0] = (1/3)*vals[0]
-        taylor_vals[0] += (1/3)*vals[1]
-        taylor_vals[0] += (1/3)*vals[2]
+        A[icell,0,0] = 1/3
+        A[icell,0,1] = 1/3
+        A[icell,0,2] = 1/3
         
         # d/dx
-        taylor_vals[1] = ((y2 - y3)/D)*vals[0]
-        taylor_vals[1] += ((-y1 + y3)/D)*vals[1]
-        taylor_vals[1] += ((y1 - y2)/D)*vals[2]
+        A[icell,1,0] = (y2 - y3)/D
+        A[icell,1,1] = (-y1 + y3)/D
+        A[icell,1,2] = (y1 - y2)/D
         
         # d/dy
-        taylor_vals[2] = ((-x2 + x3)/D)*vals[0]
-        taylor_vals[2] += ((x1 - x3)/D)*vals[1]
-        taylor_vals[2] += ((-x1 + x2)/D)*vals[2]
-        
-        dof_vals_taylor[dofs] = taylor_vals
-    
-    t.vector().set_local(dof_vals_taylor)
-    t.vector().apply('insert')
+        A[icell,2,0] = (-x2 + x3)/D
+        A[icell,2,1] = (x1 - x3)/D
+        A[icell,2,2] = (-x1 + x2)/D
+
+    return A
 
 
-def DG2_to_taylor(u, t):
+def DG2_to_taylor_matrix(V):
     """
-    Convert a function u (which is a DG2 function in 2D) to a DG Taylor basis
-    which is stored in the DG2 function t. Most operations on the function t
-    will be wrong since dolfin does not support Taylor basis DG elements. The
-    t function should hence be read and modified by specially crafted code only! 
+    Create the per cell matrices that when matrix multiplied with the
+    Lagrange cell dofs return a vector of Taylor cell dofs.
+    This implementation handles DG2 function space V
     """
-    V = u.function_space()
     mesh = V.mesh()
     vertices = mesh.coordinates()
-    dm = V.dofmap()
-    dof_vals = u.vector().get_local()
-    dof_vals_taylor = numpy.zeros_like(dof_vals)
     
-    taylor_vals = numpy.zeros(6, float)
+    tdim = mesh.topology().dim()
+    num_cells_owned = mesh.topology().ghost_offset(tdim)
     
+    A = numpy.zeros((num_cells_owned, 6, 6), float)
     for cell in cells(mesh):
-        dofs = dm.cell_dofs(cell.index())
-        vals = dof_vals[dofs]
+        icell = cell.index()
         
-        verts = cell.entities(0)
-        x = numpy.zeros((6, 2), float)
-        x[0] = vertices[verts[0]]
-        x[1] = vertices[verts[1]]
-        x[2] = vertices[verts[2]]
-        x[3] = (x[1] +  x[2])/2
-        x[4] = (x[0] +  x[2])/2
-        x[5] = (x[0] +  x[1])/2
-                
-        ###############################
-        # From sympy code gen
-        
-        ((x1, y1), (x2, y2), (x3, y3)) = x[:3]
-        D = (y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3)
-                
-        # Value at xc
-        taylor_vals[0] = (-1/9)*vals[0]
-        taylor_vals[0] += (-1/9)*vals[1]
-        taylor_vals[0] += (-1/9)*vals[2]
-        taylor_vals[0] += (4/9)*vals[3]
-        taylor_vals[0] += (4/9)*vals[4]
-        taylor_vals[0] += (4/9)*vals[5]
-        
-        # d/dx
-        taylor_vals[1] = ((y2 - y3)/(3*D))*vals[0]
-        taylor_vals[1] += ((-y1 + y3)/(3*D))*vals[1]
-        taylor_vals[1] += ((y1 - y2)/(3*D))*vals[2]
-        taylor_vals[1] += (4*(-y2 + y3)/(3*D))*vals[3]
-        taylor_vals[1] += (4*(y1 - y3)/(3*D))*vals[4]
-        taylor_vals[1] += (4*(-y1 + y2)/(3*D))*vals[5]
-        
-        # d/dy
-        taylor_vals[2] = ((-x2 + x3)/(3*D))*vals[0]
-        taylor_vals[2] += ((x1 - x3)/(3*D))*vals[1]
-        taylor_vals[2] += ((-x1 + x2)/(3*D))*vals[2]
-        taylor_vals[2] += (4*(x2 - x3)/(3*D))*vals[3]
-        taylor_vals[2] += (4*(-x1 + x3)/(3*D))*vals[4]
-        taylor_vals[2] += (4*(x1 - x2)/(3*D))*vals[5]
-        
-        # d/dx^2
-        taylor_vals[3] = (4*(y2 - y3)**2/D**2)*vals[0]
-        taylor_vals[3] += (4*(y1 - y3)**2/D**2)*vals[1]
-        taylor_vals[3] += (4*(-y1 + y2)**2/D**2)*vals[2]
-        taylor_vals[3] += (8*(-y1 + y2)*(y1 - y3)/D**2)*vals[3]
-        taylor_vals[3] += (8*(y1 - y2)*(y2 - y3)/D**2)*vals[4]
-        taylor_vals[3] += (-8*(y1 - y3)*(y2 - y3)/D**2)*vals[5]
-        
-        # d/dy^2
-        taylor_vals[4] = (4*(x2 - x3)**2/D**2)*vals[0]
-        taylor_vals[4] += (4*(x1 - x3)**2/D**2)*vals[1]
-        taylor_vals[4] += (4*(x1 - x2)**2/D**2)*vals[2]
-        taylor_vals[4] += (-8*(x1 - x2)*(x1 - x3)/D**2)*vals[3]
-        taylor_vals[4] += (8*(x1 - x2)*(x2 - x3)/D**2)*vals[4]
-        taylor_vals[4] += (-8*(x1 - x3)*(x2 - x3)/D**2)*vals[5]
-        
-        # d/dx*dy
-        taylor_vals[5] = (-4*(x2 - x3)*(y2 - y3)/D**2)*vals[0]
-        taylor_vals[5] += (-4*(x1 - x3)*(y1 - y3)/D**2)*vals[1]
-        taylor_vals[5] += (4*(x1 - x2)*(-y1 + y2)/D**2)*vals[2]
-        taylor_vals[5] += (4*((x1 - x2)*(y1 - y3) + (x1 - x3)*(y1 - y2))/D**2)*vals[3]
-        taylor_vals[5] += (-(4*(x1 - x2)*(y2 - y3) + 4*(x2 - x3)*(y1 - y2))/D**2)*vals[4]
-        taylor_vals[5] += (4*((x1 - x3)*(y2 - y3) + (x2 - x3)*(y1 - y3))/D**2)*vals[5]
-        
-        dof_vals_taylor[dofs] = taylor_vals
-    
-    t.vector().set_local(dof_vals_taylor)
-    t.vector().apply('insert')
-
-
-def taylor_to_DG1(t, u):
-    """
-    Take a function t as produced by DG1_to_taylor and convert it back
-    to a standard Lagrange DG1 function, u.
-    """
-    V = t.function_space()
-    mesh = V.mesh()
-    vertices = mesh.coordinates()
-    dm = V.dofmap()
-    dof_vals_taylor = t.vector().get_local()
-    dof_vals = numpy.zeros_like(dof_vals_taylor)
-    
-    vals = numpy.zeros(3, float)
-    
-    for cell in cells(mesh):
-        dofs = dm.cell_dofs(cell.index())
-        taylor_vals = dof_vals_taylor[dofs]
-        
-        # Corner and center coordinates
         verts = cell.entities(0)
         x = numpy.zeros((3, 2), float)
         x[0] = vertices[verts[0]]
         x[1] = vertices[verts[1]]
         x[2] = vertices[verts[2]]
-        xc = (x[0] + x[1] +  x[2])/3
+                
+        ###############################
+        # From sympy code gen
         
-        # Evaluate the Taylor basis at each node
-        for i in range(3):
-            dx, dy = x[i,0] - xc[0], x[i,1] - xc[1]
-            vals[i] = taylor_vals[0] + dx*taylor_vals[1] + dy*taylor_vals[2]
-        dof_vals[dofs] = vals
-    
-    u.vector().set_local(dof_vals)
-    u.vector().apply('insert')
+        ((x1, y1), (x2, y2), (x3, y3)) = x
+        D = (y2 - y3)*(x1 - x3) + (x3 - x2)*(y1 - y3)
+        
+        # Value at xc
+        A[icell,0,0] = -1/9
+        A[icell,0,1] = -1/9
+        A[icell,0,2] = -1/9
+        A[icell,0,3] = 4/9
+        A[icell,0,4] = 4/9
+        A[icell,0,5] = 4/9
+        
+        # d/dx
+        A[icell,1,0] = (y2 - y3)/(3*D)
+        A[icell,1,1] = (-y1 + y3)/(3*D)
+        A[icell,1,2] = (y1 - y2)/(3*D)
+        A[icell,1,3] = 4*(-y2 + y3)/(3*D)
+        A[icell,1,4] = 4*(y1 - y3)/(3*D)
+        A[icell,1,5] = 4*(-y1 + y2)/(3*D)
+        
+        # d/dy
+        A[icell,2,0] = (-x2 + x3)/(3*D)
+        A[icell,2,1] = (x1 - x3)/(3*D)
+        A[icell,2,2] = (-x1 + x2)/(3*D)
+        A[icell,2,3] = 4*(x2 - x3)/(3*D)
+        A[icell,2,4] = 4*(-x1 + x3)/(3*D)
+        A[icell,2,5] = 4*(x1 - x2)/(3*D)
+        
+        # d/dx^2
+        A[icell,3,0] = 4*(y2 - y3)**2/D**2
+        A[icell,3,1] = 4*(y1 - y3)**2/D**2
+        A[icell,3,2] = 4*(y1 - y2)**2/D**2
+        A[icell,3,3] = -8*(y1 - y2)*(y1 - y3)/D**2
+        A[icell,3,4] = 8*(y1 - y2)*(y2 - y3)/D**2
+        A[icell,3,5] = -8*(y1 - y3)*(y2 - y3)/D**2
+        
+        # d/dy^2
+        A[icell,4,0] = 4*(x2 - x3)**2/D**2
+        A[icell,4,1] = 4*(x1 - x3)**2/D**2
+        A[icell,4,2] = 4*(x1 - x2)**2/D**2
+        A[icell,4,3] = -8*(x1 - x2)*(x1 - x3)/D**2
+        A[icell,4,4] = 8*(x1 - x2)*(x2 - x3)/D**2
+        A[icell,4,5] = -8*(x1 - x3)*(x2 - x3)/D**2
+        
+        # d/dx*dy
+        A[icell,5,0] = -4*(x2 - x3)*(y2 - y3)/D**2
+        A[icell,5,1] = -4*(x1 - x3)*(y1 - y3)/D**2
+        A[icell,5,2] = -4*(x1 - x2)*(y1 - y2)/D**2
+        A[icell,5,3] = 4*((x1 - x2)*(y1 - y3) + (x1 - x3)*(y1 - y2))/D**2
+        A[icell,5,4] = -(4*(x1 - x2)*(y2 - y3) + 4*(x2 - x3)*(y1 - y2))/D**2
+        A[icell,5,5] = 4*((x1 - x3)*(y2 - y3) + (x2 - x3)*(y1 - y3))/D**2
+
+    return A
 
 
-def taylor_to_DG2(t, u):
+def taylor_to_DG1_matrix(V):
     """
-    Take a function t as produced by DG2_to_taylor and convert it back
-    to a standard Lagrange DG2 function, u.
+    Create the per cell matrices that when matrix multiplied with the
+    Taylor cell dofs return a vector of Lagrange cell dofs.
+    This implementation handles DG1 function space V
     """
-    V = t.function_space()
     mesh = V.mesh()
     vertices = mesh.coordinates()
-    dm = V.dofmap()
-    dof_vals_taylor = t.vector().get_local()
-    dof_vals = numpy.zeros_like(dof_vals_taylor)
     
-    vals = numpy.zeros(6, float)
+    tdim = mesh.topology().dim()
+    num_cells_owned = mesh.topology().ghost_offset(tdim)
     
+    x = numpy.zeros((3, 2), float)
+    A = numpy.zeros((num_cells_owned, 3, 3), float)
     for cell in cells(mesh):
-        dofs = dm.cell_dofs(cell.index())
-        taylor_vals = dof_vals_taylor[dofs]
+        icell = cell.index()
         
-        # Corner and center coordinates
         verts = cell.entities(0)
-        x = numpy.zeros((6, 2), float)
+        x[0] = vertices[verts[0]]
+        x[1] = vertices[verts[1]]
+        x[2] = vertices[verts[2]]
+        xc = (x[0] + x[1] +  x[2])/3
+        
+        for i in range(3):
+            dx, dy = x[i,0] - xc[0], x[i,1] - xc[1]
+            A[icell,i,0] = 1 
+            A[icell,i,1] = dx
+            A[icell,i,2] = dy
+    
+    return A
+
+
+def taylor_to_DG2_matrix(V):
+    """
+    Create the per cell matrices that when matrix multiplied with the
+    Taylor cell dofs return a vector of Lagrange cell dofs.
+    This implementation handles DG2 function space V
+    """
+    mesh = V.mesh()
+    vertices = mesh.coordinates()
+    
+    tdim = mesh.topology().dim()
+    num_cells_owned = mesh.topology().ghost_offset(tdim)
+    
+    x = numpy.zeros((6, 2), float)
+    A = numpy.zeros((num_cells_owned, 6, 6), float)
+    for cell in cells(mesh):
+        icell = cell.index()
+        
+        verts = cell.entities(0)
         x[0] = vertices[verts[0]]
         x[1] = vertices[verts[1]]
         x[2] = vertices[verts[2]]
@@ -252,16 +302,16 @@ def taylor_to_DG2(t, u):
         x[5] = (x[0] +  x[1])/2
         xc = (x[0] + x[1] +  x[2])/3
         
-        # Evaluate the Taylor basis at each node
         for i in range(6):
             dx, dy = x[i,0] - xc[0], x[i,1] - xc[1]
-            vals[i] = taylor_vals[0] + dx*taylor_vals[1] + dy*taylor_vals[2] \
-                      + dx**2/2*taylor_vals[3] + dy**2/2*taylor_vals[4] \
-                      + dx*dy*taylor_vals[5]
-        dof_vals[dofs] = vals
+            A[icell,i,0] = 1
+            A[icell,i,1] = dx
+            A[icell,i,2] = dy
+            A[icell,i,3] = dx**2/2
+            A[icell,i,4] = dy**2/2
+            A[icell,i,5] = dx*dy
     
-    u.vector().set_local(dof_vals)
-    u.vector().apply('insert')
+    return A
 
 
 #########################################################################################
@@ -346,11 +396,7 @@ def produce_code_with_sympy_DG1():
             v = func(phi[i])
             v = v.subs(replacements)
             v = v.simplify()
-            
-            s = 'taylor_vals[%d]' % index
-            s += ' = ' if i == 0 else ' += '
-            s += '(%s)*vals[%d]' % (str(v), i)
-            code.append(s)
+            code.append('A[icell,%d,%d] = %s' % (index, i, v))
         code.append('')
         print '\n'.join(code)
     
@@ -410,11 +456,7 @@ def produce_code_with_sympy_DG2():
             v = func(phi[i])
             v = v.subs(replacements)
             v = v.simplify()
-            
-            s = 'taylor_vals[%d]' % index
-            s += ' = ' if i == 0 else ' += '
-            s += '(%s)*vals[%d]' % (str(v), i)
-            code.append(s)
+            code.append('A[icell,%d,%d] = %s' % (index, i, v))
         code.append('')
         print '\n'.join(code)
     
@@ -436,22 +478,30 @@ if __name__ == '__main__':
     
     mesh = UnitTriangleMesh()
     V = FunctionSpace(mesh, 'DG', 2)
+    print mesh.coordinates()
+    print
     
     u, u2, t, tn = Function(V), Function(V), Function(V), Function(V)
     for vec in (numpy.array([0, 1, 2, 3, 4, 5], float),
-                numpy.random.rand(6)): 
-        u.vector().set_local(vec)
+                numpy.random.rand(6),
+                numpy.array([0, 1, 1, 0.75, 0.5, 0.25], float)):
+        
+        # Set the initial values
+        dofs = V.dofmap().cell_dofs(0)
+        for i, dof in enumerate(dofs):
+            u.vector()[dof] = vec[i] 
+        u.vector().apply('insert')
         
         # Convert to Taylor basis
         DG2_to_taylor_numpy(u, tn)
-        DG2_to_taylor(u, t)
-        print tn.vector().get_local(), 'numpy solve'
-        print t.vector().get_local(), 'sympy expressions'
+        lagrange_to_taylor(u, t)
+        print tn.vector().get_local()[dofs], 'numpy solve'
+        print t.vector().get_local()[dofs], 'sympy expressions'
         print 'Error norm 1:', errornorm(tn, t, degree_rise=0)
         
         # Convert to back to DG basis
-        taylor_to_DG2(t, u2)
-        print u.vector().get_local(), 'original'
-        print u2.vector().get_local(), 'round trip'
+        taylor_to_lagrange(t, u2)
+        print u.vector().get_local()[dofs], 'original'
+        print u2.vector().get_local()[dofs], 'round trip'
         print 'Error norm 2:', errornorm(u, u2, degree_rise=0)
         print
