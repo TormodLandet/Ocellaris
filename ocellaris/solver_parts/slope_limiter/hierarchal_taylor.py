@@ -81,13 +81,14 @@ class HierarchalTaylorSlopeLimiter(SlopeLimiterBase):
         """
         Perform slope limiting of DG Lagrange functions
         """
-        # No limiter needed for piecewice constant functions
-        if self.degree == 0:
-            return
-        elif self.degree == 1:
-            return self._run_dg1()
+        timer = df.Timer('Ocellaris HierarchalTaylorSlopeLimiter')
+        
+        if self.degree == 1:
+            self._run_dg1()
         elif self.degree == 2:
-            return self._run_dg2()
+            self._run_dg2()
+        
+        timer.stop()
     
     def _run_dg1(self):
         """
@@ -195,7 +196,7 @@ class HierarchalTaylorSlopeLimiter(SlopeLimiterBase):
                         # Derivative in y direction at the vertex  (linear reconstruction)
                         vertex_value = center_phiy + center_phiyy * dy + center_phixy * dx
                     
-                    # Compute alpha
+                    # Compute the slope limiter coefficient alpha
                     if vertex_value > base_value:
                         a = (maxval - base_value) / (vertex_value - base_value)
                     elif vertex_value < base_value:
