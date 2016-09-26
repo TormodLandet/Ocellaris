@@ -4,7 +4,7 @@ import numpy
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
-from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiter
+from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiterVelocity
 from . import Solver, register_solver, BDF, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 
@@ -68,7 +68,7 @@ class SolverCoupled(Solver):
                                     incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Velocity slope limiter
-        self.slope_limiters = [SlopeLimiter(simulation, 'u', sim.data['u%d' % d]) for d in range(sim.ndim)]
+        self.slope_limiter = SlopeLimiterVelocity(sim.data['u'])
         
         # Velocity post_processing
         self.velocity_postprocessor = None
@@ -305,14 +305,6 @@ class SolverCoupled(Solver):
         self.is_first_timestep = False
     
     @timeit
-    def slope_limit_velocity(self):
-        """
-        Apply a slope limiter to the given velocity field
-        """
-        for sl in self.slope_limiters:
-            sl.run()
-    
-    @timeit
     def postprocess_velocity(self):
         """
         Apply a post-processing operator to the given velocity field
@@ -432,12 +424,12 @@ class SolverCoupled(Solver):
             # Solve for the new time step
             self.solve_coupled()
             
+            # Slope limit the velocities
+            self.slope_limiter.run()
+            
             # Postprocess the solution velocity field
             self.postprocess_velocity()
             
-            # Slope limit the velocities
-            self.slope_limit_velocity()
-                        
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0
             for d in range(self.simulation.ndim):
