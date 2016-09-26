@@ -47,7 +47,6 @@ class VariableDensityModel(MultiPhaseModel):
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'VariableDensityModel - update density field')
         
-        self.slope_limiter = SlopeLimiter(simulation, 'rho', self.rho)
         self.use_analytical_solution = inp.get_value('multiphase_solver/analytical_solution', False, 'bool')
         self.use_rk_method = inp.get_value('multiphase_solver/explicit_rk_method', False, 'bool')
         
@@ -116,7 +115,7 @@ class VariableDensityModel(MultiPhaseModel):
             
             a, L = dolfin.system(eq)
             self.rk = RungeKuttaDGTimestepping(self.simulation, a, L, self.rho,
-                                               self.rho_explicit, order=None,
+                                               self.rho_explicit, 'rho', order=None,
                                                explicit_funcs=self.funcs_to_extrapolate,
                                                bcs=dirichlet_bcs)
         
@@ -137,6 +136,7 @@ class VariableDensityModel(MultiPhaseModel):
                                         self.time_coeffs, dirichlet_bcs)
             
             self.solver = linear_solver_from_input(sim, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)
+            self.slope_limiter = SlopeLimiter(sim, 'rho', self.rho)
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))

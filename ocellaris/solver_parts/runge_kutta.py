@@ -1,8 +1,9 @@
 from dolfin import Function, LocalSolver
+from ocellaris.solver_parts import SlopeLimiter
 
 
 class RungeKuttaDGTimestepping(object):
-    def __init__(self, simulation, a, L, u, up, order=None, explicit_funcs=None, bcs=None):
+    def __init__(self, simulation, a, L, u, up, func_name, order=None, explicit_funcs=None, bcs=None):
         """
         RKDG timestepping. A is a block diagonal mass matrix form (u*v*dx),
         L is the form of the right hand side of du/dt = L. The functions
@@ -45,6 +46,7 @@ class RungeKuttaDGTimestepping(object):
         self.dus = [Function(V) for _ in range(S)]
         self.solver = LocalSolver(a, L)
         self.solver.factorize()
+        self.slope_limiters = {du: SlopeLimiter(simulation, func_name, du) for du in self.dus}
         
         if self.order > 3:
             # Need one extra function storage when running the generic code
@@ -94,6 +96,8 @@ class RungeKuttaDGTimestepping(object):
         
         self.solver.solve_local_rhs(du)
         self.simulation.time = orig_t
+        
+        self.slope_limiters[du].run()
     
     def step(self, dt):
         """

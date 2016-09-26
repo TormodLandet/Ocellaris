@@ -88,4 +88,4 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
 
 
 from . import naive_nodal
-from . import hierarchal_taylor
+from . import hierarchical_taylor

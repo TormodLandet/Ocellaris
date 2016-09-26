@@ -48,7 +48,7 @@ time:
     tmax: 0.4
 
 output:
-    prefix: output/advection_of_pipe_flange_joint
+    prefix: output/advection_of_pipe_flange_joint_rk
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -58,7 +58,7 @@ multiphase_solver:
     type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 2
-    explicit_rk_method: no
+    explicit_rk_method: yes
 
 solver:
     type: AnalyticalSolution
@@ -69,7 +69,7 @@ solver:
     
 slope_limiter:
     rho:
-        method: HierarchalTaylor
+        method: HierarchicalTaylor
         use_cpp: no
         plot: yes
 

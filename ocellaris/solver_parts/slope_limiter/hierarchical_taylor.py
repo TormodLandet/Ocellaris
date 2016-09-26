@@ -8,9 +8,9 @@ from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
 from . import register_slope_limiter, SlopeLimiterBase
 
 
-@register_slope_limiter('HierarchalTaylor')
-class HierarchalTaylorSlopeLimiter(SlopeLimiterBase):
-    description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchal manner'
+@register_slope_limiter('HierarchicalTaylor')
+class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
+    description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchical manner'
     
     def __init__(self, phi_name, phi, boundary_condition, filter_method='nofilter', use_cpp=True):
         """
