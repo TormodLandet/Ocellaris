@@ -4,7 +4,7 @@ from ocellaris.utils import ocellaris_error
 from ocellaris.solver_parts import get_dof_region_marks
 
 
-LIMITER = 'none'
+LIMITER = 'None'
 FILTER = 'nofilter'
 USE_CPP = True
 _SLOPE_LIMITERS = {}

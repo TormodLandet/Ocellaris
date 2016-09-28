@@ -3,7 +3,7 @@ from __future__ import division
 import numpy
 import dolfin as df
 from ocellaris.cpp import load_module
-from ocellaris.utils import ocellaris_error, verify_key, get_dof_neighbours
+from ocellaris.utils import verify_key, get_dof_neighbours
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
 from . import register_slope_limiter, SlopeLimiterBase
 
@@ -12,7 +12,8 @@ from . import register_slope_limiter, SlopeLimiterBase
 class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
     description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchical manner'
     
-    def __init__(self, phi_name, phi, boundary_condition, filter_method='nofilter', use_cpp=True):
+    def __init__(self, phi_name, phi, boundary_condition=None, filter_method='nofilter',
+                 use_cpp=True, output_name=None):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -36,12 +37,15 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.filter = filter_method
         self.use_cpp = use_cpp
         
+        if output_name is None:
+            output_name = phi_name
+        
         # Alpha factors are secondary outputs
         V0 = df.FunctionSpace(self.mesh, 'DG', 0)
         self.alpha_funcs = []
         for i in range(degree):
             func = df.Function(V0)
-            name = 'SlopeLimiterAlpha%d_%s' % (i+1, phi_name)
+            name = 'SlopeLimiterAlpha%d_%s' % (i+1, output_name)
             func.rename(name, name)
             self.alpha_funcs.append(func)
         self.additional_plot_funcs = self.alpha_funcs
@@ -59,7 +63,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.neighbours = neighbours
         
         # Remove boundary dofs from limiter
-        num_neighbours[boundary_condition != 0] = 0
+        if boundary_condition is not None:
+            num_neighbours[boundary_condition != 0] = 0
         
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
@@ -76,6 +81,31 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             vertices.append(vnbs)
         self.vertices = vertices
         self.vertex_coordinates = mesh.coordinates()
+        
+        if use_cpp:
+            # Flatten 2D arrays for easy transfer to C++
+            self.num_neighbours = num_neighbours
+            self.max_neighbours = neighbours.shape[1]
+            self.flat_neighbours = neighbours.flatten()
+            self.flat_cell_dofs = numpy.array(self.cell_dofs_V, dtype=numpy.intc).flatten()
+            self.flat_cell_dofs_dg0 = numpy.array(self.cell_dofs_V0, dtype=numpy.intc).flatten()
+            self.cpp_mod = load_module('hierarchical_taylor')
+            
+            tdim = self.mesh.topology().dim()
+            self.num_cells_owned = self.mesh.topology().ghost_offset(tdim)
+            
+            # Store coordinates for the three vertices plus the cell center for each cell
+            stride = (3 + 1) * 2
+            self.flat_vertex_coordinates = numpy.zeros(self.num_cells_owned * stride, float)
+            for icell in xrange(self.num_cells_owned):
+                cell_vertices = [self.vertex_coordinates[iv] for iv in self.vertices[icell]]
+                center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
+                center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]) / 3
+                istart = icell * stride
+                self.flat_vertex_coordinates[istart+0:istart+2] = cell_vertices[0]
+                self.flat_vertex_coordinates[istart+2:istart+4] = cell_vertices[1]
+                self.flat_vertex_coordinates[istart+4:istart+6] = cell_vertices[2]
+                self.flat_vertex_coordinates[istart+6:istart+8] = (center_pos_x, center_pos_y)
     
     def run(self):
         """
@@ -83,22 +113,51 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         """
         timer = df.Timer('Ocellaris HierarchalTaylorSlopeLimiter')
         
-        if self.degree == 1:
-            self._run_dg1()
+        # Update the Taylor function with the current Lagrange values
+        lagrange_to_taylor(self.phi, self.taylor)
+        taylor_arr = self.taylor.vector().get_local()
+        alpha_arrs = [alpha.vector().get_local() for alpha in self.alpha_funcs]
+        
+        if self.use_cpp:
+            self._run_cpp(taylor_arr, alpha_arrs)
+        elif self.degree == 1:
+            self._run_dg1(taylor_arr, alpha_arrs[0])
         elif self.degree == 2:
-            self._run_dg2()
+            self._run_dg2(taylor_arr, alpha_arrs[0], alpha_arrs[1])
+            
+        # Update the Lagrange function with the limited Taylor values
+        self.taylor.vector().set_local(taylor_arr)
+        self.taylor.vector().apply('insert')
+        taylor_to_lagrange(self.taylor, self.phi)
+        
+        # Update the secondary output arrays, alphas
+        for alpha, alpha_arr in zip(self.alpha_funcs, alpha_arrs):
+            alpha.vector().set_local(alpha_arr)
+            alpha.vector().apply('insert')
         
         timer.stop()
+        
+    def _run_cpp(self, taylor_arr, alpha_arrs):
+        if self.degree == 1:
+            limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg1
+        elif self.degree == 2:
+            limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg2
+        
+        limiter(self.num_neighbours,
+                self.num_cells_owned,
+                self.max_neighbours,
+                self.flat_neighbours,
+                self.flat_cell_dofs,
+                self.flat_cell_dofs_dg0,
+                self.flat_vertex_coordinates,
+                taylor_arr,
+                *alpha_arrs)
     
-    def _run_dg1(self):
+    def _run_dg1(self, taylor_arr, alpha_arr):
         """
         Perform slope limiting of a DG1 function
         """
-        # Update the Taylor function space with the new DG values
-        lagrange_to_taylor(self.phi, self.taylor)
-        lagrange_vals = self.phi.vector().get_local()
-        taylor_vals = self.taylor.vector().get_local()
-        alphas = self.alpha_funcs[0].vector().get_local()
+        lagrange_arr = self.phi.vector().get_local()
         
         V = self.phi.function_space()
         mesh = V.mesh()
@@ -107,7 +166,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         
         for icell in xrange(num_cells_owned):
             dofs = self.cell_dofs_V[icell]
-            center_value = taylor_vals[dofs[0]]
+            center_value = taylor_arr[dofs[0]]
             
             # Find the minimum slope limiter coefficient alpha 
             alpha = 1.0
@@ -118,38 +177,24 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                 minval = maxval = center_value
                 for nb in self.neighbours[dof]:
                     nb_center_val_dof = self.cell_dofs_V[nb][0]
-                    nb_val = taylor_vals[nb_center_val_dof]
+                    nb_val = taylor_arr[nb_center_val_dof]
                     minval = min(minval, nb_val)
                     maxval = max(maxval, nb_val)
                 
-                vertex_value = lagrange_vals[dof]
+                vertex_value = lagrange_arr[dof]
                 if vertex_value > center_value:
                     alpha = min(alpha, (maxval - center_value)/(vertex_value - center_value))
                 elif vertex_value < center_value:
                     alpha = min(alpha, (minval - center_value)/(vertex_value - center_value))
             
-            alphas[self.cell_dofs_V0[icell]] = alpha
-            taylor_vals[dofs[1]] *= alpha
-            taylor_vals[dofs[2]] *= alpha
-        
-        # Update the DG Lagrange function space with the limited DG Taylor values
-        self.taylor.vector().set_local(taylor_vals)
-        self.taylor.vector().apply('insert')
-        taylor_to_lagrange(self.taylor, self.phi)
-        
-        self.alpha_funcs[0].vector().set_local(alphas)
-        self.alpha_funcs[0].vector().apply('insert')
-
-    def _run_dg2(self):
+            alpha_arr[self.cell_dofs_V0[icell]] = alpha
+            taylor_arr[dofs[1]] *= alpha
+            taylor_arr[dofs[2]] *= alpha
+    
+    def _run_dg2(self, taylor_arr, alpha1_arr, alpha2_arr):
         """
         Perform slope limiting of a DG2 function
         """
-        # Update the Taylor function space with the new DG values
-        lagrange_to_taylor(self.phi, self.taylor)
-        taylor_vals = self.taylor.vector().get_local()
-        alphas1 = self.alpha_funcs[0].vector().get_local()
-        alphas2 = self.alpha_funcs[1].vector().get_local()
-        
         V = self.phi.function_space()
         mesh = V.mesh()
         tdim = mesh.topology().dim()
@@ -159,7 +204,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         for icell in xrange(num_cells_owned):
             dofs = self.cell_dofs_V[icell]
             assert len(dofs) == 6
-            center_values = [taylor_vals[dof] for dof in dofs]
+            center_values = [taylor_arr[dof] for dof in dofs]
             (center_phi, center_phix, center_phiy, center_phixx, 
                 center_phiyy, center_phixy) = center_values
             
@@ -181,7 +226,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                     minval = maxval = base_value
                     for nb in self.neighbours[dof]:
                         nb_center_val_dof = self.cell_dofs_V[nb][taylor_dof]
-                        nb_val = taylor_vals[nb_center_val_dof]
+                        nb_val = taylor_arr[nb_center_val_dof]
                         minval = min(minval, nb_val)
                         maxval = max(maxval, nb_val)
                     
@@ -201,27 +246,19 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                         a = (maxval - base_value) / (vertex_value - base_value)
                     elif vertex_value < base_value:
                         a = (minval - base_value) / (vertex_value - base_value)
+                    else:
+                        a = 1
                     alpha[taylor_dof] = min(alpha[taylor_dof], a)
             
             alpha2 = min(alpha[1], alpha[2])
             alpha1 = max(alpha[0], alpha2)
             
-            taylor_vals[dofs[1]] *= alpha1
-            taylor_vals[dofs[2]] *= alpha1
-            taylor_vals[dofs[3]] *= alpha2
-            taylor_vals[dofs[4]] *= alpha2
-            taylor_vals[dofs[5]] *= alpha2
+            taylor_arr[dofs[1]] *= alpha1
+            taylor_arr[dofs[2]] *= alpha1
+            taylor_arr[dofs[3]] *= alpha2
+            taylor_arr[dofs[4]] *= alpha2
+            taylor_arr[dofs[5]] *= alpha2
             
             dof_dg0 = self.cell_dofs_V0[icell] 
-            alphas1[dof_dg0] = alpha1
-            alphas2[dof_dg0] = alpha2
-        
-        # Update the DG Lagrange function space with the limited DG Taylor values
-        self.taylor.vector().set_local(taylor_vals)
-        self.taylor.vector().apply('insert')
-        taylor_to_lagrange(self.taylor, self.phi)
-        
-        self.alpha_funcs[0].vector().set_local(alphas1)
-        self.alpha_funcs[1].vector().set_local(alphas2)
-        self.alpha_funcs[0].vector().apply('insert')
-        self.alpha_funcs[1].vector().apply('insert')
+            alpha1_arr[dof_dg0] = alpha1
+            alpha2_arr[dof_dg0] = alpha2
