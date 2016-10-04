@@ -112,8 +112,7 @@ class LineProbe(Probe):
                                    ' '.join('%15.5e' % v for v in probe_values)))
         
         if update_plot:
-            self.line.set_xdata(abcissa)
-            self.line.set_ydata(probe_values)
+            self.line.set_data(abcissa, probe_values)
             self.ax.set_xlabel(abcissa_label)
             self.ax.relim()
             self.ax.autoscale_view()

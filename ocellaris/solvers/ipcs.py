@@ -138,11 +138,12 @@ class SolverIPCS(Solver):
         self.pressure_null_space = None
         self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
                                                               USE_LAGRANGE_MULTIPLICATOR, 'bool')
-        if self.use_lagrange_multiplicator or self.simulation.data['dirichlet_bcs'].get('p', []):
+        has_dirichlet = self.simulation.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']
+        if self.use_lagrange_multiplicator or has_dirichlet:
             self.remove_null_space = False
         
         # No need for special treatment if the pressure is set via Dirichlet conditions somewhere
-        if self.simulation.data['dirichlet_bcs'].get('p', []):
+        if has_dirichlet:
             self.use_lagrange_multiplicator = False
             self.remove_null_space = False
         
@@ -511,9 +512,6 @@ class SolverIPCS(Solver):
                     ustarmax = max(thismax, ustarmax)
                 ustarmax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(ustarmax))
                 
-                # Convergence estimates
-                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
-                             % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax))
                 
                 ####################
                 tmp_us = sim.data['u_star']
@@ -531,9 +529,14 @@ class SolverIPCS(Solver):
                                       + dolfin.dot(dolfin.avg(tmp_us), tmp_n('+'))*tmp_v('+')*dolfin.dS
                                       + dolfin.dot(dolfin.avg(tmp_us), tmp_n('-'))*tmp_v('-')*dolfin.dS)
                 
-                print tmp.min(), tmp.max()
+                err_div = max(abs(tmp.min()), abs(tmp.max()))
                 
                 ####################
+                
+                # Convergence estimates
+                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
+                             % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax)
+                             + ' err div %10.3e' % err_div)
                 
                 if err_u_star < allowable_error_inner:
                     break

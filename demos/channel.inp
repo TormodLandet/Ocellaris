@@ -57,7 +57,7 @@ boundary_conditions:
 
 time:
     dt: 0.1
-    tmax: 100.0
+    tmax: 50.0
 
 output:
     prefix: output/channel
@@ -66,8 +66,9 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: Coupled
+    type: IPCS
     num_inner_iter: 20
+    allowable_error_inner: 1.0e-8
     polynomial_degree_pressure: 1
     polynomial_degree_velocity: 2
     function_space_pressure: DG
@@ -83,7 +84,7 @@ probes:
     
     file_name: velocity
     write_interval: 10
-    show_interval: 5
+    #show_interval: 5
 
 -   name: velocity near outlet
     type: LineProbe
@@ -94,7 +95,7 @@ probes:
     
     file_name: velocity2
     write_interval: 10
-    show_interval: 5
+    #show_interval: 5
 
 -   name: pressure
     type: LineProbe
@@ -105,4 +106,4 @@ probes:
     
     file_name: pressure
     write_interval: 10
-    show_interval: 5
+    #show_interval: 5

@@ -230,6 +230,19 @@ class MomentumPredictionEquation(BaseEquation):
                 # Pressure
                 if not self.use_grad_p_form:
                     L -= p*v*ni*nbc.ds()
+            
+            # Outlet boundary
+            for obc in sim.data['outlet_bcs']:
+                # Convection
+                a += rho*u*w_nU*v*obc.ds()
+                
+                # Diffusion
+                mu_dudn = p*ni
+                L += mu_dudn*v*obc.ds()
+                
+                # Pressure
+                if not self.use_grad_p_form:
+                    L -= p*v*ni*obc.ds()
         
         self.form_lhs = a
         self.form_rhs = L
@@ -287,6 +300,8 @@ class PressureCorrectionEquation(BaseEquation):
         n = dolfin.FacetNormal(mesh)
         
         # Fluid properties
+        mpm = sim.multi_phase_model
+        mu = mpm.get_laminar_dynamic_viscosity(0)
         rho = sim.data['rho']
         
         # Lagrange multiplicator to remove the pressure null space
@@ -333,27 +348,32 @@ class PressureCorrectionEquation(BaseEquation):
             a += penalty_dS*jump(p)*jump(q)*dS
             L += penalty_dS*jump(p_star)*jump(q)*dS
             
-            # Dirichlet boundary
-            dirichlet_bcs = sim.data['dirichlet_bcs'].get('p', [])
-            for dbc in dirichlet_bcs:
-                p_bc = dbc.func()
-                
+            # Collect Dirichlet and outlet boundary values
+            dirichlet_vals_and_ds = []
+            for dbc in sim.data['dirichlet_bcs'].get('p', []):
+                dirichlet_vals_and_ds.append((dbc.func(), dbc.ds()))
+            for obc in sim.data['outlet_bcs']:
+                p_ = mu*dot(dot(grad(u_star), n), n)
+                dirichlet_vals_and_ds.append((p_, obc.ds()))
+            
+            # Apply Dirichlet boundary conditions
+            for p_bc, dds in dirichlet_vals_and_ds:
                 # SIPG for -∇⋅∇p
-                a -= dot(n, K*grad(p))*q*dbc.ds()
-                a -= dot(n, K*grad(q))*p*dbc.ds()
-                L -= dot(n, K*grad(q))*p_bc*dbc.ds()
+                a -= dot(n, K*grad(p))*q*dds
+                a -= dot(n, K*grad(q))*p*dds
+                L -= dot(n, K*grad(q))*p_bc*dds
                 
                 # SIPG for -∇⋅∇p^*
-                L -= dot(n, K*grad(p_star))*q*dbc.ds()
-                L -= dot(n, K*grad(q))*p_star*dbc.ds()
+                L -= dot(n, K*grad(p_star))*q*dds
+                L -= dot(n, K*grad(q))*p_star*dds
                 
                 # Weak Dirichlet
-                a += penalty_ds*p*q*dbc.ds()
-                L += penalty_ds*p_bc*q*dbc.ds()
+                a += penalty_ds*p*q*dds
+                L += penalty_ds*p_bc*q*dds
                 
                 # Weak Dirichlet for p^*
-                L += penalty_ds*p_star*q*dbc.ds()
-                L -= penalty_ds*p_bc*q*dbc.ds()
+                L += penalty_ds*p_star*q*dds
+                L -= penalty_ds*p_bc*q*dds
             
             # Neumann boundary conditions
             neumann_bcs = sim.data['neumann_bcs'].get('p', [])
@@ -361,7 +381,7 @@ class PressureCorrectionEquation(BaseEquation):
                 # Neumann boundary conditions on p and p_star cancel
                 #L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
                 pass
-        
+            
             # Use boundary conditions for the velocity for the
             # term from integration by parts of div(u_star)
             for d in range(sim.ndim):
