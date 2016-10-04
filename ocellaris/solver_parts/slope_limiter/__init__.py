@@ -56,16 +56,16 @@ class DoNothingSlopeLimiter(SlopeLimiterBase):
         pass
 
 
-def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_filter=FILTER, default_use_cpp=USE_CPP):
+def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=LIMITER):
     """
     Return a slope limiter based on the user provided input or the default
     values if no input is provided by the user
     """
     # Get user provided input (or default values)
     inp = simulation.input.get_value('slope_limiter/%s' % phi_name, {}, 'Input')
-    method = inp.get_value('method', default_limiter, 'string')
-    filter_method = inp.get_value('filter', default_filter, 'string')
-    use_cpp = inp.get_value('use_cpp', default_use_cpp, 'bool')
+    method = inp.get_value('method', method, 'string')
+    filter_method = inp.get_value('filter', FILTER, 'string')
+    use_cpp = inp.get_value('use_cpp', USE_CPP, 'bool')
     plot_exceedance = inp.get_value('plot', False, 'bool')  
     
     # Get the region markers
@@ -76,9 +76,10 @@ def SlopeLimiter(simulation, phi_name, phi, default_limiter=LIMITER, default_fil
         boundary_condition[dof] = 1
     
     # Construct the limiter
-    simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, phi_name))
+    name = phi_name if output_name is None else output_name
+    simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, name))
     limiter_class = get_slope_limiter(method)
-    limiter = limiter_class(phi_name, phi, boundary_condition, filter_method, use_cpp)
+    limiter = limiter_class(phi_name, phi, boundary_condition, filter_method, use_cpp, output_name)
     
     if plot_exceedance:
         for func in limiter.additional_plot_funcs:
