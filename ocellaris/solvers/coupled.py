@@ -68,7 +68,7 @@ class SolverCoupled(Solver):
                                     incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Velocity slope limiter
-        self.slope_limiter = SlopeLimiterVelocity(sim.data['u'])
+        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u')
         
         # Velocity post_processing
         self.velocity_postprocessor = None

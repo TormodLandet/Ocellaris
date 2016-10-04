@@ -1,14 +1,58 @@
 # encoding: utf8
 from __future__ import division
+import numpy
 import dolfin as df
+from dolfin import dot, ds, dS, dx
 from ocellaris.utils import verify_key, get_dof_neighbours
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
+from ocellaris.solver_parts.slope_limiter.hierarchical_taylor import HierarchicalTaylorSlopeLimiter
 
 
-class SlopeLimiterVelocity():
-    def __init__(self, vel, vel_name='u', use_cpp=True):
+LIMITER = 'None'
+USE_CPP = True
+
+
+def SlopeLimiterVelocity(simulation, vel, vel_name, default_limiter=LIMITER, default_use_cpp=USE_CPP):
+    """
+    Limit the slope of the given vector field to obtain boundedness
+    """
+    # Get user provided input (or default values)
+    inp = simulation.input.get_value('slope_limiter/%s' % vel_name, {}, 'Input')
+    method = inp.get_value('vel_method', default_limiter, 'string')
+    use_cpp = inp.get_value('use_cpp', default_use_cpp, 'bool')
+    plot_exceedance = inp.get_value('plot', False, 'bool')
+    verify_key('vel_method', method, ['None', 'HierarchicalTaylor', 'LeastSquares'], 'SlopeLimiterVelocity')
+    
+    # Get the limiter
+    if method == 'None':
+        limiter = DoNothingSlopeLimiterVelocity()
+    elif method == 'HierarchicalTaylor':
+        limiter = HierarchicalTaylorSlopeLimiterVelocity(simulation, vel, vel_name, use_cpp)
+    elif method == 'LeastSquares':
+        limiter = LeastSquaresSlopeLimiterVelocity(simulation, vel, vel_name, use_cpp)
+    
+    # Add extra limiter outputs
+    if plot_exceedance:
+        for func in limiter.additional_plot_funcs:
+            simulation.io.add_extra_output_function(func)
+    
+    return limiter
+
+
+class DoNothingSlopeLimiterVelocity(object):
+    def __init__(self, *argv, **kwargs):
+        self.additional_plot_funcs = ()
+    
+    def run(self):
+        pass
+
+
+class LeastSquaresSlopeLimiterVelocity(object):
+    def __init__(self, simulation, vel, vel_name, use_cpp=True):
         """
-        Limit the slope of the given scalar to obtain boundedness
+        Use a Hierachical Taylor slope limiter on each of the velocity
+        components and then least squares to reestablish the facet
+        fluxes to ensure continuity 
         """
         # Verify input
         V = vel[0].function_space()
@@ -22,6 +66,121 @@ class SlopeLimiterVelocity():
         verify_key('topological dimension', mesh.topology().dim(), [2], loc)
         
         # Store input
+        self.simulation = simulation
+        self.vel = vel
+        self.vel_name = vel_name
+        self.degree = degree
+        self.mesh = mesh
+        self.use_cpp = use_cpp
+        
+        # Create slope limiters for the velocity components
+        self.temp_vels = [df.Function(V), df.Function(V)]
+        sl0 = HierarchicalTaylorSlopeLimiter(vel_name, self.temp_vels[0], use_cpp=use_cpp, output_name=vel_name+'0')
+        sl1 = HierarchicalTaylorSlopeLimiter(vel_name, self.temp_vels[1], use_cpp=use_cpp, output_name=vel_name+'1')
+        self.slope_limiters = [sl0, sl1]
+        
+        # Fast access to cell dofs
+        dm = V.dofmap()
+        indices = range(self.mesh.num_cells())
+        self.cell_dofs = [dm.cell_dofs(i) for i in indices]
+        
+        self.additional_plot_funcs = sum((sl.additional_plot_funcs for sl in self.slope_limiters), [])
+        
+        # Define the over determined form of the projection
+        self._define_form()
+    
+    def _define_form(self):
+        V = self.vel[0].function_space()
+        mesh = V.mesh()
+        
+        # The mixed function space of the projection test functions (non-square system)
+        k = 2
+        e1 = df.FiniteElement('DGT', mesh.ufl_cell(), 0)
+        e2 = df.VectorElement('DG', mesh.ufl_cell(), 0)
+        e3 = df.VectorElement('DG', mesh.ufl_cell(), k)
+        em = df.MixedElement([e1, e2, e3])
+        W = df.FunctionSpace(mesh, em)
+        Vvec = df.VectorFunctionSpace(mesh, 'DG', 2)
+        
+        v1, v2, v3 = df.TestFunctions(W)
+        u = df.TrialFunction(Vvec)
+        n = df.FacetNormal(mesh)
+        
+        # Original and limited velocities
+        w = self.vel
+        m = df.as_vector(self.temp_vels)
+        
+        # Equation 1 - flux through the sides should not be changed
+        a = L = 0
+        for R in '+-':
+            a += dot(u(R), n(R))*v1(R)*dS
+            L += dot(w(R), n(R))*v1(R)*dS
+        a += dot(u, n)*v1*ds
+        L += dot(w, n)*v1*ds
+        
+        # Equation 2 - cell averages should not be changed
+        a += dot(u, v2)*dx
+        L += dot(w, v2)*dx
+        
+        # Equation 3 - velocity should be limited
+        a += dot(u, v3)*dx
+        L += dot(m, v3)*dx
+        
+        self.form = a, L
+    
+    def run(self):
+        """
+        Perform slope limiting of the velocity field
+        """
+        timer = df.Timer('Ocellaris LeastSquaresSlopeLimiterVelocity')
+        
+        # Perform initial slope limiting
+        for d in range(2):
+            self.temp_vels[d].assign(self.vel[d])
+            self.slope_limiters[0].run()
+            
+        V = self.vel[0].function_space()
+        mesh = V.mesh()
+        
+        u0_vals = self.vel[0].vector().get_local()
+        u1_vals = self.vel[1].vector().get_local()
+        
+        a, L = self.form
+        for cell in df.cells(mesh, 'regular'):
+            dofs = self.cell_dofs[cell.index()]
+            A = df.assemble_local(a, cell)
+            b = df.assemble_local(L, cell)
+            u = numpy.linalg.lstsq(A, b)[0]
+            
+            u0_vals[dofs] = u[:6]
+            u1_vals[dofs] = u[6:]
+        
+        self.vel[0].vector().set_local(u0_vals)
+        self.vel[1].vector().set_local(u1_vals)
+        self.vel[0].vector().apply('insert')
+        self.vel[1].vector().apply('insert')
+        
+        timer.stop()
+
+
+class HierarchicalTaylorSlopeLimiterVelocity(object):
+    def __init__(self, simulation, vel, vel_name, use_cpp=True):
+        """
+        Limit the slope of the given vector field to obtain boundedness
+        """
+        # Verify input
+        V = vel[0].function_space()
+        mesh = V.mesh()
+        family = V.ufl_element().family()
+        degree = V.ufl_element().degree()
+        loc = 'SlopeLimiterVelocity'
+        verify_key('slope limited function', family, ['Discontinuous Lagrange'], loc)
+        verify_key('slope limited degree', degree, (2,), loc)
+        verify_key('function shape', vel.ufl_shape, [(2,)], loc)
+        verify_key('topological dimension', mesh.topology().dim(), [2], loc)
+        
+        # Store input
+        self.simulation = simulation
         self.vel = vel
         self.vel_name = vel_name
         self.degree = degree
@@ -140,7 +299,7 @@ class SlopeLimiterVelocity():
                         elif vertex_value < base_value:
                             a = (minval - base_value) / (vertex_value - base_value)
                         alpha[taylor_dof] = min(alpha[taylor_dof], a)
-                
+            
             alpha2 = min(min(alpha_u0[1], alpha_u0[2]),
                          min(alpha_u1[1], alpha_u1[2]))
             alpha1 = min(max(alpha_u0[0], alpha2),
