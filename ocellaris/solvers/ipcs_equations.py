@@ -98,7 +98,6 @@ class MomentumPredictionEquation(BaseEquation):
         
         # Fluid properties
         rho = sim.data['rho']
-        rho_old = mpm.get_density(-1)
         nu = mpm.get_laminar_kinematic_viscosity(0)
         mu = mpm.get_laminar_dynamic_viscosity(0)
         
@@ -115,7 +114,7 @@ class MomentumPredictionEquation(BaseEquation):
             # Time derivative
             # ∂u/∂t
             a = rho*c1*u/dt*v*dx
-            L = -(rho*c2*up + rho_old*c3*upp)/dt*v*dx
+            L = -(rho*c2*up + rho*c3*upp)/dt*v*dx
             
             # Convection
             # ρ∇⋅(u ⊗ u_conv)
@@ -156,9 +155,9 @@ class MomentumPredictionEquation(BaseEquation):
             penalty_dS, penalty_ds, D12 = self.calculate_penalties(nu)
             
             # Time derivative
-            # ∂(ρu)/∂t
+            # ρ ∂(u)/∂t
             a = rho*c1*u/dt*v*dx
-            L = -(rho*c2*up + rho_old*c3*upp)/dt*v*dx
+            L = -rho*(c2*up + c3*upp)/dt*v*dx
             
             # Convection:
             # w⋅∇(ρu)    
@@ -185,11 +184,17 @@ class MomentumPredictionEquation(BaseEquation):
                 L += (avg(v) + dot(D12, jump(v, n)))*jump(p)*ni('+')*dS
             else:
                 L += p*v.dx(self.component)*dx
-                L -= (avg(p) - dot(D12, jump(p, n)))*jump(v)*ni('+')*dS
+                #L -= (avg(p) - dot(D12, jump(p, n)))*jump(v)*ni('+')*dS
+                L -= p('+')*v('+')*ni('+')*dS
+                L -= p('-')*v('-')*ni('-')*dS
             
             # Body force (gravity)
             # ρ g
             L += rho*g[self.component]*v*dx
+            
+            # Other sources
+            for f in sim.data['momentum_sources']:
+                L+= f[self.component]*v*dx
             
             # Dirichlet boundary
             dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % self.component, [])
@@ -216,8 +221,13 @@ class MomentumPredictionEquation(BaseEquation):
             # Neumann boundary
             neumann_bcs = sim.data['neumann_bcs'].get('u%d' % self.component, [])
             for nbc in neumann_bcs:
-                L -= mu*nbc.func()*v*nbc.ds()
+                # Convection
+                a += rho*u*w_nU*v*nbc.ds()
                 
+                # Diffusion
+                L += mu*nbc.func()*v*nbc.ds()
+                
+                # Pressure
                 if not self.use_grad_p_form:
                     L -= p*v*ni*nbc.ds()
         

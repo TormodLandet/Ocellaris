@@ -2,7 +2,7 @@ from __future__ import division
 import dolfin
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
-from ..solver_parts import VelocityBDMProjection, HydrostaticPressure
+from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiter
 from .ipcs_equations import EQUATION_SUBTYPES
 
 
@@ -70,6 +70,10 @@ class SolverIPCS(Solver):
         for d in range(sim.ndim):
             eq = VelocityUpdateEquation(simulation, d)
             self.eqs_vel_upd.append(eq)
+            
+        # Slope limiter for the momenum equation velocity components
+        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u_star%d' % d], 'u_star%d' % d)
+                               for d in range(sim.ndim)]
         
         # Projection for the velocity
         self.velocity_postprocessor = None
@@ -215,27 +219,40 @@ class SolverIPCS(Solver):
         self.hydrostatic_pressure_correction = False
         if all(gi == 0 for gi in g.py_value):
             return
+        return
         
         # Get the input needed to calculate p_hydrostatic
-        rho = sim.data['rho_star']
+        rho = sim.data['rho']
         sky_location = sim.input.get_value('multiphase_solver/sky_location', required_type='float')
-        ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep', 
-                                                HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP, required_type='float')
+        self.ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep', 
+                                                     HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP,
+                                                     required_type='float')
         
         # Helper class to calculate the hydrostatic pressure distribution
         ph = sim.data['p_hydrostatic']
         self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, sky_location)
-        if ph_every_timestep:
-            # Correct every timestep
-            self.hydrostatic_pressure_correction = True
-        else:
+        self.hydrostatic_pressure_correction = True
+    
+    def update_hydrostatic_pressure(self):
+        """
+        Update the hydrostatic pressure field
+        (when the density is not constant)
+        """
+        if not self.hydrostatic_pressure_correction:
+            return
+        
+        self.hydrostatic_pressure.update()
+            
+        if not self.ph_every_timestep:
             # Correct the pressure only now, at the begining
+            sim = self.simulation
             p = sim.data['p']
             if p.vector().max() == p.vector().min() == 0.0:
-                sim.log.info('    Initial pressure field is identically zero, initializing to hydrostatic')
+                sim.log.info('Initial pressure field is identically zero, initializing to hydrostatic')
                 self.hydrostatic_pressure.update()
-                p.assign(dolfin.interpolate(ph, p.function_space()))
+                p.assign(dolfin.interpolate(sim.data['p_hydrostatic'], p.function_space()))
             del sim.data['p_hydrostatic']
+            self.hydrostatic_pressure_correction = False
     
     @timeit
     def update_convection(self, t, dt):
@@ -305,6 +322,7 @@ class SolverIPCS(Solver):
             
             solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
             self.niters_u[d] = solver.solve(A, us.vector(), b)
+            self.slope_limiters[d].run()
             
             self.u_tmp.vector().axpy(-1, us.vector())
             err += self.u_tmp.vector().norm('l2')
@@ -467,8 +485,7 @@ class SolverIPCS(Solver):
             self.update_convection(t, dt)
             
             # Calculate the hydrostatic pressure when the density is not constant
-            if self.hydrostatic_pressure_correction:
-                self.hydrostatic_pressure.update()
+            self.update_hydrostatic_pressure()
             
             # Run inner iterations
             self.inner_iteration = 1
@@ -497,6 +514,26 @@ class SolverIPCS(Solver):
                 # Convergence estimates
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
                              % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax))
+                
+                ####################
+                tmp_us = sim.data['u_star']
+                tmp_mesh = tmp_us[0].function_space().mesh()
+                tmp_V = dolfin.FunctionSpace(tmp_mesh, 'DG', 0)
+                tmp_n = dolfin.FacetNormal(tmp_mesh)
+                tmp_v = dolfin.TestFunction(tmp_V)
+                
+                #tmp = dolfin.assemble(dolfin.dot(tmp_us, tmp_n)*tmp_v*dolfin.ds
+                #                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('+'))*tmp_v('+')*dolfin.dS
+                #                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('-'))*tmp_v('-')*dolfin.dS)
+                
+                tmp = dolfin.assemble(- (tmp_us[0] + tmp_us[1]) * tmp_v * dolfin.dx
+                                      + dolfin.dot(tmp_us, tmp_n)*tmp_v*dolfin.ds
+                                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('+'))*tmp_v('+')*dolfin.dS
+                                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('-'))*tmp_v('-')*dolfin.dS)
+                
+                print tmp.min(), tmp.max()
+                
+                ####################
                 
                 if err_u_star < allowable_error_inner:
                     break

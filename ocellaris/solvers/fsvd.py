@@ -3,7 +3,7 @@ import numpy
 import dolfin
 from ocellaris.utils import verify_key, timeit, linear_solver_from_input, ocellaris_error
 from . import Solver, register_solver
-from ..solver_parts import VelocityBDMProjection
+from ..solver_parts import VelocityBDMProjection, SlopeLimiter
 from .fsvd_equations import EQUATION_SUBTYPES
 
 
@@ -52,6 +52,10 @@ class SolverFSVD(Solver):
             eq = VelocityUpdateEquation(simulation, d)
             self.eqs_vel_upd.append(eq)
         self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'])
+        
+        # Slope limiter for the momenum equation velocity components
+        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u%d' % d)
+                               for d in range(sim.ndim)]
         
         # Pre assembled matrices
         self.Au = [None]*sim.ndim
@@ -170,6 +174,7 @@ class SolverFSVD(Solver):
             
             self.simulation.hooks.matrix_ready('Au%d' % d, A, b)
             self.niters_u[d] = solver.solve(A, u.vector(), b)
+            self.slope_limiters[d].run()
             
             self.u_tmp.vector().axpy(-1, u.vector())
             err += self.u_tmp.vector().norm('l2')
