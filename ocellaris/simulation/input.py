@@ -1,6 +1,11 @@
 import os, collections
-import yaml
 from ocellaris.utils import ocellaris_error, get_root_value
+
+
+try:
+    import yaml
+except ImportError:
+    raise ImportError('Missing required yaml module, please install the PyYAML package')
 
 
 class UndefinedParameter(object):
