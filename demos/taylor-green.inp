@@ -73,23 +73,23 @@ initial_conditions:
 
 time:
     dt: 0.1
-    tmax: 0.1
+    tmax: 0.2
 
 output:
-    prefix: taylor_green
+    prefix: output/taylor_green
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
 
 solver:
-    type: Coupled
+    type: IPCS
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
     num_inner_iter: 50
-    allowable_error_inner: 1.0e-6
+    allowable_error_inner: 1.0e-8
     use_stress_divergence_form: false
 
 convection:

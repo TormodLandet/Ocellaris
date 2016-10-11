@@ -490,7 +490,6 @@ class SolverIPCS(Solver):
             
             # Run inner iterations
             self.inner_iteration = 1
-            #of = dolfin.File('test.xdmf')
             while self.inner_iteration <= num_inner_iter:
                 err_u_star = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
@@ -516,20 +515,30 @@ class SolverIPCS(Solver):
                 ####################
                 tmp_us = sim.data['u_star']
                 tmp_mesh = tmp_us[0].function_space().mesh()
-                tmp_V = dolfin.FunctionSpace(tmp_mesh, 'DG', 0)
+                tmp_V = dolfin.FunctionSpace(tmp_mesh, 'DG', 1)
                 tmp_n = dolfin.FacetNormal(tmp_mesh)
+                tmp_u = dolfin.TrialFunction(tmp_V)
                 tmp_v = dolfin.TestFunction(tmp_V)
                 
-                #tmp = dolfin.assemble(dolfin.dot(tmp_us, tmp_n)*tmp_v*dolfin.ds
-                #                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('+'))*tmp_v('+')*dolfin.dS
-                #                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('-'))*tmp_v('-')*dolfin.dS)
+                dot, grad, jump, avg = dolfin.dot, dolfin.grad, dolfin.jump, dolfin.avg
+                dx, dS, ds = dolfin.dx, dolfin.dS, dolfin.ds 
+                tmp_a = tmp_u*tmp_v*dx
+                tmp_L = + dot(avg(tmp_us), tmp_n('+'))*jump(tmp_v)*dS \
+                        + dot(tmp_us, tmp_n)*tmp_v*ds \
+                        - dot(tmp_us, grad(tmp_v))*dx
+                tmp_ls = dolfin.LocalSolver(tmp_a, tmp_L)
+                tmp = dolfin.Function(tmp_V)
+                tmp_ls.solve_local_rhs(tmp)
                 
-                tmp = dolfin.assemble(- (tmp_us[0] + tmp_us[1]) * tmp_v * dolfin.dx
-                                      + dolfin.dot(tmp_us, tmp_n)*tmp_v*dolfin.ds
-                                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('+'))*tmp_v('+')*dolfin.dS
-                                      + dolfin.dot(dolfin.avg(tmp_us), tmp_n('-'))*tmp_v('-')*dolfin.dS)
+                err_div = max(abs(tmp.vector().min()), abs(tmp.vector().max()))
                 
-                err_div = max(abs(tmp.min()), abs(tmp.max()))
+                if self.inner_iteration == 20:
+                    from matplotlib import pyplot
+                    fig = pyplot.figure(figsize=(10, 8))
+                    #tmp.vector().set_local(abs(tmp.vector().get_local()))
+                    a = dolfin.plot(tmp, cmap='viridis')
+                    pyplot.colorbar(a)
+                    fig.savefig('test_%f.png' % t)
                 
                 ####################
                 

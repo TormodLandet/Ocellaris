@@ -335,18 +335,18 @@ class PressureCorrectionEquation(BaseEquation):
             
             # Symmetric Interior Penalty method for -∇⋅∇p
             a -= dot(n('+'), avg(K*grad(p)))*jump(q)*dS
-            a -= dot(n('+'), avg(K*grad(q)))*jump(p)*dS
+            #a -= dot(n('+'), avg(K*grad(q)))*jump(p)*dS
             
             # Symmetric Interior Penalty method for -∇⋅∇p^*
             L -= dot(n('+'), avg(K*grad(p_star)))*jump(q)*dS
-            L -= dot(n('+'), avg(K*grad(q)))*jump(p_star)*dS
+            #L -= dot(n('+'), avg(K*grad(q)))*jump(p_star)*dS
             
             # Weak continuity
             penalty_dS, penalty_ds = self.calculate_penalties()
             
             # Symmetric Interior Penalty coercivity term
             a += penalty_dS*jump(p)*jump(q)*dS
-            L += penalty_dS*jump(p_star)*jump(q)*dS
+            #L += penalty_dS*jump(p_star)*jump(q)*dS
             
             # Collect Dirichlet and outlet boundary values
             dirichlet_vals_and_ds = []
@@ -360,20 +360,20 @@ class PressureCorrectionEquation(BaseEquation):
             for p_bc, dds in dirichlet_vals_and_ds:
                 # SIPG for -∇⋅∇p
                 a -= dot(n, K*grad(p))*q*dds
-                a -= dot(n, K*grad(q))*p*dds
+                #a -= dot(n, K*grad(q))*p*dds
                 L -= dot(n, K*grad(q))*p_bc*dds
                 
                 # SIPG for -∇⋅∇p^*
                 L -= dot(n, K*grad(p_star))*q*dds
-                L -= dot(n, K*grad(q))*p_star*dds
+                #L -= dot(n, K*grad(q))*p_star*dds
                 
                 # Weak Dirichlet
                 a += penalty_ds*p*q*dds
                 L += penalty_ds*p_bc*q*dds
                 
                 # Weak Dirichlet for p^*
-                L += penalty_ds*p_star*q*dds
-                L -= penalty_ds*p_bc*q*dds
+                #L += penalty_ds*p_star*q*dds
+                #L -= penalty_ds*p_bc*q*dds
             
             # Neumann boundary conditions
             neumann_bcs = sim.data['neumann_bcs'].get('p', [])
