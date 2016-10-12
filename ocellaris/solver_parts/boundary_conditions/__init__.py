@@ -55,7 +55,7 @@ class BoundaryCondition(object):
 
 
 from .boundary_region import BoundaryRegion
-from .dof_marker import get_dof_region_marks
+from .dof_marker import get_dof_region_marks, mark_cell_layers
 
 from . import dirichlet
 from . import neumann

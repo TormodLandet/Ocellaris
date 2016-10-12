@@ -1,4 +1,4 @@
-from .boundary_conditions import BoundaryRegion, get_dof_region_marks
+from .boundary_conditions import BoundaryRegion, get_dof_region_marks, mark_cell_layers
 from .slope_limiter import SlopeLimiter
 from .slope_limiter_velocity import SlopeLimiterVelocity
 from .runge_kutta import RungeKuttaDGTimestepping

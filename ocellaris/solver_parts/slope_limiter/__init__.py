@@ -1,7 +1,7 @@
 import numpy
 import dolfin
 from ocellaris.utils import ocellaris_error
-from ocellaris.solver_parts import get_dof_region_marks
+from ocellaris.solver_parts import mark_cell_layers
 
 
 LIMITER = 'None'
@@ -66,14 +66,15 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=LIMITER):
     method = inp.get_value('method', method, 'string')
     filter_method = inp.get_value('filter', FILTER, 'string')
     use_cpp = inp.get_value('use_cpp', USE_CPP, 'bool')
-    plot_exceedance = inp.get_value('plot', False, 'bool')  
+    plot_exceedance = inp.get_value('plot', False, 'bool')
+    skip_boundary = inp.get_value('skip_boundary', True, 'bool')
     
-    # Get the region markers
+    # Mark boundary cells
     V = phi.function_space()
-    dof_region_marks = get_dof_region_marks(simulation, V)
-    boundary_condition = numpy.zeros(V.dim(), numpy.intc)
-    for dof in dof_region_marks:
-        boundary_condition[dof] = 1
+    if skip_boundary:
+        boundary_condition = mark_cell_layers(simulation, V, layers=1)
+    else:
+        boundary_condition = numpy.zeros(V.dim(), bool)
     
     # Construct the limiter
     name = phi_name if output_name is None else output_name
