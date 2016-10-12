@@ -532,13 +532,26 @@ class SolverIPCS(Solver):
                 
                 err_div = max(abs(tmp.vector().min()), abs(tmp.vector().max()))
                 
+                tmp_a = tmp_u*tmp_v*dx
+                tmp_L = jump(self.simulation.data['p'])*jump(tmp_v)*dS
+                tmp_ls2 = dolfin.LocalSolver(tmp_a, tmp_L)
+                tmp2 = dolfin.Function(tmp_V)
+                tmp_ls2.solve_local_rhs(tmp2)
+                
                 if self.inner_iteration == 20:
                     from matplotlib import pyplot
+                    
                     fig = pyplot.figure(figsize=(10, 8))
                     #tmp.vector().set_local(abs(tmp.vector().get_local()))
                     a = dolfin.plot(tmp, cmap='viridis')
                     pyplot.colorbar(a)
                     fig.savefig('test_%f.png' % t)
+                    
+                    fig = pyplot.figure(figsize=(10, 8))
+                    #tmp.vector().set_local(abs(tmp.vector().get_local()))
+                    a = dolfin.plot(tmp2, cmap='viridis')
+                    pyplot.colorbar(a)
+                    fig.savefig('hest_%f.png' % t)
                 
                 ####################
                 

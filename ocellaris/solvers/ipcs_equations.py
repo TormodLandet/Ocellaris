@@ -184,9 +184,7 @@ class MomentumPredictionEquation(BaseEquation):
                 L += (avg(v) + dot(D12, jump(v, n)))*jump(p)*ni('+')*dS
             else:
                 L += p*v.dx(self.component)*dx
-                #L -= (avg(p) - dot(D12, jump(p, n)))*jump(v)*ni('+')*dS
-                L -= p('+')*v('+')*ni('+')*dS
-                L -= p('-')*v('-')*ni('-')*dS
+                L -= (avg(p) - dot(D12, jump(p, n)))*jump(v)*ni('+')*dS
             
             # Body force (gravity)
             # ρ g
