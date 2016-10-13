@@ -18,6 +18,7 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
                                            const Array<int>& cell_dofs_dg0,
                                            const Array<double>& vertex_coords,
                                            double* taylor_arr,
+                                           double* taylor_arr_old,
                                            double* alpha_arr)
 {
   const int vstride = 8;
@@ -58,7 +59,12 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
       for (int inb = 0; inb < nn; inb++)
       {
         int nb = neighbours[dof * max_neighbours + inb];
-        double nb_val = taylor_arr[cell_dofs[nb * dstride + 0]];
+        int nb_dof = cell_dofs[nb * dstride + 0];
+        double nb_val = taylor_arr[nb_dof];
+        lo = std::min(lo, nb_val);
+        hi = std::max(hi, nb_val);
+
+        nb_val = taylor_arr_old[nb_dof];
         lo = std::min(lo, nb_val);
         hi = std::max(hi, nb_val);
       }
@@ -95,6 +101,7 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
                                            const Array<int>& cell_dofs_dg0,
                                            const Array<double>& vertex_coords,
                                            double* taylor_arr,
+                                           double* taylor_arr_old,
                                            double* alpha1_arr,
                                            double* alpha2_arr)
 {
@@ -159,7 +166,12 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
         for (int inb = 0; inb < nn; inb++)
         {
           int nb = neighbours[dof * max_neighbours + inb];
-          double nb_val = taylor_arr[cell_dofs[nb * dstride + itaylor]];
+          int nb_dof = cell_dofs[nb * dstride + itaylor];
+          double nb_val = taylor_arr[nb_dof];
+          lo = std::min(lo, nb_val);
+          hi = std::max(hi, nb_val);
+
+          nb_val = taylor_arr_old[nb_dof];
           lo = std::min(lo, nb_val);
           hi = std::max(hi, nb_val);
         }

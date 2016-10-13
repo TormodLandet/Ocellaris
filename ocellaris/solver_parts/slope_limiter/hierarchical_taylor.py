@@ -13,7 +13,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
     description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchical manner'
     
     def __init__(self, phi_name, phi, boundary_condition=None, filter_method='nofilter',
-                 use_cpp=True, output_name=None):
+                 use_cpp=True, output_name=None, phi_old=None):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -32,6 +32,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         # Store input
         self.phi_name = phi_name
         self.phi = phi
+        self.phi_old = phi_old
         self.degree = degree
         self.mesh = mesh
         self.filter = filter_method
@@ -50,12 +51,13 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             self.alpha_funcs.append(func)
         self.additional_plot_funcs = self.alpha_funcs
         
-        # Intermediate DG Taylor function space
-        self.taylor = df.Function(V)
-        
         # No limiter needed for piecewice constant functions
         if degree == 0:
             return
+        
+        # Intermediate DG Taylor function space
+        self.taylor = df.Function(V)
+        self.taylor_old = df.Function(V) if self.phi_old is not None else None 
         
         # Find the neighbour cells for each dof
         num_neighbours, neighbours = get_dof_neighbours(V)
@@ -118,12 +120,18 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         taylor_arr = self.taylor.vector().get_local()
         alpha_arrs = [alpha.vector().get_local() for alpha in self.alpha_funcs]
         
+        if self.phi_old is not None:
+            lagrange_to_taylor(self.phi_old, self.taylor_old)
+            taylor_arr_old = self.taylor_old.vector().get_local()
+        else:
+            taylor_arr_old = taylor_arr
+        
         if self.use_cpp:
-            self._run_cpp(taylor_arr, alpha_arrs)
+            self._run_cpp(taylor_arr, taylor_arr_old, alpha_arrs)
         elif self.degree == 1:
-            self._run_dg1(taylor_arr, alpha_arrs[0])
+            self._run_dg1(taylor_arr, taylor_arr_old, alpha_arrs[0])
         elif self.degree == 2:
-            self._run_dg2(taylor_arr, alpha_arrs[0], alpha_arrs[1])
+            self._run_dg2(taylor_arr, taylor_arr_old, alpha_arrs[0], alpha_arrs[1])
             
         # Update the Lagrange function with the limited Taylor values
         self.taylor.vector().set_local(taylor_arr)
@@ -137,7 +145,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         
         timer.stop()
         
-    def _run_cpp(self, taylor_arr, alpha_arrs):
+    def _run_cpp(self, taylor_arr, taylor_arr_old, alpha_arrs):
         if self.degree == 1:
             limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg1
         elif self.degree == 2:
@@ -151,9 +159,10 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                 self.flat_cell_dofs_dg0,
                 self.flat_vertex_coordinates,
                 taylor_arr,
+                taylor_arr_old,
                 *alpha_arrs)
     
-    def _run_dg1(self, taylor_arr, alpha_arr):
+    def _run_dg1(self, taylor_arr, taylor_arr_old, alpha_arr):
         """
         Perform slope limiting of a DG1 function
         """
@@ -185,6 +194,10 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                     nb_val = taylor_arr[nb_center_val_dof]
                     minval = min(minval, nb_val)
                     maxval = max(maxval, nb_val)
+                    
+                    nb_val = taylor_arr_old[nb_center_val_dof]
+                    minval = min(minval, nb_val)
+                    maxval = max(maxval, nb_val)
                 
                 vertex_value = lagrange_arr[dof]
                 if vertex_value > center_value:
@@ -199,7 +212,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             taylor_arr[dofs[1]] *= alpha
             taylor_arr[dofs[2]] *= alpha
     
-    def _run_dg2(self, taylor_arr, alpha1_arr, alpha2_arr):
+    def _run_dg2(self, taylor_arr, taylor_arr_old, alpha1_arr, alpha2_arr):
         """
         Perform slope limiting of a DG2 function
         """
@@ -243,7 +256,11 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                         nb_val = taylor_arr[nb_center_val_dof]
                         minval = min(minval, nb_val)
                         maxval = max(maxval, nb_val)
-                    
+                        
+                        nb_val = taylor_arr_old[nb_center_val_dof]
+                        minval = min(minval, nb_val)
+                        maxval = max(maxval, nb_val)
+                
                     # Compute vertex value
                     if taylor_dof == 0:
                         # Function value at the vertex (linear reconstruction)

@@ -56,7 +56,7 @@ class DoNothingSlopeLimiter(SlopeLimiterBase):
         pass
 
 
-def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=LIMITER):
+def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=LIMITER, old_value=None):
     """
     Return a slope limiter based on the user provided input or the default
     values if no input is provided by the user
@@ -80,7 +80,7 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=LIMITER):
     name = phi_name if output_name is None else output_name
     simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, name))
     limiter_class = get_slope_limiter(method)
-    limiter = limiter_class(phi_name, phi, boundary_condition, filter_method, use_cpp, output_name)
+    limiter = limiter_class(phi_name, phi, boundary_condition, filter_method, use_cpp, output_name, old_value)
     
     if plot_exceedance:
         for func in limiter.additional_plot_funcs:

@@ -136,7 +136,7 @@ class VariableDensityModel(MultiPhaseModel):
                                         self.time_coeffs, dirichlet_bcs)
             
             self.solver = linear_solver_from_input(sim, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)
-            self.slope_limiter = SlopeLimiter(sim, 'rho', self.rho)
+            self.slope_limiter = SlopeLimiter(sim, 'rho', self.rho, old_value=self.rho_p)
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))
