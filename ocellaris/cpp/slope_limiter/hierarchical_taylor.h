@@ -37,6 +37,7 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
     double center_phix = taylor_arr[cell_dofs[ic * dstride + 1]];
     double center_phiy = taylor_arr[cell_dofs[ic * dstride + 2]];
 
+    bool is_on_boundary = false;
     for (int ivert = 0; ivert < 3; ivert++)
     {
       // Calculate the value of phi at the vertex
@@ -46,9 +47,15 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
 
       // Find highest and lowest value in the connected neighbour cells
       int dof = cell_dofs[ic * dstride + ivert];
+      int nn = num_neighbours[dof];
+      if (nn == 0)
+      {
+        is_on_boundary = true;
+        break;
+      }
       double lo = center_phi;
       double hi = center_phi;
-      for (int inb = 0; inb < num_neighbours[dof]; inb++)
+      for (int inb = 0; inb < nn; inb++)
       {
         int nb = neighbours[dof * max_neighbours + inb];
         double nb_val = taylor_arr[cell_dofs[nb * dstride + 0]];
@@ -68,6 +75,9 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
       }
       alpha = std::min(alpha, a);
     }
+
+    if (is_on_boundary)
+      continue;
 
     // Slope limit this cell
     alpha_arr[cell_dofs_dg0[ic]] = alpha;
@@ -108,6 +118,7 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
     double center_phiyy = taylor_arr[cell_dofs[ic * dstride + 4]];
     double center_phixy = taylor_arr[cell_dofs[ic * dstride + 5]];
 
+    bool is_on_boundary = false;
     for (int itaylor = 0; itaylor < 3; itaylor++)
     {
       for (int ivert = 0; ivert < 3; ivert++)
@@ -137,9 +148,15 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
 
         // Find highest and lowest value in the connected neighbour cells
         int dof = cell_dofs[ic * dstride + ivert];
+        int nn = num_neighbours[dof];
+        if (nn == 0)
+        {
+          is_on_boundary = true;
+          break;
+        }
         double lo = base_value;
         double hi = base_value;
-        for (int inb = 0; inb < num_neighbours[dof]; inb++)
+        for (int inb = 0; inb < nn; inb++)
         {
           int nb = neighbours[dof * max_neighbours + inb];
           double nb_val = taylor_arr[cell_dofs[nb * dstride + itaylor]];
@@ -160,6 +177,9 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
         alpha[itaylor] = std::min(alpha[itaylor], a);
       }
     }
+
+    if (is_on_boundary)
+      continue;
 
     // Compute alphas by the hierarchical method
     double alpha2 = std::min(alpha[1], alpha[2]);
