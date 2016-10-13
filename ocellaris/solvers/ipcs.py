@@ -91,6 +91,9 @@ class SolverIPCS(Solver):
         self.niters_u = [None] * sim.ndim
         self.niters_p = None
         self.niters_u_upd = [None] * sim.ndim
+        
+        # Storage for convergence checks
+        self._error_cache = None
     
     def read_input(self):
         """
@@ -310,9 +313,6 @@ class SolverIPCS(Solver):
             if self.inner_iteration == 1:
                 # Assemble the A matrix only the first inner iteration
                 self.Au[d] = eq.assemble_lhs()
-                #self.velocity_solver.parameters['preconditioner']['structure'] = 'same_nonzero_pattern'
-            else:
-                pass#self.velocity_solver.parameters['preconditioner']['structure'] = 'same'
             
             A = self.Au[d]
             b = eq.assemble_rhs()
@@ -432,6 +432,51 @@ class SolverIPCS(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
+            
+    @timeit
+    def calculate_divergence_error(self):
+        """
+        Check the convergence towards zero divergence. This is just for user output
+        """
+        sim = self.simulation
+        
+        if self._error_cache is None:
+            dot, grad, jump, avg = dolfin.dot, dolfin.grad, dolfin.jump, dolfin.avg
+            dx, dS, ds = dolfin.dx, dolfin.dS, dolfin.ds
+            
+            u_star = sim.data['u_star']
+            mesh = u_star[0].function_space().mesh()
+            V = dolfin.FunctionSpace(mesh, 'DG', 1)
+            n = dolfin.FacetNormal(mesh)
+            u = dolfin.TrialFunction(V)
+            v = dolfin.TestFunction(V)
+            
+            a = u*v*dx
+            L = dot(avg(u_star), n('+'))*jump(v)*dS \
+                + dot(u_star, n)*v*ds \
+                - dot(u_star, grad(v))*dx
+            
+            local_solver = dolfin.LocalSolver(a, L)
+            error_func = dolfin.Function(V)
+            
+            self._error_cache = (local_solver, error_func)
+        
+        local_solver, error_func = self._error_cache
+        local_solver.solve_local_rhs(error_func)
+        err_div = max(abs(error_func.vector().min()),
+                      abs(error_func.vector().max()))
+        
+        # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK 
+        if self.inner_iteration == 20:
+            from matplotlib import pyplot
+            
+            fig = pyplot.figure(figsize=(10, 8))
+            a = dolfin.plot(error_func, cmap='viridis', backend='matplotlib')
+            pyplot.colorbar(a)
+            fig.savefig('test_%f.png' % sim.time)
+        # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
+                
+        return err_div
     
     def run(self):
         """
@@ -494,11 +539,6 @@ class SolverIPCS(Solver):
                 err_u_star = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
                 
-                #for field_name in ('u_star0', 'u_star1', 'p'):
-                #    field = sim.data[field_name]
-                #    field.rename(field_name, field_name)
-                #    of << (field, self.inner_iteration+0.0)
-                
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
@@ -511,49 +551,8 @@ class SolverIPCS(Solver):
                     ustarmax = max(thismax, ustarmax)
                 ustarmax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(ustarmax))
                 
-                
-                ####################
-                tmp_us = sim.data['u_star']
-                tmp_mesh = tmp_us[0].function_space().mesh()
-                tmp_V = dolfin.FunctionSpace(tmp_mesh, 'DG', 1)
-                tmp_n = dolfin.FacetNormal(tmp_mesh)
-                tmp_u = dolfin.TrialFunction(tmp_V)
-                tmp_v = dolfin.TestFunction(tmp_V)
-                
-                dot, grad, jump, avg = dolfin.dot, dolfin.grad, dolfin.jump, dolfin.avg
-                dx, dS, ds = dolfin.dx, dolfin.dS, dolfin.ds 
-                tmp_a = tmp_u*tmp_v*dx
-                tmp_L = + dot(avg(tmp_us), tmp_n('+'))*jump(tmp_v)*dS \
-                        + dot(tmp_us, tmp_n)*tmp_v*ds \
-                        - dot(tmp_us, grad(tmp_v))*dx
-                tmp_ls = dolfin.LocalSolver(tmp_a, tmp_L)
-                tmp = dolfin.Function(tmp_V)
-                tmp_ls.solve_local_rhs(tmp)
-                
-                err_div = max(abs(tmp.vector().min()), abs(tmp.vector().max()))
-                
-                tmp_a = tmp_u*tmp_v*dx
-                tmp_L = jump(self.simulation.data['p'])*jump(tmp_v)*dS
-                tmp_ls2 = dolfin.LocalSolver(tmp_a, tmp_L)
-                tmp2 = dolfin.Function(tmp_V)
-                tmp_ls2.solve_local_rhs(tmp2)
-                
-                if self.inner_iteration == 20:
-                    from matplotlib import pyplot
-                    
-                    fig = pyplot.figure(figsize=(10, 8))
-                    #tmp.vector().set_local(abs(tmp.vector().get_local()))
-                    a = dolfin.plot(tmp, cmap='viridis')
-                    pyplot.colorbar(a)
-                    fig.savefig('test_%f.png' % t)
-                    
-                    fig = pyplot.figure(figsize=(10, 8))
-                    #tmp.vector().set_local(abs(tmp.vector().get_local()))
-                    a = dolfin.plot(tmp2, cmap='viridis')
-                    pyplot.colorbar(a)
-                    fig.savefig('hest_%f.png' % t)
-                
-                ####################
+                # Get the divergence error
+                err_div = self.calculate_divergence_error() 
                 
                 # Convergence estimates
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
