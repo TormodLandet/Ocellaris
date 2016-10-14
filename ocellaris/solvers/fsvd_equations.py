@@ -182,7 +182,11 @@ class PressureCorrectionEquation(BaseEquation):
         dt = sim.data['dt']
         mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
-        rho_min = Constant(self.simulation.multi_phase_model.get_density_range()[0])
+        
+        # Fluid properties
+        mpm = sim.multi_phase_model
+        mu = mpm.get_laminar_dynamic_viscosity(0)
+        rho_min = Constant(mpm.get_density_range()[0])
         
         # Weak form of the Poisson eq. with discontinuous elements
         # -∇⋅∇p = - γ_1/Δt ρ ∇⋅u^*
@@ -208,29 +212,34 @@ class PressureCorrectionEquation(BaseEquation):
         
         # Symmetric Interior Penalty coercivity term
         a += penalty_dS*jump(p)*jump(q)*dS
-        L += penalty_dS*jump(p_star)*jump(q)*dS
+        #L += penalty_dS*jump(p_star)*jump(q)*dS
         
-        # Dirichlet boundary
-        dirichlet_bcs = sim.data['dirichlet_bcs'].get('p', [])
-        for dbc in dirichlet_bcs:
-            p_bc = dbc.func()
-            
+        # Collect Dirichlet and outlet boundary values
+        dirichlet_vals_and_ds = []
+        for dbc in sim.data['dirichlet_bcs'].get('p', []):
+            dirichlet_vals_and_ds.append((dbc.func(), dbc.ds()))
+        for obc in sim.data['outlet_bcs']:
+            p_ = mu*dot(dot(grad(u_star), n), n)
+            dirichlet_vals_and_ds.append((p_, obc.ds()))
+        
+        # Apply Dirichlet boundary conditions
+        for p_bc, dds in dirichlet_vals_and_ds:
             # SIPG for -∇⋅∇p
-            a -= dot(n, K*grad(p))*q*dbc.ds()
-            a -= dot(n, K*grad(q))*p*dbc.ds()
-            L -= dot(n, K*grad(q))*p_bc*dbc.ds()
+            a -= dot(n, K*grad(p))*q*dds
+            a -= dot(n, K*grad(q))*p*dds
+            L -= dot(n, K*grad(q))*p_bc*dds
             
             # SIPG for -∇⋅∇p^*
-            L -= dot(n, K*grad(p_star))*q*dbc.ds()
-            L -= dot(n, K*grad(q))*p_star*dbc.ds()
+            L -= dot(n, K*grad(p_star))*q*dds
+            L -= dot(n, K*grad(q))*p_star*dds
             
             # Weak Dirichlet
-            a += penalty_ds*p*q*dbc.ds()
-            L += penalty_ds*p_bc*q*dbc.ds()
+            a += penalty_ds*p*q*dds
+            L += penalty_ds*p_bc*q*dds
             
             # Weak Dirichlet for p^*
-            L += penalty_ds*p_star*q*dbc.ds()
-            L -= penalty_ds*p_bc*q*dbc.ds()
+            #L += penalty_ds*p_star*q*dds
+            #L -= penalty_ds*p_bc*q*dds
         
         # Neumann boundary conditions on p and p_star cancel
         #neumann_bcs = sim.data['neumann_bcs'].get('p', [])
@@ -244,9 +253,9 @@ class PressureCorrectionEquation(BaseEquation):
             neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
             for dbc in dirichlet_bcs:
                 u_bc = dbc.func()
-                L -= c1/dt*u_bc*n[d]*q*dbc.ds()
+                L -= c1*rho_min/dt*u_bc*n[d]*q*dbc.ds()
             for nbc in neumann_bcs:
-                L -= c1/dt*u_star[d]*n[d]*q*nbc.ds()
+                L -= c1*rho_min/dt*u_star[d]*n[d]*q*nbc.ds()
         
         self.form_lhs = a
         self.form_rhs = L

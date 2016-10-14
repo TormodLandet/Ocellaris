@@ -17,7 +17,7 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'absolute_tolerance': 1e-15}
 EQUATION_SUBTYPE = 'Default'
 USE_GRAD_P_FORM = False
-FIX_PRESSURE_DOF = True
+FIX_PRESSURE_DOF = False
 
 
 @register_solver('FSVD')
@@ -54,7 +54,7 @@ class SolverFSVD(Solver):
         self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'])
         
         # Slope limiter for the momenum equation velocity components
-        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u%d' % d)
+        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u%d' % d, old_value=sim.data['up%d' % d])
                                for d in range(sim.ndim)]
         
         # Pre assembled matrices
@@ -311,10 +311,8 @@ class SolverFSVD(Solver):
                 err_u_star = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
                 
-                self.velocity_update()
-                self.postprocess_velocity()
                 div_dS_f, div_dx_f = sim.solution_properties.divergences()
-                diverr = div_dS_f.vector().max() + div_dx_f.vector().max()
+                err_div = div_dS_f.vector().max() + div_dx_f.vector().max()
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
@@ -325,19 +323,23 @@ class SolverFSVD(Solver):
                 umax = 0
                 for d in range(sim.ndim):
                     thismax = abs(sim.data['u%d' % d].vector().get_local()).max()
-                    ustarmax = max(thismax, umax)
-                umax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(ustarmax))
+                    umax = max(thismax, umax)
+                umax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(umax))
                 
                 # Convergence estimates
-                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e - div %10.3e%s - ui*max %10.3e'
-                             % (self.inner_iteration, err_u_star, err_p, diverr, solver_info,  umax))
+                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
+                             % (self.inner_iteration, err_u_star, err_p, solver_info,  umax)
+                             + ' err div %10.3e' % err_div)
                 
-                if diverr < allowable_div_inner:
+                if err_div < allowable_div_inner:
                     break
-                elif self.inner_iteration > 3 and diverr > 1e4:
+                elif self.inner_iteration > 3 and err_div > 1e4:
                     ocellaris_error('Iteration diverged', 'Inner iterations diverged')
                 
                 self.inner_iteration += 1
+            
+            self.velocity_update()
+            self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             for d in range(sim.ndim):
