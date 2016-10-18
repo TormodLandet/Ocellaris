@@ -45,6 +45,14 @@ class SolverIPCS(Solver):
         # Solver control parameters
         sim.data['dt'] = dolfin.Constant(simulation.dt)
         
+        # Projection to tilde velocity: avg(u_star) on the facets lifted to the cells
+        self.u_tilde = None
+        if self.vel_is_discontinuous:
+            self.velocity_postprocessor_tilde = VelocityBDMProjection(sim, sim.data['u_star'], 
+                incompressibility_flux_type=self.incompressibility_flux_type)
+            Vtilde = sim.data['Vu']
+            self.u_tilde = dolfin.as_vector([dolfin.Function(Vtilde), dolfin.Function(Vtilde)]) 
+        
         # Get equations
         MomentumPredictionEquation, PressureCorrectionEquation, \
             VelocityUpdateEquation = EQUATION_SUBTYPES[self.equation_subtype]
@@ -61,7 +69,7 @@ class SolverIPCS(Solver):
             self.eqs_mom_pred.append(eq)
         
         # Define the pressure correction equation
-        self.eq_pressure = PressureCorrectionEquation(simulation,
+        self.eq_pressure = PressureCorrectionEquation(simulation, self.u_tilde,
                                                       use_lagrange_multiplicator=self.use_lagrange_multiplicator,
                                                       incompressibility_flux_type=self.incompressibility_flux_type)
         
@@ -201,6 +209,7 @@ class SolverIPCS(Solver):
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
         sim.data['p_hat'] = dolfin.Function(Vp)
+        sim.data['p_tilde'] = dolfin.Function(Vp)
         
         # If gravity is nonzero we create a separate hydrostatic pressure field
         if any(gi != 0 for gi in sim.data['g'].py_value):
@@ -338,6 +347,37 @@ class SolverIPCS(Solver):
         for the pressure by taking out the nullspace, a constant shift
         of the pressure, by providing the nullspace to the solver
         """
+        
+        if self.inner_iteration > 10:
+            sim = self.simulation
+            mesh = sim.data['mesh']
+            if not hasattr(self, 'Vdg0'):
+                self.Vdg0 = dolfin.FunctionSpace(mesh, 'DG', 0)
+                self.Vdg2 = dolfin.FunctionSpace(mesh, 'DG', 2)
+                self.t2 = dolfin.Function(self.Vdg2)
+                self.l2 = dolfin.Function(self.Vdg2)
+            
+            c1 = sim.data['time_coeffs'][0]
+            dt = sim.data['dt']
+            f = dolfin.project(c1/dt*dolfin.div(self.u_tilde), self.Vdg0)
+            dm0 = self.Vdg0.dofmap()
+            dm2 = self.Vdg2.dofmap()
+            for cell in dolfin.cells(mesh):
+                cid = cell.index()
+                dof = dm0.cell_dofs(cid)[0]
+                dofs2 = dm2.cell_dofs(cid)
+                
+                fi = f.vector()[dof][0]
+                self.t2.vector()[dofs2[3]] = fi/2
+                self.t2.vector()[dofs2[4]] = fi/2
+            
+            from ocellaris.utils import taylor_to_lagrange
+            taylor_to_lagrange(self.t2, self.l2)
+            p_hat = dolfin.project(self.l2, self.simulation.data['Vp'])
+            self.simulation.data['p'].vector().axpy(-1.0, p_hat.vector())
+        
+            return p_hat.vector().norm('l2')
+        
         p = self.simulation.data['p']
         dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
         
@@ -388,15 +428,19 @@ class SolverIPCS(Solver):
         
         # Calculate p_hat = p_new - p_old 
         p_hat.vector().axpy(1, p.vector())
+        err_p  = p_hat.vector().norm('l2')
         
-        return p_hat.vector().norm('l2')
+        return err_p
     
     @timeit
-    def velocity_update(self):
+    def velocity_update(self, vel=None):
         """
         Update the velocity predictions with the updated pressure
         field from the pressure correction equation
         """
+        if vel is None:
+            vel = self.simulation.data['u']
+        
         if self.use_local_solver_for_update:
             # Element-wise projection
             if self.u_upd_solver is None:
@@ -407,7 +451,7 @@ class SolverIPCS(Solver):
             for d in range(self.simulation.ndim):
                 eq = self.eqs_vel_upd[d]
                 b = eq.assemble_rhs()
-                u_new = self.simulation.data['u%d' % d]
+                u_new = vel[d]
                 self.u_upd_solver.solve_local(u_new.vector(), b, Vu.dofmap())
                 self.niters_u_upd[d] = 0
         
@@ -421,7 +465,7 @@ class SolverIPCS(Solver):
                 
                 A = self.Au_upd
                 b = eq.assemble_rhs()
-                u_new = self.simulation.data['u%d' % d]
+                u_new = vel[d]
                 
                 self.niters_u_upd[d] = self.u_upd_solver.solve(A, u_new.vector(), b)
     
@@ -474,6 +518,12 @@ class SolverIPCS(Solver):
             a = dolfin.plot(error_func, cmap='viridis', backend='matplotlib')
             pyplot.colorbar(a)
             fig.savefig('test_%f.png' % sim.time)
+            
+            #h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), 'test.h5', 'w')
+            #h5.write(sim.data['mesh'], '/mesh')
+            #h5.write(dolfin.project(dolfin.div(self.u_tilde), sim.data['Vp']), '/f')
+            #h5.write(sim.data['p'], '/p_star')
+            #h5.close()
         # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
                 
         return err_div
@@ -537,6 +587,11 @@ class SolverIPCS(Solver):
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
                 err_u_star = self.momentum_prediction(t, dt)
+                
+                if self.u_tilde is not None:
+                    # Lift avg(u) from the facets to the cells
+                    self.velocity_postprocessor_tilde.run(self.u_tilde)
+                
                 err_p = self.pressure_correction()
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
@@ -559,7 +614,7 @@ class SolverIPCS(Solver):
                              % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax)
                              + ' err div %10.3e' % err_div)
                 
-                if err_u_star < allowable_error_inner:
+                if err_div < allowable_error_inner:
                     break
                 
                 self.inner_iteration += 1
