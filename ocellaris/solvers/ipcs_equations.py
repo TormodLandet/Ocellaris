@@ -247,12 +247,11 @@ class MomentumPredictionEquation(BaseEquation):
 
 
 class PressureCorrectionEquation(BaseEquation):
-    def __init__(self, simulation, u_tilde, use_lagrange_multiplicator, incompressibility_flux_type):
+    def __init__(self, simulation, use_lagrange_multiplicator, incompressibility_flux_type):
         """
         This class assembles the pressure Poisson equation, both CG and DG 
         """
         self.simulation = simulation
-        self.u_tilde = u_tilde
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.incompressibility_flux_type = incompressibility_flux_type
         
@@ -324,17 +323,13 @@ class PressureCorrectionEquation(BaseEquation):
             L = K*dot(grad(p_star), grad(q))*dx
 
             # RHS, ∇⋅u^*
-            if self.u_tilde is None:
-                if self.incompressibility_flux_type == 'central':
-                    u_flux = avg(u_star)
-                elif self.incompressibility_flux_type == 'upwind':
-                    switch = dolfin.conditional(dolfin.gt(abs(dot(u_star, n))('+'), 0.0), 1.0, 0.0)
-                    u_flux = switch*u_star('+') + (1 - switch)*u_star('-')
-                L += c1/dt*dot(u_star, grad(q))*dx
-                L -= c1/dt*dot(u_flux, n('+'))*jump(q)*dS
-            else:
-                L -= c1/dt*div(self.u_tilde)*q*dx
-                #L += c1/dt*dot(u_star - self.u_tilde, grad(q))*dx
+            if self.incompressibility_flux_type == 'central':
+                u_flux = avg(u_star)
+            elif self.incompressibility_flux_type == 'upwind':
+                switch = dolfin.conditional(dolfin.gt(abs(dot(u_star, n))('+'), 0.0), 1.0, 0.0)
+                u_flux = switch*u_star('+') + (1 - switch)*u_star('-')
+            L += c1/dt*dot(u_star, grad(q))*dx
+            L -= c1/dt*dot(u_flux, n('+'))*jump(q)*dS
             
             # Symmetric Interior Penalty method for -∇⋅∇p
             a -= dot(n('+'), avg(K*grad(p)))*jump(q)*dS
@@ -387,15 +382,14 @@ class PressureCorrectionEquation(BaseEquation):
             
             # Use boundary conditions for the velocity for the
             # term from integration by parts of div(u_star)
-            if self.u_tilde is None:
-                for d in range(sim.ndim):
-                    dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
-                    neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
-                    for dbc in dirichlet_bcs:
-                        u_bc = dbc.func()
-                        L -= c1/dt*u_bc*n[d]*q*dbc.ds()
-                    for nbc in neumann_bcs:
-                        L -= c1/dt*u_star[d]*n[d]*q*nbc.ds()
+            for d in range(sim.ndim):
+                dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
+                neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                for dbc in dirichlet_bcs:
+                    u_bc = dbc.func()
+                    L -= c1/dt*u_bc*n[d]*q*dbc.ds()
+                for nbc in neumann_bcs:
+                    L -= c1/dt*u_star[d]*n[d]*q*nbc.ds()
         
         # ALE mesh velocities
         if sim.mesh_morpher.active:
