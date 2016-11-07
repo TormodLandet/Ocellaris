@@ -1,6 +1,6 @@
 from __future__ import division
 import dolfin
-from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
+from ocellaris.utils import verify_key, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
 from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiter
 from .ipcs_equations import EQUATION_SUBTYPES
@@ -83,9 +83,7 @@ class SolverIPCS(Solver):
         
         # Storage for preassembled matrices
         self.Au = [None]*sim.ndim
-        self.Ap = None
         self.Au_upd = None
-        self.pressure_null_space = None
         
         # Store number of iterations
         self.niters_u = [None] * sim.ndim
@@ -122,19 +120,11 @@ class SolverIPCS(Solver):
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
-        if not self.equation_subtype in EQUATION_SUBTYPES:
-            available_methods = '\n'.join(' - %s' % m for m in EQUATION_SUBTYPES)
-            ocellaris_error('Unknown equation sub-type', 
-                            'Equation sub-type %s not available for ipcs solver, please use one of:\n%s' %
-                            (self.equation_subtype, EQUATION_SUBTYPES))
+        verify_key('equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'ipcs solver')
         
         # Coefficients for u, up and upp
         self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
-        if not self.timestepping_method in TIMESTEPPING_METHODS:
-            available_methods = '\n'.join(' - %s' % m for m in TIMESTEPPING_METHODS)
-            ocellaris_error('Unknown timestepping method', 
-                            'Timestepping method %s not recognised, please use one of:\n%s' %
-                            (self.timestepping_method, available_methods))
+        verify_key('timestepping method', self.timestepping_method, TIMESTEPPING_METHODS, 'ipcs solver')
         
         # Lagrange multiplicator or remove null space via PETSc
         self.remove_null_space = True
@@ -339,44 +329,19 @@ class SolverIPCS(Solver):
         of the pressure, by providing the nullspace to the solver
         """
         p = self.simulation.data['p']
-        dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('p', [])
-        
-        # Assemble the A matrix only the first inner iteration
-        if self.inner_iteration == 1:
-            self.Ap = self.eq_pressure.assemble_lhs()
-        
-        # The equation system to solve
-        A = self.Ap
-        b = self.eq_pressure.assemble_rhs()
-        
-        # Apply strong boundary conditions
-        if not self.vel_is_discontinuous:
-            for dbc in dirichlet_bcs:
-                dbc.apply(A, b)
-        
-        if self.remove_null_space:
-            if self.pressure_null_space is None:
-                # Create vector that spans the null space
-                null_vec = dolfin.Vector(p.vector())
-                null_vec[:] = 1
-                null_vec *= 1/null_vec.norm("l2")
-                
-                # Create null space basis object
-                self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
-            
-            # Make sure the null space is set on the matrix
-            dolfin.as_backend_type(A).set_nullspace(self.pressure_null_space)
-            
-            # Orthogonalize b with respect to the null space
-            self.pressure_null_space.orthogonalize(b)
+        p_hat = self.simulation.data['p_hat']
         
         # Temporarily store the old pressure
-        p_hat = self.simulation.data['p_hat']
         p_hat.vector().zero()
         p_hat.vector().axpy(-1, p.vector())
         
-        # Solve for new pressure
-        self.niters_p = self.pressure_solver.solve(A, p.vector(), b)
+        # Assemble the A matrix only the first inner iteration
+        assemble_A = self.inner_iteration == 1
+        
+        # Solve the pressure equation
+        self.niters_p = self.eq_pressure.solve(self.pressure_solver, 
+                                               assemble_A,
+                                               self.remove_null_space)
         
         # Removing the null space of the matrix system is not strictly the same as removing
         # the null space of the equation, so we correct for this here 

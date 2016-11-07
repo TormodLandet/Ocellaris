@@ -83,18 +83,19 @@ output:
 
 solver:
     type: IPCS
+    equation_subtype: LDGforPressure
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
-    num_inner_iter: 50
+    num_inner_iter: 10
     allowable_error_inner: 1.0e-8
     use_stress_divergence_form: false
 
-convection:
+slope_limiter:
     u:
-        convection_scheme: Upwind
+        method: None  # HierarchicalTaylor
 
 hooks:
 #    pre-solve:
