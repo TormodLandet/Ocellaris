@@ -606,16 +606,16 @@ class LDGPressureCorrectionEquation(BaseEquation):
         for nbc in neumann_bcs:
             # LDG exterior facet fluxes
             p_hat_ds = p
-            sigma_hat_ds = nbc.func()*n
+            #sigma_hat_ds = nbc.func()*n
             
             # Equation 1
             eq -= p_hat_ds*K*dot(tau, n)*nbc.ds()
             
             # Equation 2
-            eq -= dot(sigma_hat_ds, n)*q*nbc.ds()
+            #eq -= dot(sigma_hat_ds, n)*q*nbc.ds()
             
             # P star
-            eq += dot(n, K*grad(p_star))*q*nbc.ds()
+            #eq += dot(n, K*grad(p_star))*q*nbc.ds()
         
         # Use boundary conditions for the velocity for the
         # term from integration by parts of div(u_star)
