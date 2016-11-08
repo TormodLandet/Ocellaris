@@ -4,7 +4,7 @@ import numpy
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
-from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiterVelocity
+from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiter
 from . import Solver, register_solver, BDF, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 
@@ -68,7 +68,18 @@ class SolverCoupled(Solver):
                                     incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Velocity slope limiter
-        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u')
+        if self.vel_is_discontinuous:
+            self.u_magnitude_lim = dolfin.Function(sim.data['Vu'])
+            self.u_magnitude_fac = dolfin.Function(sim.data['Vu'])
+            self.slope_limiter = SlopeLimiter(sim, 'u', self.u_magnitude_lim)
+            
+            self.u_magnitude_lim.rename('u_maglim', 'u_magnitude_lim')
+            self.u_magnitude_fac.rename('u_magfac', 'u_magnitude_fac')
+            sim.io.add_extra_output_function(self.u_magnitude_lim)
+            sim.io.add_extra_output_function(self.u_magnitude_fac)
+            
+            self.slope_limiter_0 = SlopeLimiter(sim, 'u', sim.data['u0'], output_name='u0')
+            self.slope_limiter_1 = SlopeLimiter(sim, 'u', sim.data['u1'], output_name='u1')
         
         # Velocity post_processing
         self.velocity_postprocessor = None
@@ -424,11 +435,35 @@ class SolverCoupled(Solver):
             # Solve for the new time step
             self.solve_coupled()
             
-            # Slope limit the velocities
-            self.slope_limiter.run()
-            
             # Postprocess the solution velocity field
             self.postprocess_velocity()
+            
+            # Slope limit the velocities
+            if self.vel_is_discontinuous:
+                u0v = sim.data['u0'].vector().get_local()
+                u1v = sim.data['u1'].vector().get_local()
+                magnitude = numpy.sqrt(u0v**2 + u1v**2)
+                self.u_magnitude_lim.vector().set_local(magnitude)
+                self.u_magnitude_lim.vector().apply('insert')
+                self.slope_limiter.run()
+                magnitude_lim = self.u_magnitude_lim.vector().get_local()
+                with numpy.errstate(divide='ignore'):
+                    fac = (magnitude - magnitude_lim) / (magnitude + 1e-16)
+                fac[magnitude < 1e-14] = 0
+                self.u_magnitude_fac.vector().set_local(fac)
+                self.u_magnitude_fac.vector().apply('insert')
+                norm_u_lim_fac = dolfin.norm(self.u_magnitude_fac)
+                sim.reporting.report_timestep_value('u_lim_fac', norm_u_lim_fac)
+                
+                # Apply the magnitude slope limiter
+                #sim.data['u0'].vector().set_local(u0v*(1-fac))
+                #sim.data['u1'].vector().set_local(u1v*(1-fac))
+                #sim.data['u0'].vector().apply('insert')
+                #sim.data['u1'].vector().apply('insert')
+                
+                # Apply component slope limiters
+                self.slope_limiter_0.run()
+                self.slope_limiter_1.run()
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0

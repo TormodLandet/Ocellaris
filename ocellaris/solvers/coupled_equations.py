@@ -1,4 +1,5 @@
 # encoding: utf8
+from __future__ import division
 import dolfin
 from dolfin import dx, div, grad, dot, jump, avg, ds, dS, Constant
 from . import UPWIND
@@ -225,6 +226,9 @@ class CoupledEquations(object):
                 flux = jump(flux_nU)
                 eq -= u[d]*dot(grad(rho*v[d]), u_conv)*dx
                 eq += flux*jump(rho*v[d])*dS
+                
+                # Stabilizing term when w is not divergence free
+                eq += 1/2*div(u_conv)*u[d]*v[d]*dx
                 
                 # ALE terms
                 if sim.mesh_morpher.active:
