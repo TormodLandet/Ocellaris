@@ -38,7 +38,7 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
     double center_phix = taylor_arr[cell_dofs[ic * dstride + 1]];
     double center_phiy = taylor_arr[cell_dofs[ic * dstride + 2]];
 
-    bool is_on_boundary = false;
+    bool skip_this_cell = false;
     for (int ivert = 0; ivert < 3; ivert++)
     {
       // Calculate the value of phi at the vertex
@@ -51,7 +51,7 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
       int nn = num_neighbours[dof];
       if (nn == 0)
       {
-        is_on_boundary = true;
+        skip_this_cell = true;
         break;
       }
       double lo = center_phi;
@@ -82,8 +82,8 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
       alpha = std::min(alpha, a);
     }
 
-    if (is_on_boundary)
-      continue;
+    if (skip_this_cell)
+      alpha = 1.0;
 
     // Slope limit this cell
     alpha_arr[cell_dofs_dg0[ic]] = alpha;
@@ -125,7 +125,7 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
     double center_phiyy = taylor_arr[cell_dofs[ic * dstride + 4]];
     double center_phixy = taylor_arr[cell_dofs[ic * dstride + 5]];
 
-    bool is_on_boundary = false;
+    bool skip_this_cell = false;
     for (int itaylor = 0; itaylor < 3; itaylor++)
     {
       for (int ivert = 0; ivert < 3; ivert++)
@@ -158,7 +158,7 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
         int nn = num_neighbours[dof];
         if (nn == 0)
         {
-          is_on_boundary = true;
+          skip_this_cell = true;
           break;
         }
         double lo = base_value;
@@ -190,12 +190,13 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
       }
     }
 
-    if (is_on_boundary)
-      continue;
-
-    // Compute alphas by the hierarchical method
-    double alpha2 = std::min(alpha[1], alpha[2]);
-    double alpha1 = std::max(alpha[0], alpha2);
+    double alpha1 = 1.0, alpha2 = 1.0;
+    if (!skip_this_cell)
+    {
+      // Compute alphas by the hierarchical method
+      alpha2 = std::min(alpha[1], alpha[2]);
+      alpha1 = std::max(alpha[0], alpha2);
+    }
 
     // Slope limit this cell
     alpha1_arr[cell_dofs_dg0[ic]] = alpha1;
