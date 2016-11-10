@@ -82,8 +82,8 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: IPCS
-    equation_subtype: LDGforPressure
+    type: Coupled
+    equation_subtype: PoissonP
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     function_space_velocity: DG
