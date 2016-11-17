@@ -80,3 +80,4 @@ from . import coupled
 from . import coupled_ldg
 from . import fsvd
 from . import ipcs
+from . import simple
