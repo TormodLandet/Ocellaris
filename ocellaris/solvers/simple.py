@@ -1,9 +1,10 @@
+# encoding: utf8
 from __future__ import division
 import dolfin
 from ocellaris.utils import verify_key, timeit, linear_solver_from_input
-from . import Solver, register_solver, BDF, CRANK_NICOLSON, BDM, UPWIND
+from . import Solver, register_solver, BDM
 from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiter
-from .ipcs_equations import EQUATION_SUBTYPES
+from .simple_equations import EQUATION_SUBTYPES
 
 
 # Solvers - default values, can be changed in the input file
@@ -17,7 +18,6 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
 MAX_ITER_MOMENTUM = 1000
 
 # Equations - default values, can be changed in the input file
-TIMESTEPPING_METHODS = (BDF,)
 EQUATION_SUBTYPE = 'Default'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
@@ -101,17 +101,16 @@ class SolverSIMPLE(Solver):
         # Get matrices
         Matrices = EQUATION_SUBTYPES[self.equation_subtype]
         matrices = Matrices(simulation,
-                            timestepping_method=self.timestepping_method,
-                            flux_type=self.flux_type,
                             use_stress_divergence_form=self.use_stress_divergence_form,
                             use_grad_p_form=self.use_grad_p_form,
                             use_grad_q_form=self.use_grad_q_form,
+                            use_lagrange_multiplicator=self.use_lagrange_multiplicator,
                             include_hydrostatic_pressure=self.hydrostatic_pressure_correction,
                             incompressibility_flux_type=self.incompressibility_flux_type)
         self.matrices = matrices
         
         # Slope limiter for the momenum equation velocity components
-        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u_star%d' % d], 'u_star%d' % d)
+        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u_star%d' % d)
                                for d in range(sim.ndim)]
         
         # Projection for the velocity
@@ -126,6 +125,12 @@ class SolverSIMPLE(Solver):
         self.A_tilde_inv = [None]*sim.ndim
         self.B = [None]*sim.ndim
         self.C = [None]*sim.ndim
+        self.tmp_mats = None
+        
+        # Temporary matrices to store matrix matrix products
+        self.mat_pv = None
+        self.mat_uq = None
+        self.mat_pq = None
         
         # Store number of iterations
         self.niters_u = [None] * sim.ndim
@@ -174,7 +179,6 @@ class SolverSIMPLE(Solver):
             self.remove_null_space = False
         
         # Control the form of the governing equations 
-        self.flux_type = sim.input.get_value('convection/u/flux_type', UPWIND, 'string')
         self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
                                                               USE_STRESS_DIVERGENCE, 'bool')
         self.use_grad_p_form = sim.input.get_value('solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
@@ -295,15 +299,10 @@ class SolverSIMPLE(Solver):
             
             if self.is_first_timestep:
                 uic.assign(uip)
-            elif self.timestepping_method == BDF:
+            else:
                 uic.vector().zero()
                 uic.vector().axpy(2.0, uip.vector())
                 uic.vector().axpy(-1.0, uipp.vector())
-            elif self.timestepping_method == CRANK_NICOLSON:
-                uic.vector().zero()
-                uic.vector().axpy(1.5, uip.vector())
-                uic.vector().axpy(-0.5, uipp.vector())
-        
         self.is_first_timestep = False
     
     @timeit
@@ -320,11 +319,8 @@ class SolverSIMPLE(Solver):
             
             # Assemble the LHS matrices only the first inner iteration
             if self.inner_iteration == 1:
-                self.A[d] = self.matrices.assemble_A(d)
-                self.A_tilde[d] = self.matrices.assemble_A_tilde(d)
-                self.A_tilde_inv[d] = self.matrices.assemble_A_tilde_inv(d)
-                self.B[d] = self.matrices.assemble_B(d)
-                self.C = self.matrices.assemble_C(d)
+                (self.A[d], self.A_tilde[d], self.A_tilde_inv[d],
+                 self.B[d], self.C[d]) = self.matrices.assemble_matrices(d)
             
             A = self.A[d]
             A_tilde = self.A_tilde[d]
@@ -359,11 +355,23 @@ class SolverSIMPLE(Solver):
         p = self.simulation.data['p']
         p_hat = self.simulation.data['p_hat']
         
-        # The equation system to solve
-        LHS = self.C[0]*self.A_tilde_inv[0]*self.B[0]
-        for d in range(1, self.simulation.ndim):
-            LHS += self.C[d]*self.A_tilde_inv[d]*self.B[d]
-        RHS = self.matrices.assemble_E()
+        # Compute the LHS = C⋅Ãinv⋅B
+        if self.inner_iteration == 1:
+            LHS = 0
+            for d in range(1, self.simulation.ndim):
+                C, Ainv, B = self.C[d], self.A_tilde_inv[d], self.B[d]
+                self.mat_uq = matmul(C, Ainv, self.mat_uq)
+                self.mat_pq = matmul(self.mat_uq, B, self.mat_pq)
+                
+                if LHS == 0:
+                    LHS = dolfin.PETScMatrix(self.mat_pq)
+                else:
+                    LHS.axpy(1, self.mat_pq)
+            self.LHS_pressure = LHS
+        else:
+            LHS = self.LHS_pressure
+        
+        RHS = self.matrices.assemble_E(self.simulation.data['u'])
         
         # Inform PETSc about the null space
         if self.remove_null_space:
@@ -377,12 +385,14 @@ class SolverSIMPLE(Solver):
                 self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
             
             # Make sure the null space is set on the matrix
-            dolfin.as_backend_type(LHS).set_nullspace(self.pressure_null_space)
+            LHS.set_nullspace(self.pressure_null_space)
             
             # Orthogonalize b with respect to the null space
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
+        LHS.apply('insert')
+        assert LHS.size(0) == LHS.size(1)
         self.niters_p = self.pressure_solver.solve(LHS, p_hat.vector(), RHS)
         
         # Removing the null space of the matrix system is not strictly the same as removing
@@ -405,10 +415,12 @@ class SolverSIMPLE(Solver):
         field from the pressure correction equation
         """
         p_hat = self.simulation.data['p_hat']
+        
         for d in range(self.simulation.ndim):
-            upd = -self.A_tilde_inv[d] * self.B[d] * p_hat.vector()
-            u_new = self.simulation.data['u%d' % d]
-            u_new.vector().axpy(1, upd)
+            Ainv, B = self.A_tilde_inv[d], self.B[d]
+            self.mat_pv = matmul(Ainv, B, self.mat_pv)
+            u = self.simulation.data['u%d' % d]
+            u.vector().axpy(-1, self.mat_pv * p_hat.vector())
     
     @timeit
     def postprocess_velocity(self):
@@ -429,17 +441,17 @@ class SolverSIMPLE(Solver):
             dot, grad, jump, avg = dolfin.dot, dolfin.grad, dolfin.jump, dolfin.avg
             dx, dS, ds = dolfin.dx, dolfin.dS, dolfin.ds
             
-            u_star = sim.data['u_star']
-            mesh = u_star[0].function_space().mesh()
+            vel = sim.data['u']
+            mesh = vel[0].function_space().mesh()
             V = dolfin.FunctionSpace(mesh, 'DG', 1)
             n = dolfin.FacetNormal(mesh)
             u = dolfin.TrialFunction(V)
             v = dolfin.TestFunction(V)
             
             a = u*v*dx
-            L = dot(avg(u_star), n('+'))*jump(v)*dS \
-                + dot(u_star, n)*v*ds \
-                - dot(u_star, grad(v))*dx
+            L = dot(avg(vel), n('+'))*jump(v)*dS \
+                + dot(vel, n)*v*ds \
+                - dot(vel, grad(v))*dx
             
             local_solver = dolfin.LocalSolver(a, L)
             error_func = dolfin.Function(V)
@@ -460,7 +472,7 @@ class SolverSIMPLE(Solver):
             pyplot.colorbar(a)
             fig.savefig('test_%f.png' % sim.time)
         # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-                
+        
         return err_div
     
     def run(self):
@@ -484,16 +496,13 @@ class SolverSIMPLE(Solver):
         if has_upp_start_values:
             sim.log.info('Initial values for upp are found and used')
             self.is_first_timestep = False
-            if self.timestepping_method == BDF:
-                self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+            self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
         
         # Give reasonable starting guesses for the solvers
         for d in range(sim.ndim):
             up = self.simulation.data['up%d' % d]
             u_new = self.simulation.data['u%d' % d]
-            u_star = self.simulation.data['u_star%d' % d]
             u_new.assign(up)
-            u_star.assign(up)
         
         while True:
             # Get input values, these can possibly change over time
@@ -521,38 +530,38 @@ class SolverSIMPLE(Solver):
             # Run inner iterations
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
-                err_u_star = self.momentum_prediction(t, dt)
+                err_u = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
+                
+                self.velocity_update()
+                self.postprocess_velocity()
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
 
-                # Get max u_star
-                ustarmax = 0
+                # Get max velocity
+                umax = 0
                 for d in range(sim.ndim):
-                    thismax = abs(sim.data['u_star0'].vector().get_local()).max()
-                    ustarmax = max(thismax, ustarmax)
-                ustarmax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(ustarmax))
+                    thismax = abs(sim.data['u%d' % d].vector().get_local()).max()
+                    umax = max(thismax, umax)
+                umax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(umax))
                 
                 # Get the divergence error
                 err_div = self.calculate_divergence_error() 
-                err_div_Vp = dolfin.norm(dolfin.project(dolfin.div(self.simulation.data['u_star']),
+                err_div_Vp = dolfin.norm(dolfin.project(dolfin.div(self.simulation.data['u']),
                                                         self.simulation.data['Vp']), 'l2')
                 
                 # Convergence estimates
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
-                             % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax)
+                             % (self.inner_iteration, err_u, err_p, solver_info,  umax)
                              + ' err div %10.3e in Vp %10.3e' % (err_div, err_div_Vp))
                 
-                if err_u_star < allowable_error_inner:
+                if err_u < allowable_error_inner:
                     break
                 
                 self.inner_iteration += 1
-            
-            self.velocity_update()
-            self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0
@@ -560,19 +569,16 @@ class SolverSIMPLE(Solver):
                 u_new = sim.data['u%d' % d]
                 up = sim.data['up%d' % d]
                 upp = sim.data['upp%d' % d]
-                uppp = sim.data['uppp%d' % d]
                 
                 if self.is_steady:
                     diff = abs(u_new.vector().get_local() - up.vector().get_local()).max() 
                     vel_diff = max(vel_diff, diff)
                 
-                uppp.assign(upp)
                 upp.assign(up)
                 up.assign(u_new)
             
             # Change time coefficient to second order
-            if self.timestepping_method == BDF:
-                sim.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+            sim.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
             
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
@@ -587,3 +593,26 @@ class SolverSIMPLE(Solver):
         
         # We are done
         sim.hooks.simulation_ended(success=True)
+
+
+def matmul(A, B, out):
+    """
+    A B (and potentially out) must be PETScMatrix
+    The matrix out must be the result of a prior matmul
+    call with the same sparsity patterns in A and B
+    """
+    #print 'A is %d x %d' % (A.size(0), A.size(1))
+    #print 'B is %d x %d' % (B.size(0), B.size(1))
+    #if out: print 'C is %d x %d' % (out.size(0), out.size(1))
+    A = A.mat()
+    B = B.mat()
+    if out is not None:
+        A.matMult(B, out.mat())
+        C = out
+        C.apply('insert')
+    else:
+        Cmat = A.matMult(B)
+        C = dolfin.PETScMatrix(Cmat)
+        C.apply('insert')
+        #print 'C is %d x %d (new)' % (C.size(0), C.size(1))
+    return C
