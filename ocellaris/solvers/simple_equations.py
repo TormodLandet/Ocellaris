@@ -59,6 +59,7 @@ class SimpleEquations(object):
         self.Cs = [None] * simulation.ndim
         self.Ds = [None] * simulation.ndim
         self.E = None
+        self.E_star = None
         
     def calculate_penalties(self, nu):
         """
@@ -323,17 +324,27 @@ class SimpleEquations(object):
             dolfin.assemble(self.eqDs[d], tensor=self.Ds[d])
         return self.Ds[d]
 
-    def assemble_E(self, u):
+    def assemble_E(self):
         if self.E is None:
             self.E = dolfin.assemble(self.eqE)
         else:
             dolfin.assemble(self.eqE, tensor=self.E)
+        return self.E
+    
+    def assemble_E_star(self, u_star):
+        if self.E_star is None:
+            self.E_star = dolfin.Vector(self.simulation.data['p'].vector())
+        E_star = self.E_star
+        E_star.zero()
         
-        E = self.E
+        # Divergence of u*, C⋅u*
         for d in range(self.simulation.ndim):
-            E -= self.Cs[d]*u[d].vector()
+            E_star.axpy(1.0, self.Cs[d]*u_star[d].vector())
         
-        return E
+        # Subtract the original RHS of C⋅u = e
+        E_star.axpy(-1.0, self.assemble_E())
+        
+        return E_star
 
 
 EQUATION_SUBTYPES = {

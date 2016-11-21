@@ -329,13 +329,13 @@ class SolverSIMPLE(Solver):
             D = self.matrices.assemble_D(d)
             alpha = self.alpha_u
             
-            LHS = A
-            LHS += (1 - alpha) / alpha * A_tilde
+            LHS = dolfin.as_backend_type(A.copy())
+            LHS.axpy((1 - alpha) / alpha, A_tilde, True)
             RHS = D
-            RHS -= B * p_star.vector() 
-            RHS += (1 - alpha) / alpha * A_tilde * u_star.vector()
+            RHS.axpy(-1.0, B * p_star.vector()) 
+            RHS.axpy((1 - alpha) / alpha, A_tilde * u_star.vector())
             
-            solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
+            #solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
             self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
             self.slope_limiters[d].run()
             
@@ -352,32 +352,34 @@ class SolverSIMPLE(Solver):
         for the pressure by taking out the nullspace, a constant shift
         of the pressure, by providing the nullspace to the solver
         """
-        p = self.simulation.data['p']
         p_hat = self.simulation.data['p_hat']
         
         # Compute the LHS = C⋅Ãinv⋅B
         if self.inner_iteration == 1:
             LHS = 0
-            for d in range(1, self.simulation.ndim):
+            for d in range(self.simulation.ndim):
                 C, Ainv, B = self.C[d], self.A_tilde_inv[d], self.B[d]
                 self.mat_uq = matmul(C, Ainv, self.mat_uq)
                 self.mat_pq = matmul(self.mat_uq, B, self.mat_pq)
+                #self.mat_pq = matmul(Ainv, B, self.mat_pq)
+                #new_pq = matmul(C, self.mat_pq, None)
                 
                 if LHS == 0:
-                    LHS = dolfin.PETScMatrix(self.mat_pq)
+                    LHS = dolfin.as_backend_type(self.mat_pq.copy())
                 else:
-                    LHS.axpy(1, self.mat_pq)
+                    #LHS += self.mat_pq
+                    LHS.axpy(1.0, self.mat_pq, True)
             self.LHS_pressure = LHS
         else:
             LHS = self.LHS_pressure
         
-        RHS = self.matrices.assemble_E(self.simulation.data['u'])
+        RHS = self.matrices.assemble_E_star(self.simulation.data['u'])
         
         # Inform PETSc about the null space
         if self.remove_null_space:
             if self.pressure_null_space is None:
                 # Create vector that spans the null space
-                null_vec = dolfin.Vector(p.vector())
+                null_vec = dolfin.Vector(p_hat.vector())
                 null_vec[:] = 1
                 null_vec *= 1/null_vec.norm("l2")
                 
@@ -398,13 +400,13 @@ class SolverSIMPLE(Solver):
         # Removing the null space of the matrix system is not strictly the same as removing
         # the null space of the equation, so we correct for this here 
         if self.remove_null_space:
-            dx2 = dolfin.dx(domain=p.function_space().mesh())
+            dx2 = dolfin.dx(domain=p_hat.function_space().mesh())
             vol = dolfin.assemble(dolfin.Constant(1)*dx2)
-            pavg = dolfin.assemble(p*dx2)/vol
-            p.vector()[:] -= pavg
+            pavg = dolfin.assemble(p_hat*dx2)/vol
+            p_hat.vector()[:] -= pavg
         
         # Calculate p = p* + α p^
-        p.vector().axpy(self.alpha_p, p_hat.vector())
+        self.simulation.data['p'].vector().axpy(self.alpha_p, p_hat.vector())
         
         return p_hat.vector().norm('l2')
     
