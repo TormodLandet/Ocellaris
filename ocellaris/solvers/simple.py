@@ -13,8 +13,8 @@ PRECONDITIONER_U = 'additive_schwarz'
 SOLVER_P = 'gmres'
 PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'relative_tolerance': 1e-10,
-                     'absolute_tolerance': 1e-15}
+                     'relative_tolerance': 1e-8, #1e-10,
+                     'absolute_tolerance': 1e-8} #1e-15}
 MAX_ITER_MOMENTUM = 1000
 
 # Equations - default values, can be changed in the input file
@@ -26,8 +26,8 @@ USE_GRAD_Q_FORM = True
 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
 INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
-ALPHA_U = 0.8
-ALPHA_P = 0.8
+ALPHA_U = 0.5
+ALPHA_P = 0.5
 
 
 @register_solver('SIMPLE')
@@ -128,9 +128,8 @@ class SolverSIMPLE(Solver):
         self.tmp_mats = None
         
         # Temporary matrices to store matrix matrix products
-        self.mat_pv = None
-        self.mat_uq = None
-        self.mat_pq = None
+        self.mat_AinvB = [None]*sim.ndim
+        self.mat_CAinvB = [None]*sim.ndim
         
         # Store number of iterations
         self.niters_u = [None] * sim.ndim
@@ -157,8 +156,8 @@ class SolverSIMPLE(Solver):
                                                         PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
         
         # Get under relaxation factors
-        self.alpha_u = sim.input.get_value('solver/alpha_u', ALPHA_U, 'float')
-        self.alpha_p = sim.input.get_value('solver/alpha_p', ALPHA_P, 'float')
+        self.alpha_u = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
+        self.alpha_p = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
@@ -311,6 +310,7 @@ class SolverSIMPLE(Solver):
         Solve the momentum prediction equation
         """
         solver = self.velocity_solver
+        p_star = self.simulation.data['p']
         
         err = 0.0
         for d in range(self.simulation.ndim):
@@ -325,21 +325,24 @@ class SolverSIMPLE(Solver):
             A = self.A[d]
             A_tilde = self.A_tilde[d]
             B = self.B[d]
-            p_star = self.simulation.data['p']
             D = self.matrices.assemble_D(d)
             alpha = self.alpha_u
+            relax = (1 - alpha) / alpha if alpha > 0 else 0.0
             
             LHS = dolfin.as_backend_type(A.copy())
-            LHS.axpy((1 - alpha) / alpha, A_tilde, True)
+            LHS.axpy(relax, A_tilde, True)
+            LHS.apply('insert')
             RHS = D
-            RHS.axpy(-1.0, B * p_star.vector()) 
-            RHS.axpy((1 - alpha) / alpha, A_tilde * u_star.vector())
+            RHS.axpy(-1.0, B * p_star.vector())
+            RHS.axpy(relax, A_tilde * u_star.vector())
+            RHS.apply('insert')
             
             #solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
             self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
             self.slope_limiters[d].run()
             
             self.u_tmp.vector().axpy(-1, u_star.vector())
+            self.u_tmp.vector().apply('insert')
             err += self.u_tmp.vector().norm('l2')
         return err
     
@@ -359,21 +362,21 @@ class SolverSIMPLE(Solver):
             LHS = 0
             for d in range(self.simulation.ndim):
                 C, Ainv, B = self.C[d], self.A_tilde_inv[d], self.B[d]
-                self.mat_uq = matmul(C, Ainv, self.mat_uq)
-                self.mat_pq = matmul(self.mat_uq, B, self.mat_pq)
-                #self.mat_pq = matmul(Ainv, B, self.mat_pq)
-                #new_pq = matmul(C, self.mat_pq, None)
+                self.mat_AinvB[d] = matmul(Ainv, B, self.mat_AinvB[d])
+                self.mat_CAinvB[d] = matmul(C, self.mat_AinvB[d], self.mat_CAinvB[d])
                 
                 if LHS == 0:
-                    LHS = dolfin.as_backend_type(self.mat_pq.copy())
+                    LHS = dolfin.as_backend_type(self.mat_CAinvB[d].copy())
                 else:
-                    #LHS += self.mat_pq
-                    LHS.axpy(1.0, self.mat_pq, True)
+                    LHS.axpy(1.0, self.mat_CAinvB[d], True)
+                LHS.apply('insert')
             self.LHS_pressure = LHS
         else:
             LHS = self.LHS_pressure
         
-        RHS = self.matrices.assemble_E_star(self.simulation.data['u'])
+        # Compute the divergence of u* and the rest of the right hand side
+        u_star = self.simulation.data['u']
+        RHS = self.matrices.assemble_E_star(u_star)
         
         # Inform PETSc about the null space
         if self.remove_null_space:
@@ -393,8 +396,6 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        LHS.apply('insert')
-        assert LHS.size(0) == LHS.size(1)
         self.niters_p = self.pressure_solver.solve(LHS, p_hat.vector(), RHS)
         
         # Removing the null space of the matrix system is not strictly the same as removing
@@ -419,10 +420,8 @@ class SolverSIMPLE(Solver):
         p_hat = self.simulation.data['p_hat']
         
         for d in range(self.simulation.ndim):
-            Ainv, B = self.A_tilde_inv[d], self.B[d]
-            self.mat_pv = matmul(Ainv, B, self.mat_pv)
             u = self.simulation.data['u%d' % d]
-            u.vector().axpy(-1, self.mat_pv * p_hat.vector())
+            u.vector().axpy(-1, self.mat_AinvB[d] * p_hat.vector())
     
     @timeit
     def postprocess_velocity(self):
@@ -464,16 +463,6 @@ class SolverSIMPLE(Solver):
         local_solver.solve_local_rhs(error_func)
         err_div = max(abs(error_func.vector().min()),
                       abs(error_func.vector().max()))
-        
-        # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK 
-        if self.inner_iteration == 20:
-            from matplotlib import pyplot
-            
-            fig = pyplot.figure(figsize=(10, 8))
-            a = dolfin.plot(error_func, cmap='viridis', backend='matplotlib')
-            pyplot.colorbar(a)
-            fig.savefig('test_%f.png' % sim.time)
-        # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
         
         return err_div
     
@@ -542,25 +531,16 @@ class SolverSIMPLE(Solver):
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
-
-                # Get max velocity
-                umax = 0
-                for d in range(sim.ndim):
-                    thismax = abs(sim.data['u%d' % d].vector().get_local()).max()
-                    umax = max(thismax, umax)
-                umax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(umax))
                 
                 # Get the divergence error
                 err_div = self.calculate_divergence_error() 
-                err_div_Vp = dolfin.norm(dolfin.project(dolfin.div(self.simulation.data['u']),
-                                                        self.simulation.data['Vp']), 'l2')
                 
                 # Convergence estimates
-                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
-                             % (self.inner_iteration, err_u, err_p, solver_info,  umax)
-                             + ' err div %10.3e in Vp %10.3e' % (err_div, err_div_Vp))
+                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s'
+                             % (self.inner_iteration, err_u, err_p, solver_info)
+                             + ' err div %10.3e' % err_div)
                 
-                if err_u < allowable_error_inner:
+                if err_u + err_p < allowable_error_inner:
                     break
                 
                 self.inner_iteration += 1
@@ -603,18 +583,14 @@ def matmul(A, B, out):
     The matrix out must be the result of a prior matmul
     call with the same sparsity patterns in A and B
     """
-    #print 'A is %d x %d' % (A.size(0), A.size(1))
-    #print 'B is %d x %d' % (B.size(0), B.size(1))
-    #if out: print 'C is %d x %d' % (out.size(0), out.size(1))
     A = A.mat()
     B = B.mat()
     if out is not None:
         A.matMult(B, out.mat())
         C = out
-        C.apply('insert')
     else:
         Cmat = A.matMult(B)
         C = dolfin.PETScMatrix(Cmat)
-        C.apply('insert')
-        #print 'C is %d x %d (new)' % (C.size(0), C.size(1))
+    
+    C.apply('insert')
     return C

@@ -82,17 +82,23 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: Coupled
-    equation_subtype: PoissonP
+    type: SIMPLE
+    equation_subtype: Default
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
-    num_inner_iter: 30
+    num_inner_iter: 3000
+    relaxation_u: 0.55
+    relaxation_p: 0.45
     allowable_error_inner: 1.0e-8
     use_stress_divergence_form: false
-    p:
+    velocity_postprocessing: BDM
+    _u:
+        solver: lu
+        preconditioner: petsc
+    _p:
         solver: lu
         preconditioner: petsc
 
@@ -119,8 +125,9 @@ hooks:
     post_timestep:
     -   name: calculate divergence
         code: |
-            div_u = project(u[0].dx(0) + u[1].dx(1), Vp)
-            print 'max_div_u|Vp = %10.3e' % abs(div_u.vector().array()).max()
+            div_u = project(div(u), Vp)
+            print 'max_div_u|Vp = %10.3e' % abs(div_u.vector().array()).max(),
+            print 'l2 %10.3e h1 %10.3e' % (norm(div_u, 'L2'), norm(div_u, 'H1'))
 
 #console_at_end: false
 #console_on_error: true
