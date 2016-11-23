@@ -390,7 +390,8 @@ class SolverSIMPLE(Solver):
                 self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
             
             # Make sure the null space is set on the matrix
-            LHS.set_nullspace(self.pressure_null_space)
+            if self.inner_iteration == 1:
+                LHS.set_nullspace(self.pressure_null_space)
             
             # Orthogonalize b with respect to the null space
             self.pressure_null_space.orthogonalize(RHS)
@@ -430,41 +431,6 @@ class SolverSIMPLE(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
-    
-    @timeit
-    def calculate_divergence_error(self):
-        """
-        Check the convergence towards zero divergence. This is just for user output
-        """
-        sim = self.simulation
-        
-        if self._error_cache is None:
-            dot, grad, jump, avg = dolfin.dot, dolfin.grad, dolfin.jump, dolfin.avg
-            dx, dS, ds = dolfin.dx, dolfin.dS, dolfin.ds
-            
-            vel = sim.data['u']
-            mesh = vel[0].function_space().mesh()
-            V = dolfin.FunctionSpace(mesh, 'DG', 1)
-            n = dolfin.FacetNormal(mesh)
-            u = dolfin.TrialFunction(V)
-            v = dolfin.TestFunction(V)
-            
-            a = u*v*dx
-            L = dot(avg(vel), n('+'))*jump(v)*dS \
-                + dot(vel, n)*v*ds \
-                - dot(vel, grad(v))*dx
-            
-            local_solver = dolfin.LocalSolver(a, L)
-            error_func = dolfin.Function(V)
-            
-            self._error_cache = (local_solver, error_func)
-        
-        local_solver, error_func = self._error_cache
-        local_solver.solve_local_rhs(error_func)
-        err_div = max(abs(error_func.vector().min()),
-                      abs(error_func.vector().max()))
-        
-        return err_div
     
     def run(self):
         """
@@ -525,25 +491,23 @@ class SolverSIMPLE(Solver):
                 err_p = self.pressure_correction()
                 
                 self.velocity_update()
-                self.postprocess_velocity()
+                #self.postprocess_velocity()
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
                 
-                # Get the divergence error
-                err_div = self.calculate_divergence_error() 
-                
                 # Convergence estimates
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s'
-                             % (self.inner_iteration, err_u, err_p, solver_info)
-                             + ' err div %10.3e' % err_div)
+                             % (self.inner_iteration, err_u, err_p, solver_info))
                 
                 if err_u + err_p < allowable_error_inner:
                     break
                 
                 self.inner_iteration += 1
+            
+            self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0

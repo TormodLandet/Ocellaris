@@ -545,12 +545,19 @@ class CoupledEquationsPoissonPressure(object):
                     eq += p*v[d]*n[d]*dbc.ds()
                     
                 # Pressure Poisson equation
-                eq -= dot(n, grad(p))*q*dbc.ds()
+                #dpdn = dot(n, grad(p))
+                if d == 0:
+                    dpdn = dot(n, mu*div(grad(u))
+                                  + rho*g
+                                  - rho*dot(grad(u), u_conv)
+                                  - rho*(c1*u + c2*sim.data['up'] + c3*sim.data['upp'])/dt) 
+                    eq -= dpdn*q*dbc.ds()
                 eq -= rho*dot(u_conv.dx(d), n)*u_bc*q*dbc.ds()
             
             # Neumann boundary
             neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
             for nbc in neumann_bcs:
+                assert False
                 # Convection
                 eq += rho*u[d]*w_nU*v[d]*nbc.ds()
                 

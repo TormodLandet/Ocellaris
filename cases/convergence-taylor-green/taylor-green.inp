@@ -100,13 +100,12 @@ output:
 
 solver:
     type: Coupled
-    num_inner_iter: 4
+    num_inner_iter: 1000
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
-    #velocity_postprocessing: None
     use_stress_divergence_form: no
     use_lagrange_multiplicator: no
     u:
@@ -114,6 +113,8 @@ solver:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
     p:
+        solver: lu
+        lu_method: petsc
         parameters:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15

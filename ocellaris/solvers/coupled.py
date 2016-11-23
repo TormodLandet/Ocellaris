@@ -18,7 +18,7 @@ LU_PARAMETERS = {}
 TIMESTEPPING_METHODS = (BDF,)
 
 # Default values, can be changed in the input file
-EQUATION_SUBTYPE = 'Conservative'
+EQUATION_SUBTYPE = 'Default'
 USE_STRESS_DIVERGENCE = False
 USE_LAGRANGE_MULTIPLICATOR = False
 FIX_PRESSURE_DOF = True
@@ -83,6 +83,8 @@ class SolverCoupled(Solver):
         
         # Velocity post_processing
         self.velocity_postprocessor = None
+        
+        sim.log.info('    Using velocity postprocessor: %r' % self.velocity_postprocessing_method)
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
             self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],

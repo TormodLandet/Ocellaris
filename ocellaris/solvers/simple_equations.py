@@ -3,7 +3,8 @@ from __future__ import division
 import numpy
 import dolfin
 from dolfin import dx, div, grad, dot, jump, avg, dS, Constant
-from ..solver_parts import define_penalty
+from ocellaris.utils import timeit
+from ocellaris.solver_parts import define_penalty
 
 
 class SimpleEquations(object):
@@ -275,24 +276,37 @@ class SimpleEquations(object):
             self.eqDs.append(eqD1 + eqD2)
             self.eqE += eqEd
     
-    def assemble_matrices(self, d):
-        eqs_and_matrices = ((self.eqAs, self.As),
-                            (self.eqBs, self.Bs),
-                            (self.eqCs, self.Cs))
+    @timeit
+    def assemble_matrices(self, d, reassemble=False):
+        # Equations, matrices and flag to indicate reassembly needed
+        eqs_and_matrices = ((self.eqAs, self.As, True),
+                            (self.eqBs, self.Bs, reassemble),
+                            (self.eqCs, self.Cs, reassemble))
         
-        for eqs, Ms in eqs_and_matrices:
+        # Assemble A, B and C matrices
+        for eqs, Ms, reas in eqs_and_matrices:
             if Ms[d] is None:
                 Ms[d] = dolfin.as_backend_type(dolfin.assemble(eqs[d]))
-            else:
+            elif reas:
                 dolfin.assemble(eqs[d], tensor=Ms[d])
         
         # Assemble block diagonal Ã and Ã_inv matrices
+        Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
-            Aglobal = dolfin.as_backend_type(self.As[d])
             At = dolfin.PETScMatrix(Aglobal)
             Ati = dolfin.PETScMatrix(Aglobal)
-            At.zero()
-            Ati.zero()
+        else:
+            At = self.A_tildes[d]
+            Ati = self.A_tilde_invs[d]
+        At.zero()
+        Ati.zero()
+        
+        if False:
+            At.ident_zeros()
+            Ati.ident_zeros()
+            At._scale(3/(2*self.simulation.dt) + 1)
+            Ati._scale(1/(3/(2*self.simulation.dt) + 1))
+        else:
             dm = self.simulation.data['Vu'].dofmap()
             N = dm.cell_dofs(0).shape[0]
             Alocal = numpy.zeros((N, N), float)
@@ -308,15 +322,15 @@ class SimpleEquations(object):
                 Alocal_inv = numpy.linalg.inv(Alocal)
                 At.set(Alocal, dofs, dofs)
                 Ati.set(Alocal_inv, dofs, dofs)
-            
-            At.apply('insert')
-            Ati.apply('insert')
-            self.A_tildes[d] = At
-            self.A_tilde_invs[d] = Ati
+        At.apply('insert')
+        Ati.apply('insert')
+        self.A_tildes[d] = At
+        self.A_tilde_invs[d] = Ati
         
         return (self.As[d], self.A_tildes[d], self.A_tilde_invs[d],
                 self.Bs[d], self.Cs[d])
     
+    @timeit
     def assemble_D(self, d):
         if self.Ds[d] is None:
             self.Ds[d] = dolfin.assemble(self.eqDs[d])
@@ -324,6 +338,7 @@ class SimpleEquations(object):
             dolfin.assemble(self.eqDs[d], tensor=self.Ds[d])
         return self.Ds[d]
 
+    @timeit
     def assemble_E(self):
         if self.E is None:
             self.E = dolfin.assemble(self.eqE)
@@ -331,6 +346,7 @@ class SimpleEquations(object):
             dolfin.assemble(self.eqE, tensor=self.E)
         return self.E
     
+    @timeit
     def assemble_E_star(self, u_star):
         if self.E_star is None:
             self.E_star = dolfin.Vector(self.simulation.data['p'].vector())
