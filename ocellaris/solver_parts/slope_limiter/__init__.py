@@ -43,11 +43,13 @@ def get_slope_limiter(name):
 
 class SlopeLimiterBase(object):
     description = 'No description available'
+    active = True
 
 
 @register_slope_limiter('None')
 class DoNothingSlopeLimiter(SlopeLimiterBase):
     description = 'No slope limiter'
+    active = False
     
     def __init__(self, *argv, **kwargs):
         self.additional_plot_funcs = []
