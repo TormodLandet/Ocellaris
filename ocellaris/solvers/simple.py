@@ -1,5 +1,6 @@
 # encoding: utf8
 from __future__ import division
+import numpy
 import dolfin
 from ocellaris.utils import verify_key, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDM
@@ -13,9 +14,10 @@ PRECONDITIONER_U = 'additive_schwarz'
 SOLVER_P = 'gmres'
 PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'relative_tolerance': 1e-8, #1e-10,
-                     'absolute_tolerance': 1e-8} #1e-15}
-MAX_ITER_MOMENTUM = 1000
+                     'relative_tolerance': 1e-10,
+                     'absolute_tolerance': 1e-15}
+MAX_INNER_ITER = 100
+ALLOWABLE_ERROR_INNER = 1e-10
 
 # Equations - default values, can be changed in the input file
 EQUATION_SUBTYPE = 'Default'
@@ -110,7 +112,7 @@ class SolverSIMPLE(Solver):
         self.matrices = matrices
         
         # Slope limiter for the momenum equation velocity components
-        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u_star%d' % d)
+        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u%d' % d)
                                for d in range(sim.ndim)]
         
         # Projection for the velocity
@@ -123,6 +125,7 @@ class SolverSIMPLE(Solver):
         self.A = [None]*sim.ndim
         self.A_tilde = [None]*sim.ndim
         self.A_tilde_inv = [None]*sim.ndim
+        self.A_tilde_unlim = [None]*sim.ndim
         self.B = [None]*sim.ndim
         self.C = [None]*sim.ndim
         self.tmp_mats = None
@@ -212,6 +215,7 @@ class SolverSIMPLE(Solver):
             sim.data['up%d' % d] = up = dolfin.Function(Vu)
             sim.data['upp%d' % d] = upp = dolfin.Function(Vu)
             sim.data['u_conv%d' % d] = uc = dolfin.Function(Vu)
+            sim.data['u_unlim%d' % d] = dolfin.Function(Vu)
             u_list.append(u)
             up_list.append(up)
             upp_list.append(upp)
@@ -221,6 +225,7 @@ class SolverSIMPLE(Solver):
         sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['u_conv'] = dolfin.as_vector(u_conv)
         self.u_tmp = dolfin.Function(Vu)
+        self.G_diag = dolfin.Function(Vu)
         
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
@@ -312,39 +317,132 @@ class SolverSIMPLE(Solver):
         solver = self.velocity_solver
         p_star = self.simulation.data['p']
         
+        if solver.is_iterative:
+            if self.inner_iteration == 1:
+                solver.set_reuse_preconditioner(False)
+            else:
+                solver.set_reuse_preconditioner(True)
+                #solver.parameters['maximum_iterations'] = 3
+        
         err = 0.0
         for d in range(self.simulation.ndim):
             u_star = self.simulation.data['u%d' % d]
+            u_unlim = self.simulation.data['u_unlim%d' % d]
             self.u_tmp.assign(u_star)
             
             # Assemble the LHS matrices only the first inner iteration
             if self.inner_iteration == 1:
                 (self.A[d], self.A_tilde[d], self.A_tilde_inv[d],
                  self.B[d], self.C[d]) = self.matrices.assemble_matrices(d)
+                
+                if self.slope_limiters[d].active:
+                    if self.A_tilde_unlim[d] is None:
+                        self.A_tilde_unlim[d] = dolfin.as_backend_type(self.A_tilde[d].copy())
+                    else:
+                        self.A_tilde_unlim[d].assign(self.A_tilde[d])
+                    self.A_tilde_unlim[d].apply('insert')
             
             A = self.A[d]
             A_tilde = self.A_tilde[d]
             B = self.B[d]
             D = self.matrices.assemble_D(d)
             alpha = self.alpha_u
-            relax = (1 - alpha) / alpha if alpha > 0 else 0.0
+            assert 0 < alpha
+            relax = (1 - alpha) / alpha
             
-            LHS = dolfin.as_backend_type(A.copy())
-            LHS.axpy(relax, A_tilde, True)
-            LHS.apply('insert')
-            RHS = D
-            RHS.axpy(-1.0, B * p_star.vector())
-            RHS.axpy(relax, A_tilde * u_star.vector())
-            RHS.apply('insert')
+            if True:
+                LHS = dolfin.as_backend_type(A.copy())
+                LHS.axpy(relax, A_tilde, False)
+                LHS.apply('insert')
+                RHS = D
+                RHS.axpy(-1.0, B * p_star.vector())
+                RHS.axpy(relax, A_tilde * u_star.vector())
+                RHS.apply('insert')
             
-            #solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
-            self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
-            self.slope_limiters[d].run()
+            else:
+                LHS = dolfin.as_backend_type(A.copy())
+                LHS._scale(1/alpha)
+                LHS.apply('insert')
+                RHS = D
+                RHS.axpy(-1.0, B * p_star.vector())
+                RHS.axpy(relax, A * u_star.vector())
+                RHS.apply('insert')
+            
+            with dolfin_log_level(dolfin.ERROR):
+                self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
+            
+            # Run the slope limiter and assemble the limiter matrix
+            if self.slope_limiters[d].active:
+                u_unlim.assign(u_star)
+                self.slope_limiters[d].run()
+                self.assemble_G(d)
             
             self.u_tmp.vector().axpy(-1, u_star.vector())
             self.u_tmp.vector().apply('insert')
             err += self.u_tmp.vector().norm('l2')
         return err
+    
+    @timeit
+    def assemble_G(self, d):
+        """
+        Construct a matrix that has the same effect as the slope limiter
+        """
+        u_star = self.simulation.data['u%d' % d].vector().get_local()
+        u_unlim = self.simulation.data['u_unlim%d' % d].vector().get_local()
+        A_tilde = self.A_tilde[d]
+        A_tilde_inv = self.A_tilde_inv[d]
+        A_tilde_unlim = self.A_tilde_unlim[d]
+        
+        dm = self.simulation.data['Vu'].dofmap()
+        N = dm.cell_dofs(0).shape[0]
+        
+        istart = A_tilde.local_range(0)[0]
+        Glocal = numpy.zeros((N, N), float)
+        Alocal = numpy.zeros((N, N), float)
+        
+        # Loop over cells and construct the limiter 
+        for cell in dolfin.cells(self.simulation.data['mesh'], 'regular'):
+            # Get global dofs
+            dofs = dm.cell_dofs(cell.index())
+            global_dofs = dofs + istart
+
+            Glocal[:] = 0            
+            for i, dof in enumerate(dofs):
+                u = u_unlim[dof]
+                u_lim = u_star[dof]
+                d1 = dofs[(i - 1) % N]
+                d2 = dofs[(i + 1) % N] 
+                u_bar = u_unlim[d1] + u_unlim[d2]
+                if u == u_bar:
+                    eta = 0.0
+                else:
+                    eta = (u_lim - u) / (u_bar - u)
+                
+                Glocal[i, i] = (1 - eta)
+                Glocal[i, (i - 1) % N] += eta
+                Glocal[i, (i + 1) % N] += eta
+                
+                #if cell.index() == 1914:
+                #    print 'u', u, 'u_lim', u_lim, 'u_bar', u_bar, 'eta', eta
+            
+            A_tilde_unlim.get(Alocal, global_dofs, global_dofs)
+            GAlocal = numpy.dot(Glocal, Alocal)
+            try: 
+                GAlocal_inv = numpy.linalg.inv(GAlocal)
+            except:
+                print cell.index()
+                print 'G'
+                print Glocal
+                print 'A'
+                print Alocal
+                print 'GA'
+                print GAlocal
+                raise
+            A_tilde.set(Alocal, global_dofs, global_dofs)
+            A_tilde_inv.set(GAlocal_inv, global_dofs, global_dofs)
+        
+        A_tilde.apply('insert')
+        A_tilde_inv.apply('insert')
     
     @timeit
     def pressure_correction(self):
@@ -355,7 +453,15 @@ class SolverSIMPLE(Solver):
         for the pressure by taking out the nullspace, a constant shift
         of the pressure, by providing the nullspace to the solver
         """
+        solver = self.pressure_solver
         p_hat = self.simulation.data['p_hat']
+        
+        if solver.is_iterative:
+            if self.inner_iteration == 1:
+                solver.set_reuse_preconditioner(False)
+            else:
+                solver.set_reuse_preconditioner(True)
+                #solver.parameters['maximum_iterations'] = 3
         
         # Compute the LHS = C⋅Ãinv⋅B
         if self.inner_iteration == 1:
@@ -397,7 +503,8 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        self.niters_p = self.pressure_solver.solve(LHS, p_hat.vector(), RHS)
+        with dolfin_log_level(dolfin.ERROR):
+            self.niters_p = solver.solve(LHS, p_hat.vector(), RHS)
         
         # Removing the null space of the matrix system is not strictly the same as removing
         # the null space of the equation, so we correct for this here 
@@ -465,8 +572,10 @@ class SolverSIMPLE(Solver):
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
             tmax = sim.input.get_value('time/tmax', required_type='float')
-            num_inner_iter = sim.input.get_value('solver/num_inner_iter', 1, 'int')
-            allowable_error_inner = sim.input.get_value('solver/allowable_error_inner', 0, 'float')
+            num_inner_iter = sim.input.get_value('solver/num_inner_iter',
+                                                 MAX_INNER_ITER, 'int')
+            allowable_error_inner = sim.input.get_value('solver/allowable_error_inner',
+                                                        ALLOWABLE_ERROR_INNER, 'float')
             
             # Check if the simulation is done
             if t+dt > tmax + 1e-6:
@@ -558,3 +667,11 @@ def matmul(A, B, out):
     
     C.apply('insert')
     return C
+
+from contextlib import contextmanager
+@contextmanager
+def dolfin_log_level(level):
+    old_level = dolfin.get_log_level()
+    dolfin.set_log_level(level)
+    yield
+    dolfin.set_log_level(old_level)

@@ -36,40 +36,65 @@ def linear_solver_from_input(simulation, path, default_solver, default_precondit
     simulation.log.info('        Preconditioner: %s' % preconditioner)
     simulation.log.info('        LU-method:      %s' % lu_method)
     
-    return make_linear_solver(solver_method, preconditioner, lu_method, params)
+    return LinearSolverWrapper(solver_method, preconditioner, lu_method, params)
 
 
-def make_linear_solver(solver_method, preconditioner=None, lu_method=None, parameters=None):
-    """
-    Create a Krylov or LU solver
+class LinearSolverWrapper(object):
+    def __init__(self, solver_method, preconditioner=None, lu_method=None, parameters=None): 
+        """
+        Wrap a Krylov or LU solver
+        
+        You must either specify solver_method = 'lu' and give the name
+        of the solver, e.g lu_solver='mumps' or give a valid Krylov
+        solver name, eg. solver_method='minres' and give the name of a
+        preconditioner, eg. preconditioner_name='hypre_amg'.
+        
+        The parameters argument is a *list* of dictionaries which are
+        to be used as parameters to the Krylov solver. Settings in the
+        first dictionary in this list will be (potentially) overwritten
+        by settings in later dictionaries. The use case is to provide
+        sane defaults as well as allow the user to override the defaults
+        in the input file
+        
+        The reason for this wrapper is to provide easy querying of 
+        iterative/direct and not crash when set_reuse_preconditioner is 
+        run before the first solve. This simplifies usage
+        """
+        self.is_first_solve = True
+        self.is_iterative = False
+        self.is_direct = False
     
-    You must either specify solver_method = 'lu' and give the name
-    of the solver, e.g lu_solver='mumps' or give a valid Krylov
-    solver name, eg. solver_method='minres' and give the name of a
-    preconditioner, eg. preconditioner_name='hypre_amg'.
+        if solver_method.lower() == 'lu':
+            solver = dolfin.PETScLUSolver(lu_method)
+            self.is_direct = True
+        else:
+            precon = dolfin.PETScPreconditioner(preconditioner)
+            solver = dolfin.PETScKrylovSolver(solver_method, precon)
+            self.preconditioner = precon # Keep from going out of scope
+            self.is_iterative = True
+        
+        for parameter_set in parameters:
+            apply_settings(solver_method, solver.parameters, parameter_set)
+        
+        self.created_with_preconditioner = preconditioner
+        self.created_with_lu_method = lu_method
+        self.created_with_parameters = parameters
+        self.solver = solver
     
-    The parameters argument is a *list* of dictionaries which are
-    to be used as parameters to the Krylov solver. Settings in the
-    first dictionary in this list will be (potentially) overwritten
-    by settings in later dictionaries. The use case is to provide
-    sane defaults as well as allow the user to override the defaults
-    in the input file  
-    """
-    if solver_method.lower() == 'lu':
-        solver = dolfin.PETScLUSolver(lu_method)
-    else:
-        precon = dolfin.PETScPreconditioner(preconditioner)
-        solver = dolfin.PETScKrylovSolver(solver_method, precon)
-        solver.prec = precon # Keep from going out of scope
+    def solve(self, *argv, **kwargs):
+        ret = self.solver.solve(*argv, **kwargs)
+        self.is_first_solve = False
+        return ret
     
-    for parameter_set in parameters:
-        apply_settings(solver_method, solver.parameters, parameter_set)
+    @property
+    def parameters(self):
+        return self.solver.parameters 
     
-    solver.created_with_preconditioner = preconditioner
-    solver.created_with_lu_method = lu_method
-    solver.created_with_parameters = parameters
-    
-    return solver
+    def set_reuse_preconditioner(self, *argv, **kwargs):
+        if self.is_iterative and self.is_first_solve:
+            return  # Nov 2016: this segfaults if running before the first solve
+        else:
+            return self.solver.set_reuse_preconditioner(*argv, **kwargs)
 
 
 def apply_settings(solver_method, parameters, new_values):

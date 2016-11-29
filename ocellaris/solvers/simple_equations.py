@@ -1,6 +1,8 @@
 # encoding: utf8
 from __future__ import division
+from collections import deque
 import numpy
+from petsc4py import PETSc
 import dolfin
 from dolfin import dx, div, grad, dot, jump, avg, dS, Constant
 from ocellaris.utils import timeit
@@ -33,7 +35,9 @@ class SimpleEquations(object):
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
         self.incompressibility_flux_type = incompressibility_flux_type
-
+        self.num_elements_in_block = 0
+        self.block_partitions = None
+        
         assert self.incompressibility_flux_type in ('central', 'upwind')
         
         # Discontinuous or continuous elements
@@ -290,7 +294,56 @@ class SimpleEquations(object):
             elif reas:
                 dolfin.assemble(eqs[d], tensor=Ms[d])
         
-        # Assemble block diagonal Ã and Ã_inv matrices
+        # Assemble Ã and Ã_inv matrices
+        Nelem = self.num_elements_in_block
+        if Nelem == 0:
+            At, Ati = self.assemble_A_tilde_diagonal(d)
+        elif Nelem == 1:
+            At, Ati = self.assemble_A_tilde_single_element(d)
+        else:
+            At, Ati = self.assemble_A_tilde_multi_element(d, Nelem)
+        At.apply('insert'); Ati.apply('insert')
+        self.A_tildes[d], self.A_tilde_invs[d] = At, Ati
+        
+        return (self.As[d], self.A_tildes[d], self.A_tilde_invs[d],
+                self.Bs[d], self.Cs[d])
+    
+    @timeit
+    def assemble_A_tilde_diagonal(self, d):
+        """
+        Assemble diagonal Ã and Ã_inv matrices
+        """
+        Vu = self.simulation.data['Vu']
+        Aglobal = dolfin.as_backend_type(self.As[d])
+        
+        if self.A_tildes[d] is None:
+            At = create_block_matrix(self.simulation, Vu, None)
+            Ati = create_block_matrix(self.simulation, Vu, None)
+            self.u_diag = dolfin.Vector(self.simulation.data['u0'].vector())
+        else:
+            At = self.A_tildes[d]
+            Ati = self.A_tilde_invs[d]
+        At.zero()
+        Ati.zero()
+        
+        Aglobal.get_diagonal(self.u_diag)
+        At.set_diagonal(self.u_diag)
+        inv_diag = 1.0/self.u_diag.get_local()
+        self.u_diag.set_local(inv_diag)
+        Ati.set_diagonal(self.u_diag)
+        
+        #At.ident_zeros()
+        #Ati.ident_zeros()
+        #At._scale(3/(2*self.simulation.dt) + 1)
+        #Ati._scale(1/(3/(2*self.simulation.dt) + 1))
+        return At, Ati
+    
+    @timeit
+    def assemble_A_tilde_single_element(self, d):
+        """
+        Assemble block diagonal Ã and Ã_inv matrices where the blocks
+        are the dofs in a single element
+        """
         Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
             At = dolfin.PETScMatrix(Aglobal)
@@ -301,34 +354,58 @@ class SimpleEquations(object):
         At.zero()
         Ati.zero()
         
-        if False:
-            At.ident_zeros()
-            Ati.ident_zeros()
-            At._scale(3/(2*self.simulation.dt) + 1)
-            Ati._scale(1/(3/(2*self.simulation.dt) + 1))
-        else:
-            dm = self.simulation.data['Vu'].dofmap()
-            N = dm.cell_dofs(0).shape[0]
-            Alocal = numpy.zeros((N, N), float)
-            
-            # Loop over cells and get the block diagonal parts (should be moved to C++)
-            for cell in dolfin.cells(self.simulation.data['mesh'], 'regular'):
-                # Get global dofs
-                istart = Aglobal.local_range(0)[0] 
-                dofs = dm.cell_dofs(cell.index()) + istart
-                
-                # Get block diagonal part of A, invert and insert into approximations
-                Aglobal.get(Alocal, dofs, dofs)
-                Alocal_inv = numpy.linalg.inv(Alocal)
-                At.set(Alocal, dofs, dofs)
-                Ati.set(Alocal_inv, dofs, dofs)
-        At.apply('insert')
-        Ati.apply('insert')
-        self.A_tildes[d] = At
-        self.A_tilde_invs[d] = Ati
+        dm = self.simulation.data['Vu'].dofmap()
+        N = dm.cell_dofs(0).shape[0]
+        Alocal = numpy.zeros((N, N), float)
         
-        return (self.As[d], self.A_tildes[d], self.A_tilde_invs[d],
-                self.Bs[d], self.Cs[d])
+        # Loop over cells and get the block diagonal parts (should be moved to C++)
+        for cell in dolfin.cells(self.simulation.data['mesh'], 'regular'):
+            # Get global dofs
+            istart = Aglobal.local_range(0)[0] 
+            dofs = dm.cell_dofs(cell.index()) + istart
+            
+            # Get block diagonal part of A, invert and insert into approximations
+            Aglobal.get(Alocal, dofs, dofs)
+            Alocal_inv = numpy.linalg.inv(Alocal)
+            At.set(Alocal, dofs, dofs)
+            Ati.set(Alocal_inv, dofs, dofs)
+        return At, Ati
+        
+    @timeit    
+    def assemble_A_tilde_multi_element(self, d, Nelem):
+        """
+        Assemble block diagonal Ã and Ã_inv matrices where the blocks
+        are the dofs of N elememts a single element
+        """
+        Vu = self.simulation.data['Vu']
+        if self.block_partitions is None:
+            self.block_partitions = create_block_partitions(self.simulation, Vu, Nelem)
+            self.simulation.log.info('SIMPLE solver with %d cell blocks found %d blocks in total'
+                                     % (Nelem, len(self.block_partitions)))
+        
+        Aglobal = dolfin.as_backend_type(self.As[d])
+        if self.A_tildes[d] is None:
+            #At = dolfin.PETScMatrix(Aglobal)
+            At = create_block_matrix(self.simulation, Vu, self.block_partitions)
+            Ati = create_block_matrix(self.simulation, Vu, self.block_partitions)
+        else:
+            At = self.A_tildes[d]
+            Ati = self.A_tilde_invs[d]
+        At.zero()
+        Ati.zero()
+        
+        # Loop over super-cells and get the block diagonal parts (should be moved to C++)
+        istart = Aglobal.local_range(0)[0]
+        for _cells, dofs, _dof_idx in self.block_partitions:
+            global_dofs = dofs + istart
+            N = len(dofs)
+            Ablock = numpy.zeros((N, N), float)
+            Aglobal.get(Ablock, global_dofs, global_dofs)
+            Ablock_inv = numpy.linalg.inv(Ablock)
+            
+            At.set(Ablock, dofs, global_dofs)
+            Ati.set(Ablock_inv, dofs, global_dofs)
+        return At, Ati
     
     @timeit
     def assemble_D(self, d):
@@ -361,6 +438,108 @@ class SimpleEquations(object):
         E_star.axpy(-1.0, self.assemble_E())
         
         return E_star
+    
+
+def create_block_partitions(simulation, V, Ncells):
+    """
+    Create super-cell partitions of Ncells cells each 
+    """
+    mesh = simulation.data['mesh']
+    
+    # Construct a cell connectivity mapping
+    con_CF = simulation.data['connectivity_CF']
+    con_FC = simulation.data['connectivity_FC']
+    con_CFC = {}
+    tdim = mesh.topology().dim()
+    num_cells_owned = mesh.topology().ghost_offset(tdim)
+    for icell in range(num_cells_owned):
+        for ifacet in con_CF(icell):
+            for inb in con_FC(ifacet):
+                if inb != icell:
+                    con_CFC.setdefault(icell, []).append(inb)
+
+    # Get dofs per cell
+    dm = V.dofmap()
+    Ndof = dm.cell_dofs(0).shape[0]
+    N = Ncells*Ndof
+    
+    # Partition all local cells into super-cells 
+    picked = [False]*num_cells_owned
+    partitions = []
+    for icell in range(num_cells_owned):
+        # Make sure the cell is not part of an existing supercell
+        if picked[icell]:
+            continue
+        
+        # Find candidate cells to join this supercell and
+        # extend the candidate set by breadth first search
+        super_cell = [icell]
+        picked[icell] = True
+        candidates = deque(con_CFC[icell])
+        while candidates and len(super_cell) < Ncells:
+            icand = candidates.popleft()
+            if picked[icand]:
+                continue
+            
+            super_cell.append(icand)
+            picked[icand] = True
+            candidates.extend(con_CFC[icand])
+        
+        # Get the dofs of our super-cell
+        # Will contain duplicates if V is not DG
+        dofs = []
+        for isel in super_cell:
+            dofs.extend(dm.cell_dofs(isel))
+            
+        # Map dofs to indices in local block matrix
+        dof_idx = {}
+        for i, dof in enumerate(dofs):
+            dof_idx[dof] = i
+        
+        dofs = numpy.array(dofs, numpy.intc)
+        partitions.append((super_cell, dofs, dof_idx))
+    
+    return partitions
+
+
+def create_block_matrix(simulation, V, blocks):
+    """
+    Create a sparse PETSc matrix to hold dense blocks that are larger than
+    the normal DG block diagonal mass matrices (super-cell dense blocks)
+    Based on code from Miro: https://fenicsproject.org/qa/11647
+    """
+    mesh = simulation.data['mesh']
+    dm = V.dofmap()
+    
+    if blocks:
+        # Create block diagonal matrix
+        nnz_max = 0
+        for _cells, dofs, _dof_idx in blocks:
+            nnz_max = max(nnz_max, len(dofs))
+    else:
+        # Create diagonal matrix
+        nnz_max = 1
+    
+    comm = mesh.mpi_comm().tompi4py() 
+    mat = PETSc.Mat()
+    mat.create(comm)
+    
+    # Set local and global size of the matrix
+    sizes = [dm.index_map().size(dolfin.IndexMap.MapSize_OWNED), 
+             dm.index_map().size(dolfin.IndexMap.MapSize_GLOBAL)]
+    mat.setSizes([sizes, sizes])
+    
+    # Set matrix type
+    mat.setType('aij')
+    mat.setPreallocationNNZ(nnz_max)
+    mat.setUp()
+    
+    # Map from local rows to global rows
+    lgmap = map(int, dm.tabulate_local_to_global_dofs())
+    lgmap = PETSc.LGMap().create(lgmap, comm=comm)
+    mat.setLGMap(lgmap, lgmap)
+    
+    return dolfin.PETScMatrix(mat)
 
 
 EQUATION_SUBTYPES = {

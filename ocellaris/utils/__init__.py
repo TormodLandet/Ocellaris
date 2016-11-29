@@ -5,7 +5,7 @@ from .code_runner import RunnablePythonString, CodedExpression
 from .cpp_expression import OcellarisCppExpression, ocellaris_interpolate
 from .gradient_reconstruction import GradientReconstructor
 from .dofmap import facet_dofmap, get_dof_neighbours
-from .linear_solvers import make_linear_solver, linear_solver_from_input, condition_number
+from .linear_solvers import linear_solver_from_input, condition_number
 from .trace_projection import convert_to_dgt
 from .mpi import get_root_value, gather_lines_on_root
 from .form_language import OcellarisConstant
