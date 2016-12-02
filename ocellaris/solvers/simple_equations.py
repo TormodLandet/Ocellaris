@@ -36,6 +36,7 @@ class SimpleEquations(object):
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
         self.incompressibility_flux_type = incompressibility_flux_type
         self.num_elements_in_block = 0
+        self.lump_diagonal = False
         self.block_partitions = None
         
         assert self.incompressibility_flux_type in ('central', 'upwind')
@@ -65,15 +66,20 @@ class SimpleEquations(object):
         self.Ds = [None] * simulation.ndim
         self.E = None
         self.E_star = None
+        self.L = [None] * simulation.ndim
         
-    def calculate_penalties(self, nu):
+    def calculate_penalties(self, nu, no_coeff=False):
         """
         Calculate SIPG penalty
         """
         mpm = self.simulation.multi_phase_model
         mesh = self.simulation.data['mesh']
         
-        mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
+        if no_coeff:
+            mu_min = mu_max = 1.0
+        else:
+            mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
+        
         P = self.simulation.data['Vu'].ufl_element().degree()
         penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
@@ -173,7 +179,7 @@ class SimpleEquations(object):
             eqA += 1/2*div(u_conv)*u[d]*v[d]*dx
             
             # Diffusion:
-            # -∇⋅∇u
+            # -∇⋅μ∇u
             eqA += mu*dot(grad(u[d]), grad(v[d]))*dx
             
             # Symmetric Interior Penalty method for -∇⋅μ∇u
@@ -326,16 +332,18 @@ class SimpleEquations(object):
         At.zero()
         Ati.zero()
         
-        Aglobal.get_diagonal(self.u_diag)
+        if self.lump_diagonal:
+            self.u_diag[:] = 1.0
+            self.u_diag.apply('insert')
+            self.u_diag = Aglobal * self.u_diag
+        else:
+            Aglobal.get_diagonal(self.u_diag)
+        
         At.set_diagonal(self.u_diag)
         inv_diag = 1.0/self.u_diag.get_local()
         self.u_diag.set_local(inv_diag)
         Ati.set_diagonal(self.u_diag)
         
-        #At.ident_zeros()
-        #Ati.ident_zeros()
-        #At._scale(3/(2*self.simulation.dt) + 1)
-        #Ati._scale(1/(3/(2*self.simulation.dt) + 1))
         return At, Ati
     
     @timeit
@@ -439,6 +447,69 @@ class SimpleEquations(object):
         
         return E_star
     
+    @timeit
+    def assemble_L(self, d):
+        """
+        Pure Laplacian for a velocity component
+        (no viscosity coefficient)
+        """
+        if self.L[d] is not None:
+            return self.L[d]
+        
+        sim = self.simulation
+        mesh = sim.data['mesh']
+        n = dolfin.FacetNormal(mesh)
+        Vu = sim.data['Vu']
+        
+        # The trial and test functions
+        u = dolfin.TrialFunction(Vu)
+        v = dolfin.TestFunction(Vu)
+        
+        # Penalties
+        penalty_dS, penalty_ds = self.calculate_penalties(nu=None, no_coeff=True)[:2]
+        
+        # Laplacian
+        eq = dot(grad(u), grad(v))*dx
+        
+        # Symmetric Interior Penalty method for -∇⋅∇u
+        eq -= dot(n('+'), avg(grad(u)))*jump(v)*dS
+        eq -= dot(n('+'), avg(grad(v)))*jump(u)*dS
+        
+        # Symmetric Interior Penalty coercivity term
+        eq += penalty_dS*jump(u)*jump(v)*dS
+        
+        # Dirichlet boundary
+        dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
+        for dbc in dirichlet_bcs:
+            u_bc = dbc.func()
+            
+            # SIPG for -∇⋅μ∇u
+            eq -= dot(n, grad(u))*v*dbc.ds()
+            eq -= dot(n, grad(v))*u*dbc.ds()
+            eq += dot(n, grad(v))*u_bc*dbc.ds()
+            
+            # Weak Dirichlet
+            eq += penalty_ds*(u - u_bc)*v*dbc.ds()
+        
+        # Neumann boundary
+        neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+        for nbc in neumann_bcs:
+            eq -= nbc.func()*v*nbc.ds()
+        
+        # Outlet boundary
+        p = sim.data['p']
+        for obc in sim.data['outlet_bcs']:    
+            # Diffusion
+            mu_dudn = p*n[d]
+            eq -= mu_dudn*v*obc.ds()
+        
+        a, L = dolfin.system(eq)
+        laplacian = dolfin.assemble(a)
+        rhs = dolfin.assemble(L)
+        
+        self.L[d] = (laplacian, rhs)
+        return self.L[d]
+
 
 def create_block_partitions(simulation, V, Ncells):
     """

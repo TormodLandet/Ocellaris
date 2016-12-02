@@ -14,6 +14,7 @@ PRECONDITIONER_U = 'additive_schwarz'
 SOLVER_P = 'gmres'
 PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
+                     'maximum_iterations': 10,
                      'relative_tolerance': 1e-10,
                      'absolute_tolerance': 1e-15}
 MAX_INNER_ITER = 100
@@ -387,62 +388,39 @@ class SolverSIMPLE(Solver):
         """
         Construct a matrix that has the same effect as the slope limiter
         """
-        u_star = self.simulation.data['u%d' % d].vector().get_local()
-        u_unlim = self.simulation.data['u_unlim%d' % d].vector().get_local()
+        u_star = self.simulation.data['u%d' % d].vector()
+        u_unlim = self.simulation.data['u_unlim%d' % d].vector()
+        A = self.A[d]
         A_tilde = self.A_tilde[d]
         A_tilde_inv = self.A_tilde_inv[d]
         A_tilde_unlim = self.A_tilde_unlim[d]
         
-        dm = self.simulation.data['Vu'].dofmap()
-        N = dm.cell_dofs(0).shape[0]
+        L, bg = self.matrices.assemble_L(d)
+        u_vhat = u_star - u_unlim
         
-        istart = A_tilde.local_range(0)[0]
-        Glocal = numpy.zeros((N, N), float)
-        Alocal = numpy.zeros((N, N), float)
+        above = A * u_vhat
+        below = bg - L * u_star 
         
-        # Loop over cells and construct the limiter 
-        for cell in dolfin.cells(self.simulation.data['mesh'], 'regular'):
-            # Get global dofs
-            dofs = dm.cell_dofs(cell.index())
-            global_dofs = dofs + istart
-
-            Glocal[:] = 0            
-            for i, dof in enumerate(dofs):
-                u = u_unlim[dof]
-                u_lim = u_star[dof]
-                d1 = dofs[(i - 1) % N]
-                d2 = dofs[(i + 1) % N] 
-                u_bar = u_unlim[d1] + u_unlim[d2]
-                if u == u_bar:
-                    eta = 0.0
-                else:
-                    eta = (u_lim - u) / (u_bar - u)
-                
-                Glocal[i, i] = (1 - eta)
-                Glocal[i, (i - 1) % N] += eta
-                Glocal[i, (i + 1) % N] += eta
-                
-                #if cell.index() == 1914:
-                #    print 'u', u, 'u_lim', u_lim, 'u_bar', u_bar, 'eta', eta
-            
-            A_tilde_unlim.get(Alocal, global_dofs, global_dofs)
-            GAlocal = numpy.dot(Glocal, Alocal)
-            try: 
-                GAlocal_inv = numpy.linalg.inv(GAlocal)
-            except:
-                print cell.index()
-                print 'G'
-                print Glocal
-                print 'A'
-                print Alocal
-                print 'GA'
-                print GAlocal
-                raise
-            A_tilde.set(Alocal, global_dofs, global_dofs)
-            A_tilde_inv.set(GAlocal_inv, global_dofs, global_dofs)
+        loc_above = above.get_local()
+        loc_below = below.get_local()
+        loc_Wdiag = loc_above/loc_below
+        numpy.clip(loc_Wdiag, 0.0, 1.0, loc_Wdiag)
         
-        A_tilde.apply('insert')
-        A_tilde_inv.apply('insert')
+        def get_diag(M, temp_vec):
+            M.get_diagonal(temp_vec)
+            return temp_vec.get_local()
+        
+        def set_diag(M, diag, temp_vec):
+            temp_vec.set_local(diag)
+            M.set_diagonal(temp_vec)
+            M.apply('insert')
+        
+        loc_Adiag = get_diag(A_tilde_unlim, above)
+        loc_Ldiag = get_diag(L, above)
+        loc_Adiag += loc_Wdiag*loc_Ldiag
+        
+        set_diag(A_tilde, loc_Adiag, above)
+        set_diag(A_tilde_inv, 1.0/loc_Adiag, above)
     
     @timeit
     def pressure_correction(self):
