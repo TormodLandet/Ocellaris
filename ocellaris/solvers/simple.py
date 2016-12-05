@@ -115,6 +115,7 @@ class SolverSIMPLE(Solver):
         # Slope limiter for the momenum equation velocity components
         self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u%d' % d)
                                for d in range(sim.ndim)]
+        self.using_limiter = self.slope_limiters[0].active
         
         # Projection for the velocity
         self.velocity_postprocessor = None
@@ -336,11 +337,12 @@ class SolverSIMPLE(Solver):
                 (self.A[d], self.A_tilde[d], self.A_tilde_inv[d],
                  self.B[d], self.C[d]) = self.matrices.assemble_matrices(d)
                 
-                if self.slope_limiters[d].active:
+                if self.using_limiter:
                     if self.A_tilde_unlim[d] is None:
                         self.A_tilde_unlim[d] = dolfin.as_backend_type(self.A_tilde[d].copy())
                     else:
-                        self.A_tilde_unlim[d].assign(self.A_tilde[d])
+                        self.A_tilde_unlim[d].zero()
+                        self.A_tilde_unlim[d].axpy(1.0, self.A_tilde[d], True)
                     self.A_tilde_unlim[d].apply('insert')
             
             A = self.A[d]
@@ -373,7 +375,7 @@ class SolverSIMPLE(Solver):
                 self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
             
             # Run the slope limiter and assemble the limiter matrix
-            if self.slope_limiters[d].active:
+            if self.using_limiter:
                 u_unlim.assign(u_star)
                 self.slope_limiters[d].run()
                 self.assemble_G(d)
@@ -404,7 +406,7 @@ class SolverSIMPLE(Solver):
         loc_above = above.get_local()
         loc_below = below.get_local()
         loc_Wdiag = loc_above/loc_below
-        numpy.clip(loc_Wdiag, 0.0, 1.0, loc_Wdiag)
+        #numpy.clip(loc_Wdiag, -1.0, 1.0, loc_Wdiag)
         
         def get_diag(M, temp_vec):
             M.get_diagonal(temp_vec)
@@ -442,7 +444,7 @@ class SolverSIMPLE(Solver):
                 #solver.parameters['maximum_iterations'] = 3
         
         # Compute the LHS = C⋅Ãinv⋅B
-        if self.inner_iteration == 1:
+        if self.inner_iteration == 1 or self.using_limiter:
             LHS = 0
             for d in range(self.simulation.ndim):
                 C, Ainv, B = self.C[d], self.A_tilde_inv[d], self.B[d]

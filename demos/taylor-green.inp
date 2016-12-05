@@ -89,9 +89,9 @@ solver:
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
-    num_inner_iter: 3000
-    relaxation_u: 0.55
-    relaxation_p: 0.45
+    num_inner_iter: 300
+    relaxation_u: 0.5
+    relaxation_p: 0.5
     allowable_error_inner: 1.0e-8
     use_stress_divergence_form: false
     velocity_postprocessing: BDM
@@ -104,7 +104,7 @@ solver:
 
 slope_limiter:
     u:
-        method: None  # HierarchicalTaylor
+        method: HierarchicalTaylor
 
 hooks:
 #    pre-solve:
