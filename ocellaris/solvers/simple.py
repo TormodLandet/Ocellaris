@@ -128,13 +128,10 @@ class SolverSIMPLE(Solver):
         self.A_tilde_inv = [None]*sim.ndim
         self.B = [None]*sim.ndim
         self.C = [None]*sim.ndim
-        self.L = [None]*sim.ndim
-        self.Iu = None
         
         # Temporary matrices to store matrix matrix products
         self.mat_AinvB = [None]*sim.ndim
         self.mat_CAinvB = [None]*sim.ndim
-        self.mat_WL = [None]*sim.ndim
         
         # Store number of iterations
         self.niters_u = [None] * sim.ndim
@@ -634,6 +631,7 @@ def matmul(A, B, out):
     
     C.apply('insert')
     return C
+
 
 from contextlib import contextmanager
 @contextmanager
