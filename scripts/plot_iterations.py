@@ -22,6 +22,7 @@ def read_iterations(h5_file_name, derived=True):
     log = ''.join(log).split('\n')
     errors_u = []
     errors_p = []
+    errors_div = []
     iterations_per_timestep = []
     it = 0
     for line in log:
@@ -33,27 +34,33 @@ def read_iterations(h5_file_name, derived=True):
             wds =  line.split()
             errors_u.append(float(wds[6]))
             errors_p.append(float(wds[10]))
+            errors_div.append(float(wds[-1]))
     
     if it != 0:
         iterations_per_timestep.append(it)
     
-    return errors_u, errors_p, iterations_per_timestep
+    return errors_u, errors_p, errors_div, iterations_per_timestep
 
 
 def plot_iterations(file_name):
-    errors_u, errors_p, iterations_per_timestep = read_iterations(file_name)
+    errors_u, errors_p, errors_div, iterations_per_timestep = read_iterations(file_name)
     
     fig = pyplot.figure()
-    ax1 = fig.add_subplot(211)
-    ax2 = fig.add_subplot(212)
+    ax1 = fig.add_subplot(311)
+    ax2 = fig.add_subplot(312)
+    ax3 = fig.add_subplot(313)
+    
     ax1.plot(errors_u)
     ax2.plot(errors_p)
+    ax3.plot(errors_div)
     for split in iterations_per_timestep:
         ax1.axvline(split, color='r')
         ax2.axvline(split, color='r')
+        ax3.axvline(split, color='r')
     
-    ax1.set_ylim(0, 0.1)
-    ax2.set_ylim(0, 0.1)
+    #ax1.set_ylim(0, 0.1)
+    #ax2.set_ylim(0, 0.1)
+    #ax3.set_ylim(0, 0.1)
     
     fig.tight_layout()
     pyplot.show()

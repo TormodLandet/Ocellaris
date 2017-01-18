@@ -6,48 +6,11 @@ from dolfin import dot, ds, dS, dx
 from ocellaris.utils import verify_key, get_dof_neighbours
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
 from ocellaris.solver_parts.slope_limiter.hierarchical_taylor import HierarchicalTaylorSlopeLimiter
+from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
 
 
-LIMITER = 'None'
-USE_CPP = True
-
-
-def SlopeLimiterVelocity(simulation, vel, vel_name, default_limiter=LIMITER, default_use_cpp=USE_CPP):
-    """
-    Limit the slope of the given vector field to obtain boundedness
-    """
-    # Get user provided input (or default values)
-    inp = simulation.input.get_value('slope_limiter/%s' % vel_name, {}, 'Input')
-    method = inp.get_value('vel_method', default_limiter, 'string')
-    use_cpp = inp.get_value('use_cpp', default_use_cpp, 'bool')
-    plot_exceedance = inp.get_value('plot', False, 'bool')
-    verify_key('vel_method', method, ['None', 'HierarchicalTaylor', 'LeastSquares'], 'SlopeLimiterVelocity')
-    
-    # Get the limiter
-    if method == 'None':
-        limiter = DoNothingSlopeLimiterVelocity()
-    elif method == 'HierarchicalTaylor':
-        limiter = HierarchicalTaylorSlopeLimiterVelocity(simulation, vel, vel_name, use_cpp)
-    elif method == 'LeastSquares':
-        limiter = LeastSquaresSlopeLimiterVelocity(simulation, vel, vel_name, use_cpp)
-    
-    # Add extra limiter outputs
-    if plot_exceedance:
-        for func in limiter.additional_plot_funcs:
-            simulation.io.add_extra_output_function(func)
-    
-    return limiter
-
-
-class DoNothingSlopeLimiterVelocity(object):
-    def __init__(self, *argv, **kwargs):
-        self.additional_plot_funcs = ()
-    
-    def run(self):
-        pass
-
-
-class LeastSquaresSlopeLimiterVelocity(object):
+@register_velocity_slope_limiter('LeastSquares')
+class LeastSquaresSlopeLimiterVelocity(VelocitySlopeLimiterBase):
     def __init__(self, simulation, vel, vel_name, use_cpp=True):
         """
         Use a Hierachical Taylor slope limiter on each of the velocity
@@ -162,8 +125,8 @@ class LeastSquaresSlopeLimiterVelocity(object):
         
         timer.stop()
 
-
-class HierarchicalTaylorSlopeLimiterVelocity(object):
+@register_velocity_slope_limiter('HierarchicalTaylor')
+class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
     def __init__(self, simulation, vel, vel_name, use_cpp=True):
         """
         Limit the slope of the given vector field to obtain boundedness

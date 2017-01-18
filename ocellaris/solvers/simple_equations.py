@@ -323,8 +323,8 @@ class SimpleEquations(object):
         Aglobal = dolfin.as_backend_type(self.As[d])
         
         if self.A_tildes[d] is None:
-            At = create_block_matrix(self.simulation, Vu, None)
-            Ati = create_block_matrix(self.simulation, Vu, None)
+            At = create_block_matrix(self.simulation, Vu, 1)
+            Ati = create_block_matrix(self.simulation, Vu, 1)
             self.u_diag = dolfin.Vector(self.simulation.data['u0'].vector())
         else:
             At = self.A_tildes[d]
@@ -453,8 +453,7 @@ class SimpleEquations(object):
         Pure Laplacian for a velocity component
         (no viscosity coefficient)
         """
-        if self.L[d] is not None:
-            return self.L[d]
+        laplacian, rhs = (None, None) if self.L[d] is None else self.L[d]
         
         sim = self.simulation
         mesh = sim.data['mesh']
@@ -465,11 +464,39 @@ class SimpleEquations(object):
         u = dolfin.TrialFunction(Vu)
         v = dolfin.TestFunction(Vu)
         
-        # Penalties
-        penalty_dS, penalty_ds = self.calculate_penalties(nu=None, no_coeff=True)[:2]
+        if True:
+            L = dolfin.assemble(u*v*dx)
+            L.zero()
+            dm = Vu.dofmap()
+            N = dm.cell_dofs(0).shape[0]
+            tdim = mesh.topology().dim()
+            num_cells_owned = mesh.topology().ghost_offset(tdim)
+            
+            #local = numpy.zeros((N, N), float)
+            #local[:,-3:] = 1
+            local = numpy.eye(N)
+            local[:,-3:] -= 1/3
+            
+            for icell in range(num_cells_owned):
+                istart = L.local_range(0)[0] 
+                dofs = dm.cell_dofs(icell) + istart
+                L.set(local, dofs, dofs) 
+            L.apply('insert')
+            
+            rhs = dolfin.Function(Vu).vector()
+            self.L[d] = (L, rhs)
+            return self.L[d]
         
         # Laplacian
         eq = dot(grad(u), grad(v))*dx
+        eq += (dot(n, grad(u))*v)('+')*dS
+        eq += (dot(n, grad(u))*v)('-')*dS
+        eq += (dot(n, grad(u))*v)*dolfin.ds
+        eq += Constant(0)*v*dx 
+        
+        """
+        # Penalties
+        penalty_dS, penalty_ds = self.calculate_penalties(nu=None, no_coeff=True)[:2]
         
         # Symmetric Interior Penalty method for -∇⋅∇u
         eq -= dot(n('+'), avg(grad(u)))*jump(v)*dS
@@ -502,10 +529,10 @@ class SimpleEquations(object):
             # Diffusion
             mu_dudn = p*n[d]
             eq -= mu_dudn*v*obc.ds()
-        
+        """
         a, L = dolfin.system(eq)
-        laplacian = dolfin.assemble(a)
-        rhs = dolfin.assemble(L)
+        laplacian = dolfin.assemble(a, tensor=laplacian)
+        rhs = dolfin.assemble(L, tensor=rhs)
         
         self.L[d] = (laplacian, rhs)
         return self.L[d]
@@ -573,7 +600,7 @@ def create_block_partitions(simulation, V, Ncells):
     return partitions
 
 
-def create_block_matrix(simulation, V, blocks):
+def create_block_matrix(simulation, V, blocks=1):
     """
     Create a sparse PETSc matrix to hold dense blocks that are larger than
     the normal DG block diagonal mass matrices (super-cell dense blocks)
@@ -582,14 +609,13 @@ def create_block_matrix(simulation, V, blocks):
     mesh = simulation.data['mesh']
     dm = V.dofmap()
     
-    if blocks:
+    if isinstance(blocks, int):
+        nnz_max = blocks
+    else:
         # Create block diagonal matrix
         nnz_max = 0
         for _cells, dofs, _dof_idx in blocks:
             nnz_max = max(nnz_max, len(dofs))
-    else:
-        # Create diagonal matrix
-        nnz_max = 1
     
     comm = mesh.mpi_comm().tompi4py() 
     mat = PETSc.Mat()

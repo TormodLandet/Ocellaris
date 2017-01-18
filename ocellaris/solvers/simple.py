@@ -4,8 +4,8 @@ import numpy
 import dolfin
 from ocellaris.utils import verify_key, timeit, linear_solver_from_input
 from . import Solver, register_solver, BDM
-from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiter
-from .simple_equations import EQUATION_SUBTYPES
+from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiterVelocity
+from .simple_equations import EQUATION_SUBTYPES, create_block_matrix
 
 
 # Solvers - default values, can be changed in the input file
@@ -113,9 +113,8 @@ class SolverSIMPLE(Solver):
         self.matrices = matrices
         
         # Slope limiter for the momenum equation velocity components
-        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u%d' % d)
-                               for d in range(sim.ndim)]
-        self.using_limiter = self.slope_limiters[0].active
+        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u')
+        self.using_limiter = self.slope_limiter.active
         
         # Projection for the velocity
         self.velocity_postprocessor = None
@@ -127,21 +126,19 @@ class SolverSIMPLE(Solver):
         self.A = [None]*sim.ndim
         self.A_tilde = [None]*sim.ndim
         self.A_tilde_inv = [None]*sim.ndim
-        self.A_tilde_unlim = [None]*sim.ndim
         self.B = [None]*sim.ndim
         self.C = [None]*sim.ndim
-        self.tmp_mats = None
+        self.L = [None]*sim.ndim
+        self.Iu = None
         
         # Temporary matrices to store matrix matrix products
         self.mat_AinvB = [None]*sim.ndim
         self.mat_CAinvB = [None]*sim.ndim
+        self.mat_WL = [None]*sim.ndim
         
         # Store number of iterations
         self.niters_u = [None] * sim.ndim
         self.niters_p = None
-        
-        # Storage for convergence checks
-        self._error_cache = None
     
     def read_input(self):
         """
@@ -227,7 +224,6 @@ class SolverSIMPLE(Solver):
         sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['u_conv'] = dolfin.as_vector(u_conv)
         self.u_tmp = dolfin.Function(Vu)
-        self.G_diag = dolfin.Function(Vu)
         
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
@@ -329,21 +325,12 @@ class SolverSIMPLE(Solver):
         err = 0.0
         for d in range(self.simulation.ndim):
             u_star = self.simulation.data['u%d' % d]
-            u_unlim = self.simulation.data['u_unlim%d' % d]
             self.u_tmp.assign(u_star)
             
             # Assemble the LHS matrices only the first inner iteration
             if self.inner_iteration == 1:
                 (self.A[d], self.A_tilde[d], self.A_tilde_inv[d],
                  self.B[d], self.C[d]) = self.matrices.assemble_matrices(d)
-                
-                if self.using_limiter:
-                    if self.A_tilde_unlim[d] is None:
-                        self.A_tilde_unlim[d] = dolfin.as_backend_type(self.A_tilde[d].copy())
-                    else:
-                        self.A_tilde_unlim[d].zero()
-                        self.A_tilde_unlim[d].axpy(1.0, self.A_tilde[d], True)
-                    self.A_tilde_unlim[d].apply('insert')
             
             A = self.A[d]
             A_tilde = self.A_tilde[d]
@@ -374,55 +361,36 @@ class SolverSIMPLE(Solver):
             with dolfin_log_level(dolfin.ERROR):
                 self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
             
-            # Run the slope limiter and assemble the limiter matrix
-            if self.using_limiter:
-                u_unlim.assign(u_star)
-                self.slope_limiters[d].run()
-                self.assemble_G(d)
-            
             self.u_tmp.vector().axpy(-1, u_star.vector())
             self.u_tmp.vector().apply('insert')
             err += self.u_tmp.vector().norm('l2')
+        
         return err
     
-    @timeit
-    def assemble_G(self, d):
+    def run_limiter(self):
         """
-        Construct a matrix that has the same effect as the slope limiter
+        Run the slope limiter and assemble the limiter matrix
         """
-        u_star = self.simulation.data['u%d' % d].vector()
-        u_unlim = self.simulation.data['u_unlim%d' % d].vector()
-        A = self.A[d]
-        A_tilde = self.A_tilde[d]
-        A_tilde_inv = self.A_tilde_inv[d]
-        A_tilde_unlim = self.A_tilde_unlim[d]
+        if not self.using_limiter:
+            return 0
         
-        L, bg = self.matrices.assemble_L(d)
-        u_vhat = u_star - u_unlim
+        for d in range(self.simulation.ndim):
+            u_star = self.simulation.data['u%d' % d]
+            u_unlim = self.simulation.data['u_unlim%d' % d]
+            u_unlim.assign(u_star)
         
-        above = A * u_vhat
-        below = bg - L * u_star 
+        self.slope_limiter.run()
         
-        loc_above = above.get_local()
-        loc_below = below.get_local()
-        loc_Wdiag = loc_above/loc_below
-        #numpy.clip(loc_Wdiag, -1.0, 1.0, loc_Wdiag)
+        change = 0
+        for d in range(self.simulation.ndim):
+            u_star = self.simulation.data['u%d' % d]
+            u_unlim = self.simulation.data['u_unlim%d' % d]
+            self.u_tmp.assign(u_unlim)
+            self.u_tmp.vector().axpy(-1, u_star.vector())
+            self.u_tmp.vector().apply('insert')
+            change += self.u_tmp.vector().norm('l2')
         
-        def get_diag(M, temp_vec):
-            M.get_diagonal(temp_vec)
-            return temp_vec.get_local()
-        
-        def set_diag(M, diag, temp_vec):
-            temp_vec.set_local(diag)
-            M.set_diagonal(temp_vec)
-            M.apply('insert')
-        
-        loc_Adiag = get_diag(A_tilde_unlim, above)
-        loc_Ldiag = get_diag(L, above)
-        loc_Adiag += loc_Wdiag*loc_Ldiag
-        
-        set_diag(A_tilde, loc_Adiag, above)
-        set_diag(A_tilde_inv, 1.0/loc_Adiag, above)
+        return change
     
     @timeit
     def pressure_correction(self):
@@ -518,6 +486,16 @@ class SolverSIMPLE(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
+            
+    @timeit
+    def calculate_divergence_error(self):
+        """
+        Check the convergence towards zero divergence. This is just for user output
+        """
+        div_dS_f, div_dx_f = self.simulation.solution_properties.divergences()
+        div_dS = div_dS_f.vector().max()
+        div_dx = div_dx_f.vector().max()
+        return div_dS + div_dx
     
     def run(self):
         """
@@ -580,12 +558,21 @@ class SolverSIMPLE(Solver):
                 err_p = self.pressure_correction()
                 
                 self.velocity_update()
-                #self.postprocess_velocity()
+                self.postprocess_velocity()
+                
+                err_lim = self.run_limiter()
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
+                
+                if self.using_limiter:
+                    solver_info += ' - err lim %10.3e' % err_lim
+                
+                # Divergence error
+                err_div = self.calculate_divergence_error()
+                solver_info += ' - err div %10.3e' % err_div
                 
                 # Convergence estimates
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s'
@@ -596,7 +583,7 @@ class SolverSIMPLE(Solver):
                 
                 self.inner_iteration += 1
             
-            self.postprocess_velocity()
+            #self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0
