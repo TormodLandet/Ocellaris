@@ -97,10 +97,12 @@ output:
     ocellaris_log_level: info
     stdout_enabled: overridden in script
     xdmf_write_interval: 0
+    save_restart_file_at_end: no
 
 solver:
     type: Coupled
     num_inner_iter: 1000
+    allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
     function_space_velocity: DG
@@ -113,11 +115,15 @@ solver:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
     p:
-        solver: lu
-        lu_method: petsc
+        #solver: lu
+        #lu_method: petsc
         parameters:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
     _coupled:
         solver: gmres
         preconditioner: petsc_amg
+
+slope_limiter:
+    u:
+        method: Solenoidal

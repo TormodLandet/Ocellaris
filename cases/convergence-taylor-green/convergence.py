@@ -208,7 +208,7 @@ def run_convergence_time(dt_list):
         print_results(results, dt_list, 'dt')
 
 
-run_convergence_space([8, 16, 24])
+run_convergence_space([8, 16, 24, 32, 40])
 #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
 #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
 #dolfin.interactive()
