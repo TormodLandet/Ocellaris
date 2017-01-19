@@ -4,9 +4,9 @@ from ocellaris.utils import ocellaris_error
 from ocellaris.solver_parts import mark_cell_layers
 
 
-LIMITER = 'None'
-FILTER = 'nofilter'
-USE_CPP = True
+DEFAULT_LIMITER = 'None'
+DEFAULT_FILTER = 'nofilter'
+DEFAULT_USE_CPP = True
 _SLOPE_LIMITERS = {}
 
 
@@ -58,16 +58,17 @@ class DoNothingSlopeLimiter(SlopeLimiterBase):
         pass
 
 
-def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=LIMITER, old_value=None):
+def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None, old_value=None):
     """
     Return a slope limiter based on the user provided input or the default
     values if no input is provided by the user
     """
     # Get user provided input (or default values)
     inp = simulation.input.get_value('slope_limiter/%s' % phi_name, {}, 'Input')
-    method = inp.get_value('method', method, 'string')
-    filter_method = inp.get_value('filter', FILTER, 'string')
-    use_cpp = inp.get_value('use_cpp', USE_CPP, 'bool')
+    if method is None:
+        method = inp.get_value('method', DEFAULT_LIMITER, 'string')
+    filter_method = inp.get_value('filter', DEFAULT_FILTER, 'string')
+    use_cpp = inp.get_value('use_cpp', DEFAULT_USE_CPP, 'bool')
     plot_exceedance = inp.get_value('plot', False, 'bool')
     skip_boundary = inp.get_value('skip_boundary', True, 'bool')
     

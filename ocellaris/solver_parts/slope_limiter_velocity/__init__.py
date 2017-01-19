@@ -66,7 +66,7 @@ def SlopeLimiterVelocity(simulation, vel, vel_name, default_limiter=LIMITER, def
     """
     # Get user provided input (or default values)
     inp = simulation.input.get_value('slope_limiter/%s' % vel_name, {}, 'Input')
-    method = inp.get_value('vel_method', default_limiter, 'string')
+    method = inp.get_value('method', default_limiter, 'string')
     use_cpp = inp.get_value('use_cpp', default_use_cpp, 'bool')
     plot_exceedance = inp.get_value('plot', False, 'bool')
     

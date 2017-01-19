@@ -26,7 +26,7 @@ class MomentumPredictionEquation(BaseEquation):
         P = self.simulation.data['Vu'].ufl_element().degree()
         penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
-        self.simulation.log.info('DG SIP penalty viscosity:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
+        self.simulation.log.info('    DG SIP penalty viscosity:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
         D12 = Constant([0, 0])
         
@@ -159,7 +159,7 @@ class PressureCorrectionEquation(BaseEquation):
         k_min = k_max = 1.0
         penalty_dS = define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
-        self.simulation.log.info('DG SIP penalty pressure:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
+        self.simulation.log.info('    DG SIP penalty pressure:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
         return Constant(penalty_dS), Constant(penalty_ds)
     

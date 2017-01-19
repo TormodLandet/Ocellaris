@@ -48,7 +48,7 @@ class CoupledEquations(object):
         P = self.simulation.data['Vu'].ufl_element().degree()
         penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
-        self.simulation.log.info('DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
+        self.simulation.log.info('    DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
         if self.velocity_continuity_factor_D12 is not None:
             D12 = Constant([self.velocity_continuity_factor_D12]*self.simulation.ndim)
@@ -408,8 +408,8 @@ class CoupledEquationsPoissonPressure(object):
         penalty_p_dS = define_penalty(mesh, Pp, 1.0, 1.0, boost_factor=3, exponent=1.0)
         penalty_u_ds = penalty_u_dS*2
         penalty_p_ds = penalty_p_dS*2
-        self.simulation.log.info('DG SIP penalty u:  dS %.1f  ds %.1f' % (penalty_u_dS, penalty_u_ds))
-        self.simulation.log.info('DG SIP penalty p:  dS %.1f  ds %.1f' % (penalty_p_dS, penalty_p_ds))
+        self.simulation.log.info('    DG SIP penalty u:  dS %.1f  ds %.1f' % (penalty_u_dS, penalty_u_ds))
+        self.simulation.log.info('    DG SIP penalty p:  dS %.1f  ds %.1f' % (penalty_p_dS, penalty_p_ds))
         
         return Constant(penalty_u_dS), Constant(penalty_u_ds), Constant(penalty_p_dS), Constant(penalty_p_ds)
     

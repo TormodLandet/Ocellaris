@@ -29,6 +29,7 @@ class InputOutputHandling():
         The output files (XDMF) normally only contain u, p and potentially rho or c. Other
         custom fields can be added  
         """
+        self.simulation.log.info('    Adding extra output function %s' % function.name())
         self.extra_xdmf_functions.append(function)
     
     def _setup_io(self):

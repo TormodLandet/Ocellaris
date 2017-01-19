@@ -83,7 +83,7 @@ class SimpleEquations(object):
         P = self.simulation.data['Vu'].ufl_element().degree()
         penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS*2
-        self.simulation.log.info('DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
+        self.simulation.log.info('    DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
         
         if False and self.velocity_continuity_factor_D12 is not None:
             D12 = Constant([self.velocity_continuity_factor_D12]*self.simulation.ndim)
