@@ -112,7 +112,7 @@ class SolverSIMPLE(Solver):
                             incompressibility_flux_type=self.incompressibility_flux_type)
         self.matrices = matrices
         
-        # Slope limiter for the momenum equation velocity components
+        # Slope limiter for the momentum equation velocity components
         self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u')
         self.using_limiter = self.slope_limiter.active
         
@@ -364,7 +364,8 @@ class SolverSIMPLE(Solver):
         
         return err
     
-    def run_limiter(self):
+    @timeit
+    def slope_limit_velocities(self):
         """
         Run the slope limiter and assemble the limiter matrix
         """
@@ -557,7 +558,7 @@ class SolverSIMPLE(Solver):
                 self.velocity_update()
                 self.postprocess_velocity()
                 
-                err_lim = self.run_limiter()
+                err_lim = self.slope_limit_velocities()
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]

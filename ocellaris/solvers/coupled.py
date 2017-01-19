@@ -4,7 +4,7 @@ import numpy
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
-from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiter
+from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiterVelocity
 from . import Solver, register_solver, BDF, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 
@@ -67,28 +67,17 @@ class SolverCoupled(Solver):
                                     include_hydrostatic_pressure=self.hydrostatic_pressure_correction,
                                     incompressibility_flux_type=self.incompressibility_flux_type)
         
-        # Velocity slope limiter
-        if self.vel_is_discontinuous:
-            self.u_magnitude_lim = dolfin.Function(sim.data['Vu'])
-            self.u_magnitude_fac = dolfin.Function(sim.data['Vu'])
-            self.slope_limiter = SlopeLimiter(sim, 'u', self.u_magnitude_lim)
-            
-            self.u_magnitude_lim.rename('u_maglim', 'u_magnitude_lim')
-            self.u_magnitude_fac.rename('u_magfac', 'u_magnitude_fac')
-            sim.io.add_extra_output_function(self.u_magnitude_lim)
-            sim.io.add_extra_output_function(self.u_magnitude_fac)
-            
-            self.slope_limiter_0 = SlopeLimiter(sim, 'u', sim.data['u0'], output_name='u0')
-            self.slope_limiter_1 = SlopeLimiter(sim, 'u', sim.data['u1'], output_name='u1')
-        
-        # Velocity post_processing
-        self.velocity_postprocessor = None
-        
         sim.log.info('    Using velocity postprocessor: %r' % self.velocity_postprocessing_method)
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
             self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
                 incompressibility_flux_type=self.incompressibility_flux_type, D12=D12)
+        
+        # Velocity slope limiter
+        self.using_limiter = False
+        if self.vel_is_discontinuous:
+            self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u')
+            self.using_limiter = self.slope_limiter.active        
         
         if self.fix_pressure_dof:
             pdof = get_global_row_number(self.subspaces[-1])
@@ -217,6 +206,7 @@ class SolverCoupled(Solver):
             sim.data['up%d' % d] = up = dolfin.Function(Vu)
             sim.data['upp%d' % d] = upp = dolfin.Function(Vu)
             sim.data['u_conv%d' % d] = uc = dolfin.Function(Vu)
+            sim.data['u_unlim%d' % d] = dolfin.Function(Vu)
             u_list.append(u)
             up_list.append(up)
             upp_list.append(upp)
@@ -226,6 +216,7 @@ class SolverCoupled(Solver):
         sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['u_conv'] = dolfin.as_vector(u_conv)
         sim.data['p'] = dolfin.Function(Vp)
+        self.u_tmp = dolfin.Function(Vu)
     
     def setup_hydrostatic_pressure_calculations(self):
         """
@@ -324,6 +315,32 @@ class SolverCoupled(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
+    
+    @timeit
+    def slope_limit_velocities(self):
+        """
+        Run the slope limiter and assemble the limiter matrix
+        """
+        if not self.using_limiter:
+            return 0
+        
+        for d in range(self.simulation.ndim):
+            u_star = self.simulation.data['u%d' % d]
+            u_unlim = self.simulation.data['u_unlim%d' % d]
+            u_unlim.assign(u_star)
+        
+        self.slope_limiter.run()
+        
+        change = 0
+        for d in range(self.simulation.ndim):
+            u_star = self.simulation.data['u%d' % d]
+            u_unlim = self.simulation.data['u_unlim%d' % d]
+            self.u_tmp.assign(u_unlim)
+            self.u_tmp.vector().axpy(-1, u_star.vector())
+            self.u_tmp.vector().apply('insert')
+            change += self.u_tmp.vector().norm('l2')
+        
+        return change
     
     @timeit
     def solve_coupled(self):
@@ -441,31 +458,9 @@ class SolverCoupled(Solver):
             self.postprocess_velocity()
             
             # Slope limit the velocities
-            if self.vel_is_discontinuous:
-                u0v = sim.data['u0'].vector().get_local()
-                u1v = sim.data['u1'].vector().get_local()
-                magnitude = numpy.sqrt(u0v**2 + u1v**2)
-                self.u_magnitude_lim.vector().set_local(magnitude)
-                self.u_magnitude_lim.vector().apply('insert')
-                self.slope_limiter.run()
-                magnitude_lim = self.u_magnitude_lim.vector().get_local()
-                with numpy.errstate(divide='ignore'):
-                    fac = (magnitude - magnitude_lim) / (magnitude + 1e-16)
-                fac[magnitude < 1e-14] = 0
-                self.u_magnitude_fac.vector().set_local(fac)
-                self.u_magnitude_fac.vector().apply('insert')
-                norm_u_lim_fac = dolfin.norm(self.u_magnitude_fac)
-                sim.reporting.report_timestep_value('u_lim_fac', norm_u_lim_fac)
-                
-                # Apply the magnitude slope limiter
-                #sim.data['u0'].vector().set_local(u0v*(1-fac))
-                #sim.data['u1'].vector().set_local(u1v*(1-fac))
-                #sim.data['u0'].vector().apply('insert')
-                #sim.data['u1'].vector().apply('insert')
-                
-                # Apply component slope limiters
-                self.slope_limiter_0.run()
-                self.slope_limiter_1.run()
+            if self.using_limiter:
+                change_lim = self.slope_limit_velocities()
+                sim.reporting.report_timestep_value('slope_lim', change_lim)
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = 0
