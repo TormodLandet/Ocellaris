@@ -13,21 +13,29 @@ def read_summary_file(summary_file_name,):
     inp = codecs.open(summary_file_name, 'r', 'utf-8')
     line = inp.readline()
     while line:
-        if line.startswith('#'*40):
+        if line.startswith('#' * 40):
             # This is the start of a header, the header is the next line
             name = inp.readline().strip()
             inp.readline() # read the line after the header
-            summaries[name] = discr, errL2, errH1, style = [], [], [], {}
+            summaries[name] = discr, errL2, errH1, meta, style = [], [], [], {}, {}
+            meta['y-label'] = 'L2 error'
             style['label'] = name
+            style['marker'] = '.'
             L2 = True
             
         elif line.startswith('{'):
             s = json.loads(line)
             style.update(s)
         
+        elif line.startswith('HIDE'):
+            del summaries[name]
+        
         elif line.startswith(' Discr.'):
             # We are at the table of results
-            inp.readline(); inp.readline(); inp.readline()
+            inp.readline()
+            discr_type = inp.readline().split()[0]
+            meta['x-label'] = discr_type
+            inp.readline()
             while True:
                 wds = inp.readline().split()
                 try:
@@ -56,7 +64,7 @@ def plot_convergence_summaries(file_name):
     ax.set_title('Comparison of convergence tests')
     
     for name in case_names:
-        discr, errL2, errH1, style = summaries[name]
+        discr, errL2, errH1, meta, style = summaries[name]
         
         print name
         print discr, errL2, errH1
@@ -65,6 +73,8 @@ def plot_convergence_summaries(file_name):
         
         ax.loglog(discr, errL2, **style)
     
+    ax.set_xlabel(meta['x-label'])
+    ax.set_ylabel(meta['y-label'])
     ax.legend()
     fig.tight_layout()
 
