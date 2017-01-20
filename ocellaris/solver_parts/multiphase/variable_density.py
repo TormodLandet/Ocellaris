@@ -46,6 +46,7 @@ class VariableDensityModel(MultiPhaseModel):
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'VariableDensityModel - update density field')
+        simulation.hooks.register_custom_hook_point('MultiPhaseModelUpdated')
         
         self.use_analytical_solution = inp.get_value('multiphase_solver/analytical_solution', False, 'bool')
         self.use_rk_method = inp.get_value('multiphase_solver/explicit_rk_method', False, 'bool')
@@ -228,3 +229,4 @@ class VariableDensityModel(MultiPhaseModel):
         self.simulation.reporting.report_timestep_value('max(rho)', self.rho.vector().max())
         
         timer.stop()
+        self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')

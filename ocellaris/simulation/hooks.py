@@ -1,6 +1,6 @@
 import traceback
 import dolfin
-from ocellaris.utils import timeit
+from ocellaris.utils import timeit, verify_key
 
 
 class Hooks(object):
@@ -21,7 +21,16 @@ class Hooks(object):
         
         # More specialized hooks
         self._matrix_ready_hooks = []
+        self._custom_hooks = {}
         
+        # TODO: consider making all other hooks wrappers over custom hooks
+        
+    def register_custom_hook_point(self, hook_point):
+        """
+        Add a new custom hook points to which hooks can be added
+        """
+        assert hook_point not in self._custom_hooks
+        self._custom_hooks[hook_point] = []
     
     # ------------------------------------------
     # Hook adders:
@@ -55,6 +64,14 @@ class Hooks(object):
         Add a function that will run after matrix assembly
         """
         self._matrix_ready_hooks.append((hook, description))
+    
+    def add_custom_hook(self, hook_point, hook, description):
+        """
+        Add other type of hook, must give a string name for
+        the hook name
+        """
+        verify_key('custom hook point', hook_point, self._custom_hooks)
+        self._custom_hooks[hook_point].append((hook, description))
     
     # ------------------------------------------
     # Hook runners:
@@ -151,18 +168,38 @@ class Hooks(object):
                 raise
             finally:
                 t.stop()
+                
+    @timeit
+    def run_custom_hook(self, hook_point, *args, **kwargs):
+        """
+        Called by the solver at a custom point
+        
+        Will run all custom hooks in the reverse order they have
+        been added
+        """
+        verify_key('custom hook point', hook_point, self._custom_hooks)
+        for hook, description in self._custom_hooks[hook_point][::-1]:
+            try:
+                hook(*args, **kwargs)
+            except:
+                self.simulation.log.error('Got exception in hook: %s' % description)
+                self.simulation.log.error(traceback.format_exc())
+                raise
     
     def show_hook_info(self):
         """
         Show all registered hooks
         """
         show = self.simulation.log.info
+        all_hooks = [('Pre-simulation', self._pre_simulation_hooks),
+                     ('Pre-timestep', self._pre_timestep_hooks),
+                     ('Post-timestep:', self._post_timestep_hooks),
+                     ('Post-simulation', self._post_simulation_hooks),
+                     ('Matrix ready', self._matrix_ready_hooks)]
+        all_hooks.extend(('Custom hook "%s"' % name, hooks) for name, hooks in self._custom_hooks.items())
+        
         show('\nRegistered hooks:')
-        for hook_type, hooks in [('Pre-simulation', self._pre_simulation_hooks),
-                                 ('Pre-timestep', self._pre_timestep_hooks),
-                                 ('Post-timestep:', self._post_timestep_hooks),
-                                 ('Post-simulation', self._post_simulation_hooks),
-                                 ('Matrix ready', self._matrix_ready_hooks)]:
+        for hook_type, hooks in all_hooks:
             show('    %s:' % hook_type)
             for _hook, description in hooks[::-1]:
                 show('        - %s' % description)

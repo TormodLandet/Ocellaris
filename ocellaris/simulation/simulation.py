@@ -46,6 +46,7 @@ class Simulation(object):
         self.multi_phase_model = None
         self.mesh_morpher = None
         self.t_start = None
+        self.probes = None
         
         # For timing the analysis
         self.prevtime = self.starttime = time.time()

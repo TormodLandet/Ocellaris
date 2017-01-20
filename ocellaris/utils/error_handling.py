@@ -37,5 +37,5 @@ def verify_key(name, key, options, loc=None):
         else:
             available_options = ', '.join('%r' % m for m in options)
             ocellaris_error('Unsupported %s' % name,
-                            'The %s %r is not available%s, please use %s' %
+                            'The %s %r is not available%s, only %s is available' %
                             (name, key, loc, available_options))

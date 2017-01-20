@@ -21,6 +21,8 @@ mesh:
     type: Rectangle
     Nx: 64
     Ny: 48
+    #Nx: 32
+    #Ny: 24
     endy: 0.75
 
 # BCs with no-slip
@@ -68,15 +70,15 @@ initial_conditions:
         #cpp_code: '(RHO-1)*(1 - min(max((max(x[0]-0.25, x[1]-0.5)*10 + 0.5), 0.0), 1.0)) + 1.0'
 
 time:
-    dt: 0.0001
-    tmax: 0.5
+    dt: 0.001
+    tmax: 1.0
 
 output:
-    prefix: py$ 'output/dam_break_nu%.0e_rho%d_limited_afterBDM' % (NU, RHO)
+    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_sollimSurf' % (NU, RHO)
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 100
+    xdmf_write_interval: 10
 
 multiphase_solver:
     #type: BlendedAlgebraicVOF
@@ -85,11 +87,12 @@ multiphase_solver:
     type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 1
+    #sky_location: 0.75
 
 solver:
     type: Coupled
-    num_inner_iter: 20
-    allowable_error_inner: 1e-3
+    num_inner_iter: 10
+    allowable_error_inner: 1e-8
     function_space_velocity: DG
     function_space_pressure: DG
     polynomial_degree_velocity: 2
@@ -101,9 +104,22 @@ solver:
 
 slope_limiter:
     rho:
-        method: NaiveNodal
+        method: HierarchicalTaylor
+        plot: yes
+        skip_boundary: no
     u:
-        method: NaiveNodal
+        method: Solenoidal
+        plot: yes
+        limit_all: no
+        surface_probe: free_surface
+
+probes:
+    -   name: free_surface
+        type: IsoSurface
+        value: py$ (RHO - 1.0) / 2
+        field: rho
+        file_name: '_free_surface.out'
+        custom_hook: MultiPhaseModelUpdated
 
 _probes:
     -   name: c=0.5

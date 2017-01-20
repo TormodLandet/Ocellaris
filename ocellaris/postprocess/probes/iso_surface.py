@@ -1,40 +1,48 @@
 import dolfin
 import numpy
 from matplotlib import pyplot
-from ocellaris.utils import gather_lines_on_root, timeit
+from ocellaris.utils import gather_lines_on_root, timeit, ocellaris_error
 from . import Probe, register_probe
+
 
 @register_probe('IsoSurface')
 class IsoSurface(Probe):
     def __init__(self, simulation, probe_input):
         self.simulation = simulation
-        self.input = probe_input
+        self.cells_with_surface = None
+        inp = probe_input
         
         assert self.simulation.ndim == 2, 'IsoSurface only implemented in 2D (contour line)'
 
         # Read input
-        name = self.input['name']
-        self.field_name = self.input['field']
-        self.value = self.input['value']
-        
+        self.name = inp.get_value('name', required_type='string')
+        self.field_name = inp.get_value('field', required_type='string')
+        self.value = inp.get_value('value', required_type='float')
+        self.custom_hook_point = inp.get_value('custom_hook', None, required_type='string')
         self.field = simulation.data[self.field_name]
         
         # Should we write the data to a file
         prefix = simulation.input.get_value('output/prefix', None, 'string')
-        file_name = self.input.get('file_name', '')
+        file_name = inp.get_value('file_name', None, 'string')
         self.write_file = file_name is not None
         if self.write_file:
             if prefix is not None:
                 self.file_name = prefix + file_name
             else:
                 self.file_name = file_name
-            self.write_interval = self.input.get('write_interval', 1)
+            self.write_interval = inp.get_value('write_interval', 1, 'int')
         
         # Should we pop up a matplotlib window when running?
-        self.show_interval = self.input.get('show_interval', 0)
+        self.show_interval = inp.get_value('show_interval', 0, 'int')
         self.show = self.show_interval != 0 and simulation.rank == 0
-        self.xlim = self.input.get('xlim', (None, None))
-        self.ylim = self.input.get('ylim', (None, None))
+        self.xlim = inp.get_value('xlim', (None, None), 'list(float)')
+        self.ylim = inp.get_value('ylim', (None, None), 'list(float)')
+        if not len(self.xlim) == 2:
+            ocellaris_error('Plot xlim must be two numbers',
+                            'IsoSurface probe "%s" contains invalid xlim specification' % self.name)
+        if not len(self.ylim) == 2:
+            ocellaris_error('Plot ylim must be two numbers',
+                            'IsoSurface probe "%s" contains invalid ylim specification' % self.name)
         
         if self.write_file and simulation.rank == 0:
             self.output_file = open(self.file_name, 'wt')
@@ -46,11 +54,16 @@ class IsoSurface(Probe):
             pyplot.ion()
             self.fig = pyplot.figure()
             self.ax = self.fig.add_subplot(111)
-            self.ax.set_title('Iso surface %s' % name)
+            self.ax.set_title('Iso surface %s' % self.name)
+        
+        if self.custom_hook_point is not None:
+            simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
+        else:
+            self.end_of_timestep = self.run
     
-    def end_of_timestep(self):
+    def run(self):
         """
-        Output the line probe at the end of the
+        Find and output the line probe
         """
         it = self.simulation.timestep
         
@@ -69,7 +82,8 @@ class IsoSurface(Probe):
             return
         
         # Get the iso surfaces
-        surfaces = get_iso_surfaces(self.simulation, self.field, self.value)
+        surfaces, cells = get_iso_surfaces(self.simulation, self.field, self.value)
+        self.cells_with_surface = cells
         
         # Create lines (this assumes 2D and throws away the z-component)
         lines = []
@@ -125,9 +139,16 @@ def get_iso_surfaces(simulation, field, value):
     mesh = simulation.data['mesh']
     all_values = field.compute_vertex_values()
     
+    # We will collect the cells containing the iso surface
+    cells_with_surface = numpy.zeros(mesh.num_cells(), bool)
+    connectivity_FC = simulation.data['connectivity_FC']
+    
     # Find the crossing points where the contour crosses a facet
     crossing_points = {}
     for facet in dolfin.facets(mesh):
+        fid = facet.index()
+        
+        # Get connected vertices and the field values there
         vertex_coords = []
         vertex_values = []
         for vertex in dolfin.vertices(facet):
@@ -136,6 +157,7 @@ def get_iso_surfaces(simulation, field, value):
             vertex_values.append(all_values[vertex.index()])
         assert len(vertex_coords) == 2
         
+        # Check for iso surface crossing
         b1, b2 = vertex_values[0] < value, vertex_values[1] < value
         if (b1 and b2) or not (b1 or b2):
             # Facet not crossed by contour
@@ -147,7 +169,11 @@ def get_iso_surfaces(simulation, field, value):
         x = (1 - fac)*vertex_coords[0][0] + fac*vertex_coords[1][0]
         y = (1 - fac)*vertex_coords[0][1] + fac*vertex_coords[1][1]
         z = (1 - fac)*vertex_coords[0][2] + fac*vertex_coords[1][2]
-        crossing_points[facet.index()] = (x, y, z)
+        crossing_points[fid] = (x, y, z)
+        
+        # Find the cells conencted to this facet
+        for cid in connectivity_FC(fid):
+            cells_with_surface[cid] = True
     
     # Get facet-facet connectivity via cells
     conFC = simulation.data['connectivity_FC']
@@ -171,7 +197,7 @@ def get_iso_surfaces(simulation, field, value):
     contours_from_singles_and_loops = contour_lines_from_endpoints(other_points, crossing_points, connections)
     
     assert len(crossing_points) == 0
-    return contours_from_endpoints + contours_from_singles_and_loops
+    return contours_from_endpoints + contours_from_singles_and_loops, cells_with_surface
 
 
 def get_iso_surfaces_picewice_constants(simulation, field, value):
