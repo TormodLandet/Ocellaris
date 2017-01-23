@@ -34,7 +34,7 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         
         # Get the IsoSurface probe used to locate the free surface
         self.probe_name = inp.get_value('surface_probe', None, 'string')
-        self.surface_probe = self.active_cells = None
+        self.surface_probe = None
         
         # Store input
         self.simulation = simulation
@@ -47,10 +47,12 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         # Create slope limiter
         self.sollim = SolenoidalLimiter(vel)
         
+        # Create plot output function
+        self.active_cells = None
         if self.probe_name is not None or self.limit_all:
             V0 = dolfin.FunctionSpace(self.mesh, 'DG', 0)
             self.active_cells = dolfin.Function(V0)
-            aname = 'SolenoidalSlopeLimiterVelocity_%s' % self.vel_name
+            aname = 'SolenoidalActiveCells_%s' % self.vel_name
             self.active_cells.rename(aname, aname)
             self.additional_plot_funcs.append(self.active_cells)
             
@@ -74,6 +76,7 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
             self.simulation.log.info('Marking all cells for limiting of %s' % self.vel_name)
             self.sollim.limit_cell[:] = True
             self.active_cells.vector()[:] = 1.0
+            self.active_cells.vector().apply('insert')
     
     def run(self):
         """
@@ -102,7 +105,7 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.sollim.run()
         
         # Update the plot output
-        if self.active_cells:
+        if self.active_cells is not None:
             Ncells = len(self.cell_dofs_V0)
             arr = self.active_cells.vector().get_local()
             arr[self.cell_dofs_V0] = self.sollim.limit_cell[:Ncells]
