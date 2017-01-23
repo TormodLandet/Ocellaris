@@ -6,21 +6,24 @@ from ocellaris.utils import timeit
 
 
 class SolutionProperties(object):
-    def __init__(self, simulation, divergence='div'):
+    def __init__(self, simulation):
         """
         Calculate Courant and Peclet numbers
         """
         self.simulation = simulation
-        self.divergence_method = divergence
+        self.divergence_method = None
         self.active = False
     
     def setup(self):
         sim = self.simulation
         
-        self.active = sim.input.get_value('output/solution_properties',
-                                          True, 'bool') 
+        self.active = sim.input.get_value('output/solution_properties', True, 'bool')
+        divergence_method = sim.input.get_value('output/divergence_method', 'div', 'string')
+        plot_divergences = sim.input.get_value('output/plot_divergences', False, 'bool')
         if not self.active:
+            sim.log.info('SolutionProperties not active')
             return
+        sim.log.info('SolutionProperties active with div method %r' % divergence_method)
         
         self.mesh = sim.data['mesh']
         u = sim.data['u']
@@ -32,9 +35,13 @@ class SolutionProperties(object):
     
         self._setup_courant(u, dt)
         self._setup_peclet(u, nu)
-        self._setup_divergence(u, self.divergence_method)
+        self._setup_divergence(u, divergence_method)
         self._setup_energy(rho, u, g, x0)
         self._setup_mass(rho)
+        
+        if plot_divergences:
+            sim.io.add_extra_output_function(self._div_dS)
+            sim.io.add_extra_output_function(self._div_dx)
     
     def _setup_courant(self, vel, dt):
         """
@@ -80,11 +87,14 @@ class SolutionProperties(object):
         # The difference between the flux on the same facet between two different cells
         a1 = u*v*dx
         w = dot(vel('+') - vel('-'), n('+'))
-        L1 = abs(w)*avg(v)*dS
+        if method == 'div0':
+            L1 = w*avg(v)*dS
+        else:
+            L1 = abs(w)*avg(v)*dS
         
         # The divergence internally in the cell
         a2 = u*v*dx
-        if method == 'div':
+        if method in ('div', 'div0'):
             L2 = abs(df.div(vel))*v*dx
         elif method == 'gradq_avg':
             L2 = dot(avg(vel), n('+'))*jump(v)*dS - dot(vel, grad(v))*dx
@@ -98,6 +108,9 @@ class SolutionProperties(object):
         self._div_dx_solver.factorize()
         self._div_dS = df.Function(V)
         self._div_dx = df.Function(V)
+        
+        self._div_dS.rename('Divergence_dS', 'Divergence_dS')
+        self._div_dx.rename('Divergence_dx', 'Divergence_dx')
     
     def _setup_energy(self, rho, vel, gvec, x0):
         """
