@@ -71,14 +71,16 @@ initial_conditions:
 
 time:
     dt: 0.001
-    tmax: 1.0
+    tmax: 0.12
 
 output:
-    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_sollimSurf' % (NU, RHO)
+    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_sollimNone' % (NU, RHO)
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10
+    plot_divergences: yes
+    divergence_method: div0
 
 multiphase_solver:
     #type: BlendedAlgebraicVOF
@@ -110,7 +112,7 @@ slope_limiter:
     u:
         method: Solenoidal
         plot: yes
-        limit_all: no
+        limit_no_cells: yes
         surface_probe: free_surface
 
 probes:

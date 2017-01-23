@@ -1,5 +1,5 @@
 """
-Plot timestep reports from an Ocellaris restart file 
+Plot timestep reports from one or more Ocellaris restart files 
 """
 import h5py
 import numpy
@@ -21,16 +21,26 @@ def read_reports(h5_file_name, derived=True):
     return reps
 
 
-def plot_reports(file_name):
-    reps = read_reports(file_name)
-    report_names = sorted(reps.keys())
+def plot_reports(file_names):
+    all_reps = []
+    all_rep_names = set()
+    for fn in file_names:
+        reps = read_reports(fn)
+        all_reps.append(reps)
+        all_rep_names.update(reps.keys())
+    Nfiles = len(file_names)
+    
+    report_names = sorted(all_rep_names)
     N = len(report_names)
     
     fig = pyplot.figure()
     ax = fig.add_subplot(111)
     pyplot.subplots_adjust(left=0.15, bottom=0.25)
     
-    line, = pyplot.plot([0], [0])
+    lines = []
+    for _ in file_names:
+        line, = pyplot.plot([0], [0])
+        lines.append(line)
     
     ax_slider = fig.add_axes([0.15, 0.1, 0.65, 0.03])
     slider = Slider(ax_slider, 'Report', 0.5, N+0.499999, valinit=N/2)
@@ -38,10 +48,16 @@ def plot_reports(file_name):
     def update(val):
         i = int(round(val)-1)
         rep_name = report_names[i]
-        x = reps['timesteps']
-        y = reps[rep_name]
         
-        line.set_data(x[-len(y):], y)
+        for i in range(Nfiles):
+            x = all_reps[i]['timesteps']
+            if rep_name in all_reps[i]:
+                y = all_reps[i][rep_name]
+            else:
+                y = numpy.zeros_like(x)
+                y[:] = numpy.NaN
+            lines[i].set_data(x[-len(y):], y)
+        
         ax.relim()
         ax.autoscale_view()
         ax.set_title('Ocellaris report %s' % rep_name)
@@ -61,6 +77,6 @@ def plot_reports(file_name):
 
 if __name__ == '__main__':
     import sys
-    h5_file_name = sys.argv[1]
-    plot_reports(h5_file_name)
+    h5_file_names = sys.argv[1:]
+    plot_reports(h5_file_names)
     pyplot.show()

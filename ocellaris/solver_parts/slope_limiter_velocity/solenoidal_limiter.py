@@ -30,11 +30,12 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         verify_key('topological dimension', mesh.topology().dim(), [2], loc)
         
         # Limit all cells regardless of location?
-        self.limit_all = inp.get_value('limit_all', False, 'bool')
+        self.limit_none = inp.get_value('limit_no_cells', False, 'bool')
         
         # Get the IsoSurface probe used to locate the free surface
         self.probe_name = inp.get_value('surface_probe', None, 'string')
         self.surface_probe = None
+        self.limit_selected_cells_only = self.probe_name is not None
         
         # Store input
         self.simulation = simulation
@@ -49,7 +50,7 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         
         # Create plot output function
         self.active_cells = None
-        if self.probe_name is not None or self.limit_all:
+        if self.limit_selected_cells_only:
             V0 = dolfin.FunctionSpace(self.mesh, 'DG', 0)
             self.active_cells = dolfin.Function(V0)
             aname = 'SolenoidalActiveCells_%s' % self.vel_name
@@ -65,6 +66,9 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         simulation.hooks.add_pre_simulation_hook(self.setup, 'SolenoidalSlopeLimiterVelocity - setup')
     
     def setup(self):
+        """
+        Deferred setup tasks that are run after the Navier-Stokes solver has finished its setup
+        """
         if self.probe_name is not None:
             verify_key('surface_probe', self.probe_name, self.simulation.probes,
                        'solenoidal slope limiter for %s' % self.vel_name)
@@ -72,11 +76,11 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
             self.simulation.log.info('Marking cells for limiting based on probe "%s" for %s'
                                      % (self.surface_probe.name, self.vel_name))
         
-        if self.limit_all:
-            self.simulation.log.info('Marking all cells for limiting of %s' % self.vel_name)
-            self.sollim.limit_cell[:] = True
-            self.active_cells.vector()[:] = 1.0
-            self.active_cells.vector().apply('insert')
+        if self.limit_none:
+            self.simulation.log.info('Marking no cells for limiting of %s' % self.vel_name)
+            self.sollim.limit_cell[:] = False
+            self.surface_probe = None
+            self.limit_selected_cells_only = False
     
     def run(self):
         """
@@ -104,8 +108,8 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         
         self.sollim.run()
         
-        # Update the plot output
-        if self.active_cells is not None:
+        # Update the plot output of active cells
+        if self.limit_selected_cells_only:
             Ncells = len(self.cell_dofs_V0)
             arr = self.active_cells.vector().get_local()
             arr[self.cell_dofs_V0] = self.sollim.limit_cell[:Ncells]
