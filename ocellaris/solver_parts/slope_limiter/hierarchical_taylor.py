@@ -74,6 +74,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         indices = range(self.mesh.num_cells())
         self.cell_dofs_V = [tuple(dm.cell_dofs(i)) for i in indices]
         self.cell_dofs_V0 = [int(dm0.cell_dofs(i)) for i in indices]
+        self.limit_cell = numpy.ones(len(self.cell_dofs_V0), numpy.intc)
         
         # Find vertices for each cell
         mesh.init(2, 0)
@@ -158,6 +159,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                 self.flat_cell_dofs,
                 self.flat_cell_dofs_dg0,
                 self.flat_vertex_coordinates,
+                self.limit_cell,
                 taylor_arr,
                 taylor_arr_old,
                 *alpha_arrs)
@@ -176,37 +178,38 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         for icell in xrange(num_cells_owned):
             dofs = self.cell_dofs_V[icell]
             center_value = taylor_arr[dofs[0]]
-            is_on_boundary = False
+            skip_this_cell = (self.limit_cell[icell] == 0)
             
             # Find the minimum slope limiter coefficient alpha 
             alpha = 1.0
-            for i in xrange(3):
-                dof = dofs[i]
-                nn = self.num_neighbours[dof]
-                if nn == 0:
-                    is_on_boundary = True
-                    break
-                
-                # Find vertex neighbours minimum and maximum values
-                minval = maxval = center_value
-                for nb in self.neighbours[dof]:
-                    nb_center_val_dof = self.cell_dofs_V[nb][0]
-                    nb_val = taylor_arr[nb_center_val_dof]
-                    minval = min(minval, nb_val)
-                    maxval = max(maxval, nb_val)
+            if not skip_this_cell:
+                for i in xrange(3):
+                    dof = dofs[i]
+                    nn = self.num_neighbours[dof]
+                    if nn == 0:
+                        skip_this_cell = True
+                        break
                     
-                    nb_val = taylor_arr_old[nb_center_val_dof]
-                    minval = min(minval, nb_val)
-                    maxval = max(maxval, nb_val)
+                    # Find vertex neighbours minimum and maximum values
+                    minval = maxval = center_value
+                    for nb in self.neighbours[dof]:
+                        nb_center_val_dof = self.cell_dofs_V[nb][0]
+                        nb_val = taylor_arr[nb_center_val_dof]
+                        minval = min(minval, nb_val)
+                        maxval = max(maxval, nb_val)
+                        
+                        nb_val = taylor_arr_old[nb_center_val_dof]
+                        minval = min(minval, nb_val)
+                        maxval = max(maxval, nb_val)
+                    
+                    vertex_value = lagrange_arr[dof]
+                    if vertex_value > center_value:
+                        alpha = min(alpha, (maxval - center_value)/(vertex_value - center_value))
+                    elif vertex_value < center_value:
+                        alpha = min(alpha, (minval - center_value)/(vertex_value - center_value))
                 
-                vertex_value = lagrange_arr[dof]
-                if vertex_value > center_value:
-                    alpha = min(alpha, (maxval - center_value)/(vertex_value - center_value))
-                elif vertex_value < center_value:
-                    alpha = min(alpha, (minval - center_value)/(vertex_value - center_value))
-            
-            if is_on_boundary:
-                continue
+            if skip_this_cell:
+                alpha = 1.0
             
             alpha_arr[self.cell_dofs_V0[icell]] = alpha
             taylor_arr[dofs[1]] *= alpha
@@ -228,7 +231,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             center_values = [taylor_arr[dof] for dof in dofs]
             (center_phi, center_phix, center_phiy, center_phixx, 
                 center_phiyy, center_phixy) = center_values
-            is_on_boundary = False
+            skip_this_cell = (self.limit_cell[icell] == 0)
             
             cell_vertices = [self.vertex_coordinates[iv] for iv in self.vertices[icell]]
             center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
@@ -238,6 +241,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             # Find the minimum slope limiter coefficient alpha of the φ, dφdx and dφ/dy terms
             alpha = [1.0] * 3
             for taylor_dof in (0, 1, 2): 
+                if skip_this_cell:
+                    break
                 for ivert in xrange(3):
                     dof = dofs[ivert]
                     dx = cell_vertices[ivert][0] - center_pos_x
@@ -245,7 +250,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                     
                     nn = self.num_neighbours[dof]
                     if nn == 0:
-                        is_on_boundary = True
+                        skip_this_cell = True
                         break
                     
                     # Find vertex neighbours minimum and maximum values
@@ -281,11 +286,11 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                         a = 1
                     alpha[taylor_dof] = min(alpha[taylor_dof], a)
             
-            if is_on_boundary:
-                continue
-            
-            alpha2 = min(alpha[1], alpha[2])
-            alpha1 = max(alpha[0], alpha2)
+            if skip_this_cell:
+                alpha1 = alpha2 = 1.0
+            else:
+                alpha2 = min(alpha[1], alpha[2])
+                alpha1 = max(alpha[0], alpha2)
             
             taylor_arr[dofs[1]] *= alpha1
             taylor_arr[dofs[2]] *= alpha1
