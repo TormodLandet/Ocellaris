@@ -58,6 +58,10 @@ def setup_probes(simulation):
         inp = simulation.input.get_value('probes/%d' % i, required_type='Input')
         probe_name = inp.get_value('name', 'unnamed', 'string')
         probe_type = inp.get_value('type', required_type='string')
+        enabled = inp.get_value('enabled', True, 'bool')
+        
+        if not enabled:
+            continue
         
         # Get the probe object
         probe_class = get_probe(probe_type)
