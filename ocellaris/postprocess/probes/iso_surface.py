@@ -171,7 +171,7 @@ def get_iso_surfaces(simulation, field, value):
         z = (1 - fac)*vertex_coords[0][2] + fac*vertex_coords[1][2]
         crossing_points[fid] = (x, y, z)
         
-        # Find the cells conencted to this facet
+        # Find the cells connected to this facet
         for cid in connectivity_FC(fid):
             cells_with_surface[cid] = True
     
@@ -217,8 +217,11 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
     conVF = simulation.data['connectivity_VF']
     conFV = simulation.data['connectivity_FV']
     
+    # We will collect the cells containing the iso surface
+    cells_with_surface = numpy.zeros(mesh.num_cells(), bool)
+    
     # We define acronym LCCM: line connecting cell midpoints
-    #   - We restrinct ourselves to LCCMs that cross only ony ONE facet
+    #   - We restrinct ourselves to LCCMs that cross only ONE facet
     #   - We number LLCMs by the index of the crossed facet
     
     # Find the crossing points where the contour crosses a LCCM
@@ -261,6 +264,10 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
         v1, v2 = vertex_values
         fac = (v1 - value)/(v1 - v2)
         crossing_points[fid] = (1 - fac)*vertex_coords[0] + fac*vertex_coords[1]
+        
+        # Find the cell containing the contour line
+        surf_cid = cell_ids[0] if fac <= 0.5 else cell_ids[1]
+        cells_with_surface[surf_cid] = True
     
     # Find facet to facet connections
     connections = {}
@@ -280,7 +287,7 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
     contours_from_singles_and_loops = contour_lines_from_endpoints(other_points, crossing_points, connections)
     
     assert len(crossing_points) == 0
-    return contours_from_endpoints + contours_from_singles_and_loops
+    return contours_from_endpoints + contours_from_singles_and_loops, cells_with_surface
 
 
 def contour_lines_from_endpoints(endpoints, crossing_points, connections):
