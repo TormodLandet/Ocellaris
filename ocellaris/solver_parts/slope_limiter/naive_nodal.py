@@ -11,8 +11,7 @@ from . import register_slope_limiter, SlopeLimiterBase
 class NaiveNodalSlopeLimiter(SlopeLimiterBase):
     description = 'Ensures dof node values are not themselves a local extrema'
     
-    def __init__(self, phi_name, phi, boundary_condition, filter_method='nofilter',
-                 use_cpp=True, output_name=None):
+    def __init__(self, phi_name, phi, boundary_condition, output_name=None, use_cpp=True, enforce_bounds=False):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -26,15 +25,14 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         verify_key('slope limited degree', degree, (0, 1, 2), loc)
         verify_key('function shape', phi.ufl_shape, [()], loc)
         verify_key('topological dimension', mesh.topology().dim(), [2], loc)
-        verify_key('filter', filter_method, ('nofilter', 'minmax'), loc)
         
         # Store input
         self.phi_name = phi_name
         self.phi = phi
         self.degree = degree
         self.mesh = mesh
-        self.filter = filter_method
         self.use_cpp = use_cpp
+        self.enforce_global_bounds = enforce_bounds
         
         if output_name is None:
             output_name = phi_name
@@ -77,13 +75,10 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         self.flat_cell_dofs = numpy.array(cell_dofs_V, dtype=intc).flatten()
         self.flat_cell_dofs_dg0 = numpy.array(cell_dofs_V0, dtype=intc).flatten()
         self.cpp_mod = load_module('naive_nodal')
-        
-        # The initial maximum and minimum values in the boundeness filter are cached
-        self._filter_cache = None
     
     def run(self):
         """
-        Perform the slope limiting and filtering
+        Perform the slope limiting
         """
         # No limiter needed for piecewice constant functions
         if self.degree == 0:
@@ -128,25 +123,13 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         self.exceedance.vector().set_local(exceedances)
         self.exceedance.vector().apply('insert')
         
-        # Run post processing filter
-        if self.filter == 'minmax':
-            self._run_minmax_filter(results)
+        # Enforce boundedness by cliping values to the bounds
+        if self.enforce_global_bounds:
+            minval, maxval = self.global_bounds
+            numpy.clip(results, minval, maxval, results)
         
         self.phi.vector().set_local(results, self.local_indices_dgX)
-        self.phi.vector().apply('insert')
-    
-    def _run_minmax_filter(self, results):
-        """
-        Make sure the DOF values are inside the min and max values from the
-        first time step (enforce boundedness)
-        """
-        if self._filter_cache is None:
-            mi = df.MPI.min(df.mpi_comm_world(), float(results.min()))
-            ma = df.MPI.max(df.mpi_comm_world(), float(results.max()))
-            self._filter_cache = mi, ma
-            return
-        minval, maxval = self._filter_cache
-        numpy.clip(results, minval, maxval, results)
+        self.phi.vector().apply('insert')    
 
 
 ###################################################################################################

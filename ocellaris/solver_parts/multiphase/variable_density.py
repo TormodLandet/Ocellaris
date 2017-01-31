@@ -50,6 +50,7 @@ class VariableDensityModel(MultiPhaseModel):
         
         self.use_analytical_solution = inp.get_value('multiphase_solver/analytical_solution', False, 'bool')
         self.use_rk_method = inp.get_value('multiphase_solver/explicit_rk_method', False, 'bool')
+        self.is_first_timestep = True
         
     @classmethod
     def create_function_space(cls, simulation):
@@ -137,7 +138,8 @@ class VariableDensityModel(MultiPhaseModel):
                                         self.time_coeffs, dirichlet_bcs)
             
             self.solver = linear_solver_from_input(sim, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)
-            self.slope_limiter = SlopeLimiter(sim, 'rho', self.rho, old_value=self.rho_p)
+            self.slope_limiter = SlopeLimiter(sim, 'rho', self.rho)
+            self.slope_limiter.set_phi_old(self.rho_p)
         
         # Add some debugging plots to show results in 2D
         self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))
@@ -218,6 +220,12 @@ class VariableDensityModel(MultiPhaseModel):
             self.rk.step(dt)
         
         else:
+            # Compute global bounds
+            if self.is_first_timestep:
+                lo, hi = self.slope_limiter.set_global_bounds(self.rho)
+                if self.slope_limiter.has_global_bounds:
+                    self.simulation.log.info('Setting global bounds [%r, %r] in VariableDensity' % (lo, hi))
+            
             # Solve the implicit advection equation
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
@@ -230,3 +238,4 @@ class VariableDensityModel(MultiPhaseModel):
         
         timer.stop()
         self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
+        self.is_first_timestep = False

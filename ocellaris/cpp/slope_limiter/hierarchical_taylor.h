@@ -18,6 +18,8 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
                                            const Array<int>& cell_dofs_dg0,
                                            const Array<double>& vertex_coords,
                                            const Array<int>& limit_cell,
+                                           const double global_min,
+                                           const double global_max,
                                            double* taylor_arr,
                                            double* taylor_arr_old,
                                            double* alpha_arr)
@@ -72,6 +74,12 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
           hi = std::max(hi, nb_val);
         }
 
+        // Modify local bounds to incorporate the global bounds
+        lo = std::max(lo, global_min);
+        hi = std::min(hi, global_max);
+        center_phi = std::max(center_phi, global_min);
+        center_phi = std::min(center_phi, global_max);
+
         // Compute the slope limiter coefficient alpha
         double a = 1.0;
         if (vertex_value > center_phi)
@@ -91,6 +99,7 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
 
     // Slope limit this cell
     alpha_arr[cell_dofs_dg0[ic]] = alpha;
+    taylor_arr[cell_dofs[ic * dstride + 0]] = center_phi;
     taylor_arr[cell_dofs[ic * dstride + 1]] *= alpha;
     taylor_arr[cell_dofs[ic * dstride + 2]] *= alpha;
   }
@@ -105,6 +114,8 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
                                            const Array<int>& cell_dofs_dg0,
                                            const Array<double>& vertex_coords,
                                            const Array<int>& limit_cell,
+                                           const double global_min,
+                                           const double global_max,
                                            double* taylor_arr,
                                            double* taylor_arr_old,
                                            double* alpha1_arr,
@@ -185,6 +196,15 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
           hi = std::max(hi, nb_val);
         }
 
+        // Modify local bounds to incorporate the global bounds
+        if (itaylor == 0)
+        {
+          lo = std::max(lo, global_min);
+          hi = std::min(hi, global_max);
+          center_phi = std::max(center_phi, global_min);
+          center_phi = std::min(center_phi, global_max);
+        }
+
         // Compute the slope limiter coefficient alpha
         double a = 1.0;
         if (vertex_value > base_value)
@@ -210,6 +230,7 @@ void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
     // Slope limit this cell
     alpha1_arr[cell_dofs_dg0[ic]] = alpha1;
     alpha2_arr[cell_dofs_dg0[ic]] = alpha2;
+    taylor_arr[cell_dofs[ic * dstride + 0]] = center_phi;
     taylor_arr[cell_dofs[ic * dstride + 1]] *= alpha1;
     taylor_arr[cell_dofs[ic * dstride + 2]] *= alpha1;
     taylor_arr[cell_dofs[ic * dstride + 3]] *= alpha2;

@@ -43,7 +43,34 @@ def get_slope_limiter(name):
 
 class SlopeLimiterBase(object):
     description = 'No description available'
+    
     active = True
+    phi_old = None
+    global_bounds = -1e100, 1e100
+    has_global_bounds = False
+    enforce_global_bounds = False
+    
+    def set_phi_old(self, phi_old):
+        """
+        Some limiters use an old (allready limited) field as an extra
+        information about in the limiting process
+        """
+        self.phi_old = phi_old
+    
+    def set_global_bounds(self, phi):
+        """
+        Set the initial field which we use this to compute the global
+        bounds which must be observed everywhere for all time 
+        """
+        if self.enforce_global_bounds:
+            lo = phi.vector().min()
+            hi = phi.vector().max()
+            self.global_bounds = (lo, hi)
+            self.has_global_bounds = True
+        else:
+            self.global_bounds = SlopeLimiterBase.global_bounds
+            self.has_global_bounds = False
+        return self.global_bounds
 
 
 @register_slope_limiter('None')
@@ -58,7 +85,7 @@ class DoNothingSlopeLimiter(SlopeLimiterBase):
         pass
 
 
-def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None, old_value=None):
+def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     """
     Return a slope limiter based on the user provided input or the default
     values if no input is provided by the user
@@ -67,10 +94,10 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None, old_v
     inp = simulation.input.get_value('slope_limiter/%s' % phi_name, {}, 'Input')
     if method is None:
         method = inp.get_value('method', DEFAULT_LIMITER, 'string')
-    filter_method = inp.get_value('filter', DEFAULT_FILTER, 'string')
     use_cpp = inp.get_value('use_cpp', DEFAULT_USE_CPP, 'bool')
     plot_exceedance = inp.get_value('plot', False, 'bool')
     skip_boundary = inp.get_value('skip_boundary', True, 'bool')
+    enforce_bounds = inp.get_value('enforce_bounds', False, 'bool')
     
     # Mark boundary cells
     V = phi.function_space()
@@ -81,9 +108,10 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None, old_v
     
     # Construct the limiter
     name = phi_name if output_name is None else output_name
-    simulation.log.info('    Using slope limiter %s with filter %s for %s' % (method, filter_method, name))
+    simulation.log.info('    Using slope limiter %s for field %s' % (method, name))
     limiter_class = get_slope_limiter(method)
-    limiter = limiter_class(phi_name, phi, boundary_condition, filter_method, use_cpp, output_name, old_value)
+    limiter = limiter_class(phi_name=phi_name, phi=phi, boundary_condition=boundary_condition,
+                            output_name=output_name, use_cpp=use_cpp, enforce_bounds=enforce_bounds)
     
     if plot_exceedance:
         for func in limiter.additional_plot_funcs:
