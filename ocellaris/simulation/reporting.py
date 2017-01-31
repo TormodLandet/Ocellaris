@@ -1,3 +1,6 @@
+# encoding: utf-8
+from __future__ import division
+from collections import OrderedDict
 from matplotlib import pyplot
 from ocellaris.utils import ocellaris_error
 
@@ -10,7 +13,7 @@ class Reporting(object):
         """
         self.simulation = simulation
         self.timesteps = []
-        self.timestep_xy_reports = {}
+        self.timestep_xy_reports = OrderedDict()
         simulation.hooks.add_pre_simulation_hook(self.setup_report_plotting, 'Reporting - setup plots')
     
     def setup_report_plotting(self):
