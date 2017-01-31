@@ -8,10 +8,13 @@ user_code:
         RHO: 1000.0
 
 physical_properties:
-    #rho0: 1000.0
-    #nu0: 1.0 #1.0e-6
-    #rho1: 1.225
-    #nu1: 1.0 #1.5e-5
+    rho0: py$ RHO
+    nu0: py$ NU
+    rho1: 1.0
+    nu1: py$ NU
+    g: [0, -9.81]
+
+_physical_properties:
     nu: py$ NU
     rho_min: 1.0
     rho_max: py$ RHO
@@ -36,7 +39,7 @@ _boundary_conditions:
     p:
         type: WallPressure
 
-# BCs with wall slip        
+# BCs with wall slip
 boundary_conditions:
 -   name: top and bottom
     selector: code
@@ -62,6 +65,12 @@ boundary_conditions:
         value: 0
 
 initial_conditions:
+    cp:
+        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
+    cpp:
+        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
+
+_initial_conditions:
     rho_p:
         cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? RHO : 1.0'
         #cpp_code: '(RHO-1)*(1 - min(max((max(x[0]-0.25, x[1]-0.5)*10 + 0.5), 0.0), 1.0)) + 1.0'
@@ -74,7 +83,7 @@ time:
     tmax: 0.12
 
 output:
-    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_sollimNone' % (NU, RHO)
+    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_hric_sollim' % (NU, RHO)
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -83,9 +92,14 @@ output:
     divergence_method: div0
 
 multiphase_solver:
-    #type: BlendedAlgebraicVOF
-    #function_space_colour: DG
-    #polynomial_degree_colour: 0
+    type: BlendedAlgebraicVOF
+    function_space_colour: DG
+    polynomial_degree_colour: 0
+    continuous_fields: no
+    plot_fields: yes
+    #sky_location: 0.75
+
+_multiphase_solver:
     type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 1
@@ -100,48 +114,40 @@ solver:
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
 
-#convection:
-#    c:
-#        convection_scheme: HRIC
+convection:
+    c:
+        convection_scheme: HRIC
 
 slope_limiter:
     rho:
         method: HierarchicalTaylor
         plot: yes
         skip_boundary: no
+        enforce_bounds: yes
     u:
         method: Solenoidal
+        #method: Componentwise
+        #comp_method: HierarchicalTaylor 
         plot: yes
-        limit_no_cells: yes
+        #limit_no_cells: yes
         surface_probe: free_surface
 
 probes:
     -   name: free_surface
+        enabled: no
         type: IsoSurface
         value: py$ (RHO - 1.0) / 2
         field: rho
         file_name: '_free_surface.out'
         custom_hook: MultiPhaseModelUpdated
-
-_probes:
-    -   name: c=0.5
+        
+    -   name: free_surface
+        enabled: yes
         type: IsoSurface
         value: 0.5
         field: c
-        file_name: '_c05.out'
-        show_interval: 0
-        xlim: [0, 1]
-        ylim: [0, 0.75]
-    -   name: c=0.1
-        type: IsoSurface
-        value: 0.1
-        field: c
-        file_name: '_c01.out'
-    -   name: c=0.9
-        type: IsoSurface
-        value: 0.9
-        field: c
-        file_name: '_c09.out'
+        file_name: '_free_surface.out'
+        custom_hook: MultiPhaseModelUpdated
 
 _hooks:
     post_timestep:

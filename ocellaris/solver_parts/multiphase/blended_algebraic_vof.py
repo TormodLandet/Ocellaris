@@ -15,6 +15,7 @@ CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION = False
 FORCE_STEADY = False
 FORCE_BOUNDED = False
 FORCE_SHARP = False
+PLOT_FIELDS = False
 
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
@@ -42,7 +43,6 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         simulation.data['c'] = Function(V)
         simulation.data['cp'] = Function(V)
         simulation.data['cpp'] = Function(V)
-        simulation.data['c_star'] = Function(V)
 
         # The projected density and viscosity functions for the new time step can be made continuous
         self.continuous_fields = simulation.input.get_value('multiphase_solver/continuous_fields',
@@ -50,11 +50,11 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if self.continuous_fields:
             mesh = simulation.data['mesh']
             P = V.ufl_element().degree()
-            V_star = dolfin.FunctionSpace(mesh, 'CG', P + 1)
-            self.continuous_c_star = dolfin.Function(V_star)
-            self.continuous_c = dolfin.Function(V_star)
-            self.continuous_c_old = dolfin.Function(V_star)
-            
+            V_cont = dolfin.FunctionSpace(mesh, 'CG', P + 1)
+            self.continuous_c = dolfin.Function(V_cont)
+            self.continuous_c_old = dolfin.Function(V_cont)
+            self.continuous_c_oldold = dolfin.Function(V_cont)
+        
         self.force_steady = simulation.input.get_value('multiphase_solver/force_steady', FORCE_STEADY, 'bool')
         self.force_bounded = simulation.input.get_value('multiphase_solver/force_bounded', FORCE_BOUNDED, 'bool')
         self.force_sharp = simulation.input.get_value('multiphase_solver/force_sharp', FORCE_SHARP, 'bool')
@@ -74,7 +74,6 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         scheme = simulation.input.get_value('convection/c/convection_scheme', CONVECTION_SCHEME, 'string')
         scheme_class = get_convection_scheme(scheme)
         self.convection_scheme = scheme_class(simulation, 'c')
-        self.convection_scheme_star = scheme_class(simulation, 'c_star')
         self.need_gradient = scheme_class.need_alpha_gradient
     
         # Create the equations when the simulation starts
@@ -82,6 +81,18 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(self.update, 'BlendedAlgebraicVofModel - update colour field')
+        simulation.hooks.register_custom_hook_point('MultiPhaseModelUpdated')
+        
+        # Plot density and viscosity fields for visualization
+        self.plot_fields = simulation.input.get_value('multiphase_solver/plot_fields', PLOT_FIELDS, 'bool')
+        if self.plot_fields:
+            V_plot = V if not self.continuous_fields else V_cont
+            self.rho_for_plot = Function(V_plot)
+            self.nu_for_plot = Function(V_plot)
+            self.rho_for_plot.rename('rho', 'Density')
+            self.nu_for_plot.rename('nu', 'Kinematic viscosity')
+            simulation.io.add_extra_output_function(self.rho_for_plot)
+            simulation.io.add_extra_output_function(self.nu_for_plot)
         
         simulation.log.info('Creating blended VOF multiphase model')
         simulation.log.info('    Using convection scheme %s for the colour function' % scheme)
@@ -93,53 +104,45 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         since the solver needs the density and viscosity we define, and
         we need the velocity that is defined by the solver
         """
+        sim = self.simulation
         beta = self.convection_scheme.blending_function
         
         # The time step (real value to be supplied later)
         self.dt = Constant(1.0)
         
-        # Use first order backward time difference on the first time step
-        # Coefficients for u, up and upp
-        self.time_coeffs = Constant([1, -1, 0])
-        self.extrapolation_coeffs = [1, 0]
-        
         # Setup the equation to solve
-        c = self.simulation.data['c']
-        cp = self.simulation.data['cp']
-        cpp = self.simulation.data['cpp']
-        c_star = self.simulation.data['c_star']
-        dirichlet_bcs = self.simulation.data['dirichlet_bcs'].get('c', [])
+        c = sim.data['c']
+        cp = sim.data['cp']
+        cpp = sim.data['cpp']
+        dirichlet_bcs = sim.data['dirichlet_bcs'].get('c', [])
+        
+        # Use backward Euler (BDF1) for timestep 1
+        self.time_coeffs = Constant([1, -1, 0])
+        
+        if dolfin.norm(cpp.vector()) > 0:
+            # Use BDF2 from the start
+            self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
+            sim.log.info('Using second order timestepping from the start in BlendedAlgebraicVOF')
         
         # Make sure the convection scheme has something usefull in the first iteration
         c.assign(cp)
-        c_star.assign(cp)
         
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
-        
-        # At the previous time step (known advecting velocity "up")
-        vel = self.simulation.data['up']
-        Vc = self.simulation.data['Vc']
-        self.eq = AdvectionEquation(self.simulation, Vc, cp, cpp, vel, beta, self.time_coeffs, dirichlet_bcs)
-        
-        # At the next time step (extrapolated advecting velocity)
-        Vu = self.simulation.data['Vu']
-        self.u_conv_comps = [dolfin.Function(Vu) for _ in range(self.simulation.ndim)]
-        self.u_conv = dolfin.as_vector(self.u_conv_comps)
-        beta_star = self.convection_scheme_star.blending_function
-        self.eq_star = AdvectionEquation(self.simulation, self.simulation.data['Vc'],
-                                         c, cp, self.u_conv, beta_star,
-                                         self.time_coeffs, dirichlet_bcs)
-        
-        # Add some debugging plots to show results in 2D
-        self.simulation.plotting.add_plot('c', c, clim=(0, 1))
-        self.simulation.plotting.add_plot('c_beta', beta)
+        Vc = sim.data['Vc']
+        u_conv = Constant(2.0) * sim.data['up'] + Constant(-1.0) * sim.data['upp']
+        self.eq = AdvectionEquation(sim, Vc, cp, cpp, u_conv, beta, self.time_coeffs, dirichlet_bcs)
         
         if self.need_gradient:
             # Reconstruct the gradient from the colour function DG0 field
             self.convection_scheme.gradient_reconstructor.initialize()
             gradient = self.convection_scheme.gradient_reconstructor.gradient
-            self.simulation.plotting.add_plot('c_grad', gradient)
+            sim.plotting.add_plot('c_grad', gradient)
+            
+        # Add some debugging plots to show results in 2D
+        sim.plotting.add_plot('c', c, clim=(0, 1))
+        sim.plotting.add_plot('c_beta', beta)
+        self.update_plot_fields()
     
     def get_colour_function(self, k):
         """
@@ -149,17 +152,17 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             if self.continuous_fields:
                 c = self.continuous_c
             else:
-                c = self.simulation.data['cp']
+                c = self.simulation.data['c']
         elif k == -1:
             if self.continuous_fields:
                 c = self.continuous_c_old
             else:
-                c = self.simulation.data['cpp']
-        elif k == 1:
+                c = self.simulation.data['cp']
+        elif k == -2:
             if self.continuous_fields:
-                c = self.continuous_c_star
+                c = self.continuous_c_oldold
             else:
-                c = self.simulation.data['c_star']
+                c = self.simulation.data['cpp']
         
         if self.force_steady:
             c = self.simulation.data['c']
@@ -172,30 +175,45 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         return c
     
+    def update_plot_fields(self):
+        """
+        These fields are only needed to visualise the rho and nu fields
+        in xdmf format for Paraview or similar
+        """
+        if not self.plot_fields:
+            return
+        V = self.rho_for_plot.function_space()
+        dolfin.project(self.get_density(0), V, function=self.rho_for_plot)
+        dolfin.project(self.get_laminar_kinematic_viscosity(0), V, function=self.nu_for_plot)
+    
     def update(self, timestep_number, t, dt):
         """
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field
         """
         timer = dolfin.Timer('Ocellaris update VOF')
+        
+        # Get the functions
+        c = self.simulation.data['c']
+        cp = self.simulation.data['cp']
+        cpp = self.simulation.data['cpp']
+        
+        if timestep_number != 1:
+            # Update the previous values
+            cpp.assign(cp)
+            cp.assign(c)
+        
         self.dt.assign(dt)
         is_static = isinstance(self.convection_scheme, StaticScheme)
         
         # Reconstruct the gradients
         if self.need_gradient:
             self.convection_scheme.gradient_reconstructor.reconstruct()
-            self.convection_scheme_star.gradient_reconstructor.reconstruct()
         
         # Update the convection blending factors
         if not is_static:
             vel = self.simulation.data['up']
             self.convection_scheme.update(t, dt, vel)
-        
-        # Get the functions
-        c = self.simulation.data['c']
-        cp = self.simulation.data['cp']
-        cpp = self.simulation.data['cpp']
-        c_star = self.simulation.data['c_star']
         
         # Solve the advection equations for the colour field
         if timestep_number == 1 or is_static:
@@ -205,47 +223,20 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             b = self.eq.assemble_rhs()
             dolfin.solve(A, c.vector(), b)
         
-        if is_static:
-            c_star.assign(cp)
-        else:
-            # Update the extrapolated convecting velocity
-            e1, e2 = self.extrapolation_coeffs
-            for d, uci in enumerate(self.u_conv_comps):
-                uciv = uci.vector()
-                uciv.zero()
-                uciv.axpy(e1, self.simulation.data['up%d' % d].vector())
-                uciv.axpy(e2, self.simulation.data['upp%d' % d].vector())
-            
-            # Update the convection blending factors
-            self.convection_scheme_star.update(t, dt, self.u_conv)
-        
-            # Solve the advection equations for the extrapolated colour field
-            A_star = self.eq_star.assemble_lhs()
-            b_star = self.eq_star.assemble_rhs()
-            dolfin.solve(A_star, c_star.vector(), b_star)
-        
         # Optionally use a continuous predicted colour field
         if self.continuous_fields:
             Vcg = self.continuous_c.function_space()
-            dolfin.project(c_star, Vcg, function=self.continuous_c_star)
             dolfin.project(c, Vcg, function=self.continuous_c)
             dolfin.project(cp, Vcg, function=self.continuous_c_old)
+            dolfin.project(cpp, Vcg, function=self.continuous_c_oldold)
         
         # Report properties of the colour field
-        sum_c = dolfin.assemble(c * dolfin.dx)
-        arr_c = c.vector().get_local()
-        min_c = dolfin.MPI.min(dolfin.mpi_comm_world(), float(arr_c.min()))
-        max_c = dolfin.MPI.max(dolfin.mpi_comm_world(), float(arr_c.max()))
-        self.simulation.reporting.report_timestep_value('sum(c)', sum_c)
-        self.simulation.reporting.report_timestep_value('min(c)', min_c)
-        self.simulation.reporting.report_timestep_value('max(c)', max_c)
-        
-        # Update the previous values for the next time step
-        cpp.assign(cp)
-        cp.assign(c)
+        self.simulation.reporting.report_timestep_value('min(c)', c.vector().min())
+        self.simulation.reporting.report_timestep_value('max(c)', c.vector().max())
         
         # Use second order backward time difference after the first time step
         self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
-        self.extrapolation_coeffs = [2, -1]
         
+        self.update_plot_fields()
         timer.stop()
+        self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
