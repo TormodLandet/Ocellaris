@@ -2,7 +2,7 @@
 from __future__ import division
 import numpy
 import dolfin
-from solenoidal import SolenoidalLimiter
+from solenoidal import SolenoidalLimiter, COST_FUNCTIONS
 from ocellaris.utils import verify_key
 from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
 
@@ -23,11 +23,13 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         mesh = V.mesh()
         family = V.ufl_element().family()
         degree = V.ufl_element().degree()
+        cost_func = simulation.input.get_value('slope_limiter/cost_function', 'LocalExtrema', 'string')
         loc = 'SolenoidalSlopeLimiterVelocity'
         verify_key('slope limited function', family, ['Discontinuous Lagrange'], loc)
         verify_key('slope limited degree', degree, (2,), loc)
         verify_key('function shape', vel.ufl_shape, [(2,)], loc)
         verify_key('topological dimension', mesh.topology().dim(), [2], loc)
+        verify_key('cost function', cost_func, COST_FUNCTIONS, loc)
         
         # Limit all cells regardless of location?
         self.limit_none = inp.get_value('limit_no_cells', False, 'bool')
@@ -46,7 +48,7 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.use_cpp = use_cpp
         
         # Create slope limiter
-        self.sollim = SolenoidalLimiter(vel)
+        self.sollim = SolenoidalLimiter(vel, cost_function=cost_func, use_cpp=use_cpp)
         
         # Create plot output function
         self.active_cells = None
