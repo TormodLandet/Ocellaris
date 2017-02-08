@@ -119,6 +119,8 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     
     return limiter
 
+from ocellaris.cpp import load_module
+LocalMaximaMeasurer = load_module('measure_local_maxima').LocalMaximaMeasurer
 
 from . import naive_nodal
 from . import hierarchical_taylor
