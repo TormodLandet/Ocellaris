@@ -4,6 +4,7 @@ import numpy
 import dolfin
 from solenoidal import SolenoidalLimiter, COST_FUNCTIONS
 from ocellaris.utils import verify_key
+from ocellaris.solver_parts.slope_limiter import SlopeLimiter
 from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
 
 
@@ -39,6 +40,29 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.surface_probe = None
         self.limit_selected_cells_only = self.probe_name is not None
         
+        # Use prelimiter to set (possibly) extended valid bound and avoid excessive limiting
+        prelimiter_method = inp.get_value('prelimiter', None, 'string')
+        prelimiter = None
+        if prelimiter_method:
+            def run_prelim():
+                for lim in prelimiters:
+                    lim.limit_cell[:] = self.sollim.limit_cell[:]
+                    lim.run()
+            prelimiters = []
+            dim, = vel.ufl_shape
+            for d in range(dim):
+                name = '%s%d' % (vel_name, d)
+                lim = SlopeLimiter(simulation, vel_name, vel[d], name, method=prelimiter_method)
+                prelimiters.append(lim)
+            prelimiter = run_prelim
+        
+        # Cost function options
+        cf_options = {}
+        cf_option_keys = ('max_cost', 'out_of_bounds_penalty_fac', 'out_of_bounds_penalty_const')
+        for key in cf_option_keys:
+            if key in inp:
+                cf_options[key] = inp.get_value(key, required_type='float')
+        
         # Store input
         self.simulation = simulation
         self.vel = vel
@@ -46,24 +70,33 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.degree = degree
         self.mesh = mesh
         self.use_cpp = use_cpp
+        self.cf_options = cf_options
         
         # Create slope limiter
-        self.sollim = SolenoidalLimiter(vel, cost_function=cost_func, use_cpp=use_cpp)
+        self.sollim = SolenoidalLimiter(vel, cost_function=cost_func, use_cpp=use_cpp,
+                                        prelimiter=prelimiter, cf_options=cf_options)
         
-        # Create plot output function
+        # Create plot output functions
+        V0 = dolfin.FunctionSpace(self.mesh, 'DG', 0)
+        
+        # Final cost from minimizer per cell
+        self.cell_cost = dolfin.Function(V0)
+        cname = 'SolenoidalCostFunc_%s' % self.vel_name
+        self.cell_cost.rename(cname, cname)
+        self.additional_plot_funcs.append(self.cell_cost)
+        
         self.active_cells = None
         if self.limit_selected_cells_only:
-            V0 = dolfin.FunctionSpace(self.mesh, 'DG', 0)
             self.active_cells = dolfin.Function(V0)
             aname = 'SolenoidalActiveCells_%s' % self.vel_name
             self.active_cells.rename(aname, aname)
             self.additional_plot_funcs.append(self.active_cells)
-            
-            # Cell dofs
-            tdim = self.mesh.topology().dim()
-            Ncells = self.mesh.topology().ghost_offset(tdim)
-            dm0 = V0.dofmap()
-            self.cell_dofs_V0 = numpy.array([int(dm0.cell_dofs(i)) for i in xrange(Ncells)], int)
+        
+        # Cell dofs
+        tdim = self.mesh.topology().dim()
+        Ncells = self.mesh.topology().ghost_offset(tdim)
+        dm0 = V0.dofmap()
+        self.cell_dofs_V0 = numpy.array([int(dm0.cell_dofs(i)) for i in xrange(Ncells)], int)
         
         simulation.hooks.add_pre_simulation_hook(self.setup, 'SolenoidalSlopeLimiterVelocity - setup')
     
@@ -110,9 +143,15 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         
         self.sollim.run()
         
+        # Update plot of cost function
+        Ncells = len(self.cell_dofs_V0)
+        arr = self.cell_cost.vector().get_local()
+        arr[self.cell_dofs_V0] = self.sollim.cell_cost[:Ncells]
+        self.cell_cost.vector().set_local(arr)
+        self.cell_cost.vector().apply('insert')
+        
         # Update the plot output of active cells
         if self.limit_selected_cells_only:
-            Ncells = len(self.cell_dofs_V0)
             arr = self.active_cells.vector().get_local()
             arr[self.cell_dofs_V0] = self.sollim.limit_cell[:Ncells]
             self.active_cells.vector().set_local(arr)
