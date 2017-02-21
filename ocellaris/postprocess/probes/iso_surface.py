@@ -182,10 +182,11 @@ def get_iso_surfaces(simulation, field, value):
     # Find facet to facet connections
     connections = {}
     for facet_id in crossing_points:
+        connections[facet_id] = []
         for cell_id in conFC(facet_id):
             for facet_neighbour_id in conCF(cell_id):
                 if facet_neighbour_id != facet_id and facet_neighbour_id in crossing_points:
-                    connections.setdefault(facet_id, []).append(facet_neighbour_id)
+                    connections[facet_id].append(facet_neighbour_id)
     
     # Make continous contour lines
     # Find end points of contour lines and start with these
@@ -272,10 +273,11 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
     # Find facet to facet connections
     connections = {}
     for facet_id in crossing_points:
+        connections[facet_id] = []
         for vertex_id in conFV(facet_id):
             for facet_neighbour_id in conVF(vertex_id):
                 if facet_neighbour_id != facet_id and facet_neighbour_id in crossing_points:
-                    connections.setdefault(facet_id, []).append(facet_neighbour_id)
+                    connections[facet_id].append(facet_neighbour_id)
     
     # Make continous contour lines
     # Find end points of contour lines and start with these
