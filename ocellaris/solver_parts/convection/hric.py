@@ -104,10 +104,10 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 aD = alpha_arr[self.alpha_dofmap[iaD]]
                 aC = alpha_arr[self.alpha_dofmap[iaC]]
             elif polydeg == 1:
-                res = numpy.zeros(2)
-                self.alpha_function.eval(res[0:], cell_info[iaD].midpoint)
-                self.alpha_function.eval(res[1:], cell_info[iaC].midpoint)
-                aD, aC = res
+                aD, aC = numpy.zeros(1), numpy.zeros(1)
+                self.alpha_function.eval(aD, cell_info[iaD].midpoint)
+                self.alpha_function.eval(aC, cell_info[iaC].midpoint)
+                aD, aC = aD[0], aC[0]
             
             if abs(aC - aD) < EPS:
                 # No change in this area, use upstream value

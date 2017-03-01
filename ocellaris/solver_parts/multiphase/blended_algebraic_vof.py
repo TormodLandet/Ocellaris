@@ -2,6 +2,7 @@
 from __future__ import division
 import dolfin
 from dolfin import Function, Constant
+from ocellaris.solver_parts import SlopeLimiter
 from . import register_multi_phase_model, MultiPhaseModel
 from ..convection import get_convection_scheme, StaticScheme
 from .vof import VOFMixin
@@ -94,9 +95,14 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             simulation.io.add_extra_output_function(self.rho_for_plot)
             simulation.io.add_extra_output_function(self.nu_for_plot)
         
+        # Slope limiter in case we are using DG1, not DG0
+        self.slope_limiter = SlopeLimiter(simulation, 'c', simulation.data['c'])
+        self.is_first_timestep = True
+        
         simulation.log.info('Creating blended VOF multiphase model')
         simulation.log.info('    Using convection scheme %s for the colour function' % scheme)
         simulation.log.info('    Using continuous rho and nu fields: %r' % self.continuous_fields)
+        simulation.log.info('    Using slope limiter: %s' % self.slope_limiter.limiter_method)
     
     def on_simulation_start(self):
         """
@@ -214,6 +220,12 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if not is_static:
             vel = self.simulation.data['up']
             self.convection_scheme.update(t, dt, vel)
+            
+        # Update global bounds in slope limiter 
+        if self.is_first_timestep:
+            lo, hi = self.slope_limiter.set_global_bounds(cp)
+            if self.slope_limiter.has_global_bounds:
+                self.simulation.log.info('Setting global bounds [%r, %r] in BlendedAlgebraicVofModel' % (lo, hi))
         
         # Solve the advection equations for the colour field
         if timestep_number == 1 or is_static:
@@ -222,6 +234,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
             dolfin.solve(A, c.vector(), b)
+            self.slope_limiter.run()
         
         # Optionally use a continuous predicted colour field
         if self.continuous_fields:
@@ -240,3 +253,4 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         self.update_plot_fields()
         timer.stop()
         self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
+        self.is_first_timestep = False

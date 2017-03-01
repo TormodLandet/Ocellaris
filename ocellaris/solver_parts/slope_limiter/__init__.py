@@ -23,6 +23,7 @@ def register_slope_limiter(name):
     """
     def register(slope_limiter_class):
         add_slope_limiter(name, slope_limiter_class)
+        slope_limiter_class.limiter_method = name 
         return slope_limiter_class
     return register
 

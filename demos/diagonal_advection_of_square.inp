@@ -49,7 +49,7 @@ initial_conditions:
         cpp_code: '(0.25 <= x[0] && x[0] <= 0.5 && 0.25 <= x[1] && x[1] <= 0.5) ? 1.0 : 0.0'
 
 time:
-    dt: 0.01
+    dt: 0.001
     tmax: 1.0
 
 output:
@@ -61,8 +61,7 @@ output:
 multiphase_solver:
     type: BlendedAlgebraicVOF
     function_space_colour: DG
-    polynomial_degree_colour: 0
-    sky_location: 1.0
+    polynomial_degree_colour: 1
 
 solver:
     type: AnalyticalSolution
@@ -73,8 +72,15 @@ solver:
 
 convection:
     c:
-        convection_scheme: Upwind
+        convection_scheme: HRIC
         HRIC_version: HRIC
+
+slope_limiter:
+    c:
+        method: HierarchicalTaylor
+        plot: yes
+        skip_boundary: no
+        enforce_bounds: yes
 
 probes:
     -   name: c=0.5
@@ -90,8 +96,10 @@ probes:
         value: 0.1
         field: c
         file_name: '_c01.out'
+        enabled: no
     -   name: c=0.9
         type: IsoSurface
         value: 0.9
         field: c
         file_name: '_c09.out'
+        enabled: no
