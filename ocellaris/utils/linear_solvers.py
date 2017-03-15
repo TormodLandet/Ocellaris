@@ -60,6 +60,11 @@ class LinearSolverWrapper(object):
         iterative/direct and not crash when set_reuse_preconditioner is 
         run before the first solve. This simplifies usage
         """
+        self.solver_method = solver_method
+        self.preconditioner = preconditioner
+        self.lu_method = lu_method
+        self.input_parameters = parameters
+        
         self.is_first_solve = True
         self.is_iterative = False
         self.is_direct = False
@@ -95,6 +100,14 @@ class LinearSolverWrapper(object):
             return  # Nov 2016: this segfaults if running before the first solve
         else:
             return self.solver.set_reuse_preconditioner(*argv, **kwargs)
+        
+    def __repr__(self):
+        return ('<LinearSolverWrapper iterative=%r ' % self.is_iterative + 
+                                     'direct=%r ' % self.is_direct +
+                                     'method=%r ' % self.solver_method +
+                                     'preconditioner=%r ' % self.preconditioner +
+                                     'LU-method=%r ' % self.lu_method +
+                                     'parameters=%r>' % self.input_parameters)
 
 
 def apply_settings(solver_method, parameters, new_values):

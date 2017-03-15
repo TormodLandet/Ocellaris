@@ -35,6 +35,11 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.use_cpp = use_cpp
         self.enforce_global_bounds = enforce_bounds
         
+        # No limiter needed for piecewice constant functions
+        if self.degree == 0:
+            self.additional_plot_funcs = []
+            return
+        
         if output_name is None:
             output_name = phi_name
         
@@ -47,10 +52,6 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             func.rename(name, name)
             self.alpha_funcs.append(func)
         self.additional_plot_funcs = self.alpha_funcs
-        
-        # No limiter needed for piecewice constant functions
-        if degree == 0:
-            return
         
         # Intermediate DG Taylor function space
         self.taylor = df.Function(V)
@@ -111,6 +112,9 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         """
         Perform slope limiting of DG Lagrange functions
         """
+        # No limiter needed for piecewice constant functions
+        if self.degree == 0:
+            return
         timer = df.Timer('Ocellaris HierarchalTaylorSlopeLimiter')
         
         # Update the Taylor function with the current Lagrange values
