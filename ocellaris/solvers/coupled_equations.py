@@ -1,13 +1,13 @@
 # encoding: utf8
 from __future__ import division
 import dolfin
-from dolfin import dx, div, grad, dot, jump, avg, ds, dS, Constant
-from . import UPWIND, BDF
+from dolfin import dx, div, grad, dot, jump, avg, dS, Constant
+from . import UPWIND
 from ..solver_parts import define_penalty
 
 
 class CoupledEquations(object):
-    def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
+    def __init__(self, simulation, flux_type, use_stress_divergence_form,
                  use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator, 
                  pressure_continuity_factor, velocity_continuity_factor_D12,
                  include_hydrostatic_pressure, incompressibility_flux_type):
@@ -17,7 +17,6 @@ class CoupledEquations(object):
         :type simulation: ocellaris.Simulation
         """
         self.simulation = simulation
-        self.timestepping_method = timestepping_method
         self.use_stress_divergence_form = use_stress_divergence_form
         self.use_grad_p_form = use_grad_p_form
         self.use_grad_q_form = use_grad_q_form
@@ -367,7 +366,7 @@ class CoupledEquations(object):
 
 
 class CoupledEquationsPoissonPressure(object):
-    def __init__(self, simulation, timestepping_method, flux_type, use_stress_divergence_form,
+    def __init__(self, simulation, flux_type, use_stress_divergence_form,
                  use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator, 
                  pressure_continuity_factor, velocity_continuity_factor_D12,
                  include_hydrostatic_pressure, incompressibility_flux_type):
@@ -384,7 +383,6 @@ class CoupledEquationsPoissonPressure(object):
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
         self.use_grad_p_form = use_grad_p_form
         
-        assert timestepping_method == BDF
         assert not use_stress_divergence_form
         assert not use_lagrange_multiplicator
         assert not simulation.mesh_morpher.active

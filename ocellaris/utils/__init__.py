@@ -10,3 +10,4 @@ from .trace_projection import convert_to_dgt
 from .mpi import get_root_value, gather_lines_on_root
 from .form_language import OcellarisConstant
 from .taylor_basis import lagrange_to_taylor, taylor_to_lagrange
+from .small_helpers import create_vector_functions, shift_fields

@@ -14,16 +14,8 @@ def setup_simulation(simulation):
     simulation.log.info('Preparing simulation ...\n')
     t_start = time.time()
     
-    # Test for PETSc linear algebra backend
-    if not dolfin.has_linear_algebra_backend("PETSc"):
-        ocellaris_error('Missing PETSc',
-                        'DOLFIN has not been configured with PETSc '
-                        'which is needed by Ocellaris.')
-    dolfin.parameters['linear_algebra_backend'] = 'PETSc'
-    
-    # Form compiler "uflacs" needed for isoparametric elements
-    form_compiler = simulation.input.get_value('solver/form_compiler', 'auto', 'string')
-    dolfin.parameters['form_compiler']['representation'] = form_compiler
+    # Set linear algebra backend to PETSc
+    setup_fenics(simulation)
     
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')
@@ -31,10 +23,14 @@ def setup_simulation(simulation):
     simulation.dt = simulation.input.get_value('time/dt', required_type='float')
     assert simulation.dt > 0
     
+    # Preliminaries, before setup begins
     # Get the multi phase model class
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
     multiphase_class = get_multi_phase_model(multiphase_model_name)
-        
+    
+    ###########################################################################
+    # Setup the Ocellaris simulation
+    
     if not simulation.restarted:
         # Load the mesh. The mesh determines if we are in 2D or 3D
         load_mesh(simulation)
@@ -96,6 +92,22 @@ def setup_simulation(simulation):
     
     # Show all registered hooks
     simulation.hooks.show_hook_info()
+    
+
+def setup_fenics(simulation):
+    """
+    Setup FEniCS parameters like linear algebra backend
+    """
+    # Test for PETSc linear algebra backend
+    if not dolfin.has_linear_algebra_backend("PETSc"):
+        ocellaris_error('Missing PETSc',
+                        'DOLFIN has not been configured with PETSc '
+                        'which is needed by Ocellaris.')
+    dolfin.parameters['linear_algebra_backend'] = 'PETSc'
+    
+    # Form compiler "uflacs" needed for isoparametric elements
+    form_compiler = simulation.input.get_value('solver/form_compiler', 'auto', 'string')
+    dolfin.parameters['form_compiler']['representation'] = form_compiler
 
 
 def load_mesh(simulation):
@@ -332,6 +344,24 @@ def setup_initial_conditions(simulation):
         
         # Run the C++ code to set the initial value of the function
         ocellaris_interpolate(simulation, cpp_code, description, V, func)
+    
+    # Some fields start out as copies, we do that here so that the input file
+    # does not have to contain superfluous initial conditions
+    comp_name_pairs = [('up_conv%d', 'up%d'), ('upp_conv%d', 'upp%d')]
+    for cname_pattern, cname_main_pattern in comp_name_pairs:
+        for d in range(simulation.ndim):
+            cname = cname_pattern % d
+            cname_main = cname_main_pattern % d
+            
+            if cname in ic:
+                simulation.log.info('    Leaving %s as set by initial condition' % cname)
+                continue
+            
+            if cname not in simulation.data:
+                continue
+            
+            simulation.data[cname].assign(simulation.data[cname_main])
+            simulation.log.info('    Assigning initial value %s = %s' % (cname, cname_main))
 
 
 def setup_hooks(simulation):

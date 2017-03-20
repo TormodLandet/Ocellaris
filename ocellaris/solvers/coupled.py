@@ -3,19 +3,16 @@ from __future__ import division
 import numpy
 import dolfin
 from dolfin import Constant
-from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input
+from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input, create_vector_functions, shift_fields
 from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiterVelocity, LocalMaximaMeasurer
-from . import Solver, register_solver, BDF, BDM, UPWIND
+from . import Solver, register_solver, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 
 
 # Default values, can be changed in the input file
-LU_SOLVER_1CPU = 'default'
+LU_SOLVER_1CPU = 'umfpack'
 LU_SOLVER_NCPU = 'superlu_dist'
 LU_PARAMETERS = {}
-
-# Implemented timestepping methods
-TIMESTEPPING_METHODS = (BDF,)
 
 # Default values, can be changed in the input file
 EQUATION_SUBTYPE = 'Default'
@@ -56,7 +53,6 @@ class SolverCoupled(Solver):
         # Create equation
         CoupledEquations = EQUATION_SUBTYPES[self.equation_subtype]
         self.eqs = CoupledEquations(simulation,
-                                    timestepping_method=self.timestepping_method,
                                     flux_type=self.flux_type,
                                     use_stress_divergence_form=self.use_stress_divergence_form,
                                     use_grad_p_form=self.use_grad_p_form,
@@ -104,21 +100,13 @@ class SolverCoupled(Solver):
             available_methods = '\n'.join(' - %s' % m for m in EQUATION_SUBTYPES)
             ocellaris_error('Unknown equation sub-type',
                             'Equation sub-type %s not available for coupled solver, please use one of:\n%s' %
-                            (self.equation_subtype, EQUATION_SUBTYPES))
+                            (self.equation_subtype, available_methods))
         
         # Give warning if using iterative solver
         if isinstance(self.coupled_solver, dolfin.PETScKrylovSolver):
             sim.log.warning('WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
         else:
             self.coupled_solver.parameters['same_nonzero_pattern'] = True
-        
-        # Coefficients for u, up and upp
-        self.timestepping_method = sim.input.get_value('solver/timestepping_method', BDF, 'string')
-        if self.timestepping_method not in TIMESTEPPING_METHODS:
-            available_methods = '\n'.join(' - %s' % m for m in TIMESTEPPING_METHODS)
-            ocellaris_error('Unknown timestepping method',
-                            'Timestepping method %s not recognised, please use one of:\n%s' %
-                            (self.timestepping_method, available_methods))
         
         # Lagrange multiplicator or remove null space via PETSc or just normalize after solving
         self.remove_null_space = True
@@ -201,21 +189,13 @@ class SolverCoupled(Solver):
         self.assigner = dolfin.FunctionAssigner(func_spaces, Vcoupled)
         
         # Create segregated functions on component and vector form
-        u_list, up_list, upp_list, u_conv = [], [], [], []
-        for d in range(sim.ndim):
-            sim.data['u%d' % d] = u = dolfin.Function(Vu)
-            sim.data['up%d' % d] = up = dolfin.Function(Vu)
-            sim.data['upp%d' % d] = upp = dolfin.Function(Vu)
-            sim.data['u_conv%d' % d] = uc = dolfin.Function(Vu)
-            sim.data['u_unlim%d' % d] = dolfin.Function(Vu)
-            u_list.append(u)
-            up_list.append(up)
-            upp_list.append(upp)
-            u_conv.append(uc)
-        sim.data['u'] = dolfin.as_vector(u_list)
-        sim.data['up'] = dolfin.as_vector(up_list)
-        sim.data['upp'] = dolfin.as_vector(upp_list)
-        sim.data['u_conv'] = dolfin.as_vector(u_conv)
+        create_vector_functions(sim, 'u', 'u%d', Vu)
+        create_vector_functions(sim, 'up', 'up%d', Vu)
+        create_vector_functions(sim, 'upp', 'upp%d', Vu)
+        create_vector_functions(sim, 'u_conv', 'u_conv%d', Vu)
+        create_vector_functions(sim, 'up_conv', 'up_conv%d', Vu)
+        create_vector_functions(sim, 'upp_conv', 'upp_conv%d', Vu)
+        create_vector_functions(sim, 'u_unlim', 'u_unlim%d', Vu)
         sim.data['p'] = dolfin.Function(Vp)
         self.u_tmp = dolfin.Function(Vu)
     
@@ -278,7 +258,6 @@ class SolverCoupled(Solver):
         Set the time stepping coefficients used for the temporal derivative
         """
         if 'time_coeffs' not in self.simulation.data:
-            self.is_first_timestep = True
             self.simulation.data['time_coeffs'] = Constant(coeffs)
             self.simulation.data['time_coeffs_py'] = coeffs
         else:
@@ -286,7 +265,7 @@ class SolverCoupled(Solver):
             self.simulation.data['time_coeffs_py'] = coeffs
     
     @timeit
-    def update_convection(self, t, dt):
+    def update_convection(self, order=2):
         """
         Update terms used to linearise and discretise the convective term
         """
@@ -296,18 +275,16 @@ class SolverCoupled(Solver):
         # Update convective velocity field components
         for d in range(ndim):
             uic = data['u_conv%d' % d]
-            uip = data['up%d' % d]
-            uipp = data['upp%d' % d]
+            uip = data['up_conv%d' % d]
+            uipp = data['upp_conv%d' % d]
             
-            if self.is_first_timestep:
+            if order == 1:
                 uic.assign(uip)
             else:
                 # Backwards difference formulation - standard linear extrapolation
                 uic.vector().zero()
                 uic.vector().axpy(2.0, uip.vector())
                 uic.vector().axpy(-1.0, uipp.vector())
-        
-        self.is_first_timestep = False
     
     @timeit
     def postprocess_velocity(self):
@@ -419,16 +396,17 @@ class SolverCoupled(Solver):
             while abs(pavg) > 1000:
                 pavg = dolfin.assemble(p * dx2) / vol
                 p.vector()[:] -= pavg
-    
-    @timeit
-    def run(self):
+                
+    def before_simulation(self):
         """
-        Run the simulation
+        Handle timestepping issues before starting the simulation. There are
+        basically two options, either we have full velocity history available,
+        either from initial conditions on the input file or from a restart file,
+        or there is only access to one previous time step and we need to start
+        up using first order timestepping
         """
         sim = self.simulation
-        sim.hooks.simulation_started()
-        t = sim.time
-        it = sim.timestep
+        starting_order = 1
         
         # Check if there are non-zero values in the upp vectors
         maxabs = 0
@@ -436,14 +414,52 @@ class SolverCoupled(Solver):
             this_maxabs = abs(sim.data['upp%d' % d].vector().get_local()).max()
             maxabs = max(maxabs, this_maxabs)
         maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
-        has_upp_start_values = maxabs > 0
+        if maxabs > 0:
+            starting_order = 2
         
-        # Previous-previous values are provided so we can start up with second order time stepping
-        if has_upp_start_values:
+        # Switch to second order time stepping
+        if starting_order == 2:
             sim.log.info('Initial values for upp are found and used')
-            self.is_first_timestep = False
-            if self.timestepping_method == BDF:
-                self.set_timestepping_coefficients([3/2, -2, 1/2])
+            self.set_timestepping_coefficients([3/2, -2, 1/2])
+        self.update_convection(starting_order)
+        
+    def after_timestep(self):
+        """
+        Move u -> up, up -> upp and prepare for the next time step
+        """
+        # Stopping criteria for steady state simulations  
+        vel_diff = None
+        if self.is_steady:
+            vel_diff = 0
+            for d in range(self.simulation.ndim):
+                u_new = self.simulation.data['u%d' % d]
+                up = self.simulation.data['up%d' % d]
+                diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
+                vel_diff = max(vel_diff, diff)
+        
+        shift_fields(self.simulation, ['u%d', 'up%d', 'upp%d'])
+        shift_fields(self.simulation, ['u_conv%d', 'up_conv%d', 'upp_conv%d'])
+        
+        # Change time coefficient to second order
+        self.set_timestepping_coefficients([3/2, -2, 1/2])
+        
+        # Extrapolate the convecting velocity to the next step
+        self.update_convection()
+        
+        return vel_diff
+    
+    @timeit
+    def run(self):
+        """
+        Run the simulation
+        """
+        # Setup timestepping and initial convections
+        self.before_simulation()
+        
+        sim = self.simulation
+        sim.hooks.simulation_started()
+        t = sim.time
+        it = sim.timestep
         
         while True:
             # Get input values, these can possibly change over time
@@ -460,9 +476,6 @@ class SolverCoupled(Solver):
             self.simulation.data['dt'].assign(dt)
             self.simulation.hooks.new_timestep(it, t, dt)
             
-            # Extrapolate the convecting velocity to the new time step
-            self.update_convection(t, dt)
-            
             # Calculate the hydrostatic pressure when the density is not constant
             if self.hydrostatic_pressure_correction:
                 self.hydrostatic_pressure.update()
@@ -473,6 +486,9 @@ class SolverCoupled(Solver):
             # Postprocess the solution velocity field
             self.postprocess_velocity()
             
+            # Set u_conv equal to u
+            shift_fields(sim, ['u%d', 'u_conv%d'])
+            
             # Slope limit the velocities
             if self.using_limiter:
                 change_lim, efficiency_lim = self.slope_limit_velocities()
@@ -480,22 +496,7 @@ class SolverCoupled(Solver):
                 sim.reporting.report_timestep_value('vel_lim_effect', efficiency_lim)
             
             # Move u -> up, up -> upp and prepare for the next time step
-            vel_diff = 0
-            for d in range(self.simulation.ndim):
-                u_new = self.simulation.data['u%d' % d]
-                up = self.simulation.data['up%d' % d]
-                upp = self.simulation.data['upp%d' % d]
-                
-                if self.is_steady:
-                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
-                    vel_diff = max(vel_diff, diff)
-                
-                upp.assign(up)
-                up.assign(u_new)
-            
-            # Change time coefficient to second order
-            if self.timestepping_method == BDF:
-                self.set_timestepping_coefficients([3/2, -2, 1/2])
+            vel_diff = self.after_timestep()
             
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
