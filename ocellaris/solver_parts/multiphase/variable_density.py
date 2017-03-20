@@ -84,8 +84,8 @@ class VariableDensityModel(MultiPhaseModel):
             u_conv, self.funcs_to_extrapolate = [], []
             for d in range(sim.ndim):
                 ux = Function(Vu)
-                up = sim.data['up%d' % d]
-                upp = sim.data['upp%d' % d]
+                up = sim.data['up_conv%d' % d]
+                upp = sim.data['upp_conv%d' % d]
                 self.funcs_to_extrapolate.append((ux, up, upp))
                 u_conv.append(ux)
             u_conv = dolfin.as_vector(u_conv)
@@ -133,7 +133,7 @@ class VariableDensityModel(MultiPhaseModel):
             # Define equation for advection of the density
             #    ∂ρ/∂t +  ∇⋅(ρ u) = 0
             beta = None
-            u_conv = Constant(2.0) * sim.data['up'] + Constant(-1.0) * sim.data['upp']
+            u_conv = sim.data['u_conv']
             self.eq = AdvectionEquation(sim, sim.data['Vrho'], self.rho_p, self.rho_pp, u_conv, beta,
                                         self.time_coeffs, dirichlet_bcs)
             
