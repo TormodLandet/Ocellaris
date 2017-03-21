@@ -136,7 +136,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
         Vc = sim.data['Vc']
-        u_conv = Constant(2.0) * sim.data['up'] + Constant(-1.0) * sim.data['upp']
+        u_conv = sim.data['u_conv']
         self.eq = AdvectionEquation(sim, Vc, cp, cpp, u_conv, beta, self.time_coeffs, dirichlet_bcs)
         
         if self.need_gradient:
