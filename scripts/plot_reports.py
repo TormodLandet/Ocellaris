@@ -8,12 +8,47 @@ from matplotlib import pyplot
 from matplotlib.widgets import Slider
 
 
-def read_reports(h5_file_name, derived=True):
+def read_reports(file_name, derived=True):
+    if file_name.endswith('h5'):
+        return read_reports_h5(file_name, derived)
+    else:
+        return read_reports_log(file_name, derived)
+
+
+def read_reports_h5(h5_file_name, derived=True):
     hdf = h5py.File(h5_file_name, 'r')
     
     reps = {}
     for rep_name in hdf['/reports']:
         reps[rep_name] = numpy.array(hdf['/reports'][rep_name])
+    
+    if derived:
+        if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
+            reps['Et'] = reps['Ek'] + reps['Ep']  
+    
+    return reps
+
+
+def read_reports_log(log_file_name, derived=True):
+    data = {}
+    for line in open(log_file_name, 'rt'):
+        if line.startswith('Reports for timestep'):
+            parts = line[12:].split(',')
+            for pair in parts:
+                try:
+                    key, value = pair.split('=')
+                    key = key.strip()
+                    value = float(value)
+                    data.setdefault(key, []).append(value)
+                except:
+                    break
+    
+    reps = {}
+    for key, values in data.items():
+        arr = numpy.array(values)
+        if key == 'timestep':
+            key = 'timesteps'
+        reps[key] = arr
     
     if derived:
         if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
