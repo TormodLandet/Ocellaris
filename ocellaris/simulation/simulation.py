@@ -113,10 +113,16 @@ class Simulation(object):
             Ek, Ep = self.solution_properties.total_energy()
             self.reporting.report_timestep_value('Co', Co_max)
             self.reporting.report_timestep_value('Pe', Pe_max)
-            self.reporting.report_timestep_value('div', div_dx+div_dS)
+            self.reporting.report_timestep_value('div', div_dx + div_dS)
             self.reporting.report_timestep_value('mass', mass)
             self.reporting.report_timestep_value('Ek', Ek)
             self.reporting.report_timestep_value('Ep', Ep)
+            
+            if self.solution_properties.has_div_conv:
+                div_conv_dS_f, div_conv_dx_f = self.solution_properties.divergences('u_conv')
+                div_conv_dS = div_conv_dS_f.vector().max()
+                div_conv_dx = div_conv_dx_f.vector().max()
+                self.reporting.report_timestep_value('div_conv', div_conv_dx + div_conv_dS)
             
             if not numpy.isfinite(Co_max):
                 ocellaris_error('Non finite Courant number',

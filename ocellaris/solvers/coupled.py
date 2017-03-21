@@ -72,7 +72,7 @@ class SolverCoupled(Solver):
         # Velocity slope limiter
         self.using_limiter = False
         if self.vel_is_discontinuous:
-            self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u')
+            self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel2=sim.data['u_conv'])
             self.using_limiter = self.slope_limiter.active
             self.slope_measurer = LocalMaximaMeasurer(sim.data['mesh'])
         

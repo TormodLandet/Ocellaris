@@ -10,7 +10,7 @@ from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
 class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
     description = 'Scalar limiting of each component'
     
-    def __init__(self, simulation, vel, vel_name, use_cpp=True):
+    def __init__(self, simulation, vel, vel_name, vel2=None, use_cpp=True):
         """
         Use a standard slope limiter on each component of the velocity field 
         """

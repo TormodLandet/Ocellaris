@@ -12,7 +12,7 @@ from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
 class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
     description = 'Limit in a divergence free polynomial space'
     
-    def __init__(self, simulation, vel, vel_name, use_cpp=True):
+    def __init__(self, simulation, vel, vel_name, vel2=None, use_cpp=True):
         """
         Use a solenoidal polynomial slope limiter on the velocity field 
         """
@@ -62,19 +62,23 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         for key in cf_option_keys:
             if key in inp:
                 cf_options[key] = inp.get_value(key, required_type='float')
+        max_cost = cf_options.pop('max_cost', None)
         
         # Store input
         self.simulation = simulation
         self.vel = vel
+        self.vel2 = vel2
         self.vel_name = vel_name
         self.degree = degree
         self.mesh = mesh
         self.use_cpp = use_cpp
         self.cf_options = cf_options
+        self.max_cost = max_cost
         
         # Create slope limiter
         self.sollim = SolenoidalLimiter(vel, cost_function=cost_func, use_cpp=use_cpp,
-                                        prelimiter=prelimiter, cf_options=cf_options)
+                                        prelimiter=prelimiter, cf_options=cf_options,
+                                        max_cost=max_cost, vec_field2=vel2)
         
         # Create plot output functions
         V0 = dolfin.FunctionSpace(self.mesh, 'DG', 0)

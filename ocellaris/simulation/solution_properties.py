@@ -13,6 +13,8 @@ class SolutionProperties(object):
         self.simulation = simulation
         self.divergence_method = None
         self.active = False
+        self.has_div_conv = False
+        self._div = {}
     
     def setup(self):
         sim = self.simulation
@@ -39,9 +41,16 @@ class SolutionProperties(object):
         self._setup_energy(rho, u, g, x0)
         self._setup_mass(rho)
         
+        if 'up_conv0' in sim.data:
+            u_conv = sim.data['u_conv']
+            self._setup_divergence(u_conv, divergence_method, 'u_conv')
+            self.has_div_conv = True
+        
         if plot_divergences:
-            sim.io.add_extra_output_function(self._div_dS)
-            sim.io.add_extra_output_function(self._div_dx)
+            for name in ('u', 'u_conv'):
+                if name in self._div:
+                    sim.io.add_extra_output_function(self._div[name]['div_dS'])
+                    sim.io.add_extra_output_function(self._div[name]['div_dx'])
     
     def _setup_courant(self, vel, dt):
         """
@@ -75,7 +84,7 @@ class SolutionProperties(object):
         self._peclet_solver.factorize()
         self._peclet = df.Function(V)
     
-    def _setup_divergence(self, vel, method):
+    def _setup_divergence(self, vel, method, name='u'):
         """
         Calculate divergence and element to element velocity
         flux differences on the same edges
@@ -101,16 +110,18 @@ class SolutionProperties(object):
         else:
             raise ValueError('Divergence type %r not supported' % method)
         
-        # Pre-factorize matrices and store for usage in projection
-        self._div_dS_solver = df.LocalSolver(a1, L1)
-        self._div_dx_solver = df.LocalSolver(a2, L2)
-        self._div_dS_solver.factorize()
-        self._div_dx_solver.factorize()
-        self._div_dS = df.Function(V)
-        self._div_dx = df.Function(V)
+        # Store for usage in projection
+        storage = self._div[name] = {}
+        storage['dS_solver'] = df.LocalSolver(a1, L1)
+        storage['dx_solver'] = df.LocalSolver(a2, L2)
+        storage['div_dS'] = df.Function(V)
+        storage['div_dx'] = df.Function(V)
         
-        self._div_dS.rename('Divergence_dS', 'Divergence_dS')
-        self._div_dx.rename('Divergence_dx', 'Divergence_dx')
+        # Pre-factorize matrices
+        storage['dS_solver'].factorize()
+        storage['dx_solver'].factorize()
+        storage['div_dS'].rename('Divergence_%s_dS' % name, 'Divergence_%s_dS' % name)
+        storage['div_dx'].rename('Divergence_%s_dx' % name, 'Divergence_%s_dx' % name)
     
     def _setup_energy(self, rho, vel, gvec, x0):
         """
@@ -143,7 +154,7 @@ class SolutionProperties(object):
         return self._peclet
     
     @timeit
-    def divergences(self):
+    def divergences(self, name='u'):
         """
         Calculate the difference between the flux on the same
         facet between two different cells and the divergence
@@ -152,9 +163,10 @@ class SolutionProperties(object):
         Returns the sum of facet errors for each cell and the
         divergence error in each cell as DG0 functions 
         """
-        self._div_dS_solver.solve_global_rhs(self._div_dS)
-        self._div_dx_solver.solve_global_rhs(self._div_dx)
-        return self._div_dS, self._div_dx
+        storage = self._div[name]
+        storage['dS_solver'].solve_global_rhs(storage['div_dS'])
+        storage['dx_solver'].solve_global_rhs(storage['div_dx'])
+        return storage['div_dS'], storage['div_dx']
     
     @timeit
     def total_energy(self):
