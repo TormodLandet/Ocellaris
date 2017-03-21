@@ -99,16 +99,25 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     plot_exceedance = inp.get_value('plot', False, 'bool')
     skip_boundary = inp.get_value('skip_boundary', True, 'bool')
     enforce_bounds = inp.get_value('enforce_bounds', False, 'bool')
+    name = phi_name if output_name is None else output_name
+    
+    # Find degree
+    V = phi.function_space()
+    degree = V.ufl_element().degree()
+    
+    # Skip limiting if degree is 0
+    if degree == 0:
+        simulation.log.info('    Using slope limiter %s for field %s' % (method, name) + 
+                            ' (due to degree == 0)')
+        return DoNothingSlopeLimiter()
     
     # Mark boundary cells
-    V = phi.function_space()
     if skip_boundary:
         boundary_condition = mark_cell_layers(simulation, V, layers=1)
     else:
         boundary_condition = numpy.zeros(V.dim(), bool)
     
     # Construct the limiter
-    name = phi_name if output_name is None else output_name
     simulation.log.info('    Using slope limiter %s for field %s' % (method, name))
     limiter_class = get_slope_limiter(method)
     limiter = limiter_class(phi_name=phi_name, phi=phi, boundary_condition=boundary_condition,
