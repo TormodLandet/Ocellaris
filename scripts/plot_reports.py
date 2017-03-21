@@ -1,6 +1,7 @@
 """
 Plot timestep reports from one or more Ocellaris restart files 
 """
+import os
 import h5py
 import numpy
 from matplotlib import pyplot
@@ -38,9 +39,14 @@ def plot_reports(file_names):
     pyplot.subplots_adjust(left=0.15, bottom=0.25)
     
     lines = []
-    for _ in file_names:
-        line, = pyplot.plot([0], [0])
+    for fn in file_names:
+        bname = os.path.basename(fn)
+        bname_split = bname.split('_endpoint_')
+        label = bname_split[0]
+        line, = pyplot.plot([0], [0], label=label)
         lines.append(line)
+    if len(file_names) > 1:
+        ax.legend()
     
     ax_slider = fig.add_axes([0.15, 0.1, 0.65, 0.03])
     slider = Slider(ax_slider, 'Report', 0.5, N+0.499999, valinit=N/2)
