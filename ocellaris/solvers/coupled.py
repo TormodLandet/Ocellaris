@@ -524,3 +524,4 @@ def get_global_row_number(V):
     dof = dm.cell_dofs(0).min()
     gdof = dm.local_to_global_index(dof)
     return dolfin.MPI.min(dolfin.mpi_comm_world(), int(gdof))
+

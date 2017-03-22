@@ -1,8 +1,8 @@
 # encoding: utf-8
 from __future__ import division
+import os
 import numpy
 from matplotlib import pyplot
-from matplotlib.widgets import Slider
 
 
 def read_iso_surface_file(file_name):
@@ -38,9 +38,32 @@ def read_iso_surface_file(file_name):
             tline = f.readline()
         
         return field_name, value, dim, times, lines
+    
+
+def get_simulation_name(file_name, names_allready_taken):
+    # Find a name for this simulation
+    basename = os.path.basename(file_name)
+    if '_free_surface' in basename:
+        basename = basename.split('_free_surface')[0]
+    i = 1
+    name = basename
+    while name in names_allready_taken:
+        i += 1
+        name = basename + str(i)
+    names_allready_taken.add(name)
+    return name
 
 
-def plot_iso_surface_file(file_names):
+def plot_iso_surface_file(file_names, n=2**0.5, a=0.05715, g=9.81):
+    """
+    Plot free surface elevations in the format of Martin and Moyce (1952)
+    The definition of the parameters n and a are from the same article
+    and relate to the width and height of the fluid column
+    
+    :param list[str] file_names: names of Ocellaris iso surface ouput files 
+    :param float n: height_column == n**2 * a
+    :param float a: width_column
+    """
     # Data from Martin and Moyce (1952), Table 2 and 6
     mmTvec = [0.41, 0.84, 1.19, 1.43, 1.63, 1.83, 1.98, 2.20, 2.32, 2.51, 2.65,
               2.83, 2.98, 3.11, 3.33]
@@ -53,14 +76,13 @@ def plot_iso_surface_file(file_names):
     
     plots = [('Horizontal maximum', [('MM', mmTvec, mmZvec)]),
              ('Vertical maximum',   [('MM', mmYvec, mmHvec)])]
-
-    # Normalization
-    n = 2**0.5
-    a = 0.05715
-    g = 9.81
-
-    for ifile, file_name in enumerate(file_names):
+    
+    # Read files
+    names = set()
+    for file_name in file_names:
         field_name, value, dim, times, lines = read_iso_surface_file(file_name)
+        label = get_simulation_name(file_name, names) 
+        print label
         print field_name, value, dim
         
         # Y = τ
@@ -75,9 +97,11 @@ def plot_iso_surface_file(file_names):
             Zvec.append(txmax/a)
             Hvec.append(tymax/(a*n**2))
         print 'tmax, Tmax, Ymax', times[-1], Tvec[-1], Yvec[-1]
-        plots[0][1].append(('File%d' % ifile, Tvec, Zvec))
-        plots[1][1].append(('File%d' % ifile, Yvec, Hvec))
         
+        plots[0][1].append((label, Tvec, Zvec))
+        plots[1][1].append((label, Yvec, Hvec))
+    
+    # Plot surface elevations with time
     for name, lines in plots:
         fig = pyplot.figure()
         ax = fig.add_subplot(111)
@@ -88,6 +112,7 @@ def plot_iso_surface_file(file_names):
             ax.plot(tvec, vals, label=label, **kwargs)
         if len(lines) > 1:
             ax.legend()
+
 
 if __name__ == '__main__':
     import sys
