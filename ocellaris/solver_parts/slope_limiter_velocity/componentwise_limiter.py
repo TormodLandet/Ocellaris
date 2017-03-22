@@ -19,6 +19,10 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         inp = simulation.input.get_value('slope_limiter/%s' % vel_name, {}, 'Input')
         comp_method = inp.get_value('comp_method', required_type='string')
         
+        self.vel = vel
+        self.vel2 = vel2
+        self.limit_vel2 =  inp.get_value('limit_conv', False, 'bool')
+        
         # Get the IsoSurface probe used to locate the free surface
         self.probe_name = inp.get_value('surface_probe', None, 'string')
         self.surface_probe = None
@@ -81,3 +85,9 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         # Perform limiting
         for lim in self.limiters:
             lim.run()
+        
+        # Apply limiting also to the convective field?
+        if self.limit_vel2:
+            dim, = self.vel.ufl_shape
+            for d in range(dim):
+                self.vel2[d].assign(self.vel[d])
