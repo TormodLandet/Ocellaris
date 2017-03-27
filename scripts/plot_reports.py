@@ -52,7 +52,8 @@ def read_reports_log(log_file_name, derived=True):
     
     if derived:
         if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
-            reps['Et'] = reps['Ek'] + reps['Ep']  
+            N = min(reps['Ek'].size, reps['Ep'].size)
+            reps['Et'] = reps['Ek'][:N] + reps['Ep'][:N]
     
     return reps
 
