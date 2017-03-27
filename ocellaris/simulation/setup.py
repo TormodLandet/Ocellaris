@@ -2,7 +2,7 @@ import time
 import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.postprocess import setup_probes
-from ocellaris.utils import debug_console_hook, ocellaris_error, ocellaris_interpolate, log_timings
+from ocellaris.utils import interactive_console_hook, ocellaris_error, ocellaris_interpolate, log_timings
 from ocellaris.utils import OcellarisConstant, RunnablePythonString, OcellarisCppExpression
 from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
 
@@ -80,8 +80,9 @@ def setup_simulation(simulation):
     # Setup any hooks that may be present on the input file
     setup_hooks(simulation)
     
-    # Setup the debug console to optionally run at the end of each timestep
-    simulation.hooks.add_post_timestep_hook(lambda: debug_console_hook(simulation), 'Debug console')
+    # Setup the interactive console to optionally run at the end of each timestep
+    simulation.hooks.add_post_timestep_hook(lambda: interactive_console_hook(simulation),
+                                            'Interactive console commands')
     
     # Setup the summary to show after the simulation
     hook = lambda success: summarise_simulation_after_running(simulation, success)

@@ -5,9 +5,26 @@ import rlcompleter
 import cProfile, pstats
 from .timer import log_timings
 
-def debug_console_hook(simulation):
+
+def interactive_console_hook(simulation):
     """
-    Start the debug console if the user writes "d"+Enter
+    Start the interactive console if the user writes a valid
+    command to the prompt while Ocellaris is running its time
+    loop, ie. writing "[d] + [Enter]" will start the debug
+    console.
+    
+    Commands:
+    
+    * d - debug console
+    * p - plot fields
+    * r - write restart file
+    * s - stop the simulation (changes the maximum simulation
+          time to current time)
+    * t - print timings to screen
+    * prof N - profile the next N time steps
+    
+    Interactive console commands are not available on Windows
+    or during non-interactive (queue system/batch) use
     """
     # Check if the user has written something on stdin for us
     if simulation.rank == 0:
@@ -81,6 +98,10 @@ def get_input_from_terminal():
     """
     # The select() system call does not work on windows
     if 'win' in sys.platform:
+        return []
+    
+    # If we are not running interactively there will be no commands
+    if not sys.__stdin__.isatty():
         return []
     
     import select
