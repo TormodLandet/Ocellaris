@@ -34,7 +34,7 @@ sys.path.insert(0, '/mn/anatu/ansatte-u6/tormodla/.local/lib/python2.7/site-pack
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
-    'sphinxcontrib.napoleon'
+    'sphinx.ext.napoleon'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

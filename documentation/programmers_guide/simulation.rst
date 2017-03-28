@@ -12,31 +12,31 @@ as plugins (hooks), logging, reporting, plotting and input file handling.
     .. attribute:: input
         :annotation:
         
-        An :class:`ocellaris.simulation.Input` object that holds the input from
+        An :class:`ocellaris.simulation.input.Input` object that holds the input from
         the input file provided by the user
     
     .. attribute:: hooks
         :annotation:
         
-        An :class:`ocellaris.simulation.Hooks` object that keeps track of
+        An :class:`ocellaris.simulation.hooks.Hooks` object that keeps track of
         functions that should run at certain times during the simulation
 
     .. attribute:: plotting
         :annotation:
         
-        An :class:`ocellaris.simulation.Plotting` object that helps creating 
+        An :class:`ocellaris.simulation.plotting.Plotting` object that helps creating 
         plots of the solution while the simulation is running
 
     .. attribute:: reporting
         :annotation:
         
-        An :class:`ocellaris.simulation.Reporting` object that helps report
+        An :class:`ocellaris.simulation.reporting.Reporting` object that helps report
         summary values each time step
 
     .. attribute:: log
         :annotation:
         
-        An :class:`ocellaris.simulation.Log` object that helps with logging
+        An :class:`ocellaris.simulation.log.Log` object that helps with logging
         messages to screen while the simulation is running
     
     .. attribute:: data
@@ -101,12 +101,12 @@ as plugins (hooks), logging, reporting, plotting and input file handling.
               - The function space of pressures
             
 
-.. autoclass:: ocellaris.simulation.Input
+.. autoclass:: ocellaris.simulation.input.Input
 
-.. autoclass:: ocellaris.simulation.Hooks
+.. autoclass:: ocellaris.simulation.hooks.Hooks
 
-.. autoclass:: ocellaris.simulation.Plotting
+.. autoclass:: ocellaris.simulation.plotting.Plotting
 
-.. autoclass:: ocellaris.simulation.Reporting
+.. autoclass:: ocellaris.simulation.reporting.Reporting
 
-.. autoclass:: ocellaris.simulation.Log
+.. autoclass:: ocellaris.simulation.log.Log
