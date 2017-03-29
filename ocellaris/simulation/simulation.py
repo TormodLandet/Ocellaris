@@ -1,7 +1,7 @@
 import time
 import numpy
 import dolfin
-from ocellaris.utils import ocellaris_error
+from ocellaris.utils import ocellaris_error, velocity_change
 from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
@@ -119,10 +119,17 @@ class Simulation(object):
             self.reporting.report_timestep_value('Ep', Ep)
             
             if self.solution_properties.has_div_conv:
+                # Convecting and convected velocities are separate
                 div_conv_dS_f, div_conv_dx_f = self.solution_properties.divergences('u_conv')
                 div_conv_dS = div_conv_dS_f.vector().max()
                 div_conv_dx = div_conv_dx_f.vector().max()
                 self.reporting.report_timestep_value('div_conv', div_conv_dx + div_conv_dS)
+                
+                # Difference between the convective and the convected velocity
+                ucdiff = velocity_change(u1=self.data['up'],
+                                         u2=self.data['up_conv'],
+                                         ui_tmp=self.data['ui_tmp'])
+                self.reporting.report_timestep_value('uconv_diff', ucdiff)
             
             if not numpy.isfinite(Co_max):
                 ocellaris_error('Non finite Courant number',

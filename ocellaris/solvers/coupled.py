@@ -3,8 +3,10 @@ from __future__ import division
 import numpy
 import dolfin
 from dolfin import Constant
-from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input, create_vector_functions, shift_fields
-from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, SlopeLimiterVelocity, LocalMaximaMeasurer
+from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input, \
+    create_vector_functions, shift_fields, velocity_change
+from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, \
+    SlopeLimiterVelocity, LocalMaximaMeasurer
 from . import Solver, register_solver, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 
@@ -197,7 +199,7 @@ class SolverCoupled(Solver):
         create_vector_functions(sim, 'upp_conv', 'upp_conv%d', Vu)
         create_vector_functions(sim, 'u_unlim', 'u_unlim%d', Vu)
         sim.data['p'] = dolfin.Function(Vp)
-        self.u_tmp = dolfin.Function(Vu)
+        sim.data['ui_tmp'] = dolfin.Function(Vu)
     
     def setup_hydrostatic_pressure_calculations(self):
         """
@@ -302,38 +304,16 @@ class SolverCoupled(Solver):
         if not self.using_limiter:
             return 0
         
-        # Store unlimited velocities for later comparison
-        for d in range(self.simulation.ndim):
-            u_star = self.simulation.data['u%d' % d]
-            u_unlim = self.simulation.data['u_unlim%d' % d]
-            u_unlim.assign(u_star)
-        
+        # Store unlimited velocities and then run limiter
+        shift_fields(self.simulation, ['u%d', 'u_unlim%d'])
         self.slope_limiter.run()
         
-        # Measure the change in the field after limiting (L2 norm)
-        change = 0
-        for d in range(self.simulation.ndim):
-            u_star = self.simulation.data['u%d' % d]
-            u_unlim = self.simulation.data['u_unlim%d' % d]
-            self.u_tmp.assign(u_unlim)
-            self.u_tmp.vector().axpy(-1, u_star.vector())
-            self.u_tmp.vector().apply('insert')
-            change += self.u_tmp.vector().norm('l2')
+        # Measure the change in the field after limiting (l2 norm)
+        change = velocity_change(u1=self.simulation.data['u'],
+                                 u2=self.simulation.data['u_unlim'],
+                                 ui_tmp=self.simulation.data['ui_tmp'])
         
-        # Measure the efficiency of the limiter at killing local maxima 
-        slopes_before = [0] * self.simulation.ndim
-        slopes_after = [0] * self.simulation.ndim
-        timer = dolfin.Timer('Ocellaris measure velocity limiter efficiency')
-        for d in range(self.simulation.ndim):
-            slopes_before[d] = self.slope_measurer.measure(self.simulation.data['u_unlim%d' % d])
-            slopes_after[d] = self.slope_measurer.measure(self.simulation.data['u%d' % d])
-        eff = [(sb-sa)/sb for sb, sa in zip(slopes_before, slopes_after)]
-        efficiency = numpy.mean(eff)
-        timer.stop()
-        
-        #print self.simulation.time, slopes_before, slopes_after, 'Efficiency:', round(efficiency,4)
-        #exit()
-        return change, efficiency
+        return change
     
     @timeit
     def solve_coupled(self):
@@ -491,9 +471,8 @@ class SolverCoupled(Solver):
             
             # Slope limit the velocities
             if self.using_limiter:
-                change_lim, efficiency_lim = self.slope_limit_velocities()
-                sim.reporting.report_timestep_value('vel_lim_change', change_lim)
-                sim.reporting.report_timestep_value('vel_lim_effect', efficiency_lim)
+                change_lim = self.slope_limit_velocities()
+                sim.reporting.report_timestep_value('ulim_diff', change_lim)
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = self.after_timestep()
