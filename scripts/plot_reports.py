@@ -80,15 +80,15 @@ def plot_reports(file_names, save=False):
     fig = pyplot.figure()
     ax = fig.add_subplot(111)
     
-    
-    
     lines = []
+    labels = []
     for fn in file_names:
         bname = os.path.basename(fn)
         bname_split = bname.split('_endpoint_')
         label = bname_split[0]
         line, = pyplot.plot([0], [0], label=label)
         lines.append(line)
+        labels.append(label)
     if len(file_names) > 1:
         ax.legend()
     
@@ -124,7 +124,12 @@ def plot_reports(file_names, save=False):
             html.write('  <title>Ocellaris reports</title>\n')
             html.write('  <style>\n')
             html.write('    body * { margin-left: 5%; }\n')
+            html.write('    h1  { margin-left: 2%; font-family: sans-serif; }\n')
             html.write('    img { margin-left: 5%; }\n')
+            html.write('    table { margin-left: 10%; border-collapse: collapse; width: 30em; }\n')
+            html.write('    th, td { text-align: left; padding: 8px; }\n')
+            html.write('    tr:nth-child(even) { background-color: #f2f2f2 }\n')
+            html.write('    th { background-color: #5072a8; color: white; }\n')
             html.write('  </style>\n')
             html.write('</head>\n<body>\n')
             html.write('\n\n<h1>Ocellaris reports</h1>\n\n')
@@ -142,6 +147,18 @@ def plot_reports(file_names, save=False):
                 png = base64.b64encode(imgdata.buf)
                 html.write('<img alt="Ocellaris report %s" ' % rep_name +
                            'src="data:image/png;base64,%s">\n' % urllib.quote(png))
+                
+                # Write table of statistics
+                html.write('<br>\n<table>\n')
+                html.write('<tr><th>Simulation</th><th>min</th><th>max</th><th>mean</th><th>std</th></tr>\n')
+                for i in range(Nfiles):
+                    if rep_name in all_reps[i]:
+                        y = all_reps[i][rep_name]
+                    else:
+                        y = numpy.array([numpy.NaN], float)
+                    html.write('<tr><td>%s</td><td>%.3g</td><td>%.3g</td><td>%.3g</td><td>%.3g</td></tr>\n' %
+                               (labels[i], y.min(), y.max(), y.mean(), y.std()))
+                html.write('</table>\n')
             html.write('\n\n</body>\n</html>')
             print 'Wrote report file', html_file_name
         return
