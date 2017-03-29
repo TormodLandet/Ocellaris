@@ -2,6 +2,8 @@
 Plot timestep reports from one or more Ocellaris restart files 
 """
 import os
+import StringIO
+import urllib, base64
 import h5py
 import numpy
 from matplotlib import pyplot
@@ -58,7 +60,12 @@ def read_reports_log(log_file_name, derived=True):
     return reps
 
 
-def plot_reports(file_names):
+def plot_reports(file_names, save=False):
+    """
+    Show matplotlib window with a slider that allows chosing 
+    which report to show. If save==True then save reports to
+    png+html instead
+    """
     all_reps = []
     all_rep_names = set()
     for fn in file_names:
@@ -72,7 +79,8 @@ def plot_reports(file_names):
     
     fig = pyplot.figure()
     ax = fig.add_subplot(111)
-    pyplot.subplots_adjust(left=0.15, bottom=0.25)
+    
+    
     
     lines = []
     for fn in file_names:
@@ -84,13 +92,7 @@ def plot_reports(file_names):
     if len(file_names) > 1:
         ax.legend()
     
-    ax_slider = fig.add_axes([0.15, 0.1, 0.65, 0.03])
-    slider = Slider(ax_slider, 'Report', 0.5, N+0.499999, valinit=N/2)
-    
-    def update(val):
-        i = int(round(val)-1)
-        rep_name = report_names[i]
-        
+    def plot_rep(rep_name):
         for i in range(Nfiles):
             x = all_reps[i]['timesteps']
             if rep_name in all_reps[i]:
@@ -104,9 +106,49 @@ def plot_reports(file_names):
         ax.autoscale_view()
         ax.set_title('Ocellaris report %s' % rep_name)
         ax.set_ylabel(rep_name)
-        slider.valtext.set_text(rep_name)
         
         fig.canvas.draw()
+    
+    def update(val):
+        i = int(round(val)-1)
+        rep_name = report_names[i]
+        plot_rep(rep_name)
+        slider.valtext.set_text(rep_name)
+    
+    if save:
+        # Save report instead of showing plots on screen
+        html_file_name = 'reports.html'
+        with open(html_file_name, 'wt') as html:
+            html.write('<!DOCTYPE html>\n<html lang="en">\n<head>\n')
+            html.write('  <meta charset="utf-8">\n')
+            html.write('  <title>Ocellaris reports</title>\n')
+            html.write('  <style>\n')
+            html.write('    body * { margin-left: 5%; }\n')
+            html.write('    img { margin-left: 5%; }\n')
+            html.write('  </style>\n')
+            html.write('</head>\n<body>\n')
+            html.write('\n\n<h1>Ocellaris reports</h1>\n\n')
+  
+            fig.size = (8, 6)
+            for rep_name in report_names:
+                html.write('\n<h2>%s</h2>\n' % rep_name)
+                plot_rep(rep_name)
+                fig.tight_layout()
+                
+                # Get png data as base64 encoded <img> element
+                imgdata = StringIO.StringIO()
+                fig.savefig(imgdata, format='png')
+                imgdata.seek(0)  # rewind the data
+                png = base64.b64encode(imgdata.buf)
+                html.write('<img alt="Ocellaris report %s" ' % rep_name +
+                           'src="data:image/png;base64,%s">\n' % urllib.quote(png))
+            html.write('\n\n</body>\n</html>')
+            print 'Wrote report file', html_file_name
+        return
+    
+    pyplot.subplots_adjust(left=0.15, bottom=0.25)
+    ax_slider = fig.add_axes([0.15, 0.1, 0.65, 0.03])
+    slider = Slider(ax_slider, 'Report', 0.5, N+0.499999, valinit=N/2)
     
     slider.on_changed(update)
     update(slider.val)
@@ -119,6 +161,16 @@ def plot_reports(file_names):
 
 if __name__ == '__main__':
     import sys
+    
+    # Get report files to save
     h5_file_names = sys.argv[1:]
-    plot_reports(h5_file_names)
-    pyplot.show()
+    
+    save = False
+    if '--save' in h5_file_names:
+        h5_file_names.remove('--save')
+        save = True
+    
+    plot_reports(h5_file_names, save)
+    
+    if not save:
+        pyplot.show()
