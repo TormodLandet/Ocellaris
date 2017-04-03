@@ -1,7 +1,8 @@
 import numpy
 import dolfin
 from ocellaris.utils import ocellaris_error
-from ocellaris.solver_parts import mark_cell_layers
+from ocellaris.solver_parts import get_dof_region_marks, mark_cell_layers
+from .limiter_bcs import SlopeLimiterBoundaryConditions
 
 
 DEFAULT_LIMITER = 'None'
@@ -111,16 +112,21 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
                             ' (due to degree == 0)')
         return DoNothingSlopeLimiter()
     
-    # Mark boundary cells
+    # Get boundary region marks and get the helper class used to limit along the boundaries
+    drm = get_dof_region_marks(simulation, V)
+    bcs = SlopeLimiterBoundaryConditions(simulation, phi_name, drm, V.dim())
+    
     if skip_boundary:
-        boundary_condition = mark_cell_layers(simulation, V, layers=1)
+        # Mark dofs in boundary cells and one layer of connected cells
+        skip_dofs = mark_cell_layers(simulation, V, layers=1, dof_region_marks=drm)
     else:
-        boundary_condition = numpy.zeros(V.dim(), bool)
+        skip_dofs = numpy.zeros(V.dim(), bool)
+        bcs.activate()
     
     # Construct the limiter
     simulation.log.info('    Using slope limiter %s for field %s' % (method, name))
     limiter_class = get_slope_limiter(method)
-    limiter = limiter_class(phi_name=phi_name, phi=phi, boundary_condition=boundary_condition,
+    limiter = limiter_class(phi_name=phi_name, phi=phi, skip_dofs=skip_dofs, boundary_conditions=bcs,
                             output_name=output_name, use_cpp=use_cpp, enforce_bounds=enforce_bounds)
     
     if plot_exceedance:

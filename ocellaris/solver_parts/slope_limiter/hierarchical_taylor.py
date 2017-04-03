@@ -11,7 +11,7 @@ from . import register_slope_limiter, SlopeLimiterBase
 class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
     description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchical manner'
     
-    def __init__(self, phi_name, phi, boundary_condition, output_name=None, use_cpp=True, enforce_bounds=False):
+    def __init__(self, phi_name, phi, skip_dofs, boundary_conditions, output_name=None, use_cpp=True, enforce_bounds=False):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -31,6 +31,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.phi = phi
         self.degree = degree
         self.mesh = mesh
+        self.boundary_conditions = boundary_conditions
         self.use_cpp = use_cpp
         self.enforce_global_bounds = enforce_bounds
         
@@ -62,8 +63,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.neighbours = neighbours
         
         # Remove boundary dofs from limiter
-        if boundary_condition is not None:
-            num_neighbours[boundary_condition] = 0
+        if skip_dofs is not None:
+            num_neighbours[skip_dofs] = 0
         
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
@@ -106,19 +107,27 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         # Get global bounds, see SlopeLimiterBase.set_initial_field()
         global_min, global_max = self.global_bounds
         
+        # Update previous field values Taylor functions
         if self.phi_old is not None:
             lagrange_to_taylor(self.phi_old, self.taylor_old)
             taylor_arr_old = self.taylor_old.vector().get_local()
         else:
             taylor_arr_old = taylor_arr
         
+        # Get updated boundary conditions
+        boundary_dof_type, boundary_dof_value = self.boundary_conditions.get_bcs()
+        
+        # Run the limiter implementation
         if self.use_cpp:
-            self._run_cpp(taylor_arr, taylor_arr_old, alpha_arrs, global_min, global_max)
+            self._run_cpp(taylor_arr, taylor_arr_old, alpha_arrs, global_min, global_max,
+                          boundary_dof_type, boundary_dof_value)
         elif self.degree == 1:
-            self._run_dg1(taylor_arr, taylor_arr_old, alpha_arrs[0], global_min, global_max)
+            self._run_dg1(taylor_arr, taylor_arr_old, alpha_arrs[0], global_min, global_max,
+                          boundary_dof_type, boundary_dof_value)
         elif self.degree == 2:
-            self._run_dg2(taylor_arr, taylor_arr_old, alpha_arrs[0], alpha_arrs[1], global_min, global_max)
-            
+            self._run_dg2(taylor_arr, taylor_arr_old, alpha_arrs[0], alpha_arrs[1], global_min, global_max,
+                          boundary_dof_type, boundary_dof_value)
+        
         # Update the Lagrange function with the limited Taylor values
         self.taylor.vector().set_local(taylor_arr)
         self.taylor.vector().apply('insert')
@@ -131,21 +140,27 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         
         timer.stop()
     
-    def _run_cpp(self, taylor_arr, taylor_arr_old, alpha_arrs, global_min, global_max):
+    def _run_cpp(self, taylor_arr, taylor_arr_old, alpha_arrs,
+                 global_min, global_max,
+                 boundary_dof_type, boundary_dof_value):
         if self.degree == 1:
             limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg1
         elif self.degree == 2:
             limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg2
         
+        # Update C++ input
         inp = self.cpp_input
-        inp.global_min = global_min;
-        inp.global_max = global_max;
+        inp.set_global_bounds(global_min, global_max)
+        inp.set_boundary_values(boundary_dof_type, boundary_dof_value)
+        
         limiter(self.cpp_input.cpp_obj,
                 taylor_arr,
                 taylor_arr_old,
                 *alpha_arrs)
     
-    def _run_dg1(self, taylor_arr, taylor_arr_old, alpha_arr, global_min, global_max):
+    def _run_dg1(self, taylor_arr, taylor_arr_old, alpha_arr,
+                 global_min, global_max,
+                 boundary_dof_type, boundary_dof_value):
         """
         Perform slope limiting of a DG1 function
         """
@@ -203,7 +218,9 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             taylor_arr[dofs[1]] *= alpha
             taylor_arr[dofs[2]] *= alpha
     
-    def _run_dg2(self, taylor_arr, taylor_arr_old, alpha1_arr, alpha2_arr, global_min, global_max):
+    def _run_dg2(self, taylor_arr, taylor_arr_old, alpha1_arr, alpha2_arr,
+                 global_min, global_max,
+                 boundary_dof_type, boundary_dof_value):
         """
         Perform slope limiting of a DG2 function
         """

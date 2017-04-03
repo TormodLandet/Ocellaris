@@ -1,6 +1,7 @@
 #ifndef __SLOPE_LIMITER_BASIC_H
 #define __SLOPE_LIMITER_BASIC_H
 
+#include <cstdint>
 #include <vector>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/function/Function.h>
@@ -24,7 +25,7 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
   const std::vector<int>& cell_dofs = input.cell_dofs;
   const std::vector<int>& cell_dofs_dg0 = input.cell_dofs_dg0;
   const std::vector<double>& vertex_coords = input.vertex_coords;
-  const std::vector<short>& limit_cell = input.limit_cell;
+  const std::vector<std::int8_t>& limit_cell = input.limit_cell;
   const double global_min = input.global_min;
   const double global_max = input.global_max;
 
@@ -123,7 +124,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
   const std::vector<int>& cell_dofs = input.cell_dofs;
   const std::vector<int>& cell_dofs_dg0 = input.cell_dofs_dg0;
   const std::vector<double>& vertex_coords = input.vertex_coords;
-  const std::vector<short>& limit_cell = input.limit_cell;
+  const std::vector<std::int8_t>& limit_cell = input.limit_cell;
   const double global_min = input.global_min;
   const double global_max = input.global_max;
 

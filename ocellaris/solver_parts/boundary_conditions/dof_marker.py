@@ -56,7 +56,7 @@ def get_dof_region_marks(simulation, V):
 def mark_cell_layers(simulation, V, layers=1, dof_region_marks=None):
     """
     Mark all dofs as boundary dofs if they are connected to a
-    cell that contains boundary dofs. thie initial list is
+    cell that contains boundary dofs. The initial dof list is
     taken as the keys from the given dof_region_mark dictionary  
     """
     if dof_region_marks is None:

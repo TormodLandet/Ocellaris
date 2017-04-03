@@ -1,6 +1,7 @@
 #ifndef __SLOPE_LIMITER_COMMON_H
 #define __SLOPE_LIMITER_COMMON_H
 
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -9,8 +10,19 @@ namespace dolfin
 {
 
 
+enum BoundaryDofType {
+  NOT_ON_BOUNDARY = 0,
+  DIRICHLET = 1,
+  NEUMANN = 2
+};
+
+
 struct SlopeLimiterInput
 {
+  // --------------------------------------------------------------------------
+  // Connectivity and dofs
+  // --------------------------------------------------------------------------
+
   // Dimensions of the arrays
   int num_cells_owned;
   int max_neighbours;
@@ -29,7 +41,7 @@ struct SlopeLimiterInput
   std::vector<double> vertex_coords;
 
   // Should we limit a given cell. Look up with cell number and get 1 or 0
-  std::vector<short> limit_cell;
+  std::vector<std::int8_t> limit_cell;
 
   // We can clamp the limited values to a given range
   double global_min = std::numeric_limits<double>::lowest();
@@ -47,29 +59,48 @@ struct SlopeLimiterInput
     this->num_cells_owned = num_cells_owned;
     this->max_neighbours = max_neighbours;
 
-    this->num_neighbours.reserve(num_neighbours.size());
+    this->num_neighbours.resize(num_neighbours.size());
     for (int i = 0; i < num_neighbours.size(); i++)
-      this->num_neighbours.push_back(num_neighbours[i]);
+      this->num_neighbours[i] = num_neighbours[i];
 
-    this->neighbours.reserve(neighbours.size());
+    this->neighbours.resize(neighbours.size());
     for (int i = 0; i < neighbours.size(); i++)
-      this->neighbours.push_back(neighbours[i]);
+      this->neighbours[i] = neighbours[i];
 
-    this->cell_dofs.reserve(cell_dofs.size());
+    this->cell_dofs.resize(cell_dofs.size());
     for (int i = 0; i < cell_dofs.size(); i++)
-      this->cell_dofs.push_back(cell_dofs[i]);
+      this->cell_dofs[i] = cell_dofs[i];
 
-    this->cell_dofs_dg0.reserve(cell_dofs_dg0.size());
+    this->cell_dofs_dg0.resize(cell_dofs_dg0.size());
     for (int i = 0; i < cell_dofs_dg0.size(); i++)
-      this->cell_dofs_dg0.push_back(cell_dofs_dg0[i]);
+      this->cell_dofs_dg0[i] = cell_dofs_dg0[i];
 
-    this->vertex_coords.reserve(vertex_coords.size());
+    this->vertex_coords.resize(vertex_coords.size());
     for (int i = 0; i < vertex_coords.size(); i++)
-      this->vertex_coords.push_back(vertex_coords[i]);
+      this->vertex_coords[i] = vertex_coords[i];
 
-    this->limit_cell.reserve(limit_cell.size());
+    this->limit_cell.resize(limit_cell.size());
     for (int i = 0; i < limit_cell.size(); i++)
-      this->limit_cell.push_back( (short) limit_cell[i]);
+      this->limit_cell[i] = static_cast<std::int8_t>(limit_cell[i]);
+  }
+
+  // --------------------------------------------------------------------------
+  // Boundary conditions
+  // --------------------------------------------------------------------------
+
+  std::vector<BoundaryDofType> boundary_dof_type;
+  std::vector<float> boundary_dof_value;
+
+  void set_boundary_values(const Array<int>& boundary_dof_type,
+                           const Array<double>& boundary_dof_value)
+  {
+    this->boundary_dof_type.resize(boundary_dof_type.size());
+    for (int i = 0; i < boundary_dof_type.size(); i++)
+      this->boundary_dof_type[i] = static_cast<BoundaryDofType>(boundary_dof_type[i]);
+
+    this->boundary_dof_value.resize(boundary_dof_value.size());
+    for (int i = 0; i < boundary_dof_value.size(); i++)
+      this->boundary_dof_value[i] = boundary_dof_value[i];
   }
 };
 

@@ -43,3 +43,10 @@ class SlopeLimiterInput(object):
                                 flat_cell_dofs_dg0,
                                 flat_vertex_coordinates,
                                 limit_cell)
+    
+    def set_global_bounds(self, global_min, global_max):
+        self.global_min = global_min
+        self.global_max = global_max
+    
+    def set_boundary_values(self, boundary_dof_type, boundary_dof_value):
+        self.cpp_obj.set_boundary_values(boundary_dof_type, boundary_dof_value)
