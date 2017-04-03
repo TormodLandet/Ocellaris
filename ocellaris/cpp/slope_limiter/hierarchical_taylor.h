@@ -1,29 +1,33 @@
 #ifndef __SLOPE_LIMITER_BASIC_H
 #define __SLOPE_LIMITER_BASIC_H
 
+#include <vector>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/la/GenericVector.h>
 #include <dolfin/fem/GenericDofMap.h>
 
+
 namespace dolfin
 {
 
 
-void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
-                                           const int num_cells_owned,
-                                           const int max_neighbours,
-                                           const Array<int>& neighbours,
-                                           const Array<int>& cell_dofs,
-                                           const Array<int>& cell_dofs_dg0,
-                                           const Array<double>& vertex_coords,
-                                           const Array<int>& limit_cell,
-                                           const double global_min,
-                                           const double global_max,
+void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
                                            double* taylor_arr,
                                            double* taylor_arr_old,
                                            double* alpha_arr)
 {
+  const int num_cells_owned = input.num_cells_owned;
+  const int max_neighbours = input.max_neighbours;
+  const std::vector<int>& num_neighbours = input.num_neighbours;
+  const std::vector<int>& neighbours = input.neighbours;
+  const std::vector<int>& cell_dofs = input.cell_dofs;
+  const std::vector<int>& cell_dofs_dg0 = input.cell_dofs_dg0;
+  const std::vector<double>& vertex_coords = input.vertex_coords;
+  const std::vector<short>& limit_cell = input.limit_cell;
+  const double global_min = input.global_min;
+  const double global_max = input.global_max;
+
   const int vstride = 8;
   const int dstride = 3;
 
@@ -106,21 +110,23 @@ void hierarchical_taylor_slope_limiter_dg1(const Array<int>& num_neighbours,
 }
 
 
-void hierarchical_taylor_slope_limiter_dg2(const Array<int>& num_neighbours,
-                                           const int num_cells_owned,
-                                           const int max_neighbours,
-                                           const Array<int>& neighbours,
-                                           const Array<int>& cell_dofs,
-                                           const Array<int>& cell_dofs_dg0,
-                                           const Array<double>& vertex_coords,
-                                           const Array<int>& limit_cell,
-                                           const double global_min,
-                                           const double global_max,
+void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
                                            double* taylor_arr,
                                            double* taylor_arr_old,
                                            double* alpha1_arr,
                                            double* alpha2_arr)
 {
+  const int num_cells_owned = input.num_cells_owned;
+  const int max_neighbours = input.max_neighbours;
+  const std::vector<int>& num_neighbours = input.num_neighbours;
+  const std::vector<int>& neighbours = input.neighbours;
+  const std::vector<int>& cell_dofs = input.cell_dofs;
+  const std::vector<int>& cell_dofs_dg0 = input.cell_dofs_dg0;
+  const std::vector<double>& vertex_coords = input.vertex_coords;
+  const std::vector<short>& limit_cell = input.limit_cell;
+  const double global_min = input.global_min;
+  const double global_max = input.global_max;
+
   const int vstride = 8;
   const int dstride = 6;
 

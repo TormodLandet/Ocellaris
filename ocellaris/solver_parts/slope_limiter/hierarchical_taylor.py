@@ -2,7 +2,6 @@
 from __future__ import division
 import numpy
 import dolfin as df
-from ocellaris.cpp import load_module
 from ocellaris.utils import verify_key, get_dof_neighbours
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
 from . import register_slope_limiter, SlopeLimiterBase
@@ -65,7 +64,6 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         # Remove boundary dofs from limiter
         if boundary_condition is not None:
             num_neighbours[boundary_condition] = 0
-        self.num_neighbours = num_neighbours
         
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
@@ -85,28 +83,11 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.vertex_coordinates = mesh.coordinates()
         
         if use_cpp:
-            # Flatten 2D arrays for easy transfer to C++
-            self.max_neighbours = neighbours.shape[1]
-            self.flat_neighbours = neighbours.flatten()
-            self.flat_cell_dofs = numpy.array(self.cell_dofs_V, dtype=numpy.intc).flatten()
-            self.flat_cell_dofs_dg0 = numpy.array(self.cell_dofs_V0, dtype=numpy.intc).flatten()
-            self.cpp_mod = load_module('hierarchical_taylor')
-            
-            tdim = self.mesh.topology().dim()
-            self.num_cells_owned = self.mesh.topology().ghost_offset(tdim)
-            
-            # Store coordinates for the three vertices plus the cell center for each cell
-            stride = (3 + 1) * 2
-            self.flat_vertex_coordinates = numpy.zeros(self.num_cells_owned * stride, float)
-            for icell in xrange(self.num_cells_owned):
-                cell_vertices = [self.vertex_coordinates[iv] for iv in self.vertices[icell]]
-                center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
-                center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]) / 3
-                istart = icell * stride
-                self.flat_vertex_coordinates[istart+0:istart+2] = cell_vertices[0]
-                self.flat_vertex_coordinates[istart+2:istart+4] = cell_vertices[1]
-                self.flat_vertex_coordinates[istart+4:istart+6] = cell_vertices[2]
-                self.flat_vertex_coordinates[istart+6:istart+8] = (center_pos_x, center_pos_y)
+            from .limiter_cpp_utils import cpp_mod, SlopeLimiterInput
+            self.cpp_mod = cpp_mod
+            self.cpp_input = SlopeLimiterInput(mesh, vertices, self.vertex_coordinates,
+                                               self.num_neighbours, neighbours, self.cell_dofs_V,
+                                               self.cell_dofs_V0, self.limit_cell)
     
     def run(self):
         """
@@ -149,23 +130,17 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             alpha.vector().apply('insert')
         
         timer.stop()
-        
+    
     def _run_cpp(self, taylor_arr, taylor_arr_old, alpha_arrs, global_min, global_max):
         if self.degree == 1:
             limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg1
         elif self.degree == 2:
             limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg2
         
-        limiter(self.num_neighbours,
-                self.num_cells_owned,
-                self.max_neighbours,
-                self.flat_neighbours,
-                self.flat_cell_dofs,
-                self.flat_cell_dofs_dg0,
-                self.flat_vertex_coordinates,
-                self.limit_cell,
-                global_min,
-                global_max,
+        inp = self.cpp_input
+        inp.global_min = global_min;
+        inp.global_max = global_max;
+        limiter(self.cpp_input.cpp_obj,
                 taylor_arr,
                 taylor_arr_old,
                 *alpha_arrs)
