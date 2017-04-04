@@ -36,22 +36,8 @@ def get_boundary_condition(name):
         raise
 
 
-class BoundaryCondition(object):
+class BoundaryConditionCreator(object):
     description = 'No description available'
-    
-    def func(self):
-        """
-        Returns the value at the boundary for Dirichlet boundary conditions
-        and the normal derivative at the boundaru for Neumann bcs.
-        """
-        raise NotImplementedError()
-    
-    def ds(self):
-        """
-        Returns the ds measure of the part of the boundary which this boundary
-        condition applies to
-        """
-        raise NotImplementedError()
 
 
 from .boundary_region import BoundaryRegion

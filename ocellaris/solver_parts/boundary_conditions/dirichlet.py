@@ -1,5 +1,5 @@
 import dolfin
-from . import register_boundary_condition, BoundaryCondition
+from . import register_boundary_condition, BoundaryConditionCreator
 from ocellaris.utils import CodedExpression, OcellarisCppExpression
 
 
@@ -52,7 +52,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
 
 
 @register_boundary_condition('ConstantValue')
-class ConstantDirichletBoundary(BoundaryCondition):
+class ConstantDirichletBoundary(BoundaryConditionCreator):
     description = 'A prescribed constant value Dirichlet condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
@@ -92,7 +92,7 @@ class ConstantDirichletBoundary(BoundaryCondition):
 
 
 @register_boundary_condition('CodedValue')
-class CodedDirichletBoundary(BoundaryCondition):
+class CodedDirichletBoundary(BoundaryConditionCreator):
     description = 'A coded Dirichlet condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
@@ -134,7 +134,7 @@ class CodedDirichletBoundary(BoundaryCondition):
 
 
 @register_boundary_condition('CppCodedValue')
-class CppCodedDirichletBoundary(BoundaryCondition):
+class CppCodedDirichletBoundary(BoundaryConditionCreator):
     description = 'A C++ coded Dirichlet condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):

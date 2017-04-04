@@ -1,5 +1,5 @@
 import dolfin
-from . import register_boundary_condition, BoundaryCondition
+from . import register_boundary_condition, BoundaryConditionCreator
 from ocellaris.utils import CodedExpression, OcellarisCppExpression
 
 
@@ -30,7 +30,7 @@ class OcellarisNeumannBC(object):
 
 
 @register_boundary_condition('ConstantGradient')
-class NeumannBoundary(BoundaryCondition):
+class NeumannBoundary(BoundaryConditionCreator):
     description = 'A prescribed constant value Neumann condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
@@ -64,7 +64,7 @@ class NeumannBoundary(BoundaryCondition):
 
 
 @register_boundary_condition('CodedGradient')
-class CodedNeumannBoundary(BoundaryCondition):
+class CodedNeumannBoundary(BoundaryConditionCreator):
     description = 'A coded Neumann condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
@@ -100,7 +100,7 @@ class CodedNeumannBoundary(BoundaryCondition):
 
 
 @register_boundary_condition('CppCodedGradient')
-class CppCodedNeumannBoundary(BoundaryCondition):
+class CppCodedNeumannBoundary(BoundaryConditionCreator):
     description = 'A C++ coded Neumann boundary condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):

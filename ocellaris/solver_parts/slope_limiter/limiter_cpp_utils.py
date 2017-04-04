@@ -8,8 +8,7 @@ class SlopeLimiterInput(object):
                  neighbours, cell_dofs_V, cell_dofs_V0, limit_cell):
         """
         This class stores the connectivity and dof maps necessary to
-        perform the slope lmitin in an efficient manner in the C++
-        code 
+        perform slope limiting in an efficient manner in the C++ code 
         """
         # Flatten 2D arrays for easy transfer to C++
         max_neighbours = neighbours.shape[1]
@@ -45,8 +44,16 @@ class SlopeLimiterInput(object):
                                 limit_cell)
     
     def set_global_bounds(self, global_min, global_max):
+        """
+        Set the minimum and maximum allowable field values for
+        the limited field
+        """
         self.global_min = global_min
         self.global_max = global_max
     
     def set_boundary_values(self, boundary_dof_type, boundary_dof_value):
+        """
+        Transfer the boundary dof data to the C++ side
+        """
+        assert boundary_dof_type.min() >= 0 and boundary_dof_type.max() <= 2
         self.cpp_obj.set_boundary_values(boundary_dof_type, boundary_dof_value)

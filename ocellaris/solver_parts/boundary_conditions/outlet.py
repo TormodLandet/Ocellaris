@@ -1,4 +1,4 @@
-from . import register_boundary_condition, BoundaryCondition
+from . import register_boundary_condition, BoundaryConditionCreator
 from ocellaris.utils import OcellarisError
 
 
@@ -23,7 +23,7 @@ class OcellarisOutletBC(object):
 
 
 @register_boundary_condition('OpenOutletBoundary')
-class OpenOutletBoundary(BoundaryCondition):
+class OpenOutletBoundary(BoundaryConditionCreator):
     description = 'An open outlet zero stress boundary condition'
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):

@@ -114,7 +114,7 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     
     # Get boundary region marks and get the helper class used to limit along the boundaries
     drm = get_dof_region_marks(simulation, V)
-    bcs = SlopeLimiterBoundaryConditions(simulation, phi_name, drm, V.dim())
+    bcs = SlopeLimiterBoundaryConditions(simulation, output_name, drm, V.dim())
     
     if skip_boundary:
         # Mark dofs in boundary cells and one layer of connected cells
@@ -134,6 +134,7 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
             simulation.io.add_extra_output_function(func)
     
     return limiter
+
 
 from ocellaris.cpp import load_module
 LocalMaximaMeasurer = load_module('measure_local_maxima').LocalMaximaMeasurer
