@@ -1,5 +1,5 @@
 import sys
-from ocellaris import get_version, get_detailed_version, Simulation, setup_simulation, run_simulation
+from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation
 
 
 def main(inputfile, input_override):
@@ -21,7 +21,7 @@ def main(inputfile, input_override):
     sim.log.setup()
     
     # Print banner with Ocellaris version number 
-    version = get_detailed_version() or get_version()
+    version = get_detailed_version()
     sim.log.info('='*80)
     sim.log.info('                  Ocellaris   %s' % version) 
     sim.log.info('='*80)

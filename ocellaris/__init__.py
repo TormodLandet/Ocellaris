@@ -7,7 +7,7 @@ except ImportError:
     exit()
 
 
-__version__ = '2017.1.dev0'
+__version__ = '2017.1.dev1'
 
 
 def get_version():
@@ -25,11 +25,13 @@ def get_detailed_version():
     import os, subprocess
     this_dir = os.path.dirname(os.path.abspath(__file__))
     proj_dir = os.path.abspath(os.path.join(this_dir, '..'))
-    if os.path.isdir(os.path.join(proj_dir, '.hg')):
-        cmd = ['hg', 'log', '-r', '.', '--template', 
-               '{latesttag}-{latesttagdistance}-{node|short}']
-        version = subprocess.check_output(cmd)
-        return version.strip()
+    if os.path.isdir(os.path.join(proj_dir, '.git')):
+        cmd = ['git', 'describe', '--always']
+        version = subprocess.check_output(cmd, cwd=proj_dir)
+        local_version = '+git.' + version.strip()
+    else:
+        local_version = ''
+    return get_version() + local_version
 
 
 # Convenience imports for scripting
