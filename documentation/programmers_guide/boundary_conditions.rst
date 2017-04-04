@@ -7,4 +7,6 @@ function (velocity, pressure ...) in this region.
 
 .. autoclass:: ocellaris.solver_parts.boundary_conditions.BoundaryRegion
 
-.. autoclass:: ocellaris.solver_parts.boundary_conditions.BoundaryCondition
+.. autoclass:: ocellaris.solver_parts.boundary_conditions.dirichlet.OcellarisDirichletBC
+
+.. autoclass:: ocellaris.solver_parts.boundary_conditions.neumann.OcellarisNeumannBC
