@@ -143,6 +143,12 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
     def _run_cpp(self, taylor_arr, taylor_arr_old, alpha_arrs,
                  global_min, global_max,
                  boundary_dof_type, boundary_dof_value):
+        """
+        Run the C++ implementation of the HierarchicalTaylor slope limiter
+        
+        The C++ versions are probably the best tested since they are fastest
+        and hence most used
+        """
         if self.degree == 1:
             limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg1
         elif self.degree == 2:

@@ -1,6 +1,7 @@
 import numpy
 from dolfin import Timer, Constant
 
+
 class SlopeLimiterBoundaryConditions(object):
     BC_TYPE_NOT_ON_BOUNDARY = 0
     BC_TYPE_DIRICHLET = 1
@@ -52,6 +53,9 @@ class SlopeLimiterBoundaryConditions(object):
         if not self.active:
             return boundary_dof_type, boundary_dof_value
         
+        # This is potentially slow, so we time this code
+        timer = Timer("Ocellaris get slope limiter boundary conditions")
+        
         # Collect Dirichlet BCs for this field
         dirichlet = {}
         for bc in sim.data['dirichlet_bcs'].get(self.field_name, []):
@@ -63,8 +67,6 @@ class SlopeLimiterBoundaryConditions(object):
         for bc in sim.data['neumann_bcs'].get(self.field_name, []):
             region_number = bc.subdomain_id - 1
             neumann[region_number] = bc
-        
-        timer = Timer("Ocellaris get slope limiter boundary conditions")
         
         regions = sim.data['boundary']
         for region_number, dofs in self.region_dofs.items():
@@ -92,8 +94,8 @@ class SlopeLimiterBoundaryConditions(object):
                     boundary_dof_type[dof] = bc_type
                     boundary_dof_value[dof] = val
             else:
-                self._warn('WARNING: Field %s has unsupported BC in region %s' %
-                           (self.field_name, boundary_region.name))
+                self._warn('WARNING: Field %s has unsupported BC %r in region %s' %
+                           (self.field_name, type(value), boundary_region.name))
         
         timer.stop()
         return boundary_dof_type, boundary_dof_value

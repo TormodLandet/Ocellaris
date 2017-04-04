@@ -7,6 +7,7 @@
 #include <dolfin/function/Function.h>
 #include <dolfin/la/GenericVector.h>
 #include <dolfin/fem/GenericDofMap.h>
+#include "limiter_common.h"
 
 
 namespace dolfin
@@ -26,6 +27,8 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
   const std::vector<int>& cell_dofs_dg0 = input.cell_dofs_dg0;
   const std::vector<double>& vertex_coords = input.vertex_coords;
   const std::vector<std::int8_t>& limit_cell = input.limit_cell;
+  const std::vector<BoundaryDofType>& boundary_dof_type = input.boundary_dof_type;
+  const std::vector<float>& boundary_dof_value = input.boundary_dof_value;
   const double global_min = input.global_min;
   const double global_max = input.global_max;
 
@@ -79,6 +82,14 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
           hi = std::max(hi, nb_val);
         }
 
+        // Modify local bounds to incorporate the boundary conditions
+        if (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET)
+        {
+          double bc_value = boundary_dof_value[dof];
+          lo = std::min(lo, bc_value);
+          hi = std::max(hi, bc_value);
+        }
+
         // Modify local bounds to incorporate the global bounds
         lo = std::max(lo, global_min);
         hi = std::min(hi, global_max);
@@ -125,6 +136,8 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
   const std::vector<int>& cell_dofs_dg0 = input.cell_dofs_dg0;
   const std::vector<double>& vertex_coords = input.vertex_coords;
   const std::vector<std::int8_t>& limit_cell = input.limit_cell;
+  const std::vector<BoundaryDofType>& boundary_dof_type = input.boundary_dof_type;
+  const std::vector<float>& boundary_dof_value = input.boundary_dof_value;
   const double global_min = input.global_min;
   const double global_max = input.global_max;
 
@@ -203,9 +216,17 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
           hi = std::max(hi, nb_val);
         }
 
-        // Modify local bounds to incorporate the global bounds
         if (itaylor == 0)
         {
+          // Modify local bounds to incorporate the boundary conditions
+          if (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET)
+          {
+            double bc_value = boundary_dof_value[dof];
+            lo = std::min(lo, bc_value);
+            hi = std::max(hi, bc_value);
+          }
+
+          // Modify local bounds to incorporate the global bounds
           lo = std::max(lo, global_min);
           hi = std::min(hi, global_max);
           center_phi = std::max(center_phi, global_min);
