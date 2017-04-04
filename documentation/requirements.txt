@@ -1,0 +1,3 @@
+# Requirements needed to produce documentation on ReadTheDocs
+# We use mock to create a fake dolfin package
+mock

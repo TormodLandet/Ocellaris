@@ -6,12 +6,16 @@ except ImportError:
     print '    Exiting due to error\n'
     exit()
 
-_VERSION = '0.1'
+
+__version__ = '2017.1.dev0'
+
+
 def get_version():
     """
     Return the version number of Ocellaris
     """
-    return _VERSION
+    return __version__
+
 
 def get_detailed_version():
     """
@@ -26,6 +30,7 @@ def get_detailed_version():
                '{latesttag}-{latesttagdistance}-{node|short}']
         version = subprocess.check_output(cmd)
         return version.strip()
+
 
 # Convenience imports for scripting
 from .postprocess import Plotter

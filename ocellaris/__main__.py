@@ -104,7 +104,7 @@ def override_input_variables(simulation, input_override):
         d[idx] = py_value
 
 
-if __name__ == '__main__':
+def run_from_console():
     # Get command line arguments
     import argparse
     parser = argparse.ArgumentParser(prog='ocellaris',
@@ -118,3 +118,7 @@ if __name__ == '__main__':
     
     # Run Ocellaris
     main(args.inputfile, args.set_input)
+
+
+if __name__ == '__main__':
+    run_from_console()
