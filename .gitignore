@@ -19,3 +19,6 @@ results_*
 documentation/_build
 output/
 tmp_*
+build/
+dist/
+*egg-info*
