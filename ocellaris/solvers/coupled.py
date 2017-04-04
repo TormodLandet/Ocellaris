@@ -211,7 +211,7 @@ class SolverCoupled(Solver):
         # No need for hydrostatic pressure if g is zero
         g = sim.data['g']
         self.hydrostatic_pressure_correction = False
-        if all(gi == 0 for gi in g.py_value):
+        if all(gi == 0 for gi in g.values()):
             return
         
         # We only calculate the hydrostatic pressure if asked

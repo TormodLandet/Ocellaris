@@ -14,7 +14,7 @@ class HydrostaticPressure(object):
         q = dolfin.TestFunction(Vp)
         
         directions = set()
-        for i, gi in enumerate(g.py_value):
+        for i, gi in enumerate(g.values()):
             if gi != 0:
                 directions.add(i)
         
@@ -24,7 +24,7 @@ class HydrostaticPressure(object):
         elif len(directions) > 1:
             ocellaris_error('Error calculating hydrostatic pressure',
                             'Gravity vector %r is not parallel to an axis'
-                            % g.py_value)
+                            % g.values())
         
         self.active = True
         d = directions.pop()

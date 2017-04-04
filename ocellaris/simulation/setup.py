@@ -3,7 +3,7 @@ import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.postprocess import setup_probes
 from ocellaris.utils import interactive_console_hook, ocellaris_error, ocellaris_interpolate, log_timings
-from ocellaris.utils import OcellarisConstant, RunnablePythonString, OcellarisCppExpression
+from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
 from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
 
 
@@ -266,7 +266,7 @@ def setup_physical_properties(simulation, multiphase_class):
     ndim = simulation.ndim
     g = simulation.input.get_value('physical_properties/g', [0]*ndim, required_type='list(float)')
     assert len(g) == simulation.ndim
-    simulation.data['g'] = OcellarisConstant(g)
+    simulation.data['g'] = dolfin.Constant(g)
     
     # Get the density and viscosity properties from the multi phase model
     simulation.multi_phase_model = multiphase_class(simulation)

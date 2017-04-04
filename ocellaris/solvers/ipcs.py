@@ -194,7 +194,7 @@ class SolverIPCS(Solver):
         sim.data['p_hat'] = dolfin.Function(Vp)
         
         # If gravity is nonzero we create a separate hydrostatic pressure field
-        if any(gi != 0 for gi in sim.data['g'].py_value):
+        if any(gi != 0 for gi in sim.data['g'].values()):
             # Hydrostatic pressure is always CG
             Pp = Vp.ufl_element().degree()
             Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
@@ -212,7 +212,7 @@ class SolverIPCS(Solver):
         # No need for hydrostatic pressure if g is zero
         g = sim.data['g']
         self.hydrostatic_pressure_correction = False
-        if all(gi == 0 for gi in g.py_value):
+        if all(gi == 0 for gi in g.values()):
             return
         return
         
