@@ -11,7 +11,7 @@ from . import register_slope_limiter, SlopeLimiterBase
 class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
     description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchical manner'
     
-    def __init__(self, phi_name, phi, skip_dofs, boundary_conditions, output_name=None, use_cpp=True, enforce_bounds=False):
+    def __init__(self, phi_name, phi, skip_cells, boundary_conditions, output_name=None, use_cpp=True, enforce_bounds=False):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -62,10 +62,6 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.num_neighbours = num_neighbours
         self.neighbours = neighbours
         
-        # Remove boundary dofs from limiter
-        if skip_dofs is not None:
-            num_neighbours[skip_dofs] = 0
-        
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
         indices = range(self.mesh.num_cells())
@@ -82,6 +78,11 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             vertices.append(vnbs)
         self.vertices = vertices
         self.vertex_coordinates = mesh.coordinates()
+        
+        # Remove given cells from limiter 
+        if skip_cells is not None:
+            for cid in skip_cells:
+                self.limit_cell[cid] = 0
         
         if use_cpp:
             from .limiter_cpp_utils import cpp_mod, SlopeLimiterInput

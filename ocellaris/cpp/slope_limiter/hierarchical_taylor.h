@@ -49,7 +49,7 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
     double center_phix = taylor_arr[cell_dofs[ic * dstride + 1]];
     double center_phiy = taylor_arr[cell_dofs[ic * dstride + 2]];
 
-    bool skip_this_cell = (limit_cell[ic] == 0);
+    const bool skip_this_cell = (limit_cell[ic] == 0);
     if (!skip_this_cell)
     {
       for (int ivert = 0; ivert < 3; ivert++)
@@ -61,15 +61,9 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
 
         // Find highest and lowest value in the connected neighbour cells
         int dof = cell_dofs[ic * dstride + ivert];
-        int nn = num_neighbours[dof];
-        if (nn == 0)
-        {
-          skip_this_cell = true;
-          break;
-        }
         double lo = center_phi;
         double hi = center_phi;
-        for (int inb = 0; inb < nn; inb++)
+        for (int inb = 0; inb < num_neighbours[dof]; inb++)
         {
           int nb = neighbours[dof * max_neighbours + inb];
           int nb_dof = cell_dofs[nb * dstride + 0];
@@ -109,9 +103,10 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
         alpha = std::min(alpha, a);
       }
     }
-
-    if (skip_this_cell)
+    else
+    {
       alpha = 1.0;
+    }
 
     // Slope limit this cell
     alpha_arr[cell_dofs_dg0[ic]] = alpha;
@@ -161,13 +156,12 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
     double center_phiyy = taylor_arr[cell_dofs[ic * dstride + 4]];
     double center_phixy = taylor_arr[cell_dofs[ic * dstride + 5]];
 
-    bool skip_this_cell = (limit_cell[ic] == 0);
+    const bool skip_this_cell = (limit_cell[ic] == 0);
     for (int itaylor = 0; itaylor < 3; itaylor++)
     {
       if (skip_this_cell)
-      {
         break;
-      }
+
       for (int ivert = 0; ivert < 3; ivert++)
       {
         // Calculate the value of phi or its gradient at the vertex
@@ -195,15 +189,9 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
 
         // Find highest and lowest value in the connected neighbour cells
         int dof = cell_dofs[ic * dstride + ivert];
-        int nn = num_neighbours[dof];
-        if (nn == 0)
-        {
-          skip_this_cell = true;
-          break;
-        }
         double lo = base_value;
         double hi = base_value;
-        for (int inb = 0; inb < nn; inb++)
+        for (int inb = 0; inb < num_neighbours[dof]; inb++)
         {
           int nb = neighbours[dof * max_neighbours + inb];
           int nb_dof = cell_dofs[nb * dstride + itaylor];

@@ -138,16 +138,16 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     bcs = SlopeLimiterBoundaryConditions(simulation, output_name, drm, V.dim())
     
     if skip_boundary:
-        # Mark dofs in boundary cells and one layer of connected cells
-        skip_dofs = mark_cell_layers(simulation, V, layers=1, dof_region_marks=drm)
+        # Mark boundary cells and one layer of connected cells
+        skip_cells = mark_cell_layers(simulation, V, layers=1, dof_region_marks=drm)
     else:
-        skip_dofs = numpy.zeros(V.dim(), bool)
+        skip_cells = ()
         bcs.activate()
     
     # Construct the limiter
     simulation.log.info('    Using slope limiter %s for field %s' % (method, name))
     limiter_class = get_slope_limiter(method)
-    limiter = limiter_class(phi_name=phi_name, phi=phi, skip_dofs=skip_dofs, boundary_conditions=bcs,
+    limiter = limiter_class(phi_name=phi_name, phi=phi, skip_cells=skip_cells, boundary_conditions=bcs,
                             output_name=output_name, use_cpp=use_cpp, enforce_bounds=enforce_bounds)
     
     if plot_exceedance:

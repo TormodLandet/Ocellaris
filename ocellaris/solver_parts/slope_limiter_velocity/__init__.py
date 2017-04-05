@@ -3,7 +3,6 @@ from __future__ import division
 import numpy
 import dolfin
 from ocellaris.utils import ocellaris_error, verify_key
-from ocellaris.solver_parts import mark_cell_layers
 
 
 LIMITER = 'None'
