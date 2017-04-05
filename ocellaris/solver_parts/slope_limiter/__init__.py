@@ -87,6 +87,26 @@ class DoNothingSlopeLimiter(SlopeLimiterBase):
         pass
 
 
+@register_slope_limiter('OnlyBound')
+class OnlyBoundSlopeLimiter(SlopeLimiterBase):
+    description = 'Bounding limiter'
+    active = False
+    
+    def __init__(self, phi_name, phi, enforce_bounds=False, **kwargs):
+        self.phi_name = phi_name
+        self.phi = phi
+        self.enforce_global_bounds = enforce_bounds
+        self.additional_plot_funcs = []
+    
+    def run(self):
+        if self.has_global_bounds:
+            lo, hi = self.global_bounds
+            vals = self.phi.vector().get_local()
+            numpy.clip(vals, lo, hi, vals)
+            self.phi.vector().set_local(vals)
+            self.phi.vector().apply('insert')
+
+
 def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     """
     Return a slope limiter based on the user provided input or the default
@@ -108,9 +128,10 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     
     # Skip limiting if degree is 0
     if degree == 0:
-        simulation.log.info('    Using slope limiter %s for field %s' % (method, name) + 
-                            ' (due to degree == 0)')
-        return DoNothingSlopeLimiter()
+        if 'method' in inp and method != 'OnlyBound':
+            simulation.log.info('    Switching to slope limiter OnlyBound for field '
+                                '%s (due to degree == 0)' % name)
+        return OnlyBoundSlopeLimiter(phi_name=phi_name, phi=phi, enforce_bounds=enforce_bounds)
     
     # Get boundary region marks and get the helper class used to limit along the boundaries
     drm = get_dof_region_marks(simulation, V)

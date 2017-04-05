@@ -38,6 +38,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         zero when rho=rho1 and nu=nu1
         """
         self.simulation = simulation
+        simulation.log.info('Creating blended VOF multiphase model')
         
         # Define function space and solution function
         V = simulation.data['Vc']
@@ -49,6 +50,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         self.continuous_fields = simulation.input.get_value('multiphase_solver/continuous_fields',
                                                             CONTINUOUS_FIELDS, 'bool')
         if self.continuous_fields:
+            simulation.log.info('    Using continuous rho and nu fields')
             mesh = simulation.data['mesh']
             P = V.ufl_element().degree()
             V_cont = dolfin.FunctionSpace(mesh, 'CG', P + 1)
@@ -73,6 +75,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         # The convection blending function that counteracts numerical diffusion
         scheme = simulation.input.get_value('convection/c/convection_scheme', CONVECTION_SCHEME, 'string')
+        simulation.log.info('    Using convection scheme %s for the colour function' % scheme)
         scheme_class = get_convection_scheme(scheme)
         self.convection_scheme = scheme_class(simulation, 'c')
         self.need_gradient = scheme_class.need_alpha_gradient
@@ -97,12 +100,8 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         # Slope limiter in case we are using DG1, not DG0
         self.slope_limiter = SlopeLimiter(simulation, 'c', simulation.data['c'])
-        self.is_first_timestep = True
-        
-        simulation.log.info('Creating blended VOF multiphase model')
-        simulation.log.info('    Using convection scheme %s for the colour function' % scheme)
-        simulation.log.info('    Using continuous rho and nu fields: %r' % self.continuous_fields)
         simulation.log.info('    Using slope limiter: %s' % self.slope_limiter.limiter_method)
+        self.is_first_timestep = True
     
     def on_simulation_start(self):
         """
