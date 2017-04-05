@@ -55,26 +55,29 @@ def get_dof_region_marks(simulation, V):
 
 def mark_cell_layers(simulation, V, layers=1, dof_region_marks=None):
     """
-    Mark all dofs as boundary dofs if they are connected to a
-    cell that contains boundary dofs. The initial dof list is
-    taken as the keys from the given dof_region_mark dictionary  
+    Return all cells on the boundary and all connected cells in a given
+    number of layers surrounding the boundary cells. Vertex neighbours
+    are used to determine a cells neighbours.
+    
+    The initial list of cells is taken from an iterable of dofs. All 
+    cells containing these dofs are taken as the zeroth layer. If no
+    such iterable is provided the keys from the dictionary returned by
+    get_dof_region_marks(simulation, V) is used, hence the cells
+    containing the boundary facing facet are used as the zeroth level.
+    
+    @return: set of the cell numbers of marked cells  
     """
     if dof_region_marks is None:
         dof_region_marks = get_dof_region_marks(simulation, V)
     
-    # Initialize the boolean dof marker
-    marker = numpy.zeros(V.dim(), bool)
-    for dof in dof_region_marks:
-        marker[dof] =  True
-    
-    # Mark boundary cells
+    # Mark initial zeroth layer cells
     mesh = simulation.data['mesh']
     dm = V.dofmap()    
     boundary_cells = set()
     for cell in dolfin.cells(mesh):
         dofs = dm.cell_dofs(cell.index())
         for dof in dofs:
-            if marker[dof]:
+            if dof in dof_region_marks:
                 boundary_cells.add(cell.index())
                 continue
     
@@ -87,9 +90,4 @@ def mark_cell_layers(simulation, V, layers=1, dof_region_marks=None):
                 for nb in simulation.data['connectivity_VC'](vert_index):
                     boundary_cells.add(nb)
     
-    for cell_index in boundary_cells:
-        dofs = dm.cell_dofs(cell_index)
-        for dof in dofs:
-            marker[dof] = True
-    
-    return marker
+    return boundary_cells
