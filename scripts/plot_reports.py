@@ -4,6 +4,7 @@ Plot timestep reports from one or more Ocellaris restart files
 import os
 import StringIO
 import urllib, base64
+import re
 import h5py
 import numpy
 from matplotlib import pyplot
@@ -58,6 +59,68 @@ def read_reports_log(log_file_name, derived=True):
             reps['Et'] = reps['Ek'][:N] + reps['Ep'][:N]
     
     return reps
+
+
+def slugify(text):
+    """
+    Return a version of the text suitable for use in an url
+    without escaping (only ASCII, no parenthesis etc)
+    """
+    #slug = unidecode.unidecode(text)  # we only deal with ASCII, so skip this
+    slug = text.lower()
+    slug = re.sub(r'\W+', '-', slug)   # replace non letters with -
+    slug = re.sub(r'[-]+', '-', slug)  # compress multiple sequential -  
+    return slug
+
+
+def save_reports_to_html(fig, report_names, Nfiles, all_reps, labels, plot_rep):
+    """
+    Save report to a html file with embedded plots and statistics tables
+    """
+    html_file_name = 'reports.html'
+    with open(html_file_name, 'wt') as html:
+        html.write('<!DOCTYPE html>\n<html lang="en">\n<head>\n')
+        html.write('  <meta charset="utf-8">\n')
+        html.write('  <title>Ocellaris reports</title>\n')
+        html.write('  <style>\n')
+        html.write('    body * { margin-left: 5%; }\n')
+        html.write('    h1  { margin-left: 2%; font-family: sans-serif; }\n')
+        html.write('    img { margin-left: 5%; }\n')
+        html.write('    table { margin-left: 10%; border-collapse: collapse; width: 30em; }\n')
+        html.write('    th, td { text-align: left; padding: 8px; }\n')
+        html.write('    tr:nth-child(even) { background-color: #f2f2f2 }\n')
+        html.write('    th { background-color: #5072a8; color: white; }\n')
+        html.write('  </style>\n')
+        html.write('</head>\n<body>\n')
+        html.write('\n\n<h1>Ocellaris reports</h1>\n\n')
+    
+        fig.size = (8, 6)
+        for rep_name in report_names:
+            html.write('\n<h2 id="%s">%s</h2>\n' % (slugify(rep_name), rep_name))
+            plot_rep(rep_name)
+            fig.tight_layout()
+            
+            # Get png data as base64 encoded <img> element
+            imgdata = StringIO.StringIO()
+            fig.savefig(imgdata, format='png')
+            imgdata.seek(0)  # rewind the data
+            png = base64.b64encode(imgdata.buf)
+            html.write('<img alt="Ocellaris report %s" ' % rep_name +
+                       'src="data:image/png;base64,%s">\n' % urllib.quote(png))
+            
+            # Write table of statistics
+            html.write('<br>\n<table>\n')
+            html.write('<tr><th>Simulation</th><th>min</th><th>max</th><th>mean</th><th>std</th></tr>\n')
+            for i in range(Nfiles):
+                if rep_name in all_reps[i]:
+                    y = all_reps[i][rep_name]
+                else:
+                    y = numpy.array([numpy.NaN], float)
+                html.write('<tr><td>%s</td><td>%.3g</td><td>%.3g</td><td>%.3g</td><td>%.3g</td></tr>\n' %
+                           (labels[i], y.min(), y.max(), y.mean(), y.std()))
+            html.write('</table>\n')
+        html.write('\n\n</body>\n</html>')
+        print 'Wrote report file', html_file_name
 
 
 def plot_reports(file_names, save=False):
@@ -116,51 +179,8 @@ def plot_reports(file_names, save=False):
         slider.valtext.set_text(rep_name)
     
     if save:
-        # Save report instead of showing plots on screen
-        html_file_name = 'reports.html'
-        with open(html_file_name, 'wt') as html:
-            html.write('<!DOCTYPE html>\n<html lang="en">\n<head>\n')
-            html.write('  <meta charset="utf-8">\n')
-            html.write('  <title>Ocellaris reports</title>\n')
-            html.write('  <style>\n')
-            html.write('    body * { margin-left: 5%; }\n')
-            html.write('    h1  { margin-left: 2%; font-family: sans-serif; }\n')
-            html.write('    img { margin-left: 5%; }\n')
-            html.write('    table { margin-left: 10%; border-collapse: collapse; width: 30em; }\n')
-            html.write('    th, td { text-align: left; padding: 8px; }\n')
-            html.write('    tr:nth-child(even) { background-color: #f2f2f2 }\n')
-            html.write('    th { background-color: #5072a8; color: white; }\n')
-            html.write('  </style>\n')
-            html.write('</head>\n<body>\n')
-            html.write('\n\n<h1>Ocellaris reports</h1>\n\n')
-  
-            fig.size = (8, 6)
-            for rep_name in report_names:
-                html.write('\n<h2>%s</h2>\n' % rep_name)
-                plot_rep(rep_name)
-                fig.tight_layout()
-                
-                # Get png data as base64 encoded <img> element
-                imgdata = StringIO.StringIO()
-                fig.savefig(imgdata, format='png')
-                imgdata.seek(0)  # rewind the data
-                png = base64.b64encode(imgdata.buf)
-                html.write('<img alt="Ocellaris report %s" ' % rep_name +
-                           'src="data:image/png;base64,%s">\n' % urllib.quote(png))
-                
-                # Write table of statistics
-                html.write('<br>\n<table>\n')
-                html.write('<tr><th>Simulation</th><th>min</th><th>max</th><th>mean</th><th>std</th></tr>\n')
-                for i in range(Nfiles):
-                    if rep_name in all_reps[i]:
-                        y = all_reps[i][rep_name]
-                    else:
-                        y = numpy.array([numpy.NaN], float)
-                    html.write('<tr><td>%s</td><td>%.3g</td><td>%.3g</td><td>%.3g</td><td>%.3g</td></tr>\n' %
-                               (labels[i], y.min(), y.max(), y.mean(), y.std()))
-                html.write('</table>\n')
-            html.write('\n\n</body>\n</html>')
-            print 'Wrote report file', html_file_name
+        # Just save to html, do not show slider etc
+        save_reports_to_html(fig, report_names, Nfiles, all_reps, labels, plot_rep)
         return
     
     pyplot.subplots_adjust(left=0.15, bottom=0.25)
