@@ -22,6 +22,15 @@ class AdvectionEquation(object):
         Vc_family = Vc.ufl_element().family()
         self.colour_is_discontinuous = (Vc_family == 'Discontinuous Lagrange')
         
+        try:
+            Vu_family = u_conv[0].function_space().ufl_element().family()
+        except:
+            Vu_family = u_conv.function_space().ufl_element().family()
+        self.velocity_is_trace = (Vu_family == 'Discontinuous Lagrange Trace')
+        if self.velocity_is_trace:
+            assert self.colour_is_discontinuous
+            assert Vc.ufl_element().degree() == 0
+        
         # Create UFL forms
         self.define_advection_equation()
     
@@ -48,6 +57,27 @@ class AdvectionEquation(object):
             # Continous Galerkin implementation of the advection equation
             # FIXME: add stabilization
             eq = (c1*c + c2*self.cp + c3*self.cpp)/dt*d*dx + div(c*u_conv)*d*dx
+        
+        elif self.velocity_is_trace:
+            # Upstream and downstream normal velocities
+            w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2
+            w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2
+            
+            if self.beta is not None:
+                # Define the blended flux
+                # The blending factor beta is not DG, so beta('+') == beta('-')
+                b = self.beta('+')
+                flux = (1-b)*jump(c*w_nU) + b*jump(c*w_nD)
+            else:
+                flux = jump(c*w_nU)
+            
+            # Discontinuous Galerkin implementation of the advection equation 
+            eq = (c1*c + c2*self.cp + c3*self.cpp)/dt*d*dx + flux*jump(d)*dS
+            
+            # Enforce Dirichlet BCs weakly
+            for dbc in self.dirichlet_bcs:
+                eq += w_nD*dbc.func()*d*dbc.ds()
+                eq += w_nU*c*d*dbc.ds()
         
         elif self.beta is not None:
             # Upstream and downstream normal velocities

@@ -42,18 +42,18 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         # Define function space and solution function
         V = simulation.data['Vc']
+        self.degree = V.ufl_element().degree()
         simulation.data['c'] = Function(V)
         simulation.data['cp'] = Function(V)
         simulation.data['cpp'] = Function(V)
-
+        
         # The projected density and viscosity functions for the new time step can be made continuous
         self.continuous_fields = simulation.input.get_value('multiphase_solver/continuous_fields',
                                                             CONTINUOUS_FIELDS, 'bool')
         if self.continuous_fields:
             simulation.log.info('    Using continuous rho and nu fields')
             mesh = simulation.data['mesh']
-            P = V.ufl_element().degree()
-            V_cont = dolfin.FunctionSpace(mesh, 'CG', P + 1)
+            V_cont = dolfin.FunctionSpace(mesh, 'CG', self.degree + 1)
             self.continuous_c = dolfin.Function(V_cont)
             self.continuous_c_old = dolfin.Function(V_cont)
             self.continuous_c_oldold = dolfin.Function(V_cont)
@@ -61,7 +61,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         self.force_steady = simulation.input.get_value('multiphase_solver/force_steady', FORCE_STEADY, 'bool')
         self.force_bounded = simulation.input.get_value('multiphase_solver/force_bounded', FORCE_BOUNDED, 'bool')
         self.force_sharp = simulation.input.get_value('multiphase_solver/force_sharp', FORCE_SHARP, 'bool')
-            
+        
         # Calculate mu from rho and nu (i.e mu is quadratic in c) or directly from c (linear in c)
         self.calculate_mu_directly_from_colour_function = \
             simulation.input.get_value('multiphase_solver/calculate_mu_directly_from_colour_function',
@@ -79,7 +79,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         scheme_class = get_convection_scheme(scheme)
         self.convection_scheme = scheme_class(simulation, 'c')
         self.need_gradient = scheme_class.need_alpha_gradient
-    
+        
         # Create the equations when the simulation starts
         simulation.hooks.add_pre_simulation_hook(self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations')
         
@@ -135,7 +135,11 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
         Vc = sim.data['Vc']
-        u_conv = sim.data['u_conv']
+        if self.degree == 0:
+            self.vel_dgt0_projector = VelocityDGT0Projector(sim, sim.data['u_conv'])
+            u_conv = self.vel_dgt0_projector.velocity
+        else:
+            u_conv = sim.data['u_conv']
         self.eq = AdvectionEquation(sim, Vc, cp, cpp, u_conv, beta, self.time_coeffs, dirichlet_bcs)
         
         if self.need_gradient:
@@ -230,6 +234,8 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if timestep_number == 1 or is_static:
             c.assign(cp)
         else:
+            if self.degree == 0:
+                self.vel_dgt0_projector.update()
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
             dolfin.solve(A, c.vector(), b)
@@ -253,3 +259,33 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         timer.stop()
         self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
         self.is_first_timestep = False
+
+
+class VelocityDGT0Projector(object):
+    def __init__(self, simulation, u_conv):
+        """
+        Given a velocity in DG, e.g DG2, produce a velocity in DGT0,
+        i.e. a constant on each facet 
+        """
+        V = u_conv[0].function_space()
+        V_dgt0 = dolfin.VectorFunctionSpace(V.mesh(), 'DGT', 0)
+        simulation.data['u_conv_dgt0'] = Function(V_dgt0)
+        
+        u = dolfin.TrialFunction(V_dgt0)
+        v = dolfin.TestFunction(V_dgt0)
+        
+        dot, avg, dS, ds = dolfin.dot, dolfin.avg, dolfin.dS, dolfin.ds
+        w = u_conv
+        a = dot(avg(u), avg(v))*dS + dot(u, v)*ds
+        L = dot(avg(w), avg(v))*dS + dot(w, v)*ds
+        
+        self.lhs = L 
+        self.A = dolfin.assemble(a)
+        self.solver = dolfin.PETScKrylovSolver('cg')
+        self.velocity = dolfin.Function(V_dgt0)
+    
+    def update(self):
+        t  = dolfin.Timer('Ocellaris produce u_conv_dgt0')
+        b = dolfin.assemble(self.lhs)
+        self.solver.solve(self.A, self.velocity.vector(), b)
+        t.stop()
