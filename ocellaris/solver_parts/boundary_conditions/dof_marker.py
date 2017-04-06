@@ -8,7 +8,9 @@ def get_dof_region_marks(simulation, V):
     """
     Given a function space, return a dictionary mapping dof number to
     region number. Many dofs will not be included in the mapping since
-    they are not inside a boundary region (not on a boundary facet)
+    they are not inside a boundary region (not on a boundary facet).
+    This property is used elsewhere to identify boundary dofs, in
+    mark_cell_layers() and in SlopeLimiterBoundaryConditions
     """
     # This function only supports a small subset of function spaces
     family = V.ufl_element().family()

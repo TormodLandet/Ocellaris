@@ -135,7 +135,7 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     
     # Get boundary region marks and get the helper class used to limit along the boundaries
     drm = get_dof_region_marks(simulation, V)
-    bcs = SlopeLimiterBoundaryConditions(simulation, output_name, drm, V.dim())
+    bcs = SlopeLimiterBoundaryConditions(simulation, output_name, drm, V)
     
     if skip_boundary:
         # Mark boundary cells and one layer of connected cells
