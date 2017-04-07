@@ -6,6 +6,7 @@ user_code:
     constants:
         NU: 1.0e-4
         RHO: 1000.0
+        A: 0.05715  # 0.0254 * 2.25
 
 physical_properties:
     rho0: py$ RHO
@@ -22,11 +23,10 @@ _physical_properties:
 
 mesh:
     type: Rectangle
-    Nx: 64
-    Ny: 48
-    #Nx: 32
-    #Ny: 24
-    endy: 0.75
+    Nx: 25
+    Ny: 15
+    endx: py$ A * 5
+    endy: py$ A * 3
 
 # BCs with no-slip
 _boundary_conditions:
@@ -43,7 +43,7 @@ _boundary_conditions:
 boundary_conditions:
 -   name: top and bottom
     selector: code
-    inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > 0.75-1e-5)'
+    inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > 3 * A - 1e-5)'
     p:
         type: WallPressure
     u0:
@@ -54,7 +54,7 @@ boundary_conditions:
         value: 0
 -   name: walls
     selector: code
-    inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 1-1e-5)'
+    inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 5 * A - 1e-5)'
     p:
         type: WallPressure
     u0:
@@ -66,24 +66,16 @@ boundary_conditions:
 
 initial_conditions:
     cp:
-        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
+        cpp_code: '(x[0] < A + 1e-5 && x[1] < 2 * A + 1e-5) ? 1.0 : 0.0'
     cpp:
-        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? 1.0 : 0.0'
-
-_initial_conditions:
-    rho_p:
-        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? RHO : 1.0'
-        #cpp_code: '(RHO-1)*(1 - min(max((max(x[0]-0.25, x[1]-0.5)*10 + 0.5), 0.0), 1.0)) + 1.0'
-    rho_pp:
-        cpp_code: '(x[0] < 0.25+1e-5 && x[1] < 0.5+1e-5) ? RHO : 1.0'
-        #cpp_code: '(RHO-1)*(1 - min(max((max(x[0]-0.25, x[1]-0.5)*10 + 0.5), 0.0), 1.0)) + 1.0'
+        cpp_code: '(x[0] < A + 1e-5 && x[1] < 2 * A + 1e-5) ? 1.0 : 0.0'
 
 time:
-    dt: 0.001
-    tmax: 0.12
+    dt: 0.0005
+    tmax: 0.05
 
 output:
-    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_hric_sollim' % (NU, RHO)
+    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_test' % (NU, RHO)
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -124,13 +116,24 @@ slope_limiter:
         plot: yes
         skip_boundary: no
         enforce_bounds: yes
+    c:
+        enforce_bounds: yes
     u:
         method: Solenoidal
+        prelimiter: HierarchicalTaylor
+        out_of_bounds_penalty_fac: 1000.0
+        out_of_bounds_penalty_const: 0.1
+        max_cost: 0.1
+        
         #method: Componentwise
-        #comp_method: HierarchicalTaylor 
+        #comp_method: HierarchicalTaylor
+        #limit_conv: no 
+        
         plot: yes
+        use_cpp: yes
+        skip_boundary: yes
         #limit_no_cells: yes
-        surface_probe: free_surface
+        #surface_probe: free_surface
 
 probes:
     -   name: free_surface
@@ -149,7 +152,7 @@ probes:
         file_name: '_free_surface.out'
         custom_hook: MultiPhaseModelUpdated
 
-_hooks:
+hooks:
     post_timestep:
 
     -   name: plot p
@@ -208,3 +211,19 @@ _hooks:
             hook_data['cf'] << (rho, t)
             hook_data['cf'] << (p, t)
             #hook_data['cf'] << (c_star, t)
+
+    -   name: inspect fields
+        enabled: yes
+        code: |
+            if not 'fi' in hook_data:
+                from ocellaris.utils import FieldInspector
+                hook_data['fi'] = FieldInspector('output/field_inspector.xdmf', Vu)#,
+                                                 #startpos=(A - A / 4, 2 * A - A / 4),
+                                                 #endpos=(A + A / 4, 2 * A + A / 4))
+            if simulation.io.xdmf_write_interval > 0 and simulation.timestep % simulation.io.xdmf_write_interval == 0:
+                fi = hook_data['fi']
+                fi.write_function(u0, t)
+                fi.write_function(u1, t)
+                fi.write_function(u_conv0, t)
+                fi.write_function(u_conv1, t)
+
