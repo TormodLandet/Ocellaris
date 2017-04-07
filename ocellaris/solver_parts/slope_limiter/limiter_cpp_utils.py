@@ -5,7 +5,7 @@ cpp_mod = load_module('hierarchical_taylor')
 
 class SlopeLimiterInput(object):
     def __init__(self, mesh, vertices, vertex_coordinates, num_neighbours,
-                 neighbours, cell_dofs_V, cell_dofs_V0, limit_cell):
+                 neighbours, cell_dofs_V, cell_dofs_V0):
         """
         This class stores the connectivity and dof maps necessary to
         perform slope limiting in an efficient manner in the C++ code 
@@ -40,20 +40,31 @@ class SlopeLimiterInput(object):
                                 flat_neighbours,
                                 flat_cell_dofs,
                                 flat_cell_dofs_dg0,
-                                flat_vertex_coordinates,
-                                limit_cell)
+                                flat_vertex_coordinates)
     
     def set_global_bounds(self, global_min, global_max):
         """
         Set the minimum and maximum allowable field values for
         the limited field
         """
-        self.global_min = global_min
-        self.global_max = global_max
+        self.cpp_obj.global_min = global_min
+        self.cpp_obj.global_max = global_max
+        
+    def set_limit_cell(self, limit_cell):
+        """
+        Decide whether each cell should be limited. Accepts an array of length
+        num_cells_owned which is mesh.topology().ghost_offset(mesh.topology.dim())
+        
+        There reason for int instead of bool is purely ease of interfacing with 
+        the C++ SWIG wrapper
+        
+        @param numpy.ndarray(int) limit_cell: 1 for cells that should be limited, else 0 
+        """
+        self.cpp_obj.set_limit_cell(limit_cell)
     
-    def set_boundary_values(self, boundary_dof_type, boundary_dof_value):
+    def set_boundary_values(self, boundary_dof_type, boundary_dof_value, enforce):
         """
         Transfer the boundary dof data to the C++ side
         """
         assert boundary_dof_type.min() >= 0 and boundary_dof_type.max() <= 2
-        self.cpp_obj.set_boundary_values(boundary_dof_type, boundary_dof_value)
+        self.cpp_obj.set_boundary_values(boundary_dof_type, boundary_dof_value, enforce)

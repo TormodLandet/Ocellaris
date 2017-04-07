@@ -11,7 +11,7 @@ from . import register_slope_limiter, SlopeLimiterBase
 class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
     description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchical manner'
     
-    def __init__(self, phi_name, phi, skip_cells, boundary_conditions, output_name=None, use_cpp=True, enforce_bounds=False):
+    def __init__(self, phi_name, phi, skip_cells, boundary_conditions, output_name=None, use_cpp=True, enforce_bounds=False, enforce_bcs=True):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -34,6 +34,9 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.boundary_conditions = boundary_conditions
         self.use_cpp = use_cpp
         self.enforce_global_bounds = enforce_bounds
+        self.enforce_boundary_conditions = enforce_bcs
+        tdim = mesh.topology().dim()
+        self.num_cells_owned = mesh.topology().ghost_offset(tdim)
         
         # No limiter needed for piecewice constant functions
         if self.degree == 0:
@@ -67,7 +70,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         indices = range(self.mesh.num_cells())
         self.cell_dofs_V = [tuple(dm.cell_dofs(i)) for i in indices]
         self.cell_dofs_V0 = [int(dm0.cell_dofs(i)) for i in indices]
-        self.limit_cell = numpy.ones(len(self.cell_dofs_V0), numpy.intc)
+        self.limit_cell = numpy.ones(self.num_cells_owned, numpy.intc)
         
         # Find vertices for each cell
         mesh.init(2, 0)
@@ -88,8 +91,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             from .limiter_cpp_utils import cpp_mod, SlopeLimiterInput
             self.cpp_mod = cpp_mod
             self.cpp_input = SlopeLimiterInput(mesh, vertices, self.vertex_coordinates,
-                                               self.num_neighbours, neighbours, self.cell_dofs_V,
-                                               self.cell_dofs_V0, self.limit_cell)
+                                               self.num_neighbours, neighbours,
+                                               self.cell_dofs_V, self.cell_dofs_V0)
     
     def run(self):
         """
@@ -134,6 +137,14 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.taylor.vector().apply('insert')
         taylor_to_lagrange(self.taylor, self.phi)
         
+        # Enforce boundary conditions
+        if self.enforce_boundary_conditions:
+            has_dbc = boundary_dof_type == self.boundary_conditions.BC_TYPE_DIRICHLET
+            vals = self.phi.vector().get_local()
+            vals[has_dbc] = boundary_dof_value[has_dbc]
+            self.phi.vector().set_local(vals)
+            self.phi.vector().apply('insert') 
+        
         # Update the secondary output arrays, alphas
         for alpha, alpha_arr in zip(self.alpha_funcs, alpha_arrs):
             alpha.vector().set_local(alpha_arr)
@@ -158,7 +169,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         # Update C++ input
         inp = self.cpp_input
         inp.set_global_bounds(global_min, global_max)
-        inp.set_boundary_values(boundary_dof_type, boundary_dof_value)
+        inp.set_limit_cell(self.limit_cell)
+        inp.set_boundary_values(boundary_dof_type, boundary_dof_value, self.enforce_boundary_conditions)
         
         limiter(self.cpp_input.cpp_obj,
                 taylor_arr,
@@ -172,13 +184,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         Perform slope limiting of a DG1 function
         """
         lagrange_arr = self.phi.vector().get_local()
-        
-        V = self.phi.function_space()
-        mesh = V.mesh()
-        tdim = mesh.topology().dim()
-        num_cells_owned = mesh.topology().ghost_offset(tdim)
-        
-        for icell in xrange(num_cells_owned):
+        for icell in xrange(self.num_cells_owned):
             dofs = self.cell_dofs_V[icell]
             center_value = taylor_arr[dofs[0]]
             skip_this_cell = (self.limit_cell[icell] == 0)
@@ -231,13 +237,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         """
         Perform slope limiting of a DG2 function
         """
-        V = self.phi.function_space()
-        mesh = V.mesh()
-        tdim = mesh.topology().dim()
-        num_cells_owned = mesh.topology().ghost_offset(tdim)
-        
         # Slope limit one cell at a time
-        for icell in xrange(num_cells_owned):
+        for icell in xrange(self.num_cells_owned):
             dofs = self.cell_dofs_V[icell]
             assert len(dofs) == 6
             center_values = [taylor_arr[dof] for dof in dofs]

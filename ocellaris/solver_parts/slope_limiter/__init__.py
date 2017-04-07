@@ -118,8 +118,9 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
         method = inp.get_value('method', DEFAULT_LIMITER, 'string')
     use_cpp = inp.get_value('use_cpp', DEFAULT_USE_CPP, 'bool')
     plot_exceedance = inp.get_value('plot', False, 'bool')
-    skip_boundary = inp.get_value('skip_boundary', True, 'bool')
+    skip_boundary = inp.get_value('skip_boundary', False, 'bool')
     enforce_bounds = inp.get_value('enforce_bounds', False, 'bool')
+    enforce_bcs = inp.get_value('enforce_bcs', True, 'bool')
     name = phi_name if output_name is None else output_name
     
     # Find degree
@@ -146,9 +147,14 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     
     # Construct the limiter
     simulation.log.info('    Using slope limiter %s for field %s' % (method, name))
+    simulation.log.info('        Enforcing BCs: %r' % enforce_bcs)
+    simulation.log.info('        Skip boundary: %r' % skip_boundary)
+    simulation.log.info('        Enforce global bounds: %r' % enforce_bounds)
     limiter_class = get_slope_limiter(method)
-    limiter = limiter_class(phi_name=phi_name, phi=phi, skip_cells=skip_cells, boundary_conditions=bcs,
-                            output_name=output_name, use_cpp=use_cpp, enforce_bounds=enforce_bounds)
+    limiter = limiter_class(phi_name=phi_name, phi=phi, skip_cells=skip_cells,
+                            boundary_conditions=bcs, output_name=output_name,
+                            use_cpp=use_cpp, enforce_bounds=enforce_bounds,
+                            enforce_bcs=enforce_bcs)
     
     if plot_exceedance:
         for func in limiter.additional_plot_funcs:

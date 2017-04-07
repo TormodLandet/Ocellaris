@@ -40,9 +40,6 @@ struct SlopeLimiterInput
   // Coordinates of the cell vertices
   std::vector<double> vertex_coords;
 
-  // Should we limit a given cell. Look up with cell number and get 1 or 0
-  std::vector<std::int8_t> limit_cell;
-
   // We can clamp the limited values to a given range
   double global_min = std::numeric_limits<double>::lowest();
   double global_max = std::numeric_limits<double>::max();
@@ -53,8 +50,7 @@ struct SlopeLimiterInput
                   const Array<int>& neighbours,
                   const Array<int>& cell_dofs,
                   const Array<int>& cell_dofs_dg0,
-                  const Array<double>& vertex_coords,
-                  const Array<int>& limit_cell)
+                  const Array<double>& vertex_coords)
   {
     this->num_cells_owned = num_cells_owned;
     this->max_neighbours = max_neighbours;
@@ -84,15 +80,27 @@ struct SlopeLimiterInput
       this->limit_cell[i] = static_cast<std::int8_t>(limit_cell[i]);
   }
 
+  // Should we limit a given cell. Look up with cell number and get 1 or 0
+  std::vector<std::int8_t> limit_cell;
+
+  void set_limit_cell(const Array<int>& limit_cell)
+  {
+    this->limit_cell.resize(limit_cell.size());
+    for (int i = 0; i < limit_cell.size(); i++)
+      this->limit_cell[i] = static_cast<std::int8_t>(limit_cell[i]);
+  }
+
   // --------------------------------------------------------------------------
   // Boundary conditions
   // --------------------------------------------------------------------------
 
   std::vector<BoundaryDofType> boundary_dof_type;
   std::vector<float> boundary_dof_value;
+  bool enforce_boundary_conditions;
 
   void set_boundary_values(const Array<int>& boundary_dof_type,
-                           const Array<double>& boundary_dof_value)
+                           const Array<double>& boundary_dof_value,
+                           const bool enforce_bcs)
   {
     this->boundary_dof_type.resize(boundary_dof_type.size());
     for (int i = 0; i < boundary_dof_type.size(); i++)
@@ -101,6 +109,8 @@ struct SlopeLimiterInput
     this->boundary_dof_value.resize(boundary_dof_value.size());
     for (int i = 0; i < boundary_dof_value.size(); i++)
       this->boundary_dof_value[i] = boundary_dof_value[i];
+
+    this->enforce_boundary_conditions = enforce_bcs;
   }
 };
 
