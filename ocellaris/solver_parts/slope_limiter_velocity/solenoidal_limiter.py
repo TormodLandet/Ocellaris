@@ -110,7 +110,7 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.cell_dofs_V0 = numpy.array([int(dm0.cell_dofs(i)) for i in xrange(Ncells)], int)
 
         # Boundary cells where we do not fully trust the prelimiter targets (we trust BCs more)
-        self.skip_target_cells = mark_cell_layers(simulation, V, layers=1)
+        self.skip_target_cells = mark_cell_layers(simulation, V, layers=0)
         
         simulation.hooks.add_pre_simulation_hook(self.setup, 'SolenoidalSlopeLimiterVelocity - setup')
     
