@@ -21,7 +21,7 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         
         self.vel = vel
         self.vel2 = vel2
-        self.limit_vel2 =  inp.get_value('limit_conv', False, 'bool')
+        self.limit_vel2 = inp.get_value('limit_conv', False, 'bool')
         
         # Get the IsoSurface probe used to locate the free surface
         self.probe_name = inp.get_value('surface_probe', None, 'string')
