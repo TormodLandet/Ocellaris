@@ -131,7 +131,7 @@ slope_limiter:
         
         plot: yes
         use_cpp: yes
-        skip_boundary: yes
+        skip_boundary: no
         #limit_no_cells: yes
         #surface_probe: free_surface
 

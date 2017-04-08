@@ -1,12 +1,17 @@
 ocellaris:
     type: input
     version: 1.0
+    
+user_code:
+    constants:
+        NU: 1.0e-4
+        RHO_MIN: 999.0
+        RHO_MAX: 1022.0
 
 physical_properties:
-    rho0: 999
-    nu0: 1.0e-6
-    rho1: 1022
-    nu1: 1.0e-6
+    rho_min: py$ RHO_MIN
+    rho_max: py$ RHO_MAX
+    nu: py$ NU
     g: [0, -9.81]
 
 mesh:
@@ -49,27 +54,28 @@ boundary_conditions:
         value: 0
 
 initial_conditions:
-    cp:
-        cpp_code: '((x[0] < 0.25 - 1e-5 && x[1] > 0.67 - 1e-5) || x[1] > 0.75 - 1e-5) ? 1.0 : 0.0'
+    rho_p:
+        cpp_code: '((x[0] < 0.25 - 1e-5 && x[1] > 0.67 - 1e-5) || x[1] > 0.75 - 1e-5) ? RHO_MIN : RHO_MAX'
 
 time:
     dt: 0.1
     tmax: 20.1
 
 output:
-    prefix: output/internal_soliton_test6
+    prefix: output/internal_soliton
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
+    xdmf_write_interval: 1
 
 multiphase_solver:
-    type: BlendedAlgebraicVOF
+    type: VariableDensity
     function_space_colour: DG
     polynomial_degree_colour: 0
     sky_location: 1.0
 
 solver:
-    type: IPCS
+    type: Coupled
     num_inner_iter: 100
     allowable_error_inner: 1e-5
     function_space_velocity: DG
@@ -77,66 +83,16 @@ solver:
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
 
-convection:
-    c:
-        convection_scheme: Upwind
+slope_limiter:
+    rho:
+        method: HierarchicalTaylor
+        plot: yes
 
 probes:
-    -   name: c=0.5
+    -   name: free surface
         type: IsoSurface
-        value: 0.5
-        field: c
-        file_name: '_c05.out'
+        value: 1010.5
+        field: rho
+        file_name: '_free_surface.out'
         show_interval: 0
-        xlim: [0, 4]
-        ylim: [0.6, 0.9]
-    -   name: c=0.1
-        type: IsoSurface
-        value: 0.1
-        field: c
-        file_name: '_c01.out'
-    -   name: c=0.9
-        type: IsoSurface
-        value: 0.9
-        field: c
-        file_name: '_c09.out'
 
-hooks:
-    post_timestep:
-    -   name: print location of largest divergence
-        enabled: no
-        code: |
-            udiv = project(div(u), Vc)
-            values = udiv.compute_vertex_values()
-            coords = mesh.coordinates()
-            valmax = -1
-            for val, coord in zip(values, coords):
-                if abs(val) > valmax:
-                    valmax = abs(val)
-                    coordmax = coord
-            print '\n%10.3e   %5.2f %5.2f\n' % (valmax, coordmax[0], coordmax[1])
-            #if valmax > 1e-4:
-            #    run_debug_console(simulation, False)
-            #    exit()
-    
-    -   name: plot u
-        enabled: no
-        code: |
-            plot(u, title='u', key='u', window_width=1000, interactive=True)
-    
-    -   name: save colour fields
-        enabled: no
-        code: |
-            if not 'cf' in hook_data:
-                prefix = simulation.input.get_value('output/prefix')
-                hook_data['cf'] = File(prefix + '_c.pvd')
-                c.rename('c', 'c')
-                #c_star.rename('c_star', 'c_star')
-            hook_data['cf'] << (c, t)
-            #hook_data['cf'] << (c_star, t)
-
-_reporting:
-    reports_to_show: ['min(c)', 'max(c)'] #, 'max(div(u)|Vp)']
-
-#console_on_error: true
-#console_at_end: true

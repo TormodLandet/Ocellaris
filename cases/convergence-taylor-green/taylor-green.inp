@@ -127,3 +127,11 @@ solver:
 slope_limiter:
     u:
         method: Solenoidal
+        prelimiter: HierarchicalTaylor
+        #method: Componentwise
+        #comp_method: HierarchicalTaylor
+        use_cpp: yes
+        #max_cost: 0.1
+        #out_of_bounds_penalty_fac: 1000.
+        #out_of_bounds_penalty_const: 1.0
+

@@ -53,10 +53,11 @@ time:
     tmax: 1.0
 
 output:
-    prefix: output/diagonal_advection_of_square
+    prefix: output/diagonal_advection_of_square_DG1_upwind
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
+    xdmf_write_interval: 10
 
 multiphase_solver:
     type: BlendedAlgebraicVOF
@@ -72,8 +73,8 @@ solver:
 
 convection:
     c:
-        convection_scheme: HRIC
-        HRIC_version: HRIC
+        convection_scheme: Upwind
+        #HRIC_version: HRIC
 
 slope_limiter:
     c:

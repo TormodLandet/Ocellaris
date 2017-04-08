@@ -89,7 +89,7 @@ solver:
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
-    num_inner_iter: 300
+    num_inner_iter: 50
     relaxation_u: 0.5
     relaxation_p: 0.5
     allowable_error_inner: 1.0e-8
@@ -104,7 +104,7 @@ solver:
 
 slope_limiter:
     u:
-        method: HierarchicalTaylor
+        method: Solenoidal
 
 hooks:
 #    pre-solve:

@@ -110,7 +110,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
         dolfin.interactive()
         
         
-    if N == 40:
+    if N == 40 and False:
         dolfin.plot(sim.data['u0'], title='u0')
         dolfin.plot(sim.data['u1'], title='u1')
         dolfin.plot(sim.data['p'], title='p')
