@@ -1,5 +1,5 @@
 import numpy
-from dolfin import Timer, Constant
+from dolfin import Timer, Constant, Cell, cells
 
 
 class SlopeLimiterBoundaryConditions(object):
@@ -21,6 +21,7 @@ class SlopeLimiterBoundaryConditions(object):
         self.dim = V.dim()
         self.active = False
         self.set_dof_region_marks(dof_region_marks)
+        self._dof_to_cell = None
         self._allready_warned = set()
     
     def set_dof_region_marks(self, dof_region_marks):
@@ -105,12 +106,48 @@ class SlopeLimiterBoundaryConditions(object):
                 for dof in dofs:
                     boundary_dof_type[dof] = bc_type
                     boundary_dof_value[dof] = val
+            
+            elif hasattr(value, 'eval_cell'):
+                # Get values from an Expression of some sort
+                dof_to_cell = self._get_dof_to_cell_mapping()
+                mesh = self.function_space.mesh()
+                val = numpy.zeros(1, float)
+                for dof in dofs:
+                    cid, coords = dof_to_cell[dof]
+                    cell = Cell(mesh, cid)
+                    value.eval_cell(val, coords, cell)
+                    boundary_dof_type[dof] = bc_type
+                    boundary_dof_value[dof] = val[0]
+            
             else:
                 self._warn('WARNING: Field %s has unsupported BC %r in region %s' %
                            (self.field_name, type(value), boundary_region.name))
         
         timer.stop()
         return boundary_dof_type, boundary_dof_value
+    
+    
+    def _get_dof_to_cell_mapping(self):
+        """
+        Mapping from dof to containing cell and coordinates of location
+        """
+        if self._dof_to_cell is not None:
+            return self._dof_to_cell
+        
+        V = self.function_space
+        mesh = V.mesh()
+        gdim = mesh.geometry().dim()
+        dofs_x = V.tabulate_dof_coordinates().reshape((-1, gdim))
+        dm = V.dofmap()
+        
+        self._dof_to_cell = dof_to_cell = [None] * dofs_x.shape[0]
+        for cell in cells(mesh):
+            cid = cell.index()
+            for dof in dm.cell_dofs(cid):
+                dof_coords = numpy.array(dofs_x[dof], float) 
+                dof_to_cell[dof] = (cid, dof_coords)
+        
+        return dof_to_cell
 
 
 def get_same_loc_dofs(V):
