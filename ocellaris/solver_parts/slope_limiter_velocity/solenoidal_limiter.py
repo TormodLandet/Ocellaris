@@ -17,7 +17,7 @@ DEFAULT_LIMITER_W = 'LocalExtrema'
 class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
     description = 'Limit in a divergence free polynomial space'
     
-    def __init__(self, simulation, vel, vel_name, vel2, use_cpp=True):
+    def __init__(self, simulation, vel_u, vel_name, vel_w, use_cpp=True):
         """
         Use a solenoidal polynomial slope limiter on the convecting velocity field
         w and and use a prelimiter to limit the convected velocity u and set the 
@@ -27,11 +27,11 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.additional_plot_funcs = []
         
         # Verify input
-        V = vel[0].function_space()
+        V = vel_u[0].function_space()
         mesh = V.mesh()
         family = V.ufl_element().family()
         degree = V.ufl_element().degree()
-        dim, = vel.ufl_shape
+        dim, = vel_u.ufl_shape
         cost_func = simulation.input.get_value('slope_limiter/cost_function', DEFAULT_LIMITER_W, 'string')
         loc = 'SolenoidalSlopeLimiterVelocity'
         verify_key('slope limited function', family, ['Discontinuous Lagrange'], loc)
@@ -40,8 +40,8 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         verify_key('topological dimension', mesh.topology().dim(), [2], loc)
         verify_key('cost function', cost_func, COST_FUNCTIONS, loc)
         
-        # We expect the convective velocity as vel2 and the convected as vel
-        assert vel2 is not None
+        # We expect the convecting velocity as vel2 and the convected as vel
+        assert vel_w is not None
         
         # Limit all cells regardless of location?
         self.limit_none = inp.get_value('limit_no_cells', False, 'bool')
@@ -61,27 +61,35 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.prelimiters = []
         for d in range(dim):
             name = '%s%d' % (vel_name, d)
-            lim = SlopeLimiter(simulation, vel_name, vel[d], name, method=prelimiter_method)
+            lim = SlopeLimiter(simulation, vel_name, vel_u[d], name, method=prelimiter_method)
             self.prelimiters.append(lim)
         
         # Cost function options
         cf_options = {}
-        cf_option_keys = ('max_cost', 'out_of_bounds_penalty_fac', 'out_of_bounds_penalty_const')
+        cf_option_keys = ('out_of_bounds_penalty_fac', 'out_of_bounds_penalty_const')
         for key in cf_option_keys:
             if key in inp:
                 cf_options[key] = inp.get_value(key, required_type='float')
-        max_cost = cf_options.pop('max_cost', None)
+        
+        # Maximum allowed cost for solenoidal limiting of w
+        max_cost = inp.get_value('max_cost', 1e100, 'float')
+        
+        # Maximum allowed cost for solenoidal limiting of u
+        # Normally this is zero and u in only prelimited which
+        # is typically done by a stable Componentwise limter  
+        max_cost_u = inp.get_value('max_cost_u', 0.0, 'float')
         
         # Store input
         self.simulation = simulation
-        self.vel = vel
-        self.vel2 = vel2
+        self.vel_u = vel_u
+        self.vel_w = vel_w
         self.vel_name = vel_name
         self.degree = degree
         self.mesh = mesh
         self.use_cpp = use_cpp
         self.cf_options = cf_options
         self.max_cost = max_cost
+        self.max_cost_u = max_cost_u
         
         # Create slope limiter
         self.sollim = SolenoidalLimiter(V, cost_function=cost_func, use_cpp=use_cpp, cf_options=cf_options)
@@ -155,36 +163,41 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
             Ncells = len(self.cell_dofs_V0)
             self.limit_cell[:Ncells] = surface_cells[:Ncells]
 
-        # Set the solenoidal invariants used in the solenoidal limiting process.
-        self.sollim.set_invariants(self.vel)
+        # Set the solenoidal invariants used in the solenoidal limiting process
+        # based on the unlimited, solenoidal, velocity field vel_u
+        self.sollim.set_invariants(self.vel_u)
 
-        # Run prelimiters if they exist and set the target values in vel2
+        # Run prelimiters if they exist and set the target values in vel_w
         ui_tmp = self.simulation.data['ui_tmp']
         for i, lim in enumerate(self.prelimiters):
             # Save ui before limiting
-            ui_tmp.assign(self.vel[i])
+            ui_tmp.assign(self.vel_u[i])
     
             # Limit ui
             lim.limit_cell[:] = self.limit_cell[:]
             lim.run()
 
             # Set target for optimization of w
-            self.vel2[i].assign(self.vel[i])
+            self.vel_w[i].assign(self.vel_u[i])
             
             # Remove boundary cells from targets to avoid problems with BCS
-            arr = self.vel2[i].vector().get_local()
+            arr = self.vel_w[i].vector().get_local()
             arr_unlim = ui_tmp.vector().get_local()
-            V = self.vel2[i].function_space()
+            V = self.vel_w[i].function_space()
             dm = V.dofmap()          
             for cid in self.skip_target_cells:
                 for dof in dm.cell_dofs(cid):
                     arr[dof] = arr_unlim[dof]
-            self.vel2[i].vector().set_local(arr)
-            self.vel2[i].vector().apply('insert')
+            self.vel_w[i].vector().set_local(arr)
+            self.vel_w[i].vector().apply('insert')
         
-        # Run the optimizing approximate vector slope limiter with vel2 as
+        # Run the optimizing approximate vector slope limiter with vel_w as
         # target and save results to vel2 and well
-        self.sollim.run(self.vel2, lim.active, self.max_cost)
+        is_prelimited = lim.active
+        self.sollim.run(self.vel_w, is_prelimited, self.max_cost)
+        
+        if self.max_cost_u > 0:
+            self.sollim.reuse(self.vel_u, self.max_cost_u)
         
         # Update plot of cost function
         Ncells = len(self.cell_dofs_V0)

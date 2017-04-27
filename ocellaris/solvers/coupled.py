@@ -74,7 +74,7 @@ class SolverCoupled(Solver):
         # Velocity slope limiter
         self.using_limiter = False
         if self.vel_is_discontinuous:
-            self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel2=sim.data['u_conv'])
+            self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
             self.using_limiter = self.slope_limiter.active
             self.slope_measurer = LocalMaximaMeasurer(sim.data['mesh'])
         
@@ -287,6 +287,7 @@ class SolverCoupled(Solver):
                 uic.vector().zero()
                 uic.vector().axpy(2.0, uip.vector())
                 uic.vector().axpy(-1.0, uipp.vector())
+                uic.vector().apply('insert')
     
     @timeit
     def postprocess_velocity(self):

@@ -10,7 +10,7 @@ from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
 class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
     description = 'Scalar limiting of each component'
     
-    def __init__(self, simulation, vel, vel_name, vel2=None, use_cpp=True):
+    def __init__(self, simulation, vel_u, vel_name, vel_w=None, use_cpp=True):
         """
         Use a standard slope limiter on each component of the velocity field 
         """
@@ -19,9 +19,9 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         inp = simulation.input.get_value('slope_limiter/%s' % vel_name, {}, 'Input')
         comp_method = inp.get_value('comp_method', required_type='string')
         
-        self.vel = vel
-        self.vel2 = vel2
-        self.limit_vel2 = inp.get_value('limit_conv', False, 'bool')
+        self.vel_u = vel_u
+        self.vel_w = vel_w
+        self.limit_conv = inp.get_value('limit_conv', False, 'bool')
         
         # Get the IsoSurface probe used to locate the free surface
         self.probe_name = inp.get_value('surface_probe', None, 'string')
@@ -29,11 +29,11 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.limit_selected_cells_only = self.probe_name is not None
         
         # Create slope limiters
-        dim, = vel.ufl_shape
+        dim, = vel_u.ufl_shape
         self.limiters = []
         for d in range(dim):
             name = '%s%d' % (vel_name, d)
-            lim = SlopeLimiter(simulation, vel_name, vel[d], name, method=comp_method)
+            lim = SlopeLimiter(simulation, vel_name, vel_u[d], name, method=comp_method)
             self.limiters.append(lim)
         
         # Check that we can limit only certain cells
@@ -87,7 +87,7 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
             lim.run()
         
         # Apply limiting also to the convective field?
-        if self.limit_vel2:
-            dim, = self.vel.ufl_shape
+        if self.limit_conv:
+            dim, = self.vel_u.ufl_shape
             for d in range(dim):
-                self.vel2[d].assign(self.vel[d])
+                self.vel_w[d].assign(self.vel_u[d])

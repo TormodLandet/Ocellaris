@@ -59,7 +59,7 @@ class DoNothingSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         pass
 
 
-def SlopeLimiterVelocity(simulation, vel, vel_name, default_limiter=LIMITER, vel2=None, default_use_cpp=USE_CPP):
+def SlopeLimiterVelocity(simulation, vel_u, vel_name, default_limiter=LIMITER, vel_w=None, default_use_cpp=USE_CPP):
     """
     Limit the slope of the given vector field to obtain boundedness
     """
@@ -72,7 +72,7 @@ def SlopeLimiterVelocity(simulation, vel, vel_name, default_limiter=LIMITER, vel
     # Get the limiter
     simulation.log.info('    Using velocity slope limiter %s for %s' % (method, vel_name))
     limiter_class = get_velocity_slope_limiter(method)
-    limiter = limiter_class(simulation, vel, vel_name, vel2, use_cpp)
+    limiter = limiter_class(simulation, vel_u, vel_name, vel_w, use_cpp)
     
     # Add extra limiter outputs
     if plot_exceedance:
