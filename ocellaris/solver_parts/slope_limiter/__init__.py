@@ -139,8 +139,8 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     bcs = SlopeLimiterBoundaryConditions(simulation, output_name, drm, V)
     
     if skip_boundary:
-        # Mark boundary cells and one layer of connected cells
-        skip_cells = mark_cell_layers(simulation, V, layers=1, dof_region_marks=drm)
+        # Mark boundary cells for skipping (cells containing dofs with region marks)
+        skip_cells = mark_cell_layers(simulation, V, layers=0, dof_region_marks=drm)
     else:
         skip_cells = ()
         bcs.activate()

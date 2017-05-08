@@ -31,6 +31,9 @@ def get_dof_region_marks(simulation, V):
         facet_dof_indices[1,:] = (0, 2, 4)
         facet_dof_indices[2,:] = (0, 1, 5)
     
+    # Get dofs that share the same location (relevant for DG)
+    same_loc_dofs = get_same_loc_dofs(V)
+    
     # Loop over mesh and get dofs that are connected to boundary regions
     dm = V.dofmap()
     facet_marks = [int(m) for m in simulation.data['boundary_marker'].array()]
@@ -50,9 +53,43 @@ def get_dof_region_marks(simulation, V):
             facet_dofs = dofs[facet_dof_indices[ifacet]]
             for fdof in facet_dofs:
                 dof_region_marks.setdefault(fdof, []).append(mark)
+
+    # Treat all dofs in the same location in the same way
+    for fdof, regions in dof_region_marks.items():
+        for dof2 in same_loc_dofs[fdof]:
+            if dof2 not in dof_region_marks:
+                dof_region_marks[dof2] = regions
     
     assert len(dof_region_marks) > 4
     return dof_region_marks
+
+
+def get_same_loc_dofs(V):
+    """
+    Return a dictionary mapping dof number to other dofs at the same
+    location in space. V should obviously be a discontinuous space,
+    otherwise there will not be multiple dofs in the same location
+    """
+    gdim = V.mesh().geometry().dim()
+    dof_coordinates = V.tabulate_dof_coordinates().reshape((-1, gdim))
+    
+    # Map dof coordinate to dofs, this is for DG so multiple dofs
+    # will share the same location
+    coord_to_dofs = {}
+    max_neighbours = 0
+    for dof in xrange(len(dof_coordinates)):
+        coord = tuple(round(x, 5) for x in dof_coordinates[dof])
+        dofs = coord_to_dofs.setdefault(coord, [])
+        dofs.append(dof)
+        max_neighbours = max(max_neighbours, len(dofs)-1)
+    
+    # Loop through dofs at same coordinate and map them to each other
+    same_loc_dofs = {}
+    for dofs in coord_to_dofs.values():
+        for dof in dofs:
+            same_loc_dofs[dof] = tuple(d for d in dofs if d != dof)
+    
+    return same_loc_dofs
 
 
 def mark_cell_layers(simulation, V, layers=1, dof_region_marks=None):
