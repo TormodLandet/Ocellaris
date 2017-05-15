@@ -3,6 +3,7 @@ from __future__ import division
 import os
 import numpy
 from matplotlib import pyplot
+from matplotlib.ticker import MultipleLocator
 
 
 def read_iso_surface_file(file_name):
@@ -112,6 +113,17 @@ def plot_iso_surface_file(file_names, n=2**0.5, a=0.05715, g=9.81):
             ax.plot(tvec, vals, label=label, **kwargs)
         if len(lines) > 1:
             ax.legend()
+            
+        if name == 'Horizontal maximum':
+            ax.set_xlim(0, 3.55)
+            ax.set_ylim(1, 4)
+            ax.yaxis.set_minor_locator(MultipleLocator(0.5))
+            ax.yaxis.set_major_locator(MultipleLocator(1))
+        else:
+            ax.set_xlim(0, 5.0)
+            ax.set_ylim(0, 1.25)
+            ax.yaxis.set_minor_locator(MultipleLocator(0.25/2))
+            ax.yaxis.set_major_locator(MultipleLocator(0.25))
 
 
 if __name__ == '__main__':

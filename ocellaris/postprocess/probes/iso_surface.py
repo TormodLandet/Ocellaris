@@ -5,6 +5,11 @@ from ocellaris.utils import gather_lines_on_root, timeit, ocellaris_error
 from . import Probe, register_probe
 
 
+INCLUDE_BOUNDARY = False
+WRITE_INTERVAL = 1
+SHOW_INTERVAL = 0
+
+
 @register_probe('IsoSurface')
 class IsoSurface(Probe):
     def __init__(self, simulation, probe_input):
@@ -20,6 +25,7 @@ class IsoSurface(Probe):
         self.value = inp.get_value('value', required_type='float')
         self.custom_hook_point = inp.get_value('custom_hook', None, required_type='string')
         self.field = simulation.data[self.field_name]
+        self.include_boundary = inp.get_value('include_boundary', INCLUDE_BOUNDARY, 'bool')
         
         # Should we write the data to a file
         prefix = simulation.input.get_value('output/prefix', None, 'string')
@@ -30,10 +36,10 @@ class IsoSurface(Probe):
                 self.file_name = prefix + file_name
             else:
                 self.file_name = file_name
-            self.write_interval = inp.get_value('write_interval', 1, 'int')
+            self.write_interval = inp.get_value('write_interval', WRITE_INTERVAL, 'int')
         
         # Should we pop up a matplotlib window when running?
-        self.show_interval = inp.get_value('show_interval', 0, 'int')
+        self.show_interval = inp.get_value('show_interval', SHOW_INTERVAL, 'int')
         self.show = self.show_interval != 0 and simulation.rank == 0
         self.xlim = inp.get_value('xlim', (None, None), 'list(float)')
         self.ylim = inp.get_value('ylim', (None, None), 'list(float)')
@@ -84,6 +90,10 @@ class IsoSurface(Probe):
         # Get the iso surfaces
         surfaces, cells = get_iso_surfaces(self.simulation, self.field, self.value)
         self.cells_with_surface = cells
+        
+        # Get the boundary surfaces for cells with values above the given value
+        if self.include_boundary:
+            surfaces += get_boundary_surface(self.simulation, self.field, self.value)
         
         # Create lines (this assumes 2D and throws away the z-component)
         lines = []
@@ -290,6 +300,62 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
     
     assert len(crossing_points) == 0
     return contours_from_endpoints + contours_from_singles_and_loops, cells_with_surface
+
+
+@timeit
+def get_boundary_surface(simulation, field, value):
+    """
+    Find the boundary surface consisting of facets with 
+    scalar field values greater than the given iso value
+    """
+    assert simulation.ndim == 2
+    
+    mesh = simulation.data['mesh']
+    all_values = field.compute_vertex_values()
+    
+    connectivity_FC = simulation.data['connectivity_FC']
+    
+    # Find the crossing points where the contour crosses a facet
+    connections = {}
+    for facet in dolfin.facets(mesh):
+        fid = facet.index()
+        
+        # Skip facets that are not on the boundary
+        connected_cells = connectivity_FC(fid)
+        if not len(connected_cells) == 1:
+            continue
+        
+        # Get connected vertices and the field values there
+        vertex_coords = []
+        vertex_values = []
+        for vertex in dolfin.vertices(facet):
+            pt = vertex.point()
+            vertex_coords.append((pt.x(), pt.y(), pt.z()))
+            vertex_values.append(all_values[vertex.index()])
+        assert len(vertex_coords) == 2
+        
+        # Check if all values are above the iso value
+        if vertex_values[0] < value or vertex_values[1] < value:
+            continue
+        
+        connections.setdefault(vertex_coords[0], []).append(vertex_coords[1])
+        connections.setdefault(vertex_coords[1], []).append(vertex_coords[0])
+    
+    # Map coord to coord, just to be able to use the generic functionality in
+    # contour_lines_from_endpoints which works on facet_id <-> coord mappings
+    available_coords = {vc: vc for vc in connections}
+    
+    # Make continous contour lines
+    # Find end points of contour lines and start with these
+    end_points = [vc for vc, neighbours in connections.items() if len(neighbours) < 2]
+    contours_from_endpoints = contour_lines_from_endpoints(end_points, available_coords, connections)
+    
+    # Include crossing points without neighbours or joined circles without end points
+    other_points = available_coords.keys()
+    contours_from_singles_and_loops = contour_lines_from_endpoints(other_points, available_coords, connections)
+    
+    assert len(available_coords) == 0
+    return contours_from_endpoints + contours_from_singles_and_loops
 
 
 def contour_lines_from_endpoints(endpoints, crossing_points, connections):
