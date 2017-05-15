@@ -204,10 +204,12 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
           hi = std::max(hi, nb_val);
         }
 
+        // Handle boundary conditions and global bounds
+        bool dof_is_dirichlet = (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET);
         if (itaylor == 0)
         {
           // Modify local bounds to incorporate the boundary conditions
-          if (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET)
+          if (dof_is_dirichlet)
           {
             double bc_value = boundary_dof_value[dof];
             lo = std::min(lo, bc_value);
@@ -219,6 +221,22 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
           hi = std::min(hi, global_max);
           center_phi = std::max(center_phi, global_min);
           center_phi = std::min(center_phi, global_max);
+        }
+        else if (itaylor == 1 && dof_is_dirichlet && std::abs(dx) > std::abs(0.2*dy))
+        {
+          // Approximation of the derivative in the x-direction at the boundary
+          double ddx = (boundary_dof_value[dof] - center_phi) / dx;
+          double ddx2 = 2*ddx - center_phix;
+          lo = std::min(lo, ddx2);
+          hi = std::max(hi, ddx2);
+        }
+        else if (itaylor == 2 && dof_is_dirichlet && std::abs(dy) > std::abs(0.2*dx))
+        {
+          // Approximation of the derivative in the y-direction at the boundary
+          double ddy = (boundary_dof_value[dof] - center_phi) / dy;
+          double ddy2 = 2*ddy - center_phiy;
+          lo = std::min(lo, ddy2);
+          hi = std::max(hi, ddy2);
         }
 
         // Compute the slope limiter coefficient alpha
