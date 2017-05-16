@@ -211,7 +211,8 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
           // Modify local bounds to incorporate the boundary conditions
           if (dof_is_dirichlet)
           {
-            double bc_value = boundary_dof_value[dof];
+            // Value in the center of a mirrored cell on the other side of the boundary
+            double bc_value = 2*boundary_dof_value[dof] - center_phi;
             lo = std::min(lo, bc_value);
             hi = std::max(hi, bc_value);
           }
@@ -222,19 +223,19 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
           center_phi = std::max(center_phi, global_min);
           center_phi = std::min(center_phi, global_max);
         }
-        else if (itaylor == 1 && dof_is_dirichlet && std::abs(dx) > std::abs(0.2*dy))
+        else if (itaylor == 1 && dof_is_dirichlet)
         {
-          // Approximation of the derivative in the x-direction at the boundary
+          // The derivative in the x-direction at the center of a mirrored cell
           double ddx = (boundary_dof_value[dof] - center_phi) / dx;
-          double ddx2 = 2*ddx - center_phix;
+          double ddx2 = 4*ddx - 3*center_phix;
           lo = std::min(lo, ddx2);
           hi = std::max(hi, ddx2);
         }
-        else if (itaylor == 2 && dof_is_dirichlet && std::abs(dy) > std::abs(0.2*dx))
+        else if (itaylor == 2 && dof_is_dirichlet)
         {
-          // Approximation of the derivative in the y-direction at the boundary
+          // The derivative in the y-direction at the center of a mirrored cell
           double ddy = (boundary_dof_value[dof] - center_phi) / dy;
-          double ddy2 = 2*ddy - center_phiy;
+          double ddy2 = 4*ddy - 3*center_phiy;
           lo = std::min(lo, ddy2);
           hi = std::max(hi, ddy2);
         }
