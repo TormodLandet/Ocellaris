@@ -48,9 +48,12 @@ class SlopeLimiterBoundaryConditions(object):
             self.simulation.log.warning(message)
             self._allready_warned.add(message)
     
-    def get_bcs(self):
+    def get_bcs(self, weak_dof_values=None):
         """
         Get bc type and bc value for each dof in the function space
+        If a weak_dof_values array is given then this is used for Dirichlet BCs
+        instead of the strong BCs given by the BC function (these will typically
+        differ by a small bit)
         """
         sim = self.simulation
         boundary_dof_type = numpy.zeros(self.dim, numpy.intc)
@@ -90,7 +93,13 @@ class SlopeLimiterBoundaryConditions(object):
                            (self.field_name, boundary_region.name))
                 continue
             
-            if isinstance(value, Constant):
+            if bc_type == self.BC_TYPE_DIRICHLET and weak_dof_values is not None:
+                # Take values from a field which has (weak) Dirichlet BCs applied
+                for dof in dofs:
+                    boundary_dof_type[dof] = bc_type
+                    boundary_dof_value[dof] = weak_dof_values[dof]
+            
+            elif isinstance(value, Constant):
                 # Get constant value
                 val = value.values()
                 assert val.size == 1

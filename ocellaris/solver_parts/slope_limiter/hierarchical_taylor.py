@@ -35,6 +35,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.use_cpp = use_cpp
         self.enforce_global_bounds = enforce_bounds
         self.enforce_boundary_conditions = enforce_bcs
+        self.use_weak_bcs = True
         tdim = mesh.topology().dim()
         self.num_cells_owned = mesh.topology().ghost_offset(tdim)
         
@@ -94,7 +95,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                                                self.num_neighbours, neighbours,
                                                self.cell_dofs_V, self.cell_dofs_V0)
     
-    def run(self):
+    def run(self, use_weak_bcs=None):
         """
         Perform slope limiting of DG Lagrange functions
         """
@@ -119,7 +120,11 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             taylor_arr_old = taylor_arr
         
         # Get updated boundary conditions
-        boundary_dof_type, boundary_dof_value = self.boundary_conditions.get_bcs()
+        weak_vals = None
+        use_weak_bcs = self.use_weak_bcs if use_weak_bcs is None else use_weak_bcs
+        if use_weak_bcs:
+            weak_vals = self.phi.vector().get_local()
+        boundary_dof_type, boundary_dof_value = self.boundary_conditions.get_bcs(weak_vals)
         
         # Run the limiter implementation
         if self.use_cpp:
@@ -143,7 +148,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             vals = self.phi.vector().get_local()
             vals[has_dbc] = boundary_dof_value[has_dbc]
             self.phi.vector().set_local(vals)
-            self.phi.vector().apply('insert') 
+            self.phi.vector().apply('insert')
         
         # Update the secondary output arrays, alphas
         for alpha, alpha_arr in zip(self.alpha_funcs, alpha_arrs):

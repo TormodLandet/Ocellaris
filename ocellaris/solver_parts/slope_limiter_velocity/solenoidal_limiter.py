@@ -172,24 +172,13 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         for i, lim in enumerate(self.prelimiters):
             # Save ui before limiting
             ui_tmp.assign(self.vel_u[i])
-    
+            
             # Limit ui
             lim.limit_cell[:] = self.limit_cell[:]
-            lim.run()
+            lim.run(use_weak_bcs=True)
 
             # Set target for optimization of w
             self.vel_w[i].assign(self.vel_u[i])
-            
-            # Remove boundary cells from targets to avoid problems with BCS
-            arr = self.vel_w[i].vector().get_local()
-            arr_unlim = ui_tmp.vector().get_local()
-            V = self.vel_w[i].function_space()
-            dm = V.dofmap()          
-            for cid in self.skip_target_cells:
-                for dof in dm.cell_dofs(cid):
-                    arr[dof] = arr_unlim[dof]
-            self.vel_w[i].vector().set_local(arr)
-            self.vel_w[i].vector().apply('insert')
         
         # Run the optimizing approximate vector slope limiter with vel_w as
         # target and save results to vel2 and well
