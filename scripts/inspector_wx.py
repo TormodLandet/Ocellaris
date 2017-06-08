@@ -64,7 +64,6 @@ def read_reports_log(log_file_name, derived=True):
 class OcellarisInspector(wx.Frame):
     def __init__(self, lables, report_names, reports):
         super(OcellarisInspector, self).__init__(None, title='Ocellaris Report Inspector')
-        self.SetSize(800, 600)
         
         self.lables = lables
         self.report_names = report_names
@@ -72,6 +71,8 @@ class OcellarisInspector(wx.Frame):
         
         self.layout_widgets()
         self.report_selected()
+        
+        self.SetSize(800, 800)
 
     def layout_widgets(self):
         p = wx.Panel(self)
@@ -90,7 +91,7 @@ class OcellarisInspector(wx.Frame):
         # Choose report to plot
         h1 = wx.BoxSizer(wx.HORIZONTAL)
         v.Add(h1, flag=wx.ALL|wx.EXPAND, border=4)
-        h1.Add(wx.StaticText(p, label='Report:'), flag=wx.CENTER)
+        h1.Add(wx.StaticText(p, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL)
         h1.AddSpacer(5)
         self.report_selector = wx.Choice(p, choices=self.report_names)
         self.report_selector.Select(0)
@@ -98,33 +99,43 @@ class OcellarisInspector(wx.Frame):
         h1.Add(self.report_selector, proportion=1)
         
         # Customize the plot text
-        h2 = wx.BoxSizer(wx.HORIZONTAL)
-        v.Add(h2, flag=wx.ALL|wx.EXPAND, border=4)
+        Nrows = len(self.lables) + 3
+        #Nrows2 = Nrows // 2 + 1 if Nrows % 2 else Nrows // 2
+        fgs = wx.FlexGridSizer(rows=Nrows, cols=3, vgap=3, hgap=10)
+        fgs.AddGrowableCol(1, proportion=1)
+        #fgs.AddGrowableCol(4, proportion=1)
+        v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
         
         # Plot title
-        h2.Add(wx.StaticText(p, label='Title:'), flag=wx.CENTER)
-        h2.AddSpacer(5)
+        fgs.Add(wx.StaticText(p, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.title = wx.TextCtrl(p)
         self.title.Bind(wx.EVT_TEXT, self.update_plot)
-        h2.Add(self.title, proportion=1)
-        h2.AddSpacer(15)
+        fgs.Add(self.title, flag=wx.EXPAND)
+        fgs.AddSpacer(0)
         
         # Plot xlabel
-        h2.Add(wx.StaticText(p, label='X:'), flag=wx.CENTER)
-        h2.AddSpacer(5)
+        fgs.Add(wx.StaticText(p, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.xlabel = wx.TextCtrl(p)
         self.xlabel.Bind(wx.EVT_TEXT, self.update_plot)
-        h2.Add(self.xlabel, proportion=1)
-        h2.AddSpacer(15)
+        fgs.Add(self.xlabel, flag=wx.EXPAND)
+        fgs.AddSpacer(0)
         
         # Plot ylabel
-        h2.Add(wx.StaticText(p, label='Y:'), flag=wx.CENTER)
-        h2.AddSpacer(5)
+        fgs.Add(wx.StaticText(p, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.ylabel = wx.TextCtrl(p)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot)
-        h2.Add(self.ylabel, proportion=1)
-        h2.AddSpacer(5)
+        fgs.Add(self.ylabel, flag=wx.EXPAND)
+        fgs.AddSpacer(0)
         
+        # Customize the lables
+        self.label_controls = []
+        for il, label in enumerate(self.lables):
+            fgs.Add(wx.StaticText(p, label='Line %d label:' % il), flag=wx.ALIGN_CENTER_VERTICAL)
+            label_ctrl = wx.TextCtrl(p, value=label)
+            label_ctrl.Bind(wx.EVT_TEXT, self.update_plot)
+            fgs.Add(label_ctrl, flag=wx.EXPAND)
+            fgs.Add(wx.StaticText(p, label='(%s)' % label), flag=wx.ALIGN_CENTER_VERTICAL)
+            self.label_controls.append(label_ctrl)
         
         v.Fit(p)
     
@@ -144,7 +155,8 @@ class OcellarisInspector(wx.Frame):
         
         self.axes.clear()
         
-        for i, label in enumerate(self.lables):
+        lables = [lc.GetValue() for lc in self.label_controls]
+        for i, label in enumerate(lables):
             x = self.reports[i]['timesteps']
             if report_name in self.reports[i]:
                 y = self.reports[i][report_name]
