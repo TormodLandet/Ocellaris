@@ -49,7 +49,7 @@ def read_reports_log(log_file_name, derived=True):
     reps = {}
     for key, values in data.items():
         arr = numpy.array(values)
-        if key == 'timestep':
+        if key == 'time':
             key = 'timesteps'
         reps[key] = arr
     
@@ -123,7 +123,7 @@ def save_reports_to_html(fig, report_names, Nfiles, all_reps, labels, plot_rep):
         print 'Wrote report file', html_file_name
 
 
-def plot_reports(file_names, save=False):
+def plot_reports(file_names, lables, save=False, logy=False):
     """
     Show matplotlib window with a slider that allows chosing 
     which report to show. If save==True then save reports to
@@ -145,11 +145,11 @@ def plot_reports(file_names, save=False):
     
     lines = []
     labels = []
-    for fn in file_names:
-        bname = os.path.basename(fn)
-        bname_split = bname.split('_endpoint_')
-        label = bname_split[0]
-        line, = pyplot.plot([0], [0], label=label)
+    for label in lables:
+        if logy:
+            line, = pyplot.semilogy([1, 2], [1, 2], label=label)
+        else:
+            line, = pyplot.plot([1, 2], [1, 2], label=label)
         lines.append(line)
         labels.append(label)
     if len(file_names) > 1:
@@ -202,12 +202,32 @@ if __name__ == '__main__':
     # Get report files to save
     h5_file_names = sys.argv[1:]
     
+    logy = False
+    if '--logy' in h5_file_names:
+        h5_file_names.remove('--logy')
+        logy = True
+    
     save = False
     if '--save' in h5_file_names:
         h5_file_names.remove('--save')
         save = True
+        
+        
+    # Get lables
+    lables = []
+    for i in range(len(h5_file_names)):
+        fn = h5_file_names[i]
+        if ':' in fn:
+            fn, label = fn.split(':')
+            h5_file_names[i] = fn
+        else:
+            bname = os.path.basename(fn)
+            bname_split = bname.split('_endpoint_')
+            label = bname_split[0]
+        lables.append(label)
     
-    plot_reports(h5_file_names, save)
+    # Make plots
+    plot_reports(h5_file_names, lables, save, logy)
     
     if not save:
         pyplot.show()

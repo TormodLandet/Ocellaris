@@ -51,11 +51,10 @@ def get_simulation_name(file_name, names_allready_taken):
     while name in names_allready_taken:
         i += 1
         name = basename + str(i)
-    names_allready_taken.add(name)
     return name
 
 
-def plot_iso_surface_file(file_names, n=2**0.5, a=0.05715, g=9.81):
+def plot_iso_surface_file(file_names, lables, n=2**0.5, a=0.05715, g=9.81):
     """
     Plot free surface elevations in the format of Martin and Moyce (1952)
     The definition of the parameters n and a are from the same article
@@ -79,10 +78,9 @@ def plot_iso_surface_file(file_names, n=2**0.5, a=0.05715, g=9.81):
              ('Vertical maximum',   [('MM', mmYvec, mmHvec)])]
     
     # Read files
-    names = set()
-    for file_name in file_names:
+    for ifile, file_name in enumerate(file_names):
         field_name, value, dim, times, lines = read_iso_surface_file(file_name)
-        label = get_simulation_name(file_name, names) 
+        label = lables[ifile] 
         print label
         print field_name, value, dim
         
@@ -103,31 +101,42 @@ def plot_iso_surface_file(file_names, n=2**0.5, a=0.05715, g=9.81):
         plots[1][1].append((label, Yvec, Hvec))
     
     # Plot surface elevations with time
-    for name, lines in plots:
-        fig = pyplot.figure()
-        ax = fig.add_subplot(111)
+    fig = pyplot.figure(figsize=(8,4))
+    for i, (name, lines) in enumerate(plots):
+        ax = fig.add_subplot(1, 2, i+1)
         ax.set_title(name)
         
         for label, tvec, vals in lines:
-            kwargs = dict(marker='o', ls='') if label == 'MM' else {}
-            ax.plot(tvec, vals, label=label, **kwargs)
+            style = (dict(marker='o', ls='', label='Martin & Moyce') 
+                     if label == 'MM' else dict(label=label))
+            ax.plot(tvec, vals, **style)
         if len(lines) > 1:
             ax.legend()
             
         if name == 'Horizontal maximum':
-            ax.set_xlim(0, 3.55)
-            ax.set_ylim(1, 4)
+            ax.set_xlim(0, 3.8)
+            #ax.set_ylim(1, 4)
             ax.yaxis.set_minor_locator(MultipleLocator(0.5))
             ax.yaxis.set_major_locator(MultipleLocator(1))
+            ax.set_xlabel('$T$')
+            ax.set_ylabel('$Z$')
         else:
-            ax.set_xlim(0, 5.0)
-            ax.set_ylim(0, 1.25)
+            ax.set_xlim(0, 2.8)
+            #ax.set_ylim(0, 1.25)
             ax.yaxis.set_minor_locator(MultipleLocator(0.25/2))
             ax.yaxis.set_major_locator(MultipleLocator(0.25))
+            ax.set_xlabel('$\\tau$')
+            ax.set_ylabel('$H$')
+    fig.tight_layout()
 
 
 if __name__ == '__main__':
     import sys
     iso_surface_file_names = sys.argv[1:]
-    plot_iso_surface_file(iso_surface_file_names)
+    
+    names = []
+    for fn in iso_surface_file_names:
+        names.append(get_simulation_name(fn, names))
+    
+    plot_iso_surface_file(iso_surface_file_names, names)
     pyplot.show()
