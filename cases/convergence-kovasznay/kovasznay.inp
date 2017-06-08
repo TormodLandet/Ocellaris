@@ -11,6 +11,10 @@ metadata:
         
         Reynolds number R = 40 which gives λ = -0.9637405441957689
 
+user_code:
+    constants:
+        LAMBDA: -0.96374054419576697314
+
 physical_properties:
     g: [0, 0]
     nu0: 0.025
@@ -32,11 +36,11 @@ boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code:
-        -   1.0 - exp(-0.96374054419576697314*x[0])*cos(2*pi*x[1])
-        -   -0.96374054419576697314/(2*pi)*exp(-0.96374054419576697314*x[0])*sin(2*pi*x[1])
+        -   1.0 - exp(LAMBDA*x[0])*cos(2*pi*x[1])
+        -   LAMBDA/(2*pi)*exp(LAMBDA*x[0])*sin(2*pi*x[1])
     p:
         type: CppCodedGradient
-        cpp_code: "-0.96374054419576697314*exp(2*-0.96374054419576697314*x[0]) * (near(x[0], 0.0) ? 1.0 : -1.0)"
+        cpp_code: "LAMBDA*exp(2*LAMBDA*x[0]) * (near(x[0], 0.0) ? 1.0 : -1.0)"
 
 -   name: horisontal sides
     selector: code
@@ -59,8 +63,8 @@ _boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code:
-        -   1.0 - exp(-0.96374054419576697314*x[0])*cos(2*pi*x[1])
-        -   -0.96374054419576697314/(2*pi)*exp(-0.96374054419576697314*x[0])*sin(2*pi*x[1])
+        -   1.0 - exp(LAMBDA*x[0])*cos(2*pi*x[1])
+        -   LAMBDA/(2*pi)*exp(LAMBDA*x[0])*sin(2*pi*x[1])
 
 time:
     dt: 0.01   # Overridden in convergence.py
@@ -79,4 +83,6 @@ solver:
     polynomial_degree_pressure: 1  # Overridden in convergence.py
     function_space_velocity: DG
     function_space_pressure: DG
+    equation_subtype: DG
     steady_velocity_stopping_criterion: 1.0e-8
+

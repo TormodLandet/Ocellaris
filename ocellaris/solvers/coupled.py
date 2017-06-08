@@ -49,11 +49,13 @@ class SolverCoupled(Solver):
         # Solver control parameters
         sim.data['dt'] = Constant(simulation.dt)
         
+        # Equation class
+        CoupledEquations = EQUATION_SUBTYPES[self.equation_subtype]
+        
         # Get the BCs for the coupled function space
-        self.dirichlet_bcs = self.coupled_boundary_conditions()
+        self.dirichlet_bcs = self.coupled_boundary_conditions(CoupledEquations.use_strong_bcs)
         
         # Create equation
-        CoupledEquations = EQUATION_SUBTYPES[self.equation_subtype]
         self.eqs = CoupledEquations(simulation,
                                     flux_type=self.flux_type,
                                     use_stress_divergence_form=self.use_stress_divergence_form,
@@ -66,6 +68,7 @@ class SolverCoupled(Solver):
                                     incompressibility_flux_type=self.incompressibility_flux_type)
         
         sim.log.info('    Using velocity postprocessor: %r' % self.velocity_postprocessing_method)
+        self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
             self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
@@ -237,13 +240,13 @@ class SolverCoupled(Solver):
         # Correct every timestep
         self.hydrostatic_pressure_correction = True
     
-    def coupled_boundary_conditions(self):
+    def coupled_boundary_conditions(self, use_strong_bcs):
         """
         Convert boundary conditions from segregated to coupled function spaces
         """
         coupled_dirichlet_bcs = []
         for i, name in enumerate(self.subspace_names):
-            if self.vel_is_discontinuous and name.startswith('u'):
+            if not use_strong_bcs and name.startswith('u'):
                 # Use weak BCs if the velocity is DG
                 continue
             

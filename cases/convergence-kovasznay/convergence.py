@@ -42,9 +42,10 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     # Interpolate the analytical solution to the same function space
     Vu = sim.data['Vu']
     Vp = sim.data['Vp']
-    u0e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/0'), degree=polydeg_u)
-    u1e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/1'), degree=polydeg_u)
-    pe  = dolfin.Expression('-0.5*exp(-0.96374054419576697314*2*x[0]) + 1/(4*-0.96374054419576697314)*(exp(2*-0.96374054419576697314) - 1.0)', degree=polydeg_p)
+    lambda_ = sim.input.get_value('user_code/constants/LAMBDA', required_type='float')
+    u0e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/0'), LAMBDA=lambda_, degree=polydeg_u)
+    u1e = dolfin.Expression(sim.input.get_value('boundary_conditions/0/u/cpp_code/1'), LAMBDA=lambda_, degree=polydeg_u)
+    pe  = dolfin.Expression('-0.5*exp(LAMBDA*2*x[0]) + 1/(4*LAMBDA)*(exp(2*LAMBDA) - 1.0)', LAMBDA=lambda_, degree=polydeg_p)
     u0a = dolfin.project(u0e, Vu)
     u1a = dolfin.project(u1e, Vu)
     pa = dolfin.project(pe, Vp)
