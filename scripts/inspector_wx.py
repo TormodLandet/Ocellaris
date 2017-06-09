@@ -113,19 +113,23 @@ class OcellarisInspector(wx.Frame):
         fgs.Add(self.title, flag=wx.EXPAND)
         fgs.AddSpacer(0)
         
-        # Plot xlabel
+        # Plot xlabel / log x axis
         fgs.Add(wx.StaticText(p, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.xlabel = wx.TextCtrl(p)
         self.xlabel.Bind(wx.EVT_TEXT, self.update_plot)
         fgs.Add(self.xlabel, flag=wx.EXPAND)
-        fgs.AddSpacer(0)
+        self.xlog = wx.CheckBox(p, label='X as log axis')
+        self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot)
+        fgs.Add(self.xlog)
         
         # Plot ylabel
         fgs.Add(wx.StaticText(p, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.ylabel = wx.TextCtrl(p)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot)
         fgs.Add(self.ylabel, flag=wx.EXPAND)
-        fgs.AddSpacer(0)
+        self.ylog = wx.CheckBox(p, label='Y as log axis')
+        self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot)
+        fgs.Add(self.ylog)
         
         # Customize the lables
         self.label_controls = []
@@ -153,6 +157,18 @@ class OcellarisInspector(wx.Frame):
         irep = self.report_selector.GetSelection()
         report_name = self.report_names[irep]
         
+        # How to plot
+        xlog = self.xlog.GetValue()
+        ylog = self.ylog.GetValue()
+        if xlog and ylog:
+            plot = self.axes.loglog
+        elif xlog:
+            plot = self.axes.semilogx
+        elif ylog:
+            plot = self.axes.semilogy
+        else:
+            plot = self.axes.plot
+        
         self.axes.clear()
         
         lables = [lc.GetValue() for lc in self.label_controls]
@@ -163,7 +179,8 @@ class OcellarisInspector(wx.Frame):
             else:
                 y = numpy.zeros_like(x)
                 y[:] = numpy.NaN
-            self.axes.plot(x, y, label=label)
+            
+            plot(x, y, label=label)
         
         self.axes.relim()
         self.axes.autoscale_view()
