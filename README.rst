@@ -1,7 +1,7 @@
 Ocellaris
 =========
 
-Ocellaris is a work in progress to make a continuous and discontinuous Galerkin FEM solver for 
+Ocellaris is a work in progress to make a mass conserving DG FEM solver for sharp interface
 multiphase free surface flows. The current goal of the project is to simulate water entry and 
 exit of objects in ocean waves with accurate capturing of the force on the object and the 
 behaviour of the free surface.
@@ -23,21 +23,36 @@ clownfish and is written as part of a PhD project at the University of Oslo.
 Installation and running
 ------------------------
 
-Ocellaris requires a full installation of FEniCS_ with the PETSc linear algebra backend. There is no
-installation other than downloading the code and running the following command with both the Ocellaris
-Python package and the FEniCS and SciPy packages in the Python PATH (dolfin/numpy/matplotlib etc)::
+Ocellaris requires a full installation of FEniCS_ with the PETSc linear algebra backend. You can
+install the dependecies yourself (you need at least dolfin, h5py, matplotlib and PyYAML) and then
+install ocellaris to somewhere in the python module search path. You can then run::
 
   python -m ocellaris INPUTFILE.INP
+
+You can also install using the preliminary support for Singularity containers::
+
+  # Bootstrap a Singularity image from the file "Singularity" which
+  # is located in the root of the Ocellaris git repository
+  singularity create -s 3000 ocellaris.img
+  sudo singularity bootstrap ocellaris.img Singularity
+
+  # Run bash inside the newly created Singularity container
+  singularity run -H /some/empty/dir/to/use/as/home ocellaris.img
+
+  # Or, just run Ocellaris directly, the container exits along with Ocellaris
+  singularity run -H /some/empty/dir/to/use/as/home ocellaris.img -c "ocellaris INPUTFILE.INP"
   
-To test the code there are some demos in the ``demos/`` directory. Complete input files are provided
-for several of the normal benchmark cases like lid driven cavity flow and the Taylor-Green vortex. More
-information can be found in the documentation which also contains a description of the input file format.
+To test the code there are some demo input files in the ``demos/`` directory. Complete input files along
+with driver scripts are provided for several of the normal benchmark cases like Kovasznay flow and the
+Taylor-Green vortex in the ``cases/`` directory. More information can be found in the documentation which
+also contains an (incomplete) description of the input file format.
 
 Please feel free to test Ocellaris, but please keep in mind:
 
 - Ocellaris is in a state of constant development and does not have a stable API or input file format
-- Ocellaris supports Python 2 only, not Python 3 (currently).
+- Ocellaris supports Python 2 only, not Python 3 (currently, hopefully this will change some day).
 - This is a research project, do not expect anything to work properly without testing it thoroughly first!
+- Documentation has not been a priority, sorry!
 
 Documentation
 -------------
