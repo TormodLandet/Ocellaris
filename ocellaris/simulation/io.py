@@ -57,6 +57,8 @@ class InputOutputHandling():
             
             sim.log.info('    Creating XDMF file %s' % file_name)
             self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
+            self.xdmf_file.parameters['rewrite_function_mesh'] = False
+            self.xdmf_file.parameters['functions_share_mesh'] = True
         
         def create_vec_func(V):
             "Create a vector function from the components"
