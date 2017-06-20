@@ -38,7 +38,7 @@ def _get_cpp_module(source_dir, header_files, source_files, force_recompile=Fals
             if os.path.isfile(path):
                 with open(path, 'rt') as error:
                     print error.read()
-            raise
+        raise
     
     return module
 
