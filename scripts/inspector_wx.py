@@ -47,11 +47,18 @@ def read_reports_log(log_file_name, derived=True):
                     break
     
     reps = {}
+    N = 1e100
     for key, values in data.items():
         arr = numpy.array(values)
         if key == 'time':
             key = 'timesteps'
         reps[key] = arr
+        N = min(N, len(arr))
+    
+    # Ensure equal length arrays in case of partially written 
+    # time steps on the log file
+    for key in reps.keys():
+        reps[key] = reps[key][:N]
     
     if derived:
         if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
