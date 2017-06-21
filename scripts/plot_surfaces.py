@@ -64,7 +64,7 @@ def get_colour(label):
     return COLOURS[label]
 
 
-def main(filenames, equal_axis):
+def main(filenames, equal_axes):
     all_data = []
     tmin = tmax = 0
     xmin, ymin, xmax, ymax = 1e100, 1e100, -1e100, -1e100
@@ -73,7 +73,7 @@ def main(filenames, equal_axis):
         if ':' in filename:
             filename, name = filename.split(':')
         print 'Reading %s from file %s' % (name, filename)
-        description, value, dim, timesteps, data = read_iso_surfaces(filename)
+        _description, _value, _dim, timesteps, data = read_iso_surfaces(filename)
         all_data.append((name, numpy.array(timesteps), data))
         
         tmax = max(tmax, timesteps[-1])
@@ -86,7 +86,7 @@ def main(filenames, equal_axis):
     
     fig, ax = pyplot.subplots()
     pyplot.subplots_adjust(bottom=0.25)
-    axcolor = 'lightgoldenrodyellow'
+    axcolor = '#a1b8dd'
     slider_ax = pyplot.axes([0.1, 0.1, 0.8, 0.03], facecolor=axcolor)
     slider = Slider(slider_ax, 'Time', tmin, tmax, valinit=tmin)
     
@@ -112,8 +112,12 @@ def main(filenames, equal_axis):
         
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
-        ax.set_aspect('equal')
-        ax.legend(loc='lower right')
+        
+        if equal_axes:
+            ax.set_aspect('equal')
+        
+        if len(filenames) > 1:
+            ax.legend(loc='lower right')
         fig.canvas.draw_idle()
     
     slider.on_changed(update)
@@ -124,9 +128,9 @@ def main(filenames, equal_axis):
 if __name__ == '__main__':
     filenames = sys.argv[1:]
     
-    equal_axis = False
-    if '--equal' in filenames:
-        equal_axis = True
-        filenames.remove('--equal')
+    equal_axes = True
+    if '--nonequal' in filenames:
+        equal_axes = False
+        filenames.remove('--nonequal')
     
-    main(filenames, equal_axis)
+    main(filenames, equal_axes)
