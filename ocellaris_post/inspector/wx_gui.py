@@ -2,7 +2,6 @@
 Inspect timestep reports from one or more Ocellaris restart files 
 """
 import os
-import h5py
 import numpy
 import wx
 from wx.lib.embeddedimage import PyEmbeddedImage
@@ -10,71 +9,13 @@ import matplotlib
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
-
-
-def read_reports(file_name, derived=True):
-    if file_name.endswith('h5'):
-        return read_reports_h5(file_name, derived)
-    else:
-        return read_reports_log(file_name, derived)
-
-
-def read_reports_h5(h5_file_name, derived=True):
-    hdf = h5py.File(h5_file_name, 'r')
-    
-    reps = {}
-    for rep_name in hdf['/reports']:
-        reps[rep_name] = numpy.array(hdf['/reports'][rep_name])
-    
-    if derived:
-        if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
-            reps['Et'] = reps['Ek'] + reps['Ep']  
-    
-    return reps
-
-
-def read_reports_log(log_file_name, derived=True):
-    data = {}
-    for line in open(log_file_name, 'rt'):
-        if line.startswith('Reports for timestep'):
-            parts = line[12:].split(',')
-            for pair in parts:
-                try:
-                    key, value = pair.split('=')
-                    key = key.strip()
-                    value = float(value)
-                    data.setdefault(key, []).append(value)
-                except:
-                    break
-    
-    reps = {}
-    N = 1e100
-    for key, values in data.items():
-        arr = numpy.array(values)
-        if key == 'time':
-            key = 'timesteps'
-        reps[key] = arr
-        N = min(N, len(arr))
-    
-    # Ensure equal length arrays in case of partially written 
-    # time steps on the log file
-    for key in reps.keys():
-        reps[key] = reps[key][:N]
-    
-    if derived:
-        if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
-            N = min(reps['Ek'].size, reps['Ep'].size)
-            reps['Et'] = reps['Ek'][:N] + reps['Ep'][:N]
-    
-    return reps
+from ocellaris_post import Results
 
 
 class OcellarisInspector(wx.Frame):
-    def __init__(self, lables, report_names, reports):
+    def __init__(self, results):
         super(OcellarisInspector, self).__init__(None, title='Ocellaris Report Inspector')
-        self.lables = lables
-        self.report_names = report_names
-        self.reports = reports
+        self.results = results
         
         self.layout_widgets()
         self.SetSize(800, 800)
@@ -83,7 +24,7 @@ class OcellarisInspector(wx.Frame):
     def layout_widgets(self):
         p = wx.Panel(self)
         nb = wx.Notebook(p, style=wx.NB_BOTTOM)
-        self.reports_panel = OcellarisReportsPanel(nb, self.lables, self.report_names, self.reports)
+        self.reports_panel = OcellarisReportsPanel(nb, self.results)
         nb.AddPage(self.reports_panel, 'Timestep reports')
         self.reports_panel.SetBackgroundColour(p.GetBackgroundColour())
         
@@ -93,11 +34,16 @@ class OcellarisInspector(wx.Frame):
 
 
 class OcellarisReportsPanel(wx.Panel):
-    def __init__(self, parent, lables, report_names, reports):
+    def __init__(self, parent, results):
         super(OcellarisReportsPanel, self).__init__(parent)
-        self.lables = lables
-        self.report_names = report_names
-        self.reports = reports
+        self.lables = [res.label for res in results]
+        self.reports = []
+        all_rep_names = set()
+        for res in results:
+            self.reports.append(res.reports)
+            all_rep_names.update(res.reports.keys())
+        self.report_names = sorted(all_rep_names)
+        
         self.layout_widgets()
         self.report_selected()
     
@@ -237,16 +183,14 @@ def show_inspector(file_names, lables):
     """
     Show wxPython window that allows chosing  which report to show
     """
-    all_reps = []
-    all_rep_names = set()
-    for fn in file_names:
-        reps = read_reports(fn)
-        all_reps.append(reps)
-        all_rep_names.update(reps.keys())
-    report_names = sorted(all_rep_names)
+    results = []
+    for file_name, label in zip(file_names, lables):
+        res = Results(file_name)
+        res.label = label
+        results.append(res)
     
     app = wx.App()
-    frame = OcellarisInspector(lables, report_names, all_reps)
+    frame = OcellarisInspector(results)
     frame.Show()
     app.MainLoop()
 
@@ -550,26 +494,3 @@ OCELLARIS_ICON = PyEmbeddedImage(
     "taujXwDVyWw+kQsXH6pxlIqscX6RKtNyd1Y84A+HCYvl/TSQoHV24I2hjWBLxbqe7t4dyvvv"
     "Oe6iytAt+vffeL3tn3qWdGmePzUUxXGsKMdZMaSaaIpwqVEuhUKRGki9Wn4F+my8ubzErXAd"
     "DS3/AU3ij6l44vADAAAAAElFTkSuQmCC")
-
-
-if __name__ == '__main__':
-    import sys
-    
-    # Get report files to save
-    h5_file_names = sys.argv[1:]
-    
-    # Get lables
-    lables = []
-    for i in range(len(h5_file_names)):
-        fn = h5_file_names[i]
-        if ':' in fn:
-            fn, label = fn.split(':')
-            h5_file_names[i] = fn
-        else:
-            bname = os.path.basename(fn)
-            bname_split = bname.split('_endpoint_')
-            label = bname_split[0]
-        lables.append(label)
-    
-    # Make plots
-    show_inspector(h5_file_names, lables)

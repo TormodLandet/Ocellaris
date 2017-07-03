@@ -1,7 +1,7 @@
 import sys
 import numpy
 from matplotlib  import pyplot
-from matplotlib.widgets import Slider, Button, RadioButtons
+from matplotlib.widgets import Slider
 
 
 def read_iso_surfaces(filename):
