@@ -72,30 +72,45 @@ def read_reports_log(log_file_name, derived=True):
 class OcellarisInspector(wx.Frame):
     def __init__(self, lables, report_names, reports):
         super(OcellarisInspector, self).__init__(None, title='Ocellaris Report Inspector')
-        
         self.lables = lables
         self.report_names = report_names
         self.reports = reports
         
         self.layout_widgets()
-        self.report_selected()
-        
         self.SetSize(800, 800)
-        
         self.SetIcon(OCELLARIS_ICON.GetIcon())
         
-
     def layout_widgets(self):
         p = wx.Panel(self)
+        nb = wx.Notebook(p, style=wx.NB_BOTTOM)
+        self.reports_panel = OcellarisReportsPanel(nb, self.lables, self.report_names, self.reports)
+        nb.AddPage(self.reports_panel, 'Timestep reports')
+        self.reports_panel.SetBackgroundColour(p.GetBackgroundColour())
+        
+        s = wx.BoxSizer()
+        s.Add(nb, 1, wx.EXPAND)
+        p.SetSizer(s)
+
+
+class OcellarisReportsPanel(wx.Panel):
+    def __init__(self, parent, lables, report_names, reports):
+        super(OcellarisReportsPanel, self).__init__(parent)
+        self.lables = lables
+        self.report_names = report_names
+        self.reports = reports
+        self.layout_widgets()
+        self.report_selected()
+    
+    def layout_widgets(self):
         v = wx.BoxSizer(wx.VERTICAL)
-        p.SetSizer(v)
+        self.SetSizer(v)
         
         # Figure and figure controls
         self.fig = Figure((5.0, 4.0), dpi=100)
-        self.canvas = FigureCanvas(p, wx.ID_ANY, self.fig)
+        self.canvas = FigureCanvas(self, wx.ID_ANY, self.fig)
         self.axes = self.fig.add_subplot(111)
         toolbar = NavigationToolbar(self.canvas)
-        self.plot_cursor_position_info = wx.StaticText(p, style=wx.ALIGN_RIGHT, size=(250, -1), label='')
+        self.plot_cursor_position_info = wx.StaticText(self, style=wx.ALIGN_RIGHT, size=(250, -1), label='')
         self.canvas.mpl_connect('motion_notify_event', self.mouse_position_on_plot)
         v.Add(self.canvas, proportion=1, flag=wx.EXPAND)
         h = wx.BoxSizer(wx.HORIZONTAL)
@@ -104,14 +119,13 @@ class OcellarisInspector(wx.Frame):
         h.Add(self.plot_cursor_position_info, flag=wx.ALIGN_CENTER_VERTICAL)
         h.AddSpacer(5)
         v.Add(h, flag=wx.EXPAND)
-        #v.Fit(self)
         
         # Choose report to plot
         h1 = wx.BoxSizer(wx.HORIZONTAL)
         v.Add(h1, flag=wx.ALL|wx.EXPAND, border=4)
-        h1.Add(wx.StaticText(p, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        h1.Add(wx.StaticText(self, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL)
         h1.AddSpacer(5)
-        self.report_selector = wx.Choice(p, choices=self.report_names)
+        self.report_selector = wx.Choice(self, choices=self.report_names)
         self.report_selector.Select(0)
         self.report_selector.Bind(wx.EVT_CHOICE, self.report_selected)
         h1.Add(self.report_selector, proportion=1)
@@ -125,41 +139,41 @@ class OcellarisInspector(wx.Frame):
         v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
         
         # Plot title
-        fgs.Add(wx.StaticText(p, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL)
-        self.title = wx.TextCtrl(p)
+        fgs.Add(wx.StaticText(self, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        self.title = wx.TextCtrl(self)
         self.title.Bind(wx.EVT_TEXT, self.update_plot)
         fgs.Add(self.title, flag=wx.EXPAND)
         fgs.AddSpacer(0)
         
         # Plot xlabel / log x axis
-        fgs.Add(wx.StaticText(p, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL)
-        self.xlabel = wx.TextCtrl(p)
+        fgs.Add(wx.StaticText(self, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        self.xlabel = wx.TextCtrl(self)
         self.xlabel.Bind(wx.EVT_TEXT, self.update_plot)
         fgs.Add(self.xlabel, flag=wx.EXPAND)
-        self.xlog = wx.CheckBox(p, label='X as log axis')
+        self.xlog = wx.CheckBox(self, label='X as log axis')
         self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot)
         fgs.Add(self.xlog)
         
         # Plot ylabel
-        fgs.Add(wx.StaticText(p, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL)
-        self.ylabel = wx.TextCtrl(p)
+        fgs.Add(wx.StaticText(self, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        self.ylabel = wx.TextCtrl(self)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot)
         fgs.Add(self.ylabel, flag=wx.EXPAND)
-        self.ylog = wx.CheckBox(p, label='Y as log axis')
+        self.ylog = wx.CheckBox(self, label='Y as log axis')
         self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot)
         fgs.Add(self.ylog)
         
         # Customize the lables
         self.label_controls = []
         for il, label in enumerate(self.lables):
-            fgs.Add(wx.StaticText(p, label='Line %d label:' % il), flag=wx.ALIGN_CENTER_VERTICAL)
-            label_ctrl = wx.TextCtrl(p, value=label)
+            fgs.Add(wx.StaticText(self, label='Line %d label:' % il), flag=wx.ALIGN_CENTER_VERTICAL)
+            label_ctrl = wx.TextCtrl(self, value=label)
             label_ctrl.Bind(wx.EVT_TEXT, self.update_plot)
             fgs.Add(label_ctrl, flag=wx.EXPAND)
-            fgs.Add(wx.StaticText(p, label='(%s)' % label), flag=wx.ALIGN_CENTER_VERTICAL)
+            fgs.Add(wx.StaticText(self, label='(%s)' % label), flag=wx.ALIGN_CENTER_VERTICAL)
             self.label_controls.append(label_ctrl)
         
-        v.Fit(p)
+        v.Fit(self)
         
     def mouse_position_on_plot(self, mpl_event):
         x, y = mpl_event.xdata, mpl_event.ydata

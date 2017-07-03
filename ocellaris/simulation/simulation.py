@@ -5,7 +5,6 @@ from ocellaris.utils import ocellaris_error, velocity_change
 from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
-from .plotting import Plotting
 from .reporting import Reporting
 from .log import Log
 from .io import InputOutputHandling
@@ -18,15 +17,14 @@ class Simulation(object):
         """
         Represents one Ocellaris simulation. The Simulation class 
         connects the input file, geometry, mesh and more with the
-        solver and the result plotting and reporting tools     
+        solver, results IO and reporting tools     
         """
         self.ncpu = dolfin.MPI.size(dolfin.mpi_comm_world())
         self.rank = dolfin.MPI.rank(dolfin.mpi_comm_world())
         
         self.hooks = Hooks(self)
         self.input = Input(self)
-        self.data = {}        
-        self.plotting = Plotting(self)
+        self.data = {}
         self.reporting = Reporting(self)
         self.log = Log(self)
         self.io = InputOutputHandling(self)

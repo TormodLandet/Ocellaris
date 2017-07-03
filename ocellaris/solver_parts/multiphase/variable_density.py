@@ -141,9 +141,6 @@ class VariableDensityModel(MultiPhaseModel):
             self.slope_limiter = SlopeLimiter(sim, 'rho', self.rho)
             self.slope_limiter.set_phi_old(self.rho_p)
         
-        # Add some debugging plots to show results in 2D
-        self.simulation.plotting.add_plot('rho', self.rho, clim=(self.rho_min, self.rho_max))
-        
         # Make sure the initial value is included in XDMF results from timestep 0
         self.rho.assign(self.rho_p)
     

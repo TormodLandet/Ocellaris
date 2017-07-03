@@ -145,12 +145,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if self.need_gradient:
             # Reconstruct the gradient from the colour function DG0 field
             self.convection_scheme.gradient_reconstructor.initialize()
-            gradient = self.convection_scheme.gradient_reconstructor.gradient
-            sim.plotting.add_plot('c_grad', gradient)
-            
-        # Add some debugging plots to show results in 2D
-        sim.plotting.add_plot('c', c, clim=(0, 1))
-        sim.plotting.add_plot('c_beta', beta)
+        
         self.update_plot_fields()
     
     def get_colour_function(self, k):
