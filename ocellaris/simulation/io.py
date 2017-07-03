@@ -58,7 +58,11 @@ class InputOutputHandling():
             sim.log.info('    Creating XDMF file %s' % file_name)
             self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
             self.xdmf_file.parameters['rewrite_function_mesh'] = False
-            self.xdmf_file.parameters['functions_share_mesh'] = True
+            try:
+                self.xdmf_file.parameters['functions_share_mesh'] = True
+            except KeyError:
+                # the parameter 'functions_share_mesh' is new in FEniCS 2017.01
+                pass
         
         def create_vec_func(V):
             "Create a vector function from the components"
