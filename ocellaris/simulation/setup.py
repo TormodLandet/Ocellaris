@@ -1,7 +1,7 @@
 import time
 import dolfin
 from ocellaris.solvers import get_solver
-from ocellaris.postprocess import setup_probes
+from ocellaris.probes import setup_probes
 from ocellaris.utils import interactive_console_hook, ocellaris_error, ocellaris_interpolate, log_timings
 from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
 from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
