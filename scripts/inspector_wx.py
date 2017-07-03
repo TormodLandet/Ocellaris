@@ -95,9 +95,16 @@ class OcellarisInspector(wx.Frame):
         self.canvas = FigureCanvas(p, wx.ID_ANY, self.fig)
         self.axes = self.fig.add_subplot(111)
         toolbar = NavigationToolbar(self.canvas)
+        self.plot_cursor_position_info = wx.StaticText(p, style=wx.ALIGN_RIGHT, size=(250, -1), label='')
+        self.canvas.mpl_connect('motion_notify_event', self.mouse_position_on_plot)
         v.Add(self.canvas, proportion=1, flag=wx.EXPAND)
-        v.Add(toolbar, flag=wx.EXPAND)
-        v.Fit(self)
+        h = wx.BoxSizer(wx.HORIZONTAL)
+        h.Add(toolbar, proportion=1)
+        h.AddSpacer(10)
+        h.Add(self.plot_cursor_position_info, flag=wx.ALIGN_CENTER_VERTICAL)
+        h.AddSpacer(5)
+        v.Add(h, flag=wx.EXPAND)
+        #v.Fit(self)
         
         # Choose report to plot
         h1 = wx.BoxSizer(wx.HORIZONTAL)
@@ -153,7 +160,15 @@ class OcellarisInspector(wx.Frame):
             self.label_controls.append(label_ctrl)
         
         v.Fit(p)
-    
+        
+    def mouse_position_on_plot(self, mpl_event):
+        x, y = mpl_event.xdata, mpl_event.ydata
+        if x is None or y is None:
+            info = ''
+        else:
+            info = 'pos = (%.6g, %.6g)' % (x, y)
+        self.plot_cursor_position_info.Label = info
+
     def report_selected(self, evt=None):
         irep = self.report_selector.GetSelection()
         report_name = self.report_names[irep]
