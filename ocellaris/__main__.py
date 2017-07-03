@@ -1,4 +1,4 @@
-import sys
+import sys, os
 from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation
 
 
@@ -22,9 +22,12 @@ def main(inputfile, input_override):
     
     # Print banner with Ocellaris version number 
     version = get_detailed_version()
+    location = os.path.split(os.path.abspath(__file__))[0]
     sim.log.info('='*80)
     sim.log.info('                  Ocellaris   %s' % version) 
     sim.log.info('='*80)
+    sim.log.info('Installed at:')
+    sim.log.info('    %s' % location)
     sim.log.info()
     
     # Setup the Ocellaris simulation
