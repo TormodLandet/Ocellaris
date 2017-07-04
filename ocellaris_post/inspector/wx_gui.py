@@ -3,12 +3,16 @@ Inspect timestep reports from one or more Ocellaris restart files
 """
 import numpy
 import wx
+from wx.lib.pubsub import pub
 import matplotlib
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
 from ocellaris_post import Results
 from .icons import OCELLARIS_ICON
+
+
+TOPIC_METADATA = 'metadata_updated'
 
 
 class OcellarisInspector(wx.Frame):
@@ -23,10 +27,16 @@ class OcellarisInspector(wx.Frame):
     def layout_widgets(self):
         p = wx.Panel(self)
         nb = wx.Notebook(p, style=wx.NB_BOTTOM)
+        
+        self.metadata_panel = OcellarisMetadataPanel(nb, self.results)
+        nb.AddPage(self.metadata_panel, 'Metadata')
+        self.metadata_panel.SetBackgroundColour(p.GetBackgroundColour())
+        
         self.reports_panel = OcellarisReportsPanel(nb, self.results)
         nb.AddPage(self.reports_panel, 'Timestep reports')
         self.reports_panel.SetBackgroundColour(p.GetBackgroundColour())
         
+        nb.SetSelection(1)
         s = wx.BoxSizer()
         s.Add(nb, 1, wx.EXPAND)
         p.SetSizer(s)
@@ -35,7 +45,7 @@ class OcellarisInspector(wx.Frame):
 class OcellarisReportsPanel(wx.Panel):
     def __init__(self, parent, results):
         super(OcellarisReportsPanel, self).__init__(parent)
-        self.lables = [res.label for res in results]
+        self.results = results
         self.reports = []
         all_rep_names = set()
         for res in results:
@@ -45,6 +55,9 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.layout_widgets()
         self.report_selected()
+        
+        self.Bind(wx.EVT_IDLE, self.on_idle)
+        pub.subscribe(self.update_plot_soon, TOPIC_METADATA)
     
     def layout_widgets(self):
         v = wx.BoxSizer(wx.VERTICAL)
@@ -76,7 +89,7 @@ class OcellarisReportsPanel(wx.Panel):
         h1.Add(self.report_selector, proportion=1)
         
         # Customize the plot text
-        Nrows = len(self.lables) + 3
+        Nrows = len(self.results) + 3
         #Nrows2 = Nrows // 2 + 1 if Nrows % 2 else Nrows // 2
         fgs = wx.FlexGridSizer(rows=Nrows, cols=3, vgap=3, hgap=10)
         fgs.AddGrowableCol(1, proportion=1)
@@ -86,37 +99,27 @@ class OcellarisReportsPanel(wx.Panel):
         # Plot title
         fgs.Add(wx.StaticText(self, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.title = wx.TextCtrl(self)
-        self.title.Bind(wx.EVT_TEXT, self.update_plot)
+        self.title.Bind(wx.EVT_TEXT, self.update_plot_soon)
         fgs.Add(self.title, flag=wx.EXPAND)
         fgs.AddSpacer(0)
         
         # Plot xlabel / log x axis
         fgs.Add(wx.StaticText(self, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.xlabel = wx.TextCtrl(self)
-        self.xlabel.Bind(wx.EVT_TEXT, self.update_plot)
+        self.xlabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
         fgs.Add(self.xlabel, flag=wx.EXPAND)
         self.xlog = wx.CheckBox(self, label='X as log axis')
-        self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot)
+        self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         fgs.Add(self.xlog)
         
         # Plot ylabel
         fgs.Add(wx.StaticText(self, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.ylabel = wx.TextCtrl(self)
-        self.ylabel.Bind(wx.EVT_TEXT, self.update_plot)
+        self.ylabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
         fgs.Add(self.ylabel, flag=wx.EXPAND)
         self.ylog = wx.CheckBox(self, label='Y as log axis')
-        self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot)
+        self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         fgs.Add(self.ylog)
-        
-        # Customize the lables
-        self.label_controls = []
-        for il, label in enumerate(self.lables):
-            fgs.Add(wx.StaticText(self, label='Line %d label:' % il), flag=wx.ALIGN_CENTER_VERTICAL)
-            label_ctrl = wx.TextCtrl(self, value=label)
-            label_ctrl.Bind(wx.EVT_TEXT, self.update_plot)
-            fgs.Add(label_ctrl, flag=wx.EXPAND)
-            fgs.Add(wx.StaticText(self, label='(%s)' % label), flag=wx.ALIGN_CENTER_VERTICAL)
-            self.label_controls.append(label_ctrl)
         
         v.Fit(self)
         
@@ -137,8 +140,22 @@ class OcellarisReportsPanel(wx.Panel):
         self.ylabel.ChangeValue(report_name)
         
         self.update_plot()
+    
+    def update_plot_soon(self, evt=None):
+        """
+        Update the plot the next time the event queue is empty
+        """
+        self.need_update = True
+    
+    def on_idle(self, evt=None):
+        if self.need_update:
+            self.update_plot()
+    
         
     def update_plot(self, evt=None):
+        """
+        Update the plot at once
+        """
         irep = self.report_selector.GetSelection()
         report_name = self.report_names[irep]
         
@@ -156,8 +173,7 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.axes.clear()
         
-        lables = [lc.GetValue() for lc in self.label_controls]
-        for i, label in enumerate(lables):
+        for i, results in enumerate(self.results):
             x = self.reports[i]['timesteps']
             if report_name in self.reports[i]:
                 y = self.reports[i][report_name]
@@ -165,7 +181,7 @@ class OcellarisReportsPanel(wx.Panel):
                 y = numpy.zeros_like(x)
                 y[:] = numpy.NaN
             
-            plot(x, y, label=label)
+            plot(x, y, label=results.label)
         
         self.axes.relim()
         self.axes.autoscale_view()
@@ -176,6 +192,43 @@ class OcellarisReportsPanel(wx.Panel):
         self.fig.tight_layout()
         
         self.canvas.draw()
+        self.need_update = False
+
+
+class OcellarisMetadataPanel(wx.Panel):
+    def __init__(self, parent, results):
+        super(OcellarisMetadataPanel, self).__init__(parent)
+        self.results = results
+        self.layout_widgets()
+    
+    def layout_widgets(self):
+        v = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(v)
+        
+        # Metadata FlexGridSizer
+        Nrows = len(self.results)
+        fgs = wx.FlexGridSizer(rows=Nrows, cols=3, vgap=3, hgap=10)
+        fgs.AddGrowableCol(1, proportion=1)
+        v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
+        
+        # Customize the lables
+        self.label_controls = []
+        for il, results in enumerate(self.results):
+            fgs.Add(wx.StaticText(self, label='File %d label:' % il), flag=wx.ALIGN_CENTER_VERTICAL)
+            label_ctrl = wx.TextCtrl(self, value=results.label)
+            label_ctrl.Bind(wx.EVT_TEXT, self.update_lables)
+            fgs.Add(label_ctrl, flag=wx.EXPAND)
+            st = wx.StaticText(self, label='(%s)' % results.label)
+            st.SetToolTip(results.file_name)
+            fgs.Add(st, flag=wx.ALIGN_CENTER_VERTICAL)
+            self.label_controls.append(label_ctrl)
+        
+        v.Fit(self)
+    
+    def update_lables(self, event):
+        for label_control, results in zip(self.label_controls, self.results):
+            results.label = label_control.GetValue()
+        pub.sendMessage(TOPIC_METADATA)
 
 
 def show_inspector(file_names, lables):
