@@ -5,7 +5,7 @@ import wx
 from ocellaris_post import Results
 from .icons import OCELLARIS_ICON
 from .panel_results import OcellarisReportsPanel
-from .panel_metadata import OcellarisMetadataPanel
+from .panel_setup import OcellarisSetupPanel
 from .panel_surfaces import OcellarisSurfacesPanel
 
 
@@ -22,8 +22,8 @@ class OcellarisInspector(wx.Frame):
         p = wx.Panel(self)
         nb = wx.Notebook(p, style=wx.NB_BOTTOM)
         
-        self.metadata_panel = OcellarisMetadataPanel(nb, self.results)
-        nb.AddPage(self.metadata_panel, 'Metadata')
+        self.metadata_panel = OcellarisSetupPanel(nb, self.results)
+        nb.AddPage(self.metadata_panel, 'Setup')
         self.metadata_panel.SetBackgroundColour(p.GetBackgroundColour())
         
         self.reports_panel = OcellarisReportsPanel(nb, self.results)

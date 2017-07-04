@@ -16,16 +16,26 @@ class Results(object):
         The file name given can be either a simulation log file
         (for ongoing simulations) or an Ocellaris restart file 
         """
-        self.file_name = os.path.abspath(file_name)
-        self.input = None
         self.reports = None
+        self.surfaces = None
+        self.input = None
+        self.reload(file_name, derived)
+    
+    def reload(self, file_name=None, derived=True):
+        if file_name is None:
+            file_name = self.file_name
+        
+        self.file_name = os.path.abspath(file_name)
         if file_name.endswith('.h5'):
             read_h5_data(self, derived)
         elif file_name.endswith('.log'):
             read_log_data(self, derived)
         
-        self.surfaces = None
-        read_surfaces(self)
+        if self.surfaces is None:
+            read_surfaces(self)
+        else:
+            for surf in self.surfaces.values():
+                surf.reload()
     
     def get_file_path(self, name, check=True):
         """
@@ -59,6 +69,9 @@ class IsoSurfaces(object):
         self.field_name = field_name
         self.value = value
         self.file_name = file_name
+        self._cache = None
+        
+    def reload(self):
         self._cache = None
     
     def get_surfaces(self, cache=True):

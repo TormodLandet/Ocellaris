@@ -4,7 +4,7 @@ matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
 import wx
-from . import pub, TOPIC_METADATA
+from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 
 
 class OcellarisSurfacesPanel(wx.Panel):
@@ -21,6 +21,11 @@ class OcellarisSurfacesPanel(wx.Panel):
         self.layout_widgets()
         self.Bind(wx.EVT_IDLE, self.on_idle)
         pub.subscribe(self.update_plot_soon, TOPIC_METADATA)
+        pub.subscribe(self.reset_surfaces, TOPIC_RELOAD)
+        
+    def reset_surfaces(self, evt=None):
+        self.active_surface = None
+        self.need_update = True
     
     def layout_widgets(self):
         v = wx.BoxSizer(wx.VERTICAL)
@@ -48,8 +53,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         h.AddSpacer(5)
         self.surface_selector = wx.Choice(self, choices=self.surface_names)
         self.surface_selector.Select(0)
-        lam = lambda evt: setattr(self, 'active_surface', None) and setattr(self, 'need_update', True)
-        self.surface_selector.Bind(wx.EVT_CHOICE, lam)
+        self.surface_selector.Bind(wx.EVT_CHOICE, self.reset_surfaces)
         h.Add(self.surface_selector, proportion=1)
         h.AddSpacer(5)
         b = wx.Button(self, label='Load')
@@ -69,7 +73,6 @@ class OcellarisSurfacesPanel(wx.Panel):
         # Customize the plot text
         fgs = wx.FlexGridSizer(rows=3, cols=2, vgap=3, hgap=10)
         fgs.AddGrowableCol(1, proportion=1)
-        #fgs.AddGrowableCol(4, proportion=1)
         v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
         
         # Plot title
@@ -164,10 +167,9 @@ class OcellarisSurfacesPanel(wx.Panel):
         """
         self.axes.clear()
         if self.active_surface is None:
+            self.canvas.draw()
             return
-        
-        isurf = self.surface_selector.GetSelection()
-        surface_name = self.surface_names[isurf]
+        surface_name = self.active_surface
         
         # Get time
         f = self.time_selector.GetValue() * 1.0 / self.max_num_timesteps
@@ -177,8 +179,9 @@ class OcellarisSurfacesPanel(wx.Panel):
         for ires, results in enumerate(self.results):
             if surface_name in results.surfaces:
                 surf = results.surfaces[surface_name]
-                _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
-            
+                with wx.BusyCursor():
+                    _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
+                
                 i = numpy.argmin(abs(timesteps - t))
                 dt = timesteps[1] - timesteps[0]
                 if abs(timesteps[i] - t) > 1.5*dt:

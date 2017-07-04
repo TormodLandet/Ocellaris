@@ -37,4 +37,3 @@ def get_detailed_version():
 # Convenience imports for scripting
 from .simulation import Simulation
 from .run import setup_simulation, run_simulation
-from .postprocess import Results

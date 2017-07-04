@@ -16,7 +16,8 @@ from wx.lib.pubsub import pub
 
 
 # PubSub topics
-TOPIC_METADATA = 'metadata_updated'
+TOPIC_METADATA = 'updated_metadata'
+TOPIC_RELOAD = 'reloaded_data'
 
 
 from .inspector import OcellarisInspector

@@ -1,10 +1,10 @@
 import wx
-from . import pub, TOPIC_METADATA
+from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 
 
-class OcellarisMetadataPanel(wx.Panel):
+class OcellarisSetupPanel(wx.Panel):
     def __init__(self, parent, results):
-        super(OcellarisMetadataPanel, self).__init__(parent)
+        super(OcellarisSetupPanel, self).__init__(parent)
         self.results = results
         self.layout_widgets()
     
@@ -12,6 +12,7 @@ class OcellarisMetadataPanel(wx.Panel):
         v = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(v)
         
+        #######################################################################
         st = wx.StaticText(self, label='Ocellaris simulation result lables:')
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
@@ -38,9 +39,23 @@ class OcellarisMetadataPanel(wx.Panel):
             st.SetToolTip(results.file_name)
             fgs.Add(st, flag=wx.ALIGN_CENTER_VERTICAL)
         
+        #######################################################################
+        st = wx.StaticText(self, label='Reload running simulation data:')
+        st.SetFont(st.GetFont().Bold())
+        v.Add(st, flag=wx.ALL, border=5)
+        b = wx.Button(self, label='Reload')
+        b.Bind(wx.EVT_BUTTON, self.reload_data)
+        v.Add(b, flag=wx.ALL, border=10)
+        
         v.Fit(self)
     
     def update_lables(self, event):
         for label_control, results in zip(self.label_controls, self.results):
             results.label = label_control.GetValue()
         pub.sendMessage(TOPIC_METADATA)
+    
+    def reload_data(self, evt=None):
+        for results in self.results:
+            results.reload()
+        pub.sendMessage(TOPIC_METADATA)
+        pub.sendMessage(TOPIC_RELOAD)

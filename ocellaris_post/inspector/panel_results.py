@@ -11,10 +11,8 @@ class OcellarisReportsPanel(wx.Panel):
     def __init__(self, parent, results):
         super(OcellarisReportsPanel, self).__init__(parent)
         self.results = results
-        self.reports = []
         all_rep_names = set()
         for res in results:
-            self.reports.append(res.reports)
             all_rep_names.update(res.reports.keys())
         self.report_names = sorted(all_rep_names)
         self.need_update = True
@@ -57,7 +55,6 @@ class OcellarisReportsPanel(wx.Panel):
         # Customize the plot text
         fgs = wx.FlexGridSizer(rows=3, cols=3, vgap=3, hgap=10)
         fgs.AddGrowableCol(1, proportion=1)
-        #fgs.AddGrowableCol(4, proportion=1)
         v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
         
         # Plot title
@@ -136,10 +133,10 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.axes.clear()
         
-        for i, results in enumerate(self.results):
-            x = self.reports[i]['timesteps']
-            if report_name in self.reports[i]:
-                y = self.reports[i][report_name]
+        for results in self.results:
+            x = results.reports['timesteps']
+            if report_name in results.reports:
+                y = results.reports[report_name]
             else:
                 y = numpy.zeros_like(x)
                 y[:] = numpy.NaN
