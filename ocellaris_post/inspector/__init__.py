@@ -18,6 +18,7 @@ from wx.lib.pubsub import pub
 # PubSub topics
 TOPIC_METADATA = 'updated_metadata'
 TOPIC_RELOAD = 'reloaded_data'
+TOPIC_NEW_ACCEL = 'new_keyboard_shortcut'
 
 
 from .inspector import OcellarisInspector

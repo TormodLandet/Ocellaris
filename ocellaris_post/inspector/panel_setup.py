@@ -1,5 +1,5 @@
 import wx
-from . import pub, TOPIC_METADATA, TOPIC_RELOAD
+from . import pub, TOPIC_METADATA, TOPIC_RELOAD, TOPIC_NEW_ACCEL
 
 
 class OcellarisSetupPanel(wx.Panel):
@@ -43,9 +43,10 @@ class OcellarisSetupPanel(wx.Panel):
         st = wx.StaticText(self, label='Reload running simulation data:')
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
-        b = wx.Button(self, label='Reload')
+        b = wx.Button(self, label='Reload (Ctrl+R)')
         b.Bind(wx.EVT_BUTTON, self.reload_data)
         v.Add(b, flag=wx.ALL, border=10)
+        pub.sendMessage(TOPIC_NEW_ACCEL, callback=self.reload_data, key='R')
         
         v.Fit(self)
     
@@ -55,7 +56,8 @@ class OcellarisSetupPanel(wx.Panel):
         pub.sendMessage(TOPIC_METADATA)
     
     def reload_data(self, evt=None):
-        for results in self.results:
-            results.reload()
-        pub.sendMessage(TOPIC_METADATA)
-        pub.sendMessage(TOPIC_RELOAD)
+        with wx.BusyCursor():
+            for results in self.results:
+                results.reload()
+            pub.sendMessage(TOPIC_METADATA)
+            pub.sendMessage(TOPIC_RELOAD)
