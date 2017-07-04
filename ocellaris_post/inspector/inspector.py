@@ -6,6 +6,7 @@ from ocellaris_post import Results
 from .icons import OCELLARIS_ICON
 from .panel_results import OcellarisReportsPanel
 from .panel_metadata import OcellarisMetadataPanel
+from .panel_surfaces import OcellarisSurfacesPanel
 
 
 class OcellarisInspector(wx.Frame):
@@ -28,6 +29,10 @@ class OcellarisInspector(wx.Frame):
         self.reports_panel = OcellarisReportsPanel(nb, self.results)
         nb.AddPage(self.reports_panel, 'Timestep reports')
         self.reports_panel.SetBackgroundColour(p.GetBackgroundColour())
+        
+        self.surfaces_panel = OcellarisSurfacesPanel(nb, self.results)
+        nb.AddPage(self.surfaces_panel, 'Surfaces')
+        self.surfaces_panel.SetBackgroundColour(p.GetBackgroundColour())
         
         nb.SetSelection(1)
         s = wx.BoxSizer()

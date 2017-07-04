@@ -17,6 +17,7 @@ class OcellarisReportsPanel(wx.Panel):
             self.reports.append(res.reports)
             all_rep_names.update(res.reports.keys())
         self.report_names = sorted(all_rep_names)
+        self.need_update = True
         
         self.layout_widgets()
         self.report_selected()
@@ -54,9 +55,7 @@ class OcellarisReportsPanel(wx.Panel):
         h1.Add(self.report_selector, proportion=1)
         
         # Customize the plot text
-        Nrows = len(self.results) + 3
-        #Nrows2 = Nrows // 2 + 1 if Nrows % 2 else Nrows // 2
-        fgs = wx.FlexGridSizer(rows=Nrows, cols=3, vgap=3, hgap=10)
+        fgs = wx.FlexGridSizer(rows=3, cols=3, vgap=3, hgap=10)
         fgs.AddGrowableCol(1, proportion=1)
         #fgs.AddGrowableCol(4, proportion=1)
         v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
