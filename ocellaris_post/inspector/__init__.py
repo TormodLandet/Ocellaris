@@ -1,4 +1,16 @@
-import wx
+try:
+    import wx
+except ImportError:
+    print 'Missing python module "wx"'
+    print
+    print 'You must install wxPython to run the GUI. Python wheels are'
+    print 'available for most platforms in addition to conda and other'
+    print 'packages. The code has been tested with wxPython-4.0.0a3, an'
+    print 'alpha release of wxPython 4 (which seems to work perfectly).'
+    print
+    print 'ERROR: missing wxPython'
+    exit(1)
+
 from ocellaris_post import Results
 from wx.lib.pubsub import pub
 
