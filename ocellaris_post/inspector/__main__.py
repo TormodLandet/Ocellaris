@@ -1,5 +1,5 @@
 import sys, os
-from .wx_gui import show_inspector
+from . import show_inspector
 
 
 def run_from_console():

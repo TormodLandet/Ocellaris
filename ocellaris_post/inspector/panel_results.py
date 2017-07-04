@@ -1,45 +1,10 @@
-"""
-Inspect timestep reports from one or more Ocellaris restart files 
-"""
 import numpy
-import wx
-from wx.lib.pubsub import pub
 import matplotlib
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
-from ocellaris_post import Results
-from .icons import OCELLARIS_ICON
-
-
-TOPIC_METADATA = 'metadata_updated'
-
-
-class OcellarisInspector(wx.Frame):
-    def __init__(self, results):
-        super(OcellarisInspector, self).__init__(None, title='Ocellaris Report Inspector')
-        self.results = results
-        
-        self.layout_widgets()
-        self.SetSize(800, 800)
-        self.SetIcon(OCELLARIS_ICON.GetIcon())
-        
-    def layout_widgets(self):
-        p = wx.Panel(self)
-        nb = wx.Notebook(p, style=wx.NB_BOTTOM)
-        
-        self.metadata_panel = OcellarisMetadataPanel(nb, self.results)
-        nb.AddPage(self.metadata_panel, 'Metadata')
-        self.metadata_panel.SetBackgroundColour(p.GetBackgroundColour())
-        
-        self.reports_panel = OcellarisReportsPanel(nb, self.results)
-        nb.AddPage(self.reports_panel, 'Timestep reports')
-        self.reports_panel.SetBackgroundColour(p.GetBackgroundColour())
-        
-        nb.SetSelection(1)
-        s = wx.BoxSizer()
-        s.Add(nb, 1, wx.EXPAND)
-        p.SetSizer(s)
+import wx
+from . import pub, TOPIC_METADATA
 
 
 class OcellarisReportsPanel(wx.Panel):
@@ -122,7 +87,7 @@ class OcellarisReportsPanel(wx.Panel):
         fgs.Add(self.ylog)
         
         v.Fit(self)
-        
+    
     def mouse_position_on_plot(self, mpl_event):
         x, y = mpl_event.xdata, mpl_event.ydata
         if x is None or y is None:
@@ -130,7 +95,7 @@ class OcellarisReportsPanel(wx.Panel):
         else:
             info = 'pos = (%.6g, %.6g)' % (x, y)
         self.plot_cursor_position_info.Label = info
-
+    
     def report_selected(self, evt=None):
         irep = self.report_selector.GetSelection()
         report_name = self.report_names[irep]
@@ -151,7 +116,6 @@ class OcellarisReportsPanel(wx.Panel):
         if self.need_update:
             self.update_plot()
     
-        
     def update_plot(self, evt=None):
         """
         Update the plot at once
@@ -193,55 +157,3 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.canvas.draw()
         self.need_update = False
-
-
-class OcellarisMetadataPanel(wx.Panel):
-    def __init__(self, parent, results):
-        super(OcellarisMetadataPanel, self).__init__(parent)
-        self.results = results
-        self.layout_widgets()
-    
-    def layout_widgets(self):
-        v = wx.BoxSizer(wx.VERTICAL)
-        self.SetSizer(v)
-        
-        # Metadata FlexGridSizer
-        Nrows = len(self.results)
-        fgs = wx.FlexGridSizer(rows=Nrows, cols=3, vgap=3, hgap=10)
-        fgs.AddGrowableCol(1, proportion=1)
-        v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
-        
-        # Customize the lables
-        self.label_controls = []
-        for il, results in enumerate(self.results):
-            fgs.Add(wx.StaticText(self, label='File %d label:' % il), flag=wx.ALIGN_CENTER_VERTICAL)
-            label_ctrl = wx.TextCtrl(self, value=results.label)
-            label_ctrl.Bind(wx.EVT_TEXT, self.update_lables)
-            fgs.Add(label_ctrl, flag=wx.EXPAND)
-            st = wx.StaticText(self, label='(%s)' % results.label)
-            st.SetToolTip(results.file_name)
-            fgs.Add(st, flag=wx.ALIGN_CENTER_VERTICAL)
-            self.label_controls.append(label_ctrl)
-        
-        v.Fit(self)
-    
-    def update_lables(self, event):
-        for label_control, results in zip(self.label_controls, self.results):
-            results.label = label_control.GetValue()
-        pub.sendMessage(TOPIC_METADATA)
-
-
-def show_inspector(file_names, lables):
-    """
-    Show wxPython window that allows chosing  which report to show
-    """
-    results = []
-    for file_name, label in zip(file_names, lables):
-        res = Results(file_name)
-        res.label = label
-        results.append(res)
-    
-    app = wx.App()
-    frame = OcellarisInspector(results)
-    frame.Show()
-    app.MainLoop()
