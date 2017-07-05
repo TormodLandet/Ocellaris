@@ -1,15 +1,15 @@
-import sys, os
+import sys
 from . import show_inspector
 
 
-def run_from_console():
+def main():
     """
     Parse command line arguments and run the wxPython GUI
     """
-    # Get report files to save
+    # Get report files to read
     h5_file_names = sys.argv[1:]
     
-    # Get lables
+    # Get lables from command line arguments
     lables = []
     for i in range(len(h5_file_names)):
         fn = h5_file_names[i]
@@ -20,9 +20,9 @@ def run_from_console():
             label = None
         lables.append(label)
     
-    # Make plots
+    # Show the Ocellaris Inspector
     show_inspector(h5_file_names, lables)
 
 
 if __name__ == '__main__':
-    run_from_console()
+    main()

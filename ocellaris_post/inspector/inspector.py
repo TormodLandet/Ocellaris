@@ -2,14 +2,14 @@
 Inspect timestep reports from one or more Ocellaris restart files 
 """
 import os
-import wx
 import yaml
-from ocellaris_post import Results
+import wx
 from . import pub, TOPIC_NEW_ACCEL, TOPIC_METADATA
 from .icons import OCELLARIS_ICON
 from .panel_results import OcellarisReportsPanel
 from .panel_setup import OcellarisSetupPanel
 from .panel_surfaces import OcellarisSurfacesPanel
+from .panel_files import OcellarisFilesPanel
 
 
 class OcellarisInspector(wx.Frame):
@@ -49,6 +49,10 @@ class OcellarisInspector(wx.Frame):
         self.surfaces_panel = OcellarisSurfacesPanel(nb, self.results)
         nb.AddPage(self.surfaces_panel, 'Surfaces')
         self.surfaces_panel.SetBackgroundColour(p.GetBackgroundColour())
+        
+        self.files_panel = OcellarisFilesPanel(nb, self.results)
+        nb.AddPage(self.files_panel, 'Files')
+        self.files_panel.SetBackgroundColour(p.GetBackgroundColour())
         
         nb.SetSelection(1)
         s = wx.BoxSizer()
@@ -124,19 +128,3 @@ class OcellarisInspectorPersistence(object):
             yaml.safe_dump(self._cached_data, f)
         
         self.timer = None
-
-
-def show_inspector(file_names, lables):
-    """
-    Show wxPython window that allows chosing  which report to show
-    """
-    results = []
-    for file_name, label in zip(file_names, lables):
-        res = Results(file_name)
-        res.label = label
-        results.append(res)
-    
-    app = wx.App()
-    frame = OcellarisInspector(results)
-    frame.Show()
-    app.MainLoop()

@@ -16,6 +16,8 @@ class Results(object):
         The file name given can be either a simulation log file
         (for ongoing simulations) or an Ocellaris restart file 
         """
+        self.input = None
+        self.log = None
         self.reports = None
         self.surfaces = None
         self.input = None
@@ -135,9 +137,21 @@ def read_h5_data(results, derived):
     
     if derived:
         if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
-            reps['Et'] = reps['Ek'] + reps['Ep']  
+            reps['Et'] = reps['Ek'] + reps['Ep']
+            
+    # Read log
+    log = []
+    i = 0
+    while True:
+        logname = 'full_log_%d' % i
+        i += 1
+        if not logname in hdf['/ocellaris'].attrs:
+            break
+        log.append(hdf['/ocellaris'].attrs[logname])
+    log = ''.join(log).split('\n')  
     
     results.reports = reps
+    results.log = log
 
 
 def read_log_data(results, derived):
@@ -148,24 +162,27 @@ def read_log_data(results, derived):
     data = {}
     
     # Read input and timestep reports from log file
-    for line in open(results.file_name, 'rt'):
-        if line.startswith(INP_START):
-            in_input_section = True
-        elif line.startswith(INP_END):
-            in_input_section = False
-        elif in_input_section:
-            input_strs.append(line)
-        elif line.startswith('Reports for timestep'):
-            parts = line[12:].split(',')
-            for pair in parts:
-                try:
-                    key, value = pair.split('=')
-                    key = key.strip()
-                    value = float(value)
-                    data.setdefault(key, []).append(value)
-                except:
-                    break
-    
+    with open(results.file_name, 'rt') as f:
+        for line in f:
+            if line.startswith(INP_START):
+                in_input_section = True
+            elif line.startswith(INP_END):
+                in_input_section = False
+            elif in_input_section:
+                input_strs.append(line)
+            elif line.startswith('Reports for timestep'):
+                parts = line[12:].split(',')
+                for pair in parts:
+                    try:
+                        key, value = pair.split('=')
+                        key = key.strip()
+                        value = float(value)
+                        data.setdefault(key, []).append(value)
+                    except:
+                        break
+        f.seek(0)
+        log = f.read()
+        
     # Read the input section
     input_str = ''.join(input_strs)
     results.input = yaml.load(input_str)
@@ -190,6 +207,7 @@ def read_log_data(results, derived):
             reps['Et'] = reps['Ek'][:N] + reps['Ep'][:N]
     
     results.reports = reps
+    results.log = log
 
 
 def read_surfaces(res):
