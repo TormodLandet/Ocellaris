@@ -1,4 +1,3 @@
-import numpy
 import matplotlib
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
@@ -7,17 +6,36 @@ import wx
 from . import pub, TOPIC_METADATA
 
 
+DEFAULT_REPORT = 'Cof_max'
+
+
 class OcellarisReportsPanel(wx.Panel):
     def __init__(self, parent, results):
         super(OcellarisReportsPanel, self).__init__(parent)
         self.results = results
+        
+        # Sort reports first by length then by name. This makes sure that 
+        # inner iteration reports end up last in the list
         all_rep_names = set()
+        all_rep_lengths = {}
         for res in results:
-            all_rep_names.update(res.reports.keys())
-        self.report_names = sorted(all_rep_names)
+            rep_names = res.reports.keys()
+            all_rep_names.update(rep_names)
+            for rep_name in rep_names:
+                all_rep_lengths[rep_name] = max(all_rep_lengths.get(rep_name, 0),
+                                                len(res.reports[rep_name]))
+        sort_key = lambda rep_name: (all_rep_lengths[rep_name], rep_name)
+        self.report_names = sorted(all_rep_names, key=sort_key)
         self.need_update = True
         
         self.layout_widgets()
+        
+        # Select the default report
+        if DEFAULT_REPORT in self.report_names:
+            self.report_selector.Select(self.report_names.index(DEFAULT_REPORT))
+        else:
+            self.report_selector.Select(0)
+        
         self.report_selected()
         
         self.Bind(wx.EVT_IDLE, self.on_idle)
@@ -48,7 +66,6 @@ class OcellarisReportsPanel(wx.Panel):
         h1.Add(wx.StaticText(self, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL)
         h1.AddSpacer(5)
         self.report_selector = wx.Choice(self, choices=self.report_names)
-        self.report_selector.Select(0)
         self.report_selector.Bind(wx.EVT_CHOICE, self.report_selected)
         h1.Add(self.report_selector, proportion=1)
         
@@ -134,15 +151,13 @@ class OcellarisReportsPanel(wx.Panel):
         self.axes.clear()
         
         for results in self.results:
-            x = results.reports['timesteps']
-            if report_name in results.reports:
-                y = results.reports[report_name]
-            else:
-                y = numpy.zeros_like(x)
-                y[:] = numpy.NaN
-            
+            if report_name not in results.reports:
+                plot([0], [None], label=results.label)
+                continue
+            x = results.reports_x[report_name]
+            y = results.reports[report_name]
             plot(x, y, label=results.label)
-        
+                
         self.axes.relim()
         self.axes.autoscale_view()
         self.axes.set_title(self.title.GetValue())

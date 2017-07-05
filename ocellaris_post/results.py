@@ -1,10 +1,11 @@
 import os
 import numpy
 import yaml
+import cStringIO as StringIO
 
 
 class Results(object):
-    def __init__(self, file_name, derived=True):
+    def __init__(self, file_name, derived=True, inner_iterations=True):
         """
         Represents the results from an Ocellaris simulation
         
@@ -19,19 +20,42 @@ class Results(object):
         self.input = None
         self.log = None
         self.reports = None
+        self.reports_x = None
         self.surfaces = None
         self.input = None
-        self.reload(file_name, derived)
+        self.reload(file_name, derived, inner_iterations)
     
-    def reload(self, file_name=None, derived=True):
+    def reload(self, file_name=None, derived=True, inner_iterations=True):
         if file_name is None:
             file_name = self.file_name
         
         self.file_name = os.path.abspath(file_name)
         if file_name.endswith('.h5'):
-            read_h5_data(self, derived)
+            read_h5_data(self)
         elif file_name.endswith('.log'):
-            read_log_data(self, derived)
+            read_log_data(self)
+        
+        # Add derived reports
+        reps = self.reports
+        if derived:
+            if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
+                reps['Et'] = reps['Ek'] + reps['Ep']
+            if 'mass' in reps:
+                m, t = reps['mass'], reps['timesteps']
+                dm = numpy.zeros_like(m)
+                dm[1:] = (m[1:] - m[:-1])/(t[1:] - t[:-1])
+                reps['mass change'] = dm
+        
+        # Set the time to be on the x axis for the report plots
+        self.reports_x = {}
+        for report_name in reps:
+            self.reports_x[report_name] = reps['timesteps']
+        del self.reports['timesteps']
+        del self.reports['timestep']
+        
+        # Add inner iteration reports from the log
+        if inner_iterations:
+            read_iteration_reports(self)
         
         if self.surfaces is None:
             read_surfaces(self)
@@ -122,7 +146,10 @@ class IsoSurfaces(object):
         return res
 
 
-def read_h5_data(results, derived):
+def read_h5_data(results):
+    """
+    Read metadata and reports from a restart file (HDF5 format)
+    """
     import h5py
     hdf = h5py.File(results.file_name, 'r')
     
@@ -134,10 +161,6 @@ def read_h5_data(results, derived):
     reps = {}
     for rep_name in hdf['/reports']:
         reps[rep_name] = numpy.array(hdf['/reports'][rep_name])
-    
-    if derived:
-        if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
-            reps['Et'] = reps['Ek'] + reps['Ep']
             
     # Read log
     log = []
@@ -154,7 +177,10 @@ def read_h5_data(results, derived):
     results.log = log
 
 
-def read_log_data(results, derived):
+def read_log_data(results):
+    """
+    Read metadata and reports from a log file (ASCII format)
+    """
     INP_START = '----------------------------- configuration begin -'
     INP_END = '------------------------------ configuration end -'
     in_input_section = False
@@ -201,13 +227,51 @@ def read_log_data(results, derived):
     for key in reps.keys():
         reps[key] = reps[key][:N]
     
-    if derived:
-        if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
-            N = min(reps['Ek'].size, reps['Ep'].size)
-            reps['Et'] = reps['Ek'][:N] + reps['Ep'][:N]
-    
     results.reports = reps
     results.log = log
+
+
+def read_iteration_reports(results):
+    STARTMARKER = '  Inner iteration'
+    iter_reps = {}
+    for line in StringIO.StringIO(results.log):
+        if not line.startswith(STARTMARKER):
+            continue
+        # Parse the line
+        try:
+            parts = line.split(' - ')
+            iter_num = int(parts[0].split()[-1])
+            iter_reps.setdefault('iteration', []).append(iter_num)
+            for part in parts[1:]:
+                wds = part.split()
+                if wds[0] == 'iters:':
+                    N = len(wds)//2
+                    for i in range(N):
+                        value = int(wds[1 + i*2])
+                        name = 'solver iterations %s' % wds[2 + i*2]
+                        iter_reps.setdefault(name, []).append(value)
+                else:
+                    name = ' '.join(wds[:-1])
+                    value = float(wds[-1])
+                    iter_reps.setdefault(name, []).append(value)
+                    
+        except:
+            pass
+    
+    if not iter_reps:
+        return
+    
+    # Get minimum length
+    Nmin = 1e100
+    for name, value in iter_reps.items():
+        Nmin = min(Nmin, len(value))
+    
+    # Store reports and crop reports to same length
+    xaxis = numpy.arange(Nmin)
+    for name, value in iter_reps.items():
+        name2 = 'Inner iteration: %s' % name
+        results.reports[name2] = numpy.array(value[:Nmin])
+        results.reports_x[name2] = xaxis
 
 
 def read_surfaces(res):
