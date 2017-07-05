@@ -312,6 +312,12 @@ def eval_python_expression(simulation, value, pathstr, safe_mode=False):
     for name, const_value in user_constants.iteritems():
         eval_locals[name] = const_value
     
+    eval_locals['simulation'] = simulation
+    eval_locals['t'] = eval_locals['time'] = simulation.time
+    eval_locals['it'] = eval_locals['timestep'] = simulation.timestep
+    eval_locals['dt'] = simulation.dt
+    eval_locals['ndim'] = simulation.ndim
+    
     try:
         value = eval(expr, globals(), eval_locals)
     except Exception:
