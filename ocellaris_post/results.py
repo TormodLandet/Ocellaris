@@ -48,10 +48,11 @@ class Results(object):
         
         # Set the time to be on the x axis for the report plots
         self.reports_x = {}
-        for report_name in reps:
-            self.reports_x[report_name] = reps['timesteps']
-        del self.reports['timesteps']
-        del self.reports['timestep']
+        if self.reports:
+            for report_name in reps:
+                self.reports_x[report_name] = reps['timesteps']
+            del self.reports['timesteps']
+            del self.reports['timestep']
         
         # Add inner iteration reports from the log
         if inner_iterations:
