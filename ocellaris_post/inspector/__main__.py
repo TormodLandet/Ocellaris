@@ -17,9 +17,7 @@ def run_from_console():
             fn, label = fn.split(':')
             h5_file_names[i] = fn
         else:
-            bname = os.path.basename(fn)
-            bname_split = bname.split('_endpoint_')
-            label = bname_split[0]
+            label = None
         lables.append(label)
     
     # Make plots
