@@ -1,9 +1,9 @@
 # encoding: utf8
 from __future__ import division
 import dolfin
-from dolfin import dx, div, grad, dot, jump, avg, dS, Constant
+from dolfin import dx, div, grad, dot, jump, avg, dS
 from . import UPWIND
-from ..solver_parts import define_penalty
+from ..solver_parts import navier_stokes_stabilization_penalties
 from .coupled_equations_cg import CoupledEquationsCG
 
 
@@ -35,33 +35,6 @@ class CoupledEquationsDG(object):
         # Create UFL forms
         self.define_coupled_equation()
         
-    def calculate_penalties(self, nu):
-        """
-        Calculate SIPG penalty
-        """
-        mpm = self.simulation.multi_phase_model
-        mesh = self.simulation.data['mesh']
-        
-        mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
-        P = self.simulation.data['Vu'].ufl_element().degree()
-        penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
-        penalty_ds = penalty_dS*2
-        self.simulation.log.info('    DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
-        
-        if self.velocity_continuity_factor_D12 is not None:
-            D12 = Constant([self.velocity_continuity_factor_D12]*self.simulation.ndim)
-        else:
-            D12 = Constant([0, 0])
-        
-        if self.pressure_continuity_factor != 0:
-            h = self.simulation.data['h']
-            h = Constant(1.0)
-            D11 = avg(h/nu)*Constant(self.pressure_continuity_factor)
-        else:
-            D11 = None
-        
-        return Constant(penalty_dS), Constant(penalty_ds), D11, D12
-    
     def define_coupled_equation(self):
         """
         Setup the coupled Navier-Stokes equation
@@ -121,8 +94,9 @@ class CoupledEquationsDG(object):
             eq += (cvol_new - cvol_old)/dt*q*dx
         
         # Elliptic penalties
-        penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nu)
-            
+        penalty_dS, penalty_ds, D11, D12 = navier_stokes_stabilization_penalties(sim, nu, 
+             self.velocity_continuity_factor_D12, self.pressure_continuity_factor)
+        
         # Upwind and downwind velocities
         w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
         w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
