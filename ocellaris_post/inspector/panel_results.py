@@ -163,7 +163,8 @@ class OcellarisReportsPanel(wx.Panel):
         self.axes.set_title(self.title.GetValue())
         self.axes.set_xlabel(self.xlabel.GetValue())
         self.axes.set_ylabel(self.ylabel.GetValue())
-        self.axes.legend(loc='best')
+        if len(self.results) > 1:
+            self.axes.legend(loc='best')
         self.fig.tight_layout()
         
         self.canvas.draw()

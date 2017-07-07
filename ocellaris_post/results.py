@@ -52,7 +52,6 @@ class Results(object):
             for report_name in reps:
                 self.reports_x[report_name] = reps['timesteps']
             del self.reports['timesteps']
-            del self.reports['timestep']
         
         # Add inner iteration reports from the log
         if inner_iterations:
@@ -172,7 +171,7 @@ def read_h5_data(results):
         if not logname in hdf['/ocellaris'].attrs:
             break
         log.append(hdf['/ocellaris'].attrs[logname])
-    log = ''.join(log).split('\n')  
+    log = ''.join(log)
     
     results.reports = reps
     results.log = log
@@ -209,6 +208,7 @@ def read_log_data(results):
                         break
         f.seek(0)
         log = f.read()
+    del data['timestep']
         
     # Read the input section
     input_str = ''.join(input_strs)

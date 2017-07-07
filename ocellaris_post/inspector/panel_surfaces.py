@@ -118,7 +118,10 @@ class OcellarisSurfacesPanel(wx.Panel):
                 surf = results.surfaces[surface_name]
                 
                 with wx.BusyCursor():
-                    _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
+                    try:
+                        _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
+                    except:
+                        continue
                     
                     # Compute bounds
                     tmin = min(tmin, timesteps[0])
@@ -180,7 +183,10 @@ class OcellarisSurfacesPanel(wx.Panel):
             if surface_name in results.surfaces:
                 surf = results.surfaces[surface_name]
                 with wx.BusyCursor():
-                    _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
+                    try:
+                        _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
+                    except:
+                        continue
                 
                 i = numpy.argmin(abs(timesteps - t))
                 dt = timesteps[1] - timesteps[0]
