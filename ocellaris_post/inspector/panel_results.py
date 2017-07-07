@@ -4,6 +4,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
 import wx
 from . import pub, TOPIC_METADATA
+from .widget_shared import PlotLimSelectors
 
 
 DEFAULT_REPORT = 'Cof_max'
@@ -99,6 +100,9 @@ class OcellarisReportsPanel(wx.Panel):
         self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         fgs.Add(self.ylog)
         
+        self.plot_limits = PlotLimSelectors(self, self.update_plot_soon)
+        v.Add(self.plot_limits, flag=wx.ALL|wx.EXPAND, border=4)
+        
         v.Fit(self)
     
     def mouse_position_on_plot(self, mpl_event):
@@ -157,12 +161,16 @@ class OcellarisReportsPanel(wx.Panel):
             x = results.reports_x[report_name]
             y = results.reports[report_name]
             plot(x, y, label=results.label)
-                
+        
         self.axes.relim()
         self.axes.autoscale_view()
+        self.axes.set_xlim(self.plot_limits.get_xlim())
+        self.axes.set_ylim(self.plot_limits.get_ylim())
+        
         self.axes.set_title(self.title.GetValue())
         self.axes.set_xlabel(self.xlabel.GetValue())
         self.axes.set_ylabel(self.ylabel.GetValue())
+        
         if len(self.results) > 1:
             self.axes.legend(loc='best')
         self.fig.tight_layout()
