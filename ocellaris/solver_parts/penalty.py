@@ -31,8 +31,8 @@ def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
     return penalty
 
 
-def navier_stokes_stabilization_penalties(simulation, nu, velocity_continuity_factor_D12=None,
-                                          pressure_continuity_factor=None, no_coeff=False):
+def navier_stokes_stabilization_penalties(simulation, nu, velocity_continuity_factor_D12=0,
+                                          pressure_continuity_factor=0, no_coeff=False):
     """
     Calculate the stabilization parameters needed in the DG scheme
     """
@@ -49,12 +49,12 @@ def navier_stokes_stabilization_penalties(simulation, nu, velocity_continuity_fa
     penalty_ds = penalty_dS * 2
     simulation.log.info('    DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
     
-    if velocity_continuity_factor_D12 is not None:
+    if velocity_continuity_factor_D12:
         D12 = Constant([velocity_continuity_factor_D12]*simulation.ndim)
     else:
         D12 = Constant([0, 0])
     
-    if pressure_continuity_factor != 0:
+    if pressure_continuity_factor:
         h = simulation.data['h']
         h = Constant(1.0)
         D11 = avg(h/nu)*Constant(pressure_continuity_factor)
