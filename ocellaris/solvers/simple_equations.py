@@ -4,9 +4,9 @@ from collections import deque
 import numpy
 from petsc4py import PETSc
 import dolfin
-from dolfin import dx, div, grad, dot, jump, avg, dS, Constant
+from dolfin import dx, div, grad, dot, jump, avg, dS
 from ocellaris.utils import timeit
-from ocellaris.solver_parts import define_penalty
+from ocellaris.solver_parts import navier_stokes_stabilization_penalties
 
 
 class SimpleEquations(object):
@@ -55,7 +55,7 @@ class SimpleEquations(object):
         self.eqAs, self.eqBs, self.eqCs, self.eqDs, self.eqE = [], [], [], [], 0
         
         # Create UFL forms
-        self.define_coupled_equation()
+        self.define_simple_equations()
         
         # Storage for assembled matrices
         self.As = [None] * simulation.ndim
@@ -67,43 +67,10 @@ class SimpleEquations(object):
         self.E = None
         self.E_star = None
         self.L = [None] * simulation.ndim
-        
-    def calculate_penalties(self, nu, no_coeff=False):
-        """
-        Calculate SIPG penalty
-        """
-        mpm = self.simulation.multi_phase_model
-        mesh = self.simulation.data['mesh']
-        
-        if no_coeff:
-            mu_min = mu_max = 1.0
-        else:
-            mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
-        
-        P = self.simulation.data['Vu'].ufl_element().degree()
-        penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
-        penalty_ds = penalty_dS*2
-        self.simulation.log.info('    DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
-        
-        if False and self.velocity_continuity_factor_D12 is not None:
-            D12 = Constant([self.velocity_continuity_factor_D12]*self.simulation.ndim)
-        else:
-            D12 = Constant([0, 0])
-        
-        if False and self.pressure_continuity_factor != 0:
-            h = self.simulation.data['h']
-            h = Constant(1.0)
-            D11 = avg(h/nu)*Constant(self.pressure_continuity_factor)
-        else:
-            D11 = None
-        
-        return Constant(penalty_dS), Constant(penalty_ds), D11, D12
     
-    def define_coupled_equation(self):
+    def define_simple_equations(self):
         """
-        Setup the coupled Navier-Stokes equation
-        
-        This implementation assembles the full LHS and RHS each time they are needed
+        Setup weak forms for SIMPLE form
         """
         sim = self.simulation
         mpm = sim.multi_phase_model
@@ -136,7 +103,7 @@ class SimpleEquations(object):
             p += sim.data['p_hydrostatic']
         
         # Penalties
-        penalty_dS, penalty_ds, D11, D12 = self.calculate_penalties(nu)
+        penalty_dS, penalty_ds, D11, D12 = navier_stokes_stabilization_penalties(sim, nu)
             
         # Upwind and downwind velocities
         w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0

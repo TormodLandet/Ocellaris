@@ -1,11 +1,12 @@
 # encoding: utf8
 from __future__ import division
-import numpy
 import dolfin
-from ocellaris.utils import verify_key, timeit, linear_solver_from_input
+from ocellaris.utils import verify_key, timeit, linear_solver_from_input, \
+    create_vector_functions, shift_fields, velocity_change
 from . import Solver, register_solver, BDM
-from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiterVelocity
-from .simple_equations import EQUATION_SUBTYPES, create_block_matrix
+from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiterVelocity, \
+    before_simulation, after_timestep
+from .simple_equations import EQUATION_SUBTYPES
 
 
 # Solvers - default values, can be changed in the input file
@@ -14,7 +15,7 @@ PRECONDITIONER_U = 'additive_schwarz'
 SOLVER_P = 'gmres'
 PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'maximum_iterations': 10,
+                     'maximum_iterations': 100,
                      'relative_tolerance': 1e-10,
                      'absolute_tolerance': 1e-15}
 MAX_INNER_ITER = 100
@@ -96,7 +97,6 @@ class SolverSIMPLE(Solver):
         
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
-        self.is_first_timestep = True
         
         # Solver control parameters
         sim.data['dt'] = dolfin.Constant(simulation.dt)
@@ -113,7 +113,7 @@ class SolverSIMPLE(Solver):
         self.matrices = matrices
         
         # Slope limiter for the momentum equation velocity components
-        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u')
+        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
         self.using_limiter = self.slope_limiter.active
         
         # Projection for the velocity
@@ -143,11 +143,6 @@ class SolverSIMPLE(Solver):
         """
         sim = self.simulation
         
-        # Representation of velocity
-        Vu_family = sim.data['Vu'].ufl_element().family()
-        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
-        assert self.vel_is_discontinuous
-        
         # Create linear solvers
         self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u', SOLVER_U,
                                                         PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
@@ -160,21 +155,21 @@ class SolverSIMPLE(Solver):
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
-        verify_key('equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'ipcs solver')
+        verify_key('equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'SIMPLE solver')
         
         # Lagrange multiplicator or remove null space via PETSc
         self.remove_null_space = True
         self.pressure_null_space = None
         self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
                                                               USE_LAGRANGE_MULTIPLICATOR, 'bool')
-        has_dirichlet = self.simulation.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']
-        if self.use_lagrange_multiplicator or has_dirichlet:
+        if self.use_lagrange_multiplicator:
             self.remove_null_space = False
         
         # No need for special treatment if the pressure is set via Dirichlet conditions somewhere
-        if has_dirichlet:
-            self.use_lagrange_multiplicator = False
+        # No need for any tricks if the pressure is set via Dirichlet conditions somewhere
+        if sim.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']:
             self.remove_null_space = False
+            self.use_lagrange_multiplicator = False
         
         # Control the form of the governing equations 
         self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
@@ -184,15 +179,22 @@ class SolverSIMPLE(Solver):
         self.incompressibility_flux_type = sim.input.get_value('solver/incompressibility_flux_type',
                                                                INCOMPRESSIBILITY_FLUX_TYPE, 'string')
         
+        # Representation of velocity
+        Vu_family = sim.data['Vu'].ufl_element().family()
+        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
+        
         # Velocity post_processing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
-        verify_key('velocity post processing', self.velocity_postprocessing, ('none', BDM), 'ipcs solver')
+        verify_key('velocity post processing', self.velocity_postprocessing, ('none', BDM), 'SIMPLE solver')
         
         # Quasi-steady simulation input
         self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
                                                        None, 'float')
         self.is_steady = self.steady_velocity_eps is not None
+        
+        # Check if there is any gravity
+        self.has_gravity = any(gi != 0 for gi in sim.data['g'].values())
     
     def create_functions(self):
         """
@@ -204,30 +206,22 @@ class SolverSIMPLE(Solver):
         Vu = sim.data['Vu']
         Vp = sim.data['Vp']
         
-        # Create velocity functions. Keep both component and vector forms
-        u_list, up_list, upp_list, u_conv = [], [], [], []
-        for d in range(sim.ndim):
-            sim.data['u%d' % d] = u = dolfin.Function(Vu)
-            sim.data['up%d' % d] = up = dolfin.Function(Vu)
-            sim.data['upp%d' % d] = upp = dolfin.Function(Vu)
-            sim.data['u_conv%d' % d] = uc = dolfin.Function(Vu)
-            sim.data['u_unlim%d' % d] = dolfin.Function(Vu)
-            u_list.append(u)
-            up_list.append(up)
-            upp_list.append(upp)
-            u_conv.append(uc)
-        sim.data['u'] = dolfin.as_vector(u_list)
-        sim.data['up'] = dolfin.as_vector(up_list)
-        sim.data['upp'] = dolfin.as_vector(upp_list)
-        sim.data['u_conv'] = dolfin.as_vector(u_conv)
-        self.u_tmp = dolfin.Function(Vu)
+        # Create velocity functions on component and vector form
+        create_vector_functions(sim, 'u', 'u%d', Vu)
+        create_vector_functions(sim, 'up', 'up%d', Vu)
+        create_vector_functions(sim, 'upp', 'upp%d', Vu)
+        create_vector_functions(sim, 'u_conv', 'u_conv%d', Vu)
+        create_vector_functions(sim, 'up_conv', 'up_conv%d', Vu)
+        create_vector_functions(sim, 'upp_conv', 'upp_conv%d', Vu)
+        create_vector_functions(sim, 'u_unlim', 'u_unlim%d', Vu)
+        self.u_tmp = sim.data['ui_tmp'] = dolfin.Function(Vu)
         
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
         sim.data['p_hat'] = dolfin.Function(Vp)
         
         # If gravity is nonzero we create a separate hydrostatic pressure field
-        if any(gi != 0 for gi in sim.data['g'].values()):
+        if self.has_gravity:
             # Hydrostatic pressure is always CG
             Pp = Vp.ufl_element().degree()
             Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
@@ -243,23 +237,21 @@ class SolverSIMPLE(Solver):
         sim = self.simulation
         
         # No need for hydrostatic pressure if g is zero
-        g = sim.data['g']
-        self.hydrostatic_pressure_correction = False
-        if all(gi == 0 for gi in g.values()):
+        self.hydrostatic_pressure_correction = True
+        if not self.has_gravity:
+            self.hydrostatic_pressure_correction = False
             return
-        return
         
-        # Get the input needed to calculate p_hydrostatic
-        rho = sim.data['rho']
-        sky_location = sim.input.get_value('multiphase_solver/sky_location', required_type='float')
+        # Calculate p_hydrostatic every timestep or just the first time step?
         self.ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep', 
                                                      HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP,
-                                                     required_type='float')
+                                                     required_type='bool')
         
         # Helper class to calculate the hydrostatic pressure distribution
+        rho = sim.data['rho']
+        g = sim.data['g']
         ph = sim.data['p_hydrostatic']
-        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, sky_location)
-        self.hydrostatic_pressure_correction = True
+        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph)
     
     def update_hydrostatic_pressure(self):
         """
@@ -277,32 +269,9 @@ class SolverSIMPLE(Solver):
             p = sim.data['p']
             if p.vector().max() == p.vector().min() == 0.0:
                 sim.log.info('Initial pressure field is identically zero, initializing to hydrostatic')
-                self.hydrostatic_pressure.update()
-                p.assign(dolfin.interpolate(sim.data['p_hydrostatic'], p.function_space()))
+                p.interpolate(sim.data['p_hydrostatic'])
             del sim.data['p_hydrostatic']
             self.hydrostatic_pressure_correction = False
-    
-    @timeit
-    def update_convection(self, t, dt):
-        """
-        Update terms used to linearise and discretise the convective term
-        """
-        ndim = self.simulation.ndim
-        data = self.simulation.data
-        
-        # Update convective velocity field components
-        for d in range(ndim):
-            uic = data['u_conv%d' % d]
-            uip =  data['up%d' % d]
-            uipp = data['upp%d' % d]
-            
-            if self.is_first_timestep:
-                uic.assign(uip)
-            else:
-                uic.vector().zero()
-                uic.vector().axpy(2.0, uip.vector())
-                uic.vector().axpy(-1.0, uipp.vector())
-        self.is_first_timestep = False
     
     @timeit
     def momentum_prediction(self, t, dt):
@@ -367,37 +336,27 @@ class SolverSIMPLE(Solver):
     @timeit
     def slope_limit_velocities(self):
         """
-        Run the slope limiter and assemble the limiter matrix
+        Run the slope limiter
         """
         if not self.using_limiter:
             return 0
         
-        for d in range(self.simulation.ndim):
-            u_star = self.simulation.data['u%d' % d]
-            u_unlim = self.simulation.data['u_unlim%d' % d]
-            u_unlim.assign(u_star)
-        
+        # Store unlimited velocities and then run limiter
+        shift_fields(self.simulation, ['u%d', 'u_unlim%d'])
         self.slope_limiter.run()
         
-        change = 0
-        for d in range(self.simulation.ndim):
-            u_star = self.simulation.data['u%d' % d]
-            u_unlim = self.simulation.data['u_unlim%d' % d]
-            self.u_tmp.assign(u_unlim)
-            self.u_tmp.vector().axpy(-1, u_star.vector())
-            self.u_tmp.vector().apply('insert')
-            change += self.u_tmp.vector().norm('l2')
+        # Measure the change in the field after limiting (l2 norm)
+        change = velocity_change(u1=self.simulation.data['u'],
+                                 u2=self.simulation.data['u_unlim'],
+                                 ui_tmp=self.simulation.data['ui_tmp'])
         
         return change
     
     @timeit
     def pressure_correction(self):
         """
-        Solve the pressure correction equation
-        
-        We handle the case where only Neumann conditions are given
-        for the pressure by taking out the nullspace, a constant shift
-        of the pressure, by providing the nullspace to the solver
+        Solve the Navier-Stokes equations on SIMPLE form
+        (Semi-Implicit Method for Pressure-Linked Equations)
         """
         solver = self.pressure_solver
         p_hat = self.simulation.data['p_hat']
@@ -495,29 +454,20 @@ class SolverSIMPLE(Solver):
         div_dx = div_dx_f.vector().max()
         return div_dS + div_dx
     
+    @timeit.named('run SIMPLE solver')
     def run(self):
         """
         Run the simulation
         """
-        sim = self.simulation        
+        sim = self.simulation
         sim.hooks.simulation_started()
+        
+        # Setup timestepping and initial convecting velocity
+        before_simulation(sim)
+        
+        # Time loop
         t = sim.time
         it = sim.timestep
-        
-        # Check if there are non-zero values in the upp vectors
-        maxabs = 0
-        for d in range(sim.ndim):
-            this_maxabs = abs(sim.data['upp%d' % d].vector().get_local()).max()
-            maxabs = max(maxabs, this_maxabs)
-        maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
-        has_upp_start_values = maxabs > 0
-        
-        # Previous-previous values are provided so we can start up with second order time stepping 
-        if has_upp_start_values:
-            sim.log.info('Initial values for upp are found and used')
-            self.is_first_timestep = False
-            self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
-        
         # Give reasonable starting guesses for the solvers
         for d in range(sim.ndim):
             up = self.simulation.data['up%d' % d]
@@ -543,9 +493,6 @@ class SolverSIMPLE(Solver):
             self.simulation.data['dt'].assign(dt)
             self.simulation.hooks.new_timestep(it, t, dt)
             
-            # Extrapolate the convecting velocity to the new time step
-            self.update_convection(t, dt)
-            
             # Calculate the hydrostatic pressure when the density is not constant
             self.update_hydrostatic_pressure()
             
@@ -558,7 +505,10 @@ class SolverSIMPLE(Solver):
                 self.velocity_update()
                 self.postprocess_velocity()
                 
-                err_lim = self.slope_limit_velocities()
+                # Set u_conv equal to u
+                shift_fields(sim, ['u%d', 'u_conv%d'])
+                if self.using_limiter:
+                    err_lim = self.slope_limit_velocities()
                 
                 # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
@@ -584,21 +534,7 @@ class SolverSIMPLE(Solver):
             #self.postprocess_velocity()
             
             # Move u -> up, up -> upp and prepare for the next time step
-            vel_diff = 0
-            for d in range(sim.ndim):
-                u_new = sim.data['u%d' % d]
-                up = sim.data['up%d' % d]
-                upp = sim.data['upp%d' % d]
-                
-                if self.is_steady:
-                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max() 
-                    vel_diff = max(vel_diff, diff)
-                
-                upp.assign(up)
-                up.assign(u_new)
-            
-            # Change time coefficient to second order
-            sim.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+            vel_diff = after_timestep(sim, self.is_steady)
             
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
