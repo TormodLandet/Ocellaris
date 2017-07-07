@@ -268,7 +268,7 @@ class SolverCoupled(Solver):
     @timeit
     def slope_limit_velocities(self):
         """
-        Run the slope limiter and assemble the limiter matrix
+        Run the slope limiter
         """
         if not self.using_limiter:
             return 0
@@ -346,7 +346,7 @@ class SolverCoupled(Solver):
                 pavg = dolfin.assemble(p * dx2) / vol
                 p.vector()[:] -= pavg
     
-    @timeit
+    @timeit.named('run coupled solver')
     def run(self):
         """
         Run the simulation

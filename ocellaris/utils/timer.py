@@ -3,6 +3,7 @@ from collections import defaultdict
 import time
 import dolfin
 
+
 def timeit(f):
     """
     Timer decorator
@@ -14,7 +15,11 @@ def timeit(f):
     """
     @wraps(f)
     def wrapper(*args, **kwds):
-        task = f.__name__
+        if timeit.next_name:
+            task = timeit.next_name
+            timeit.next_name = None
+        else:
+            task = f.__name__
         timer = dolfin.Timer('Ocellaris %s' % task)
         #print '<%s>' % task
         ret =  f(*args, **kwds)
@@ -24,6 +29,17 @@ def timeit(f):
         return ret
     return wrapper
 timeit.timings = defaultdict(list)
+timeit.next_name = None 
+
+
+def timeit_named(name):
+    """
+    Generate a decorator that uses the given name instead on the
+    callable functions __name__ in the timings table
+    """
+    timeit.next_name = name
+    return timeit
+timeit.named = timeit_named
 
 
 def log_timings(simulation):

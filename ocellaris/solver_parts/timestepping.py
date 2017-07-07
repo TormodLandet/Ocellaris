@@ -1,3 +1,5 @@
+# encoding: utf8
+from __future__ import division
 import dolfin
 from ocellaris.utils import shift_fields
 

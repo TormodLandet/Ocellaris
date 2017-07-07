@@ -12,6 +12,7 @@ except ImportError:
     exit(1)
 
 
+import os
 import yaml
 import collections
 from ocellaris_post import Results
@@ -53,10 +54,12 @@ def show_inspector(file_names, lables):
     
     results = []
     for file_name, label in zip(file_names, lables):
+        if not os.path.isfile(file_name):
+            raise IOError('The results file %r does not exist' % file_name)
         res = Results(file_name)
         res.label = label
         results.append(res)
-
+    
     app = wx.App()
     frame = OcellarisInspector(results)
     frame.Show()
