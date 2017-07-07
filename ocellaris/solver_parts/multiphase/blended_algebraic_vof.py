@@ -221,7 +221,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             
         # Update global bounds in slope limiter 
         if self.is_first_timestep:
-            lo, hi = self.slope_limiter.set_global_bounds(cp)
+            lo, hi = self.slope_limiter.set_global_bounds(lo=0.0, hi=1.0)
             if self.slope_limiter.has_global_bounds:
                 self.simulation.log.info('Setting global bounds [%r, %r] in BlendedAlgebraicVofModel' % (lo, hi))
         

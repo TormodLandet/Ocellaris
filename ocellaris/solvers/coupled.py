@@ -6,7 +6,7 @@ from dolfin import Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input, \
     create_vector_functions, shift_fields, velocity_change
 from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, \
-    SlopeLimiterVelocity, LocalMaximaMeasurer
+    SlopeLimiterVelocity, before_simulation, after_timestep
 from . import Solver, register_solver, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 
@@ -44,7 +44,7 @@ class SolverCoupled(Solver):
         self.setup_hydrostatic_pressure_calculations()
         
         # First time step timestepping coefficients
-        self.set_timestepping_coefficients([1, -1, 0])
+        sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
         
         # Solver control parameters
         sim.data['dt'] = Constant(simulation.dt)
@@ -79,7 +79,6 @@ class SolverCoupled(Solver):
         if self.vel_is_discontinuous:
             self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
             self.using_limiter = self.slope_limiter.active
-            self.slope_measurer = LocalMaximaMeasurer(sim.data['mesh'])
         
         if self.fix_pressure_dof:
             pdof = get_global_row_number(self.subspaces[-1])
@@ -162,6 +161,9 @@ class SolverCoupled(Solver):
         self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
                                                        None, 'float')
         self.is_steady = self.steady_velocity_eps is not None
+        
+        # Check if there is any gravity
+        self.has_gravity = any(gi != 0 for gi in sim.data['g'].values())
     
     def create_functions(self):
         """
@@ -212,9 +214,8 @@ class SolverCoupled(Solver):
         sim = self.simulation
         
         # No need for hydrostatic pressure if g is zero
-        g = sim.data['g']
         self.hydrostatic_pressure_correction = False
-        if all(gi == 0 for gi in g.values()):
+        if not self.has_gravity:
             return
         
         # We only calculate the hydrostatic pressure if asked
@@ -223,22 +224,20 @@ class SolverCoupled(Solver):
         if not ph_every_timestep:
             return
         
+        # We will include hydrostatic pressure for all time steps
+        self.hydrostatic_pressure_correction = True
+        
         # Hydrostatic pressure is always CG
         Vp = sim.data['Vp']
         Pp = Vp.ufl_element().degree()
         Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
         sim.data['p_hydrostatic'] = dolfin.Function(Vph)
         
-        # Get the input needed to calculate p_hydrostatic
-        rho = sim.data['rho_star']
-        sky_location = sim.input.get_value('multiphase_solver/sky_location', required_type='float')
-        
         # Helper class to calculate the hydrostatic pressure distribution
+        rho = sim.data['rho']
+        g = sim.data['g']
         ph = sim.data['p_hydrostatic']
-        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph, sky_location)
-        
-        # Correct every timestep
-        self.hydrostatic_pressure_correction = True
+        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph)
     
     def coupled_boundary_conditions(self, use_strong_bcs):
         """
@@ -257,40 +256,6 @@ class SolverCoupled(Solver):
                 coupled_dirichlet_bcs.append(bc_new)
         
         return coupled_dirichlet_bcs
-
-    def set_timestepping_coefficients(self, coeffs):
-        """
-        Set the time stepping coefficients used for the temporal derivative
-        """
-        if 'time_coeffs' not in self.simulation.data:
-            self.simulation.data['time_coeffs'] = Constant(coeffs)
-            self.simulation.data['time_coeffs_py'] = coeffs
-        else:
-            self.simulation.data['time_coeffs'].assign(Constant(coeffs))
-            self.simulation.data['time_coeffs_py'] = coeffs
-    
-    @timeit
-    def update_convection(self, order=2):
-        """
-        Update terms used to linearise and discretise the convective term
-        """
-        ndim = self.simulation.ndim
-        data = self.simulation.data
-        
-        # Update convective velocity field components
-        for d in range(ndim):
-            uic = data['u_conv%d' % d]
-            uip = data['up_conv%d' % d]
-            uipp = data['upp_conv%d' % d]
-            
-            if order == 1:
-                uic.assign(uip)
-            else:
-                # Backwards difference formulation - standard linear extrapolation
-                uic.vector().zero()
-                uic.vector().axpy(2.0, uip.vector())
-                uic.vector().axpy(-1.0, uipp.vector())
-                uic.vector().apply('insert')
     
     @timeit
     def postprocess_velocity(self):
@@ -380,71 +345,21 @@ class SolverCoupled(Solver):
             while abs(pavg) > 1000:
                 pavg = dolfin.assemble(p * dx2) / vol
                 p.vector()[:] -= pavg
-                
-    def before_simulation(self):
-        """
-        Handle timestepping issues before starting the simulation. There are
-        basically two options, either we have full velocity history available,
-        either from initial conditions on the input file or from a restart file,
-        or there is only access to one previous time step and we need to start
-        up using first order timestepping
-        """
-        sim = self.simulation
-        starting_order = 1
-        
-        # Check if there are non-zero values in the upp vectors
-        maxabs = 0
-        for d in range(sim.ndim):
-            this_maxabs = abs(sim.data['upp%d' % d].vector().get_local()).max()
-            maxabs = max(maxabs, this_maxabs)
-        maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
-        if maxabs > 0:
-            starting_order = 2
-        
-        # Switch to second order time stepping
-        if starting_order == 2:
-            sim.log.info('Initial values for upp are found and used')
-            self.set_timestepping_coefficients([3/2, -2, 1/2])
-        self.update_convection(starting_order)
-        
-    def after_timestep(self):
-        """
-        Move u -> up, up -> upp and prepare for the next time step
-        """
-        # Stopping criteria for steady state simulations  
-        vel_diff = None
-        if self.is_steady:
-            vel_diff = 0
-            for d in range(self.simulation.ndim):
-                u_new = self.simulation.data['u%d' % d]
-                up = self.simulation.data['up%d' % d]
-                diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
-                vel_diff = max(vel_diff, diff)
-        
-        shift_fields(self.simulation, ['u%d', 'up%d', 'upp%d'])
-        shift_fields(self.simulation, ['u_conv%d', 'up_conv%d', 'upp_conv%d'])
-        
-        # Change time coefficient to second order
-        self.set_timestepping_coefficients([3/2, -2, 1/2])
-        
-        # Extrapolate the convecting velocity to the next step
-        self.update_convection()
-        
-        return vel_diff
     
     @timeit
     def run(self):
         """
         Run the simulation
         """
-        # Setup timestepping and initial convections
-        self.before_simulation()
-        
         sim = self.simulation
         sim.hooks.simulation_started()
+        
+        # Setup timestepping and initial convecting velocity
+        before_simulation(sim)
+        
+        # Time loop
         t = sim.time
         it = sim.timestep
-        
         while True:
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
@@ -479,7 +394,7 @@ class SolverCoupled(Solver):
                 sim.reporting.report_timestep_value('ulim_diff', change_lim)
             
             # Move u -> up, up -> upp and prepare for the next time step
-            vel_diff = self.after_timestep()
+            vel_diff = after_timestep(sim, self.is_steady)
             
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:

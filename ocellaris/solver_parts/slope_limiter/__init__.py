@@ -59,14 +59,18 @@ class SlopeLimiterBase(object):
         """
         self.phi_old = phi_old
     
-    def set_global_bounds(self, phi):
+    def set_global_bounds(self, phi=None, lo=None, hi=None):
         """
         Set the initial field which we use this to compute the global
         bounds which must be observed everywhere for all time 
         """
         if self.enforce_global_bounds:
-            lo = phi.vector().min()
-            hi = phi.vector().max()
+            if phi is None:
+                assert isinstance(lo, (int, long, float))
+                assert isinstance(hi, (int, long, float))
+            else:    
+                lo = phi.vector().min()
+                hi = phi.vector().max()
             self.global_bounds = (lo, hi)
             self.has_global_bounds = True
         else:
