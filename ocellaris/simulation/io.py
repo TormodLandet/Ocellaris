@@ -6,6 +6,7 @@ from ocellaris.utils import ocellaris_error
 
 # Default values, can be changed in the input file
 XDMF_WRITE_INTERVAL = 0
+XDMF_FLUSH = True
 HDF5_WRITE_INTERVAL = 0
 SAVE_RESTART_AT_END = True
 
@@ -37,6 +38,7 @@ class InputOutputHandling():
         sim.log.info('Setting up simulation IO')
         self.xdmf_write_interval = sim.input.get_value('output/xdmf_write_interval',
                                                        XDMF_WRITE_INTERVAL, 'int')
+        self.xdmf_flush =  sim.input.get_value('output/xdmf_flush', XDMF_FLUSH, 'bool')
         self.hdf5_write_interval = sim.input.get_value('output/hdf5_write_interval',
                                                          HDF5_WRITE_INTERVAL, 'int')
         
@@ -57,6 +59,7 @@ class InputOutputHandling():
             
             sim.log.info('    Creating XDMF file %s' % file_name)
             self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
+            self.xdmf_file.parameters['flush_output'] = self.xdmf_flush
             self.xdmf_file.parameters['rewrite_function_mesh'] = False
             try:
                 self.xdmf_file.parameters['functions_share_mesh'] = True
