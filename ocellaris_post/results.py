@@ -208,8 +208,9 @@ def read_log_data(results):
                         break
         f.seek(0)
         log = f.read()
-    del data['timestep']
-        
+    if data:
+        del data['timestep']
+    
     # Read the input section
     input_str = ''.join(input_strs)
     results.input = yaml.load(input_str)
