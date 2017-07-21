@@ -11,3 +11,4 @@ from .mpi import get_root_value, gather_lines_on_root
 from .taylor_basis import lagrange_to_taylor, taylor_to_lagrange
 from .small_helpers import create_vector_functions, shift_fields, velocity_change
 from .field_inspector import FieldInspector
+from .ufl_transformers import is_zero_ufl_expression, split_form_into_matrix
