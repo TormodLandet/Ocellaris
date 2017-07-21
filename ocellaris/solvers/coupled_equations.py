@@ -96,7 +96,7 @@ class CoupledEquationsDG(object):
 def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
                         include_hydrostatic_pressure, incompressibility_flux_type,
                         use_grad_q_form, use_grad_p_form, use_stress_divergence_form,
-                        velocity_continuity_factor_D12, pressure_continuity_factor):
+                        velocity_continuity_factor_D12=0, pressure_continuity_factor=0):
     """
     Define the coupled equations. Also in use by the SIMPLE solver
     

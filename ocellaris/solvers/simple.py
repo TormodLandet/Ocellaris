@@ -108,7 +108,7 @@ class SolverSIMPLE(Solver):
                             use_grad_p_form=self.use_grad_p_form,
                             use_grad_q_form=self.use_grad_q_form,
                             use_lagrange_multiplicator=self.use_lagrange_multiplicator,
-                            include_hydrostatic_pressure=self.hydrostatic_pressure_correction,
+                            include_hydrostatic_pressure=self.ph_every_timestep,
                             incompressibility_flux_type=self.incompressibility_flux_type)
         self.matrices = matrices
         
@@ -240,6 +240,7 @@ class SolverSIMPLE(Solver):
         self.hydrostatic_pressure_correction = True
         if not self.has_gravity:
             self.hydrostatic_pressure_correction = False
+            self.ph_every_timestep = False
             return
         
         # Calculate p_hydrostatic every timestep or just the first time step?

@@ -4,9 +4,8 @@ from collections import deque
 import numpy
 from petsc4py import PETSc
 import dolfin
-from dolfin import dx, div, grad, dot, jump, avg, dS
-from ocellaris.utils import timeit
-from ocellaris.solver_parts import navier_stokes_stabilization_penalties
+from ocellaris.utils import timeit, split_form_into_matrix
+from .coupled_equations import define_dg_equations
 
 
 class SimpleEquations(object):
@@ -51,10 +50,8 @@ class SimpleEquations(object):
         assert not self.use_lagrange_multiplicator
         assert not self.use_stress_divergence_form
         
-        # Storage for forms
-        self.eqAs, self.eqBs, self.eqCs, self.eqDs, self.eqE = [], [], [], [], 0
-        
         # Create UFL forms
+        self.eqAs, self.eqBs, self.eqCs, self.eqDs, self.eqE = [], [], [], [], 0
         self.define_simple_equations()
         
         # Storage for assembled matrices
@@ -73,185 +70,49 @@ class SimpleEquations(object):
         Setup weak forms for SIMPLE form
         """
         sim = self.simulation
-        mpm = sim.multi_phase_model
-        mesh = sim.data['mesh']
-        u_conv = sim.data['u_conv']
         Vu = sim.data['Vu']
         Vp = sim.data['Vp']
         
-        # The trial and test functions
-        ndim = self.simulation.ndim
-        ulist = [dolfin.TrialFunction(Vu) for _ in range(ndim)]
-        vlist = [dolfin.TestFunction(Vu) for _ in range(ndim)]
-        u = dolfin.as_vector(ulist)
-        v = dolfin.as_vector(vlist)
-        p = dolfin.TrialFunction(Vp)
-        q = dolfin.TestFunction(Vp)
+        # The trial and test functions in a coupled space (to be split)
+        func_spaces = [Vu] * sim.ndim + [Vp]
+        e_mixed = dolfin.MixedElement([fs.ufl_element() for fs in func_spaces])
+        Vcoupled = dolfin.FunctionSpace(sim.data['mesh'], e_mixed)
+        tests = dolfin.TestFunctions(Vcoupled)
+        trials = dolfin.TrialFunctions(Vcoupled)
         
-        c1, c2, c3 = sim.data['time_coeffs']
-        dt = sim.data['dt']
-        g = sim.data['g']
-        n = dolfin.FacetNormal(mesh)
+        # Split into components
+        v = dolfin.as_vector(tests[:-1])
+        u = dolfin.as_vector(trials[:-1])
+        q = tests[-1]
+        p = trials[-1]
+        lm_trial = lm_test = None
         
-        # Fluid properties
-        rho = mpm.get_density(0)
-        nu = mpm.get_laminar_kinematic_viscosity(0)
-        mu = mpm.get_laminar_dynamic_viscosity(0)
+        # Define the full coupled form and split it into subforms depending
+        # on the test and trial functions
+        eq = define_dg_equations(u, v, p, q, lm_trial, lm_test, self.simulation,
+                                 include_hydrostatic_pressure=self.include_hydrostatic_pressure,
+                                 incompressibility_flux_type=self.incompressibility_flux_type,
+                                 use_grad_q_form=self.use_grad_q_form,
+                                 use_grad_p_form=self.use_grad_p_form,
+                                 use_stress_divergence_form=self.use_stress_divergence_form)
+        mat, vec = split_form_into_matrix(eq, Vcoupled, Vcoupled)
         
-        # Hydrostatic pressure correction
-        if self.include_hydrostatic_pressure:
-            p += sim.data['p_hydrostatic']
+        # There is no p*q form, this is a saddle point system
+        assert mat[-1,-1] is None, 'Found p-q coupling, this is not a saddle point system!'
         
-        # Penalties
-        penalty_dS, penalty_ds, D11, D12 = navier_stokes_stabilization_penalties(sim, nu)
+        # Store the forms
+        for i in range(sim.ndim):
+            self.eqAs.append(mat[i,i]) 
+            self.eqBs.append(mat[i,-1])
+            self.eqCs.append(mat[-1,i])
+            self.eqDs.append(vec[i])
+            self.eqE = vec[-1]
             
-        # Upwind and downwind velocities
-        w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
-        w_nD = (dot(u_conv, n) - abs(dot(u_conv, n)))/2.0
-        
-        # Momentum equations
-        for d in range(sim.ndim):
-            up = sim.data['up%d' % d]
-            upp = sim.data['upp%d' % d]
-            eqA = eqB = eqC = 0
-            
-            # Divergence free criterion
-            # ∇⋅u = 0
-            if self.incompressibility_flux_type == 'central':
-                u_hat_p = avg(u[d])
-            elif self.incompressibility_flux_type == 'upwind':
-                assert self.use_grad_q_form, 'Upwind only implemented for grad_q_form'
-                switch = dolfin.conditional(dolfin.gt(w_nU('+'), 0.0), 1.0, 0.0)
-                u_hat_p = switch*u[d]('+') + (1 - switch)*u[d]('-')
-            
-            if self.use_grad_q_form:
-                eqC -= u[d]*q.dx(d)*dx
-                eqC += (u_hat_p + D12[d]*jump(u, n))*jump(q)*n[d]('+')*dS
-            else:
-                eqC += q*u[d].dx(d)*dx
-                eqC -= (avg(q) - dot(D12, jump(q, n)))*jump(u[d])*n[d]('+')*dS
-            
-            # Time derivative
-            # ∂(ρu)/∂t
-            eqA += rho*(c1*u[d] + c2*up + c3*upp)/dt*v[d]*dx
-            
-            # Convection:
-            # -w⋅∇(ρu)
-            flux_nU = u[d]*w_nU
-            flux = jump(flux_nU)
-            eqA -= u[d]*dot(grad(rho*v[d]), u_conv)*dx
-            eqA += flux*jump(rho*v[d])*dS
-            
-            # Stabilizing term when w is not divergence free
-            eqA += 1/2*div(u_conv)*u[d]*v[d]*dx
-            
-            # Diffusion:
-            # -∇⋅μ∇u
-            eqA += mu*dot(grad(u[d]), grad(v[d]))*dx
-            
-            # Symmetric Interior Penalty method for -∇⋅μ∇u
-            eqA -= avg(mu)*dot(n('+'), avg(grad(u[d])))*jump(v[d])*dS
-            eqA -= avg(mu)*dot(n('+'), avg(grad(v[d])))*jump(u[d])*dS
-            
-            # Symmetric Interior Penalty coercivity term
-            eqA += penalty_dS*jump(u[d])*jump(v[d])*dS
-            
-            # Pressure
-            # ∇p
-            if self.use_grad_p_form:
-                eqB += v[d]*p.dx(d)*dx
-                eqB -= (avg(v[d]) + D12[d]*jump(v, n))*jump(p)*n[d]('+')*dS
-            else:
-                eqB -= p*v[d].dx(d)*dx
-                eqB += (avg(p) - dot(D12, jump(p, n)))*jump(v[d])*n[d]('+')*dS
-            
-            # Pressure continuity stabilization. Needed for equal order discretization
-            if D11 is not None:
-                eqB += D11*dot(jump(p, n), jump(q, n))*dS
-            
-            # Body force (gravity)
-            # ρ g
-            eqA -= rho*g[d]*v[d]*dx
-            
-            # Other sources
-            for f in sim.data['momentum_sources']:
-                eqA -= f[d]*v[d]*dx
-            
-            # Dirichlet boundary
-            dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
-            for dbc in dirichlet_bcs:
-                u_bc = dbc.func()
-                
-                # Divergence free criterion
-                if self.use_grad_q_form:
-                    eqC += q*u_bc*n[d]*dbc.ds()
-                else:
-                    eqC -= q*u[d]*n[d]*dbc.ds()
-                    eqC += q*u_bc*n[d]*dbc.ds()
-                
-                # Convection
-                eqA += rho*u[d]*w_nU*v[d]*dbc.ds()
-                eqA += rho*u_bc*w_nD*v[d]*dbc.ds()
-                
-                # SIPG for -∇⋅μ∇u
-                eqA -= mu*dot(n, grad(u[d]))*v[d]*dbc.ds()
-                eqA -= mu*dot(n, grad(v[d]))*u[d]*dbc.ds()
-                eqA += mu*dot(n, grad(v[d]))*u_bc*dbc.ds()
-                
-                # Weak Dirichlet
-                eqA += penalty_ds*(u[d] - u_bc)*v[d]*dbc.ds()
-                
-                # Pressure
-                if not self.use_grad_p_form:
-                    eqB += p*v[d]*n[d]*dbc.ds()
-            
-            # Neumann boundary
-            neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
-            for nbc in neumann_bcs:
-                # Divergence free criterion
-                if self.use_grad_q_form:
-                    eqC += q*u[d]*n[d]*nbc.ds()
-                else:
-                    eqC -= q*u[d]*n[d]*nbc.ds()
-                
-                # Convection
-                eqA += rho*u[d]*w_nU*v[d]*nbc.ds()
-                
-                # Diffusion
-                eqA -= mu*nbc.func()*v[d]*nbc.ds()
-                
-                # Pressure
-                if not self.use_grad_p_form:
-                    eqB += p*v[d]*n[d]*nbc.ds()
-            
-            # Outlet boundary
-            for obc in sim.data['outlet_bcs']:
-                # Divergence free criterion
-                if self.use_grad_q_form:
-                    eqC += q*u[d]*n[d]*obc.ds()
-                else:
-                    eqC -= q*u[d]*n[d]*obc.ds()
-                
-                # Convection
-                eqA += rho*u[d]*w_nU*v[d]*obc.ds()
-                
-                # Diffusion
-                mu_dudn = p*n[d]
-                eqA -= mu_dudn*v[d]*obc.ds()
-                
-                # Pressure
-                if not self.use_grad_p_form:
-                    p_ = mu*dot(dot(grad(u), n), n)
-                    eqB += p_*n[d]*v[d]*obc.ds()
-            
-            eqA, eqD1 = dolfin.system(eqA)
-            eqB, eqD2 = dolfin.system(eqB)
-            eqC, eqEd = dolfin.system(eqC) 
-            self.eqAs.append(eqA)
-            self.eqBs.append(eqB)
-            self.eqCs.append(eqC)
-            self.eqDs.append(eqD1 + eqD2)
-            self.eqE += eqEd
+            # Check that off diagonal terms are zero
+            for j in range(sim.ndim):
+                if i == j:
+                    continue
+                assert mat[i,j] is None, 'No coupling between velocity components supported in SIMPLE solver!'
     
     @timeit
     def assemble_matrices(self, d, reassemble=False):
