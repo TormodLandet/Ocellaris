@@ -2,7 +2,7 @@ import numpy
 import dolfin
 from ufl import as_vector, Form
 from ufl.classes import FixedIndex, Indexed, ListTensor, MultiIndex, Zero
-from ufl.algorithms import (ReuseTransformer, expand_indices, expand_compounds,expand_derivatives,
+from ufl.algorithms import (expand_indices, expand_compounds,expand_derivatives,
                             compute_form_lhs, compute_form_rhs)
 from ufl.corealg.multifunction import MultiFunction
 from ufl.corealg.map_dag import map_expr_dag
@@ -77,7 +77,7 @@ def is_zero_ufl_expression(expr, return_val=False):
 # Multifunction classes:
 
 
-class FormPruner(ReuseTransformer):
+class FormPruner(MultiFunction):
     """
     Return a modified form where all arguments containing test
     or trial function with coupled function space indices which
@@ -86,6 +86,11 @@ class FormPruner(ReuseTransformer):
     
     You can use the "prune" method to create a pruned form
     """
+    expr = MultiFunction.reuse_if_untouched
+    
+    def visit(self, expr):
+        return map_expr_dag(self, expr)
+    
     def __init__(self, index_test, index_trial=None):
         super(FormPruner, self).__init__()
         self._index_v = index_test
@@ -143,11 +148,15 @@ class FormPruner(ReuseTransformer):
         return new_arg
 
 
-class IndexSimplificator(ReuseTransformer):
+class IndexSimplificator(MultiFunction):
     """
     Simplifies indexing into ListTensors with fixed indices.
     from https://github.com/firedrakeproject/tsfc/compare/index-simplificator?expand=1#diff-a766247c71abcaca1251147d24ca9b63
     """
+    expr = MultiFunction.reuse_if_untouched
+
+    def visit(self, expr):
+        return map_expr_dag(self, expr)
 
     def indexed(self, o, expr, multiindex):
         indices = list(multiindex)
