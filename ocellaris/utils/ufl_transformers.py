@@ -84,7 +84,7 @@ class FormPruner(ReuseTransformer):
     are not the specified indices (index_test & index_trial) are
     pruned from the UFL form expression tree
     
-    You can use the static "prune" method to create a pruned form
+    You can use the "prune" method to create a pruned form
     """
     def __init__(self, index_test, index_trial=None):
         super(FormPruner, self).__init__()
@@ -163,14 +163,17 @@ class IndexSimplificator(ReuseTransformer):
 
 class EstimateZeroForms(MultiFunction):
     """
-    Replace all non-Zero leaf nodes with 1 and replace operator
-    '-' by '+' in order to evaluate an UFL expression to a non-
-    zero number or zero. The value of the non-zero return is
-    not interesting in itself, but it indicates that the expression
-    is potentially not identically zero when compiled by the form
-    compiler
+    Replace all non-Zero leaf nodes with 1 and then interpret the
+    operator tree to calculate the scalar value of an expression
+    in order to estimate if an UFL expression is allways identically
+    zero or not.
     
-    We aim to NEVER clasify a non-zero form as Zero while detecting
+    The value returned is the evaluated/interpreted expression. The 
+    actual value of a non-zero return is not interesting in itself,
+    but it indicates that the expression is potentially not identically
+    zero when compiled by the form compiler.
+    
+    We aim to NEVER classify a non-zero form as Zero while detecting
     as many true zero forms as we can
     """
     def visit(self, expr):
@@ -237,9 +240,6 @@ class EstimateZeroForms(MultiFunction):
             i = int(indices[0])
             return expr[i]
         else:
-            print 'o:', o, '\nrepr:', repr(o)
-            print '\nexpr:', expr, '\nrepr:', repr(expr)
-            print '\nmi:', multi_index, '\nrepr:', repr(multi_index)
             raise NotImplementedError()
     
     def variable_derivative(self, o, f, v):
@@ -276,9 +276,9 @@ class EstimateZeroForms(MultiFunction):
 
     # Functions of one scalar argument that are zero for zero arguments
     def sqrt(self, o, f):
-        return self.visit(f)
-    ln = sin = tan = errf = sqrt
-    sinh = tanh = acos = asin = atan = sqrt
+        return f
+    sin = tan = errf = sqrt
+    sinh = tanh = asin = atan = sqrt
     
     # Functions of one scalar argument that are non-zero for zero arguments
     def cos(self, o, f):
