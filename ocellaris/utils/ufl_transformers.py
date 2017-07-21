@@ -2,7 +2,8 @@ import numpy
 import dolfin
 from ufl import as_vector, Form
 from ufl.classes import FixedIndex, Indexed, ListTensor, MultiIndex, Zero
-from ufl.algorithms import ReuseTransformer, expand_indices, expand_compounds, expand_derivatives
+from ufl.algorithms import (ReuseTransformer, expand_indices, expand_compounds,expand_derivatives,
+                            compute_form_lhs, compute_form_rhs)
 from ufl.corealg.multifunction import MultiFunction
 from ufl.corealg.map_dag import map_expr_dag
 
@@ -35,13 +36,13 @@ def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None):
     
     for i in range(N):
         # Process linear form
-        f = FormPruner.prune(full_form, i)
+        f = FormPruner(i).prune(full_form)
         if f.integrals():
             form_vector[i] = f
         
         # Process bilinear form
         for j in range(M):
-            f = FormPruner.prune(full_form, i, j)
+            f = FormPruner(i, j).prune(full_form)
             if f.integrals():
                 form_matrix[i, j] = f
     
@@ -85,29 +86,27 @@ class FormPruner(ReuseTransformer):
     
     You can use the static "prune" method to create a pruned form
     """
-    def __init__(self, index_test, index_trial=-1):
+    def __init__(self, index_test, index_trial=None):
         super(FormPruner, self).__init__()
         self._index_v = index_test
         self._index_u = index_trial
         self._cache = {}
     
-    @staticmethod
-    def prune(form, index_test, index_trial=-1):
-        pruner = FormPruner(index_test, index_trial)
+    def prune(self, form):        
+        # Get the parts of the form with the correct arity
+        if self._index_u is None:
+            form = compute_form_rhs(form)
+        else:
+            form = compute_form_lhs(form)
+        
         integrals = []
         for integral in form.integrals():
-            # Check for the correct arrity
-            form_i = Form([integral]) 
-            Nargs = len(form_i.arguments())
-            if ((index_trial == -1 and Nargs != 1) or
-                (index_trial != -1 and Nargs != 2)):
-                continue
-            
             # Prune integrals that do not contain Arguments with
             # the chosen coupled function space indices 
-            pruned = pruner.visit(integral.integrand())
+            pruned = self.visit(integral.integrand())
             if not is_zero_ufl_expression(pruned):
                 integrals.append(integral.reconstruct(pruned))
+        
         return Form(integrals)
     
     def argument(self, arg):
