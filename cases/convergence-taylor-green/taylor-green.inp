@@ -123,7 +123,7 @@ solver:
         solver: gmres
         preconditioner: petsc_amg
 
-slope_limiter:
+_slope_limiter:
     u:
         #method: Componentwise
         #comp_method: HierarchicalTaylor
