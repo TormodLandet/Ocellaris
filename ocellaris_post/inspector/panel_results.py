@@ -3,7 +3,7 @@ matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
 import wx
-from . import pub, TOPIC_METADATA
+from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 from .widget_shared import PlotLimSelectors
 
 
@@ -11,25 +11,12 @@ DEFAULT_REPORT = 'Cof_max'
 
 
 class OcellarisReportsPanel(wx.Panel):
-    def __init__(self, parent, results):
+    def __init__(self, parent, inspector_state):
         super(OcellarisReportsPanel, self).__init__(parent)
-        self.results = results
-        
-        # Sort reports first by length then by name. This makes sure that 
-        # inner iteration reports end up last in the list
-        all_rep_names = set()
-        all_rep_lengths = {}
-        for res in results:
-            rep_names = res.reports.keys()
-            all_rep_names.update(rep_names)
-            for rep_name in rep_names:
-                all_rep_lengths[rep_name] = max(all_rep_lengths.get(rep_name, 0),
-                                                len(res.reports[rep_name]))
-        sort_key = lambda rep_name: (all_rep_lengths[rep_name], rep_name)
-        self.report_names = sorted(all_rep_names, key=sort_key)
+        self.istate = inspector_state
         self.need_update = True
-        
         self.layout_widgets()
+        self.reload_report_names()
         
         # Select the default report
         if DEFAULT_REPORT in self.report_names:
@@ -41,6 +28,7 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.Bind(wx.EVT_IDLE, self.on_idle)
         pub.subscribe(self.update_plot_soon, TOPIC_METADATA)
+        pub.subscribe(self.reload_report_names, TOPIC_RELOAD)
     
     def layout_widgets(self):
         v = wx.BoxSizer(wx.VERTICAL)
@@ -66,7 +54,7 @@ class OcellarisReportsPanel(wx.Panel):
         v.Add(h1, flag=wx.ALL|wx.EXPAND, border=4)
         h1.Add(wx.StaticText(self, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL)
         h1.AddSpacer(5)
-        self.report_selector = wx.Choice(self, choices=self.report_names)
+        self.report_selector = wx.Choice(self)
         self.report_selector.Bind(wx.EVT_CHOICE, self.report_selected)
         h1.Add(self.report_selector, proportion=1)
         
@@ -104,6 +92,35 @@ class OcellarisReportsPanel(wx.Panel):
         v.Add(self.plot_limits, flag=wx.ALL|wx.EXPAND, border=4)
         
         v.Fit(self)
+        
+    def reload_report_names(self, evt=None):
+        # Store previous selection if found
+        selected = self.report_selector.GetSelection()
+        if selected != wx.NOT_FOUND:
+            selected = self.report_names[selected]
+        
+        # Sort reports first by length then by name. This makes sure that 
+        # inner iteration reports end up last in the list
+        all_rep_names = set()
+        all_rep_lengths = {}
+        for res in self.istate.results:
+            rep_names = res.reports.keys()
+            all_rep_names.update(rep_names)
+            for rep_name in rep_names:
+                all_rep_lengths[rep_name] = max(all_rep_lengths.get(rep_name, 0),
+                                                len(res.reports[rep_name]))
+        sort_key = lambda rep_name: (all_rep_lengths[rep_name], rep_name)
+        self.report_names = sorted(all_rep_names, key=sort_key)
+        
+        self.report_selector.Set(self.report_names)
+        if selected in self.report_names:
+            self.report_selector.SetSelection(self.report_names.index(selected))
+        else:
+            self.report_selector.SetSelection(0)
+        self.report_selected()
+        
+        # In case the wx.Choice was empty it must now grow a bit vertically
+        self.GetSizer().Layout()
     
     def mouse_position_on_plot(self, mpl_event):
         x, y = mpl_event.xdata, mpl_event.ydata
@@ -115,6 +132,8 @@ class OcellarisReportsPanel(wx.Panel):
     
     def report_selected(self, evt=None):
         irep = self.report_selector.GetSelection()
+        if irep == wx.NOT_FOUND:
+            return
         report_name = self.report_names[irep]
         
         self.title.ChangeValue('Ocellaris report %s' % report_name)
@@ -138,6 +157,8 @@ class OcellarisReportsPanel(wx.Panel):
         Update the plot at once
         """
         irep = self.report_selector.GetSelection()
+        if irep == wx.NOT_FOUND:
+            return
         report_name = self.report_names[irep]
         
         # How to plot
@@ -154,7 +175,7 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.axes.clear()
         
-        for results in self.results:
+        for results in self.istate.results:
             if report_name not in results.reports:
                 plot([0], [None], label=results.label)
                 continue
@@ -171,7 +192,7 @@ class OcellarisReportsPanel(wx.Panel):
         self.axes.set_xlabel(self.xlabel.GetValue())
         self.axes.set_ylabel(self.ylabel.GetValue())
         
-        if len(self.results) > 1:
+        if len(self.istate.results) > 1:
             self.axes.legend(loc='best')
         self.fig.tight_layout()
         

@@ -4,18 +4,24 @@ from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 
 
 class OcellarisFilesPanel(wx.Panel):
-    def __init__(self, parent, results):
+    def __init__(self, parent, inspector_state):
         super(OcellarisFilesPanel, self).__init__(parent)
-        self.results = results
-        self.need_update = True
-        
+        self.istate = inspector_state
         self.layout_widgets()
+        self.reload_soon()
+        
         self.Bind(wx.EVT_IDLE, self.on_idle)
         pub.subscribe(self.reload_soon, TOPIC_RELOAD)
         pub.subscribe(self.reload_soon, TOPIC_METADATA)
         
     def reload_soon(self, evt=None):
+        lables = [res.label for res in self.istate.results]
+        self.results_selector.Set(lables)
+        self.results_selector.SetSelection(0)
         self.need_update = True
+        
+        # In case the wx.Choice was empty it must now grow a bit vertically
+        self.GetSizer().Layout()
     
     def layout_widgets(self):
         v = wx.BoxSizer(wx.VERTICAL)
@@ -26,9 +32,8 @@ class OcellarisFilesPanel(wx.Panel):
         v.Add(h, flag=wx.ALL|wx.EXPAND, border=5)
         h.Add(wx.StaticText(self, label='File:'), flag=wx.ALIGN_CENTER_VERTICAL)
         h.AddSpacer(5)
-        labels = [res.label for res in self.results]
-        self.results_selector = wx.Choice(self, choices=labels)
-        self.results_selector.Select(0)
+        
+        self.results_selector = wx.Choice(self)
         self.results_selector.Bind(wx.EVT_CHOICE, self.switch_file)
         h.Add(self.results_selector, proportion=1)
         
@@ -60,8 +65,12 @@ class OcellarisFilesPanel(wx.Panel):
         Switch which simulation is active
         """
         i = self.results_selector.GetSelection()
-        results = self.results[i]
+        if i == wx.NOT_FOUND:
+            self.input_file.SetValue('')
+            self.log_file.SetValue('')
+            return
         
+        results = self.istate.results[i]
         inp = yaml.dump(results.input, default_flow_style=False, default_style='')
         log = results.log
         

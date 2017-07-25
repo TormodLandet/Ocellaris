@@ -8,24 +8,41 @@ from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 
 
 class OcellarisSurfacesPanel(wx.Panel):
-    def __init__(self, parent, results):
+    def __init__(self, parent, inspector_state):
         super(OcellarisSurfacesPanel, self).__init__(parent)
-        self.results = results
-        all_surface_names = set()
-        for res in results:
-            all_surface_names.update(res.surfaces.keys())
-        self.surface_names = sorted(all_surface_names)
-        self.active_surface = None
-        self.need_update = True
-        
+        self.istate = inspector_state
         self.layout_widgets()
+        self.reset_surfaces()
+        
         self.Bind(wx.EVT_IDLE, self.on_idle)
         pub.subscribe(self.update_plot_soon, TOPIC_METADATA)
         pub.subscribe(self.reset_surfaces, TOPIC_RELOAD)
         
     def reset_surfaces(self, evt=None):
+        if self.surface_selector.GetCount():
+            self.surface_selector.Select(0)
+            isurf = self.surface_selector.GetSelection()
+            selected_name = self.surface_names[isurf]
+        else:
+            selected_name = ''
+        
+        all_surface_names = set()
+        for res in self.istate.results:
+            all_surface_names.update(res.surfaces.keys())
+        self.surface_names = sorted(all_surface_names)
+        
+        idx = self.surface_selector.FindString(selected_name)
+        if idx == wx.NOT_FOUND:
+            idx = 0
+        
+        self.surface_selector.Set(self.surface_names)
+        self.surface_selector.SetSelection(idx)
+        
         self.active_surface = None
         self.need_update = True
+        
+        # In case the wx.Choice was empty it must now grow a bit vertically
+        self.GetSizer().Layout()
     
     def layout_widgets(self):
         v = wx.BoxSizer(wx.VERTICAL)
@@ -51,8 +68,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         v.Add(h, flag=wx.ALL|wx.EXPAND, border=4)
         h.Add(wx.StaticText(self, label='Surface:'), flag=wx.ALIGN_CENTER_VERTICAL)
         h.AddSpacer(5)
-        self.surface_selector = wx.Choice(self, choices=self.surface_names)
-        self.surface_selector.Select(0)
+        self.surface_selector = wx.Choice(self)
         self.surface_selector.Bind(wx.EVT_CHOICE, self.reset_surfaces)
         h.Add(self.surface_selector, proportion=1)
         h.AddSpacer(5)
@@ -113,7 +129,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         xmin, ymin, xmax, ymax = 1e100, 1e100, -1e100, -1e100
         
         # Populate the cache for these surfaces
-        for results in self.results:
+        for results in self.istate.results:
             if surface_name in results.surfaces:
                 surf = results.surfaces[surface_name]
                 
@@ -179,7 +195,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         t = self.tmin + (self.tmax - self.tmin) * f
         
         tsel = set()
-        for ires, results in enumerate(self.results):
+        for ires, results in enumerate(self.istate.results):
             if surface_name in results.surfaces:
                 surf = results.surfaces[surface_name]
                 with wx.BusyCursor():
@@ -220,7 +236,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         self.axes.set_title(title)
         self.axes.set_xlabel(self.xlabel.GetValue())
         self.axes.set_ylabel(self.ylabel.GetValue())
-        if len(self.results) > 1: self.axes.legend(loc='lower right')
+        if len(self.istate.results) > 1: self.axes.legend(loc='lower right')
         self.fig.tight_layout()
         
         self.canvas.draw()
