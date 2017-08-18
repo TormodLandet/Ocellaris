@@ -16,6 +16,7 @@ def create_vector_functions(simulation, vec_name, comp_name, V):
         f = dolfin.Function(V)
         f.rename(name, name)
         vec.append(f)
+        assert name not in simulation.data
         simulation.data[name] = f
     simulation.data[vec_name] = dolfin.as_vector(vec)
     return simulation.data[vec_name]
