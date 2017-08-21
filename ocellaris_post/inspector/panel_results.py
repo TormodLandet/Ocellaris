@@ -1,10 +1,11 @@
+import numpy
 import matplotlib
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
 import wx
 from . import pub, TOPIC_METADATA, TOPIC_RELOAD
-from .widget_shared import PlotLimSelectors
+from .widget_shared import PlotLimSelectors, PlotCustomLine
 
 
 DEFAULT_REPORT = 'Cof_max'
@@ -91,6 +92,9 @@ class OcellarisReportsPanel(wx.Panel):
         self.plot_limits = PlotLimSelectors(self, self.update_plot_soon)
         v.Add(self.plot_limits, flag=wx.ALL|wx.EXPAND, border=4)
         
+        self.custom_line = PlotCustomLine(self, self.update_plot_soon)
+        v.Add(self.custom_line, flag=wx.ALL|wx.EXPAND, border=4)
+        
         v.Fit(self)
         
     def reload_report_names(self, evt=None):
@@ -127,7 +131,9 @@ class OcellarisReportsPanel(wx.Panel):
         if x is None or y is None:
             info = ''
         else:
-            info = 'pos = (%.6g, %.6g)' % (x, y)
+            info = 'pos = (%.6g, %.6g)' % (x, y)    
+        
+        
         self.plot_cursor_position_info.Label = info
     
     def report_selected(self, evt=None):
@@ -185,9 +191,15 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.axes.relim()
         self.axes.autoscale_view()
+        
+        if self.custom_line.active:
+            xlim = self.axes.get_xlim()
+            x = numpy.linspace(xlim[0], xlim[1], 1000)
+            y, name = self.custom_line.get_function(x)
+            plot(x, y, label=name, color='k', linestyle='--')
+        
         self.axes.set_xlim(self.plot_limits.get_xlim())
         self.axes.set_ylim(self.plot_limits.get_ylim())
-        
         self.axes.set_title(self.title.GetValue())
         self.axes.set_xlabel(self.xlabel.GetValue())
         self.axes.set_ylabel(self.ylabel.GetValue())

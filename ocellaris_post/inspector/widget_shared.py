@@ -1,5 +1,9 @@
 import wx
 
+# For code eval in PlotCustomLine
+from math import *
+from numpy import *
+
 
 class PlotLimSelectors(wx.Panel):
     def __init__(self, parent, callback):
@@ -55,3 +59,53 @@ class PlotLimSelectors(wx.Panel):
         except ValueError: maxval = None
         
         return minval, maxval
+
+
+class PlotCustomLine(wx.Panel):
+    def __init__(self, parent, callback):
+        super(PlotCustomLine, self).__init__(parent)
+        self.callback = callback
+        self.layout_widgets()
+        self.timer = None
+    
+    @property
+    def active(self):
+        return self.cb_active.Value
+    
+    def layout_widgets(self):
+        fgs = wx.FlexGridSizer(rows=1, cols=5, vgap=3, hgap=9)
+        for i in range(2):
+            fgs.AddGrowableCol(1 + i*2, proportion=2)
+        self.SetSizer(fgs)
+        
+        self.ctrls = []
+        for label, value in (('Function', '2*x**2'), ('Name', 'Custom function y=2*x^2')):
+            fgs.Add(wx.StaticText(self, label=label), flag=wx.ALIGN_CENTER_VERTICAL)
+            ctrl = wx.TextCtrl(self, size=(20, -1), value=value)
+            ctrl.Bind(wx.EVT_TEXT, self.callback_soon)
+            fgs.Add(ctrl, flag=wx.EXPAND)
+            self.ctrls.append(ctrl)
+        
+        self.cb_active = wx.CheckBox(self, label='Active')
+        self.cb_active.Value = False
+        self.cb_active.Bind(wx.EVT_CHECKBOX, self.callback_soon)
+        fgs.Add(self.cb_active, flag=wx.EXPAND)
+            
+    def callback_soon(self, evt=None):
+        if self.timer is None:
+            self.timer = wx.CallLater(500, self.callback_now)
+    
+    def callback_now(self, evt=None):
+        self.timer = None
+        self.callback()
+    
+    def get_function(self, x):
+        N = len(x)
+        code = self.ctrls[0].Value
+        name = self.ctrls[1].Value
+        try:
+            y = eval(code)
+            assert len(y) == N
+            return y, name
+        except:
+            return x*0 - 1, name 

@@ -1,4 +1,5 @@
-import sys
+import sys, os
+from ..files import get_result_file_name
 from . import show_inspector
 
 
@@ -7,7 +8,15 @@ def main():
     Parse command line arguments and run the wxPython GUI
     """
     # Get report files to read
-    h5_file_names = sys.argv[1:]
+    h5_file_names = []
+    for fn in sys.argv[1:]:
+        if os.path.isdir(fn):
+            fn = get_result_file_name(fn)
+        if os.path.isfile(fn):
+            h5_file_names.append(fn)
+        else:
+            print 'ERROR: not a file %r' % fn
+            exit(1) 
     
     # Get lables from command line arguments
     lables = []
