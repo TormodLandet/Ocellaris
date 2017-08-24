@@ -159,9 +159,16 @@ def read_h5_data(results):
     
     # Read reports
     reps = {}
+    N = 1e100
     for rep_name in hdf['/reports']:
-        reps[rep_name] = numpy.array(hdf['/reports'][rep_name])
-            
+        arr = numpy.array(hdf['/reports'][rep_name])
+        reps[rep_name] = arr
+        N = min(N, len(arr))
+    
+    # Ensure equal length arrays
+    for key in reps.keys():
+        reps[key] = reps[key][:N]
+    
     # Read log
     log = []
     i = 0

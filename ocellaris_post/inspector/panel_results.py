@@ -181,6 +181,7 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.axes.clear()
         
+        plotted = []
         for results in self.istate.results:
             if report_name not in results.reports:
                 plot([0], [None], label=results.label)
@@ -188,6 +189,7 @@ class OcellarisReportsPanel(wx.Panel):
             x = results.reports_x[report_name]
             y = results.reports[report_name]
             plot(x, y, label=results.label)
+            plotted.append((x, y))
         
         self.axes.relim()
         self.axes.autoscale_view()
@@ -197,9 +199,18 @@ class OcellarisReportsPanel(wx.Panel):
             x = numpy.linspace(xlim[0], xlim[1], 1000)
             y, name = self.custom_line.get_function(x)
             plot(x, y, label=name, color='k', linestyle='--')
+            plotted.append((x, y))
         
-        self.axes.set_xlim(self.plot_limits.get_xlim())
-        self.axes.set_ylim(self.plot_limits.get_ylim())
+        # Change ylim if xlim is given    
+        xlim = self.plot_limits.get_xlim()
+        ylim = self.plot_limits.get_ylim()
+        if xlim != (None, None):
+            xlocator = self.axes.xaxis.get_major_locator()
+            xs, ys = zip(*plotted)
+            ylim = compute_new_lim(xlim, ylim, xs, ys, xlocator)
+        
+        self.axes.set_xlim(xlim)
+        self.axes.set_ylim(ylim)
         self.axes.set_title(self.title.GetValue())
         self.axes.set_xlabel(self.xlabel.GetValue())
         self.axes.set_ylabel(self.ylabel.GetValue())
@@ -210,3 +221,23 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.canvas.draw()
         self.need_update = False
+
+
+def compute_new_lim(lim1, lim2, arrs1, arrs2, locator):
+    minval, maxval = 1e100, -1e100
+    for x, y in zip(arrs1, arrs2):
+        I0, I1 = 0, len(arrs1) - 1
+        if lim1[0] is not None:
+            I0 = numpy.argmin(abs(x - lim1[0]))
+        if lim1[1] is not None:
+            I1 = numpy.argmin(abs(x - lim1[1]))
+        minval  = min(minval, y[I0:I1+1].min())
+        maxval  = max(maxval, y[I0:I1+1].max())
+    
+    if lim2[0] is not None:
+        minval = lim2[0]
+    if lim2[1] is not None:
+        maxval = lim2[1]
+    
+    minval, maxval = locator.view_limits(minval, maxval)
+    return minval, maxval
