@@ -41,24 +41,25 @@ class PlotLimSelectors(wx.Panel):
     def callback_now(self, evt=None):
         self.timer = None
         self.callback()
+        
+    def _get_lim(self, c0, c1):
+        try:
+            minval = float(self.ctrls[c0].Value)
+        except ValueError:
+            minval = None
+        
+        try:
+            maxval = float(self.ctrls[c1].Value)
+        except ValueError:
+            maxval = None
+        
+        return minval, maxval
     
     def get_xlim(self):
-        try: minval = float(self.ctrls[0].Value)
-        except ValueError: minval = None
-        
-        try: maxval = float(self.ctrls[1].Value)
-        except ValueError: maxval = None
-        
-        return minval, maxval
+        return self._get_lim(0, 1)
     
     def get_ylim(self):
-        try: minval = float(self.ctrls[2].Value)
-        except ValueError: minval = None
-        
-        try: maxval = float(self.ctrls[3].Value)
-        except ValueError: maxval = None
-        
-        return minval, maxval
+        return self._get_lim(2, 3)
 
 
 class PlotCustomLine(wx.Panel):

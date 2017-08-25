@@ -181,7 +181,7 @@ class OcellarisReportsPanel(wx.Panel):
         
         self.axes.clear()
         
-        plotted = []
+        xs, ys = [], []
         for results in self.istate.results:
             if report_name not in results.reports:
                 plot([0], [None], label=results.label)
@@ -189,7 +189,7 @@ class OcellarisReportsPanel(wx.Panel):
             x = results.reports_x[report_name]
             y = results.reports[report_name]
             plot(x, y, label=results.label)
-            plotted.append((x, y))
+            xs.append(x); ys.append(y)
         
         self.axes.relim()
         self.axes.autoscale_view()
@@ -199,14 +199,13 @@ class OcellarisReportsPanel(wx.Panel):
             x = numpy.linspace(xlim[0], xlim[1], 1000)
             y, name = self.custom_line.get_function(x)
             plot(x, y, label=name, color='k', linestyle='--')
-            plotted.append((x, y))
+            xs.append(x); ys.append(y)
         
         # Change ylim if xlim is given    
         xlim = self.plot_limits.get_xlim()
         ylim = self.plot_limits.get_ylim()
         if xlim != (None, None):
             xlocator = self.axes.xaxis.get_major_locator()
-            xs, ys = zip(*plotted)
             ylim = compute_new_lim(xlim, ylim, xs, ys, xlocator)
         
         self.axes.set_xlim(xlim)
@@ -226,18 +225,31 @@ class OcellarisReportsPanel(wx.Panel):
 def compute_new_lim(lim1, lim2, arrs1, arrs2, locator):
     minval, maxval = 1e100, -1e100
     for x, y in zip(arrs1, arrs2):
-        I0, I1 = 0, len(arrs1) - 1
+        # Get selection
+        I0, I1 = 0, len(y) - 1
         if lim1[0] is not None:
-            I0 = numpy.argmin(abs(x - lim1[0]))
+            I0 = (abs(x - lim1[0])).argmin()
         if lim1[1] is not None:
-            I1 = numpy.argmin(abs(x - lim1[1]))
-        minval  = min(minval, y[I0:I1+1].min())
-        maxval  = max(maxval, y[I0:I1+1].max())
+            I1 = (abs(x - lim1[1])).argmin()
+        
+        # Compute data range
+        selected = y[I0:I1+1]
+        if len(selected):
+            minval = min(minval, selected.min())
+            maxval = max(maxval, selected.max())
     
+    # Default to 0, same as matplotlib
+    if minval == 1e100:
+        minval = 0
+        maxval = 0
+    
+    # Locate prettier points to end the axis
+    minval, maxval = locator.view_limits(minval, maxval)
+    
+    # Take into account user override
     if lim2[0] is not None:
         minval = lim2[0]
     if lim2[1] is not None:
         maxval = lim2[1]
     
-    minval, maxval = locator.view_limits(minval, maxval)
     return minval, maxval
