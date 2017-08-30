@@ -72,7 +72,6 @@ class OcellarisSetupPanel(wx.Panel):
             def make_activator(il):
                 def activate(evt):
                     with wx.BusyCursor():
-                        print evt.IsChecked()
                         self.istate.results[il].active_in_gui = evt.IsChecked() 
                         pub.sendMessage(TOPIC_METADATA)
                 return activate
