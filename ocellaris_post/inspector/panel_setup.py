@@ -21,7 +21,7 @@ class OcellarisSetupPanel(wx.Panel):
         v.Add(st, flag=wx.ALL, border=8)
         
         # Metadata FlexGridSizer
-        self.file_lable_sizer = wx.FlexGridSizer(rows=1, cols=3, vgap=3, hgap=10)
+        self.file_lable_sizer = wx.FlexGridSizer(rows=1, cols=4, vgap=3, hgap=10)
         self.file_lable_sizer.AddGrowableCol(1, proportion=1)
         v.Add(self.file_lable_sizer, flag=wx.ALL|wx.EXPAND, border=6)
         self.update_open_files()
@@ -68,6 +68,19 @@ class OcellarisSetupPanel(wx.Panel):
             
             b.Bind(wx.EVT_BUTTON, make_closer(il))
             fgs.Add(b, flag=wx.ALIGN_CENTER_VERTICAL)
+            
+            def make_activator(il):
+                def activate(evt):
+                    with wx.BusyCursor():
+                        print evt.IsChecked()
+                        self.istate.results[il].active_in_gui = evt.IsChecked() 
+                        pub.sendMessage(TOPIC_METADATA)
+                return activate
+            
+            tb = wx.ToggleButton(self, label='Active')
+            tb.SetValue(results.active_in_gui)
+            tb.Bind(wx.EVT_TOGGLEBUTTON, make_activator(il))
+            fgs.Add(tb, flag=wx.ALIGN_CENTER_VERTICAL)
         
         # Open button
         fgs.AddSpacer(1)

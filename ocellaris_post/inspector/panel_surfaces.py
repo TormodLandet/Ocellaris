@@ -129,7 +129,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         xmin, ymin, xmax, ymax = 1e100, 1e100, -1e100, -1e100
         
         # Populate the cache for these surfaces
-        for results in self.istate.results:
+        for results in self.istate.active_results:
             if surface_name in results.surfaces:
                 surf = results.surfaces[surface_name]
                 
@@ -195,7 +195,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         t = self.tmin + (self.tmax - self.tmin) * f
         
         tsel = set()
-        for ires, results in enumerate(self.istate.results):
+        for ires, results in enumerate(self.istate.active_results):
             if surface_name in results.surfaces:
                 surf = results.surfaces[surface_name]
                 with wx.BusyCursor():

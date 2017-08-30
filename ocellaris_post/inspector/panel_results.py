@@ -182,7 +182,7 @@ class OcellarisReportsPanel(wx.Panel):
         self.axes.clear()
         
         xs, ys = [], []
-        for results in self.istate.results:
+        for results in self.istate.active_results:
             if report_name not in results.reports:
                 plot([0], [None], label=results.label)
                 continue

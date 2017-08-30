@@ -36,6 +36,10 @@ class InspectorState(object):
         """
         self.results = []
         self.persistence = InspectorPersistence(self)
+        
+    @property
+    def active_results(self):
+        return [r for r in self.results if r.active_in_gui]
     
     def open(self, file_name, label=None):
         """
@@ -44,6 +48,7 @@ class InspectorState(object):
         r = Results(file_name)
         self.persistence.set_label(r, label)
         self.results.append(r)
+        r.active_in_gui = True
     
     def reload(self):
         """
