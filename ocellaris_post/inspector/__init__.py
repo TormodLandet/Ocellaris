@@ -50,14 +50,15 @@ class InspectorState(object):
         self.results.append(r)
         r.active_in_gui = True
     
-    def reload(self):
+    def reload(self, only_active=True):
         """
         Reload the data. Usefull when plotting log files that are 
         continuously updated
         """
         for r in self.results:
-            r.reload()
-            
+            if r.active_in_gui or not only_active: 
+                r.reload()
+    
     def close(self, idx):
         """
         Close the results file with the given index
