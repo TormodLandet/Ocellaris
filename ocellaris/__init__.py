@@ -1,10 +1,6 @@
-try:
-    import dolfin #@UnusedImport
-except ImportError:
-    print '\n    ERROR: Could not import dolfin!\n'
-    print '    Make sure FEniCS is properly installed\n'
-    print '    Exiting due to error\n'
-    exit()
+# Check for presence of FEniCS etc
+from .verify_environment import verify_env
+verify_env()
 
 
 __version__ = '2017.1.dev1'
