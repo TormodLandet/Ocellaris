@@ -32,6 +32,7 @@ INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
 ALPHA_U = 0.5
 ALPHA_P = 0.5
+LIMIT_INNER = False
 
 
 @register_solver('SIMPLE')
@@ -115,6 +116,7 @@ class SolverSIMPLE(Solver):
         # Slope limiter for the momentum equation velocity components
         self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
         self.using_limiter = self.slope_limiter.active
+        self.limit_inner_iterations = self.limit_inner_iterations and self.using_limiter
         
         # Projection for the velocity
         self.velocity_postprocessor = None
@@ -195,6 +197,9 @@ class SolverSIMPLE(Solver):
         
         # Check if there is any gravity
         self.has_gravity = any(gi != 0 for gi in sim.data['g'].values())
+        
+        # Limiter inside inner iterations
+        self.limit_inner_iterations = sim.input.get_value('solver/limit_inner_iterations', LIMIT_INNER, 'bool')
     
     def create_functions(self):
         """
@@ -500,23 +505,22 @@ class SolverSIMPLE(Solver):
             # Run inner iterations
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
+                # Velocity and pressure inner solves
                 err_u = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
-                
                 self.velocity_update()
-                self.postprocess_velocity()
-                
-                # Set u_conv equal to u
-                shift_fields(sim, ['u%d', 'u_conv%d'])
-                if self.using_limiter:
-                    err_lim = self.slope_limit_velocities()
-                
-                # Information from solvers regarding number of iterations needed to solve linear system
                 niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
                 niters.append('%3d p' % self.niters_p)
                 solver_info = ' - iters: %s' % ' '.join(niters)
                 
-                if self.using_limiter:
+                # Set u_conv equal to u
+                #shift_fields(sim, ['u%d', 'u_conv%d'])
+                
+                # Postprocess and limit velocity inside the inner iteration
+                if self.limit_inner_iterations:
+                    self.postprocess_velocity()
+                    shift_fields(sim, ['u%d', 'u_conv%d'])
+                    err_lim = self.slope_limit_velocities()
                     solver_info += ' - err lim %10.3e' % err_lim
                 
                 # Divergence error
@@ -532,7 +536,12 @@ class SolverSIMPLE(Solver):
                 
                 self.inner_iteration += 1
             
-            #self.postprocess_velocity()
+            # Postprocess and limit velocity outside the inner iteration
+            if not self.limit_inner_iterations:
+                self.postprocess_velocity()
+                shift_fields(sim, ['u%d', 'u_conv%d'])
+                if self.using_limiter: 
+                    self.slope_limit_velocities()
             
             # Move u -> up, up -> upp and prepare for the next time step
             vel_diff = after_timestep(sim, self.is_steady)
