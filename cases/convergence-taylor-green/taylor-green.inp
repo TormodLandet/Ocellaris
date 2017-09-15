@@ -100,7 +100,7 @@ output:
     save_restart_file_at_end: no
 
 solver:
-    type: Coupled
+    type: SIMPLE
     num_inner_iter: 1000
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
