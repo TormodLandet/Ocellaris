@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import numpy
 from ocellaris.utils import ocellaris_error, verify_key
 from ocellaris.solver_parts.slope_limiter import SlopeLimiter

@@ -1,4 +1,3 @@
-from __future__ import division
 import numpy
 import dolfin
 
@@ -45,7 +44,7 @@ def get_dof_neighbours(V):
     
     # Get "owning cell" indices for all dofs
     cell_for_dof = [None] * V.dim()
-    for ic in xrange(num_cells_all):
+    for ic in range(num_cells_all):
         dofs = dm.cell_dofs(ic)
         for dof in dofs:
             assert cell_for_dof[dof] is None
@@ -55,7 +54,7 @@ def get_dof_neighbours(V):
     # will share the same location
     coord_to_dofs = {}
     max_neighbours = 0
-    for dof in xrange(len(dof_coordinates)):
+    for dof in range(len(dof_coordinates)):
         coord = tuple(round(x, 5) for x in dof_coordinates[dof])
         dofs = coord_to_dofs.setdefault(coord, [])
         dofs.append(dof)

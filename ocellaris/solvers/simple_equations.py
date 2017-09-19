@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 from collections import deque
 import numpy
 from petsc4py import PETSc
@@ -370,7 +368,7 @@ def create_block_matrix(simulation, V, blocks=1):
     mat.setUp()
     
     # Map from local rows to global rows
-    lgmap = map(int, dm.tabulate_local_to_global_dofs())
+    lgmap = [int(d) for d in dm.tabulate_local_to_global_dofs()]
     lgmap = PETSc.LGMap().create(lgmap, comm=comm)
     mat.setLGMap(lgmap, lgmap)
     

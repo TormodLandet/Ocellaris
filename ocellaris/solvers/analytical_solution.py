@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import timeit, ocellaris_interpolate

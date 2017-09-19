@@ -82,7 +82,7 @@ class Input(collections.OrderedDict):
             The input value if it exist otherwise the default value
         """
         # Allow path to be a list or a "/" separated string
-        if isinstance(path, basestring):
+        if isinstance(path, str):
             pathstr = self.basepath + path
             path = path.split('/')
         else:
@@ -122,10 +122,9 @@ class Input(collections.OrderedDict):
             return d_new
         
         # Get validation function according to required data type
-        number = (int, long, float)
+        number = (int, int, float)
         dict_types = (dict, collections.OrderedDict)
-        anytype = (int, long, float, basestring, list, tuple, dict,
-                   collections.OrderedDict, bool)
+        anytype = (int, float, str, list, tuple, dict, collections.OrderedDict, bool)
         if required_type == 'bool':
             def validate_and_convert(d): return check_isinstance(d, bool)
         elif required_type == 'float':
@@ -141,7 +140,7 @@ class Input(collections.OrderedDict):
             def validate_and_convert(d): return check_isinstance(d, int)
         elif required_type == 'string':
             def validate_and_convert(d):
-                d = check_isinstance(d, basestring)
+                d = check_isinstance(d, str)
                 # SWIG does not like Python 2 Unicode objects
                 return str(d)
         elif required_type == 'Input':
@@ -149,19 +148,19 @@ class Input(collections.OrderedDict):
                 d = check_isinstance(d, dict_types)
                 return Input(self.simulation, d, basepath=pathstr)
         elif required_type == 'dict(string:any)':
-            def validate_and_convert(d): return check_dict(d, basestring, anytype)
+            def validate_and_convert(d): return check_dict(d, str, anytype)
         elif required_type == 'dict(string:dict)':
-            def validate_and_convert(d): return check_dict(d, basestring, dict_types)
+            def validate_and_convert(d): return check_dict(d, str, dict_types)
         elif required_type == 'dict(string:list)':
-            def validate_and_convert(d): return check_dict(d, basestring, list)
+            def validate_and_convert(d): return check_dict(d, str, list)
         elif required_type == 'dict(string:float)':
-            def validate_and_convert(d): return check_dict(d, basestring, number)
+            def validate_and_convert(d): return check_dict(d, str, number)
         elif required_type == 'list(float)':
             def validate_and_convert(d): return check_list(d, number)
         elif required_type == 'list(int)':
             def validate_and_convert(d): return check_list(d, int)
         elif required_type == 'list(string)':
-            def validate_and_convert(d): return check_list(d, basestring)
+            def validate_and_convert(d): return check_list(d, str)
         elif required_type == 'list(dict)':
             def validate_and_convert(d): return check_list(d, dict_types)
         elif required_type == 'any':
@@ -218,7 +217,7 @@ class Input(collections.OrderedDict):
         
         """
         # Allow path to be a list or a "/" separated string
-        if isinstance(path, basestring):
+        if isinstance(path, str):
             path = path.split('/')
         
         d = self
@@ -269,7 +268,7 @@ class Input(collections.OrderedDict):
         _mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
     
         def dict_representer(dumper, data):
-            return dumper.represent_dict(data.iteritems())
+            return dumper.represent_dict(data.items())
     
         def dict_constructor(loader, node):
             return collections.OrderedDict(loader.construct_pairs(node))
@@ -288,7 +287,7 @@ def eval_python_expression(simulation, value, pathstr, safe_mode=False):
     values that are prefixed with "py$" indicating that they are dynamic
     expressions and not just static strings
     """
-    if not isinstance(value, basestring) or not value.startswith('py$'):
+    if not isinstance(value, str) or not value.startswith('py$'):
         return value
     
     if safe_mode:
@@ -309,7 +308,7 @@ def eval_python_expression(simulation, value, pathstr, safe_mode=False):
     global_inp = simulation.input
     user_constants = global_inp.get_value('user_code/constants', {}, 'dict(string:float)',
                                           safe_mode=True)
-    for name, const_value in user_constants.iteritems():
+    for name, const_value in user_constants.items():
         eval_locals[name] = const_value
     
     eval_locals['simulation'] = simulation

@@ -1,4 +1,3 @@
-# encoding: utf8
 import dolfin
 from ocellaris.utils import timeit, ocellaris_interpolate
 

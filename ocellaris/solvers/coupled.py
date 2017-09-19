@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import numpy
 import dolfin
 from dolfin import Constant

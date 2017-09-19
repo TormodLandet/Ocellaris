@@ -29,7 +29,7 @@ def _get_cpp_module(source_dir, header_files, source_files, force_recompile=Fals
                                           source_directory=source_dir, 
                                           sources=source_files,
                                           include_dirs=[".", source_dir])
-    except RuntimeError, e:
+    except RuntimeError as e:
         COMPILE_ERROR = "In instant.recompile: The module did not compile with command"
         if e.message.startswith(COMPILE_ERROR):
             # Get the path of the error file
@@ -37,7 +37,7 @@ def _get_cpp_module(source_dir, header_files, source_files, force_recompile=Fals
             # Print the error file if we were successfull at getting a valid file name
             if os.path.isfile(path):
                 with open(path, 'rt') as error:
-                    print error.read()
+                    print(error.read())
         raise
     
     return module

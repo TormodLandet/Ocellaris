@@ -1,5 +1,3 @@
-# encoding: utf-8
-from __future__ import division
 import dolfin
 from dolfin import Function, Constant
 from . import register_multi_phase_model, MultiPhaseModel

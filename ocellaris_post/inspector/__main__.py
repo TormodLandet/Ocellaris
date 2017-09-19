@@ -15,7 +15,7 @@ def main():
         if os.path.isfile(fn):
             h5_file_names.append(fn)
         else:
-            print 'ERROR: not a file %r' % fn
+            print('ERROR: not a file %r' % fn)
             exit(1) 
     
     # Get lables from command line arguments

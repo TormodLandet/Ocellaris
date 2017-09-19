@@ -77,7 +77,7 @@ def get_same_loc_dofs(V):
     # will share the same location
     coord_to_dofs = {}
     max_neighbours = 0
-    for dof in xrange(len(dof_coordinates)):
+    for dof in range(len(dof_coordinates)):
         coord = tuple(round(x, 5) for x in dof_coordinates[dof])
         dofs = coord_to_dofs.setdefault(coord, [])
         dofs.append(dof)

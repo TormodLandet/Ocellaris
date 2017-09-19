@@ -22,7 +22,7 @@ class SlopeLimiterInput(object):
         # Store coordinates for the three vertices plus the cell center for each cell
         stride = (3 + 1) * 2
         flat_vertex_coordinates = numpy.zeros(num_cells_owned * stride, float)
-        for icell in xrange(num_cells_owned):
+        for icell in range(num_cells_owned):
             cell_vertices = [vertex_coordinates[iv] for iv in vertices[icell]]
             center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
             center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]) / 3

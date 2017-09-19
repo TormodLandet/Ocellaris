@@ -1,6 +1,5 @@
-# encoding: utf8
 import dolfin
-from dolfin import dot, div, grad, avg, jump, dx, dS, Constant
+from dolfin import dot, grad, avg, jump, dx, dS, Constant
 from . import BaseEquation
 from ..solver_parts import define_penalty
 

@@ -80,7 +80,7 @@ class ConstantDirichletBoundary(BoundaryConditionCreator):
         """
         Add a Dirichlet condition to this variable
         """
-        assert isinstance(value, (float, int, long))
+        assert isinstance(value, (float, int))
         df_value = dolfin.Constant(value)
         
         # Store the boundary condition for use in the solver

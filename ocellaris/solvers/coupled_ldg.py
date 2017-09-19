@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import numpy
 import dolfin
 from dolfin import dx, dS, div, grad, dot, inner, outer, jump, avg, Constant
@@ -352,7 +350,7 @@ class CoupledEquationsLDG(object):
         for d in range(ndim):
             ulist.append(uc[d])
             vlist.append(vc[d])
-            indices = range(1+ndim*(d+1), 1+ndim*(d+2))
+            indices = list(range(1+ndim*(d+1), 1+ndim*(d+2)))
             sigma.append(dolfin.as_vector([uc[i] for i in indices]))
             tau.append(dolfin.as_vector([vc[i] for i in indices]))
         
@@ -536,7 +534,7 @@ class CoupledEquationsLDG2(object):
         for d in range(sim.ndim):
             ulist.append(uc[d])
             vlist.append(vc[d])
-            indices = range(1+sim.ndim*(d+1), 1+sim.ndim*(d+2))
+            indices = list(range(1+sim.ndim*(d+1), 1+sim.ndim*(d+2)))
             sigmas.append([uc[i] for i in indices])
             taus.append([vc[i] for i in indices])
         

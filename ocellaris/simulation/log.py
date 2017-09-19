@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import os
 import dolfin
 
@@ -38,7 +36,7 @@ class Log(object):
             if self.write_log:
                 self.log_file.write(message + '\n')
             if self.write_stdout:
-                print color % message
+                print(color % message)
         
         # Store all messages irrespective of the log level
         self._the_log.append(message)

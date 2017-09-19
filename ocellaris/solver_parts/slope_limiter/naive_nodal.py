@@ -1,5 +1,3 @@
-# enconding: utf8
-from __future__ import division
 import numpy
 import dolfin as df
 from ocellaris.cpp import load_module
@@ -51,7 +49,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
-        indices = range(self.mesh.num_cells())
+        indices = list(range(self.mesh.num_cells()))
         cell_dofs_V = [tuple(dm.cell_dofs(i)) for i in indices]
         cell_dofs_V0 = [int(dm0.cell_dofs(i)) for i in indices]
         
@@ -159,7 +157,7 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
         averages[ic] = sum(vals[-3:]) / 3
     
     # Modify dof values
-    dof_range = range(C)
+    dof_range = list(range(C))
     dof_range_modable = dof_range[-3:]
     for ic in range(num_cells_owned):
         dofs = flat_cell_dofs[ic * C: (ic + 1)*C]
@@ -241,18 +239,18 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
         error = abs(averages[ic] - final_avg)/averages[ic]
         if error > 1e-10:
             new_vals = [vals[i] + eps*moddable[i] for i in dof_range]
-            print num_cell_dofs, repr(error)
-            print repr(avg), repr(new_avg)
-            print repr(avg - new_avg), repr(eps), 'sssssssssssssssssssssssssssss'
-            print dofs, dof_range, dof_range_modable
-            print '%r %r %r' % (averages[ic], new_avg, final_avg)
-            print moddable, eps, nmod
-            print repr(averages[ic] - (sum(vals[-3:]) + eps*nmod)/3)
-            print vals
-            print new_vals
-            print [results[dof] for dof in dofs]
-            print  repr(averages[ic] - sum(new_vals) / 3)
-            print '--------------------------------------------------------------------------'
+            print(num_cell_dofs, repr(error))
+            print(repr(avg), repr(new_avg))
+            print(repr(avg - new_avg), repr(eps), 'sssssssssssssssssssssssssssss')
+            print(dofs, dof_range, dof_range_modable)
+            print('%r %r %r' % (averages[ic], new_avg, final_avg))
+            print(moddable, eps, nmod)
+            print(repr(averages[ic] - (sum(vals[-3:]) + eps*nmod)/3))
+            print(vals)
+            print(new_vals)
+            print([results[dof] for dof in dofs])
+            print(repr(averages[ic] - sum(new_vals) / 3))
+            print('--------------------------------------------------------------------------')
             exit()
         assert error < 1e-12, 'Got large difference in old and new average: %r' % error 
     

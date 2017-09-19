@@ -16,4 +16,4 @@ def open_results(file_or_dir, derived=True, inner_iterations=True):
             return Results(file_or_dir, derived=derived,
                            inner_iterations=inner_iterations)
     else:
-        print 'ERROR: not a file %r' % file_or_dir
+        print('ERROR: not a file %r' % file_or_dir)

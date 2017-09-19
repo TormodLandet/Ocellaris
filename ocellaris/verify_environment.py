@@ -13,9 +13,9 @@ def verify_env():
         matplotlib.use('Agg')
     
     if not has_dolfin():
-        print '\n    ERROR: Could not import dolfin!\n'
-        print '    Make sure FEniCS is properly installed\n'
-        print '    Exiting due to error\n'
+        print('\n    ERROR: Could not import dolfin!\n')
+        print('    Make sure FEniCS is properly installed\n')
+        print('    Exiting due to error\n')
         exit()
 
 

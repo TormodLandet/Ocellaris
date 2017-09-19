@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import dolfin
 from dolfin import dot, div, grad, avg, jump, dx, dS, Constant
 from . import BDF, UPWIND

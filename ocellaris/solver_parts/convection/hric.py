@@ -197,14 +197,14 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             tilde_beta = (tilde_aF_final - tilde_aC)/(1 - tilde_aC)
             
             if not (0.0 <= tilde_beta <= 1.0):
-                print 'ERROR, tilde_beta %r is out of range [0, 1]' % tilde_beta
-                print ' face normal: %r' % normal
-                print ' surface gradient: %r' % gC
-                print ' cos(theta): %r' % cos_theta
-                print ' sqrt(abs(cos(theta))) %r' % t
-                print ' tilde_aF_final %r' % tilde_aF_final
-                print ' tilde_aC %r' % tilde_aC
-                print ' aU %r, aC %r, aD %r' % (aU, aC, aD)
+                print('ERROR, tilde_beta %r is out of range [0, 1]' % tilde_beta)
+                print(' face normal: %r' % normal)
+                print(' surface gradient: %r' % gC)
+                print(' cos(theta): %r' % cos_theta)
+                print(' sqrt(abs(cos(theta))) %r' % t)
+                print(' tilde_aF_final %r' % tilde_aF_final)
+                print(' tilde_aC %r' % tilde_aC)
+                print(' aU %r, aC %r, aD %r' % (aU, aC, aD))
             
             assert 0.0 <= tilde_beta <= 1.0
             beta_arr[fdof] = tilde_beta

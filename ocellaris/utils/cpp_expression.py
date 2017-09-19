@@ -7,10 +7,10 @@ def make_expression(simulation, cpp_code, description, element):
     Create a C++ expression with parameters like time and all scalars in 
     simulation.data available (nu and rho for single phase simulations) 
     """
-    if isinstance(cpp_code, (float, int, long)):
+    if isinstance(cpp_code, (float, int)):
         cpp_code = repr(cpp_code)
     
-    if isinstance(element, (int, long)):
+    if isinstance(element, int):
         degree = element
         element = None
     else:
@@ -41,14 +41,14 @@ def get_vars(simulation):
     
     # Simulation fields etc
     for name, value in simulation.data.items():
-        if isinstance(value, (float, int, long)):
+        if isinstance(value, (float, int)):
             available_vars[name] = value
         elif isinstance(value, dolfin.Constant) and value.ufl_shape == ():
             available_vars[name] = value
     
     # User constants
     user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:float)')
-    for name, value in user_constants.iteritems():
+    for name, value in user_constants.items():
         available_vars[name] = value
     
     # Sanity check of variable names

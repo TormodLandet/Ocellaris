@@ -1,4 +1,3 @@
-# encoding: utf8
 import dolfin
 from dolfin import FiniteElement, VectorElement, MixedElement, FunctionSpace, VectorFunctionSpace
 from dolfin import FacetNormal, TrialFunction, TestFunction, TestFunctions, Function 

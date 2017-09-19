@@ -354,7 +354,7 @@ class InputOutputHandling():
                 cols = []
                 values = []
                 N, M = value.size(0), value.size(1)
-                for irow in xrange(value.size(0)):
+                for irow in range(value.size(0)):
                     indices, row_values = value.getrow(irow)
                     rows.append(len(indices) + rows[-1])
                     cols.extend(indices)
@@ -364,7 +364,7 @@ class InputOutputHandling():
             else:
                 raise ValueError('Cannot save object of type %r' % type(value))
         
-        import cPickle as pickle
+        import pickle
         with open(file_name, 'wb') as out:
             pickle.dump(data, out, protocol=pickle.HIGHEST_PROTOCOL)
         self.simulation.log.info('Saved LA objects to %r (%r)' % (file_name, kwargs.keys()))
@@ -377,7 +377,7 @@ class InputOutputHandling():
         """
         assert self.simulation.ncpu == 1, 'Not supported in parallel'
         
-        import cPickle as pickle
+        import pickle
         with open(file_name, 'rb') as inp:
             data = pickle.load(inp)
         

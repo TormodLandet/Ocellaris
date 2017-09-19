@@ -142,12 +142,12 @@ def petsc_options(opts):
     """
     from petsc4py import PETSc
     orig_opts = PETSc.Options().getAll()
-    for key, val in opts.iteritems():
+    for key, val in opts.items():
         PETSc.Options().setValue(key, val)
     
     yield # run the code
     
-    for key in opts.iterkeys():
+    for key in opts.keys():
         if key in orig_opts:
             PETSc.Options().setValue(key, orig_opts[key])
         else:
@@ -202,7 +202,7 @@ def condition_number(A, method='simplified'):
             else:
                 raise ValueError('Could not find the highest singular value (%d)'
                                  % S.getConvergedReason())
-            print 'Highest singular value:', sigma_1
+            print('Highest singular value:', sigma_1)
             
             S.setWhichSingularTriplets(SLEPc.SVD.Which.SMALLEST)
             S.solve()
@@ -211,9 +211,9 @@ def condition_number(A, method='simplified'):
             else:
                 raise ValueError('Could not find the lowest singular value (%d)'
                                  % S.getConvergedReason())
-            print 'Lowest singular value:', sigma_n
-            print PETSc.Options().getAll()
-        print PETSc.Options().getAll()
+            print('Lowest singular value:', sigma_n)
+            print(PETSc.Options().getAll())
+        print(PETSc.Options().getAll())
         
         return sigma_1/sigma_n
 

@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import dolfin
 from ocellaris.utils import verify_key, timeit, linear_solver_from_input, \
     create_vector_functions, shift_fields, velocity_change

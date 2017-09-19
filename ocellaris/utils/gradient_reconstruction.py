@@ -94,7 +94,7 @@ class GradientReconstructor(object):
         NBmax = self.num_neighbours.max()
         self.neighbours = numpy.zeros((N, NBmax), dtype='i', order='C')
         self.lstsq_matrices = numpy.zeros((N, ndim, NBmax), float, order='C')
-        for i in xrange(N):
+        for i in range(N):
             Nnb = self.num_neighbours[i]
             self.neighbours[i,:Nnb] = everyones_neighbours[i]
             self.lstsq_matrices[i,:,:Nnb] = lstsq_matrices[i] 

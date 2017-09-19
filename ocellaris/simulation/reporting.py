@@ -1,5 +1,3 @@
-# encoding: utf-8
-from __future__ import division
 from collections import OrderedDict
 from matplotlib import pyplot
 from ocellaris.utils import ocellaris_error

@@ -29,7 +29,7 @@ def verify_key(name, key, options, loc=None):
         loc = ' in %s' % loc if loc is not None else ''
         if len(options) > 1:
             if hasattr(options, 'keys'):
-                options = options.keys()
+                options = list(options.keys())
             available_options = '\n'.join(' - %r' % m for m in options)
             ocellaris_error('Unsupported %s' % name,
                             'The %s %r is not available%s, please use one of:\n%s' %

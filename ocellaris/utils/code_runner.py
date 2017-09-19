@@ -76,7 +76,7 @@ class RunnablePythonString(object):
         # Make sure the user constants are accessible
         user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:float)')
         constants = {}
-        for name, value in user_constants.iteritems():
+        for name, value in user_constants.items():
             constants[name] = value
         locals().update(constants)
         

@@ -1,5 +1,3 @@
-# encoding: utf-8
-from __future__ import division
 import dolfin
 from dolfin import Function, Constant
 from ocellaris.solver_parts import SlopeLimiter

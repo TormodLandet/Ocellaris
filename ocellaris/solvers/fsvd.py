@@ -1,4 +1,3 @@
-from __future__ import division
 import numpy
 import dolfin
 from ocellaris.utils import verify_key, timeit, linear_solver_from_input, ocellaris_error

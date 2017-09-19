@@ -86,7 +86,7 @@ def interactive_console_hook(simulation):
             stats.strip_dirs()
             stats.sort_stats('cumulative')
             stats.print_stats(30)
-            print 'Saving cProfile trace to "prof.out"'
+            print('Saving cProfile trace to "prof.out"')
             stats.dump_stats('prof.out')
             del simulation._profile_after_n_timesteps
             del simulation._profile_object
@@ -136,7 +136,7 @@ def run_debug_console(simulation, show_banner=True):
     
     # Create a banner to show before the console
     banner.append('Available variables:')
-    names = simulation.data.keys() + ['simulation']
+    names = list(simulation.data.keys()) + ['simulation']
     for i, name in enumerate(sorted(names)):
         if i % 4 == 0:
             banner[-1] += '\n'
@@ -156,10 +156,10 @@ def run_debug_console(simulation, show_banner=True):
     if not show_banner:
         banner = []
     
-    print '=== OCELLARIS CONSOLE === '*3
+    print('=== OCELLARIS CONSOLE === '*3)
     banner.append('\n>>> from dolfin import *')
     code.interact('\n'.join(banner), local=debug_locals)
-    print '= OCELLARIS CONSOLE ===='*3
+    print('= OCELLARIS CONSOLE ===='*3)
 
 
 def define_convenience_functions(simulation):
