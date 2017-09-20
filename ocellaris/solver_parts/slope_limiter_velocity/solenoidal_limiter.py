@@ -1,6 +1,5 @@
 import numpy
 import dolfin
-from solenoidal import SolenoidalLimiter, COST_FUNCTIONS
 from ocellaris.utils import verify_key
 from ocellaris.solver_parts.boundary_conditions import mark_cell_layers
 from ocellaris.solver_parts.slope_limiter import SlopeLimiter
@@ -21,6 +20,8 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         w and and use a prelimiter to limit the convected velocity u and set the 
         target for the convecting velocity w
         """
+        from solenoidal import SolenoidalLimiter, COST_FUNCTIONS
+        
         inp = simulation.input.get_value('slope_limiter/%s' % vel_name, required_type='Input')
         self.additional_plot_funcs = []
         
