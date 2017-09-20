@@ -20,7 +20,7 @@ class Log(object):
     
     def __init__(self, simulation):
         self.simulation = simulation
-        self.log_level = dolfin.INFO
+        self.log_level = dolfin.LogLevel.INFO
         self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation(), 'Flush log file')
         self.write_log = False
         self.write_stdout = False
@@ -50,19 +50,19 @@ class Log(object):
     
     def error(self, message):
         "Log an error message"
-        self.write(message, dolfin.ERROR, RED)
+        self.write(message, dolfin.LogLevel.ERROR, RED)
     
     def warning(self, message=''):
         "Log a warning message"
-        self.write(message, dolfin.WARNING, YELLOW)
+        self.write(message, dolfin.LogLevel.WARNING, YELLOW)
     
     def info(self, message=''):
         "Log an info message"
-        self.write(message, dolfin.INFO)
+        self.write(message, dolfin.LogLevel.INFO)
     
     def debug(self, message=''):
         "Log a debug message"
-        self.write(message, dolfin.DEBUG)
+        self.write(message, dolfin.LogLevel.DEBUG)
     
     def setup(self):
         """
