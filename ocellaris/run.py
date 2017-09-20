@@ -24,20 +24,23 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
     except OcellarisError as e:
         simulation.log.error('ERROR === '*8)
         simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
+        tb, err = sys.exc_info()[2], e
     except KeyboardInterrupt as e:
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
+        tb, err = sys.exc_info()[2], e
     except BaseException as e:
-        simulation.log.error('=== EXCEPTION =='*5)    
-        tb = traceback.format_tb(sys.exc_info()[2])
-        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
+        simulation.log.error('=== EXCEPTION =='*5)
+        tb, err = sys.exc_info()[2], e
+        tb_msg = traceback.format_tb(tb)
+        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         e_type = type(e).__name__
         simulation.log.error('Got %s exception when running setup:\n%s' % (e_type, str(e)))
     
     # Check if the setup ran without problems
     if not success and not catch_exceptions:
-        raise # Re-raise the exception gotten from running the solver
+        raise err.with_traceback(tb) # Re-raise the exception gotten from running the setup
     
-    return success 
+    return success
 
 
 def run_simulation(simulation, catch_exceptions=False):
@@ -67,23 +70,27 @@ def run_simulation(simulation, catch_exceptions=False):
         simulation.hooks.simulation_ended(success)
         simulation.log.error('ERROR === '*8)
         simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
+        tb, err = sys.exc_info()[2], e
     except KeyboardInterrupt as e:
         simulation.hooks.simulation_ended(success)
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
+        tb, err = sys.exc_info()[2], e
     except SystemExit as e:
         simulation.success = False  # this is just used for debugging, no fancy summary needed
         simulation.log.error('========== SystemExit - exit() was called ==========')
+        tb, err = sys.exc_info()[2], e
     except BaseException as e:
         simulation.hooks.simulation_ended(success)
-        simulation.log.error('=== EXCEPTION =='*5)    
-        tb = traceback.format_tb(sys.exc_info()[2])
-        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb))
+        simulation.log.error('=== EXCEPTION =='*5)
+        tb, err = sys.exc_info()[2], e    
+        tb_msg = traceback.format_tb(tb)
+        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         e_type = type(e).__name__
         simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
     
     # Check if the solver ran without problems
     if not success and not catch_exceptions:
-        raise # Re-raise the exception gotten from running the solver 
+        raise err.with_traceback(tb) # Re-raise the exception gotten from running the solver
     
     ##############################################################################################
     # Limited support for postprocessing implemented below. It is generally better to use Paraview
