@@ -11,12 +11,12 @@ YELLOW = '\033[93m%s\033[0m' # ANSI escape code Bright Yellow
 class Log(object):
     # Names for the available log levels in Dolfin and Ocellaris
     AVAILABLE_LOG_LEVELS = {'all': ALWAYS_WRITE,
-                            'critical': dolfin.CRITICAL,
-                            'error': dolfin.ERROR,
-                            'warning': dolfin.WARNING,
-                            'info': dolfin.INFO,
-                            'progress': dolfin.PROGRESS,
-                            'debug': dolfin.DEBUG}
+                            'critical': dolfin.LogLevel.CRITICAL,
+                            'error': dolfin.LogLevel.ERROR,
+                            'warning': dolfin.LogLevel.WARNING,
+                            'info': dolfin.LogLevel.INFO,
+                            'progress': dolfin.LogLevel.PROGRESS,
+                            'debug': dolfin.LogLevel.DEBUG}
     
     def __init__(self, simulation):
         self.simulation = simulation
