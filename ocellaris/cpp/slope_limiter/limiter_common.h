@@ -4,10 +4,16 @@
 #include <cstdint>
 #include <limits>
 #include <vector>
+#include <pybind11/pybind11.h>
+#include <Eigen/Core>
 
 
 namespace dolfin
 {
+
+
+using IntVecIn = Eigen::Ref<const Eigen::VectorXi>;
+using DoubleVecIn = Eigen::Ref<const Eigen::VectorXd>;
 
 
 enum BoundaryDofType {
@@ -46,11 +52,11 @@ struct SlopeLimiterInput
 
   void set_arrays(const int num_cells_owned,
                   const int max_neighbours,
-                  const Array<int>& num_neighbours,
-                  const Array<int>& neighbours,
-                  const Array<int>& cell_dofs,
-                  const Array<int>& cell_dofs_dg0,
-                  const Array<double>& vertex_coords)
+                  IntVecIn num_neighbours,
+                  IntVecIn neighbours,
+                  IntVecIn cell_dofs,
+                  IntVecIn cell_dofs_dg0,
+                  DoubleVecIn vertex_coords)
   {
     this->num_cells_owned = num_cells_owned;
     this->max_neighbours = max_neighbours;
@@ -83,7 +89,7 @@ struct SlopeLimiterInput
   // Should we limit a given cell. Look up with cell number and get 1 or 0
   std::vector<std::int8_t> limit_cell;
 
-  void set_limit_cell(const Array<int>& limit_cell)
+  void set_limit_cell(IntVecIn limit_cell)
   {
     this->limit_cell.resize(limit_cell.size());
     for (int i = 0; i < limit_cell.size(); i++)
@@ -98,8 +104,8 @@ struct SlopeLimiterInput
   std::vector<float> boundary_dof_value;
   bool enforce_boundary_conditions;
 
-  void set_boundary_values(const Array<int>& boundary_dof_type,
-                           const Array<double>& boundary_dof_value,
+  void set_boundary_values(IntVecIn boundary_dof_type,
+                           DoubleVecIn boundary_dof_value,
                            const bool enforce_bcs)
   {
     this->boundary_dof_type.resize(boundary_dof_type.size());

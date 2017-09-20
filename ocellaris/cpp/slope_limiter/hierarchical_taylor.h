@@ -1,5 +1,5 @@
-#ifndef __SLOPE_LIMITER_BASIC_H
-#define __SLOPE_LIMITER_BASIC_H
+#ifndef __SLOPE_LIMITER_HT_H
+#define __SLOPE_LIMITER_HT_H
 
 #include <cstdint>
 #include <vector>
@@ -7,17 +7,20 @@
 #include <dolfin/function/Function.h>
 #include <dolfin/la/GenericVector.h>
 #include <dolfin/fem/GenericDofMap.h>
-#include "limiter_common.h"
+#include <pybind11/pybind11.h>
+#include <Eigen/Core>
+#include "limiter_common.h" // remove_in_jit
 
 
 namespace dolfin
 {
 
+using DoubleVec = Eigen::Ref<Eigen::VectorXd>;
 
 void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
-                                           double* taylor_arr,
-                                           double* taylor_arr_old,
-                                           double* alpha_arr)
+                                           DoubleVec taylor_arr,
+                                           DoubleVec taylor_arr_old,
+                                           DoubleVec alpha_arr)
 {
   const int num_cells_owned = input.num_cells_owned;
   const int max_neighbours = input.max_neighbours;
@@ -118,10 +121,10 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
 
 
 void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
-                                           double* taylor_arr,
-                                           double* taylor_arr_old,
-                                           double* alpha1_arr,
-                                           double* alpha2_arr)
+                                           DoubleVec taylor_arr,
+                                           DoubleVec taylor_arr_old,
+                                           DoubleVec alpha1_arr,
+                                           DoubleVec alpha2_arr)
 {
   const int num_cells_owned = input.num_cells_owned;
   const int max_neighbours = input.max_neighbours;
@@ -273,6 +276,18 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
     taylor_arr[cell_dofs[ic * dstride + 5]] *= alpha2;
   }
 }
+
+
+PYBIND11_MODULE(SIGNATURE, m)
+{
+  pybind11::class_<SlopeLimiterInput>(m, "SlopeLimiterInput")
+      .def("set_arrays", &SlopeLimiterInput::set_arrays)
+      .def("set_limit_cell", &SlopeLimiterInput::set_limit_cell)
+      .def("set_boundary_values", &SlopeLimiterInput::set_boundary_values);
+  m.def("hierarchical_taylor_slope_limiter_dg1", &hierarchical_taylor_slope_limiter_dg1);
+  m.def("hierarchical_taylor_slope_limiter_dg2", &hierarchical_taylor_slope_limiter_dg2);
+}
+
 
 }
 

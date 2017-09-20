@@ -5,18 +5,21 @@
 #include <dolfin/function/Function.h>
 #include <dolfin/la/GenericVector.h>
 #include <dolfin/fem/GenericDofMap.h>
-//#include <fstream>
-//#include <boost/lexical_cast.hpp>
+#include <pybind11/pybind11.h>
+#include <Eigen/Core>
 
 namespace dolfin
 {
 
+using IntVecIn = Eigen::Ref<const Eigen::VectorXi>;
+using DoubleVecIn = Eigen::Ref<const Eigen::VectorXd>;
+
 void reconstruct_gradient(const Function& alpha_function,
                           const Array<int>& num_neighbours,
                           const int max_neighbours,
-                          const Array<int>& neighbours,
-                          const Array<double>& lstsq_matrices,
-                          const Array<double>& lstsq_inv_matrices,
+                          IntVecIn neighbours,
+                          DoubleVecIn lstsq_matrices,
+                          DoubleVecIn lstsq_inv_matrices,
                           Function& gradient)
 {
 	const FunctionSpace& V = *alpha_function.function_space();
@@ -81,6 +84,11 @@ void reconstruct_gradient(const Function& alpha_function,
 		i++;
 	}
 	gradient_vec->apply("insert");
+}
+
+PYBIND11_MODULE(SIGNATURE, m)
+{
+  m.def("reconstruct_gradient", &reconstruct_gradient);
 }
 
 }
