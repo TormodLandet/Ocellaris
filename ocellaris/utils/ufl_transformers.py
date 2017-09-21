@@ -133,7 +133,7 @@ class FormPruner(MultiFunction):
         for idx in range(N):
             # Construct non-coupled argument
             Vi = V.sub(idx).collapse()
-            a = dolfin.Argument(Vi, num, part=arg.part())
+            a = dolfin.function.argument.Argument(Vi, num, part=arg.part())
             indices = numpy.ndindex(a.ufl_shape)
             
             if idx == idx_wanted:
