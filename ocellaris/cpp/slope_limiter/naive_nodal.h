@@ -6,6 +6,7 @@
 #include <dolfin/la/GenericVector.h>
 #include <dolfin/fem/GenericDofMap.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
 #include <Eigen/Core>
 
 
