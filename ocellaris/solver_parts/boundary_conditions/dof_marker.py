@@ -55,7 +55,7 @@ def get_dof_region_marks(simulation, V):
                 dof_region_marks.setdefault(fdof, []).append(mark)
 
     # Treat all dofs in the same location in the same way
-    for fdof, regions in dof_region_marks.items():
+    for fdof, regions in list(dof_region_marks.items()):
         for dof2 in same_loc_dofs[fdof]:
             if dof2 not in dof_region_marks:
                 dof_region_marks[dof2] = regions
