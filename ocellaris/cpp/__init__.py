@@ -25,7 +25,6 @@ def _get_cpp_module(cpp_files, force_recompile=False):
     if force_recompile:
         cpp_sources.append('// Force recompile, time is %s \n' % time.time())
     
-    print('Compiling', cpp_files)
     sep = '\n\n// ' + '$' * 77 + '\n\n'
     cpp_code = sep.join(cpp_sources)
     module =  compile_cpp_code(cpp_code)
@@ -41,13 +40,16 @@ class _ModuleCache(object):
         self.available_modules = OrderedDict()
         self.module_cache = {}
     
-    def add_module(self, name, cpp_files):
+    def add_module(self, name, cpp_files, test_compile=True):
         """
         Add a module that can be compiled
         """
         self.available_modules[name] = cpp_files
-        m = self.get_module(name)
         
+        if test_compile:
+            # Compile at once to test the code
+            self.get_module(name)
+    
     def get_module(self, name, force_recompile=False):
         """
         Compile and load a module (first time) or use from cache (subsequent requests)
@@ -68,6 +70,7 @@ _MODULES.add_module('gradient_reconstruction', ['gradient_reconstruction/gradien
 _MODULES.add_module('naive_nodal', ['slope_limiter/naive_nodal.h'])
 _MODULES.add_module('hierarchical_taylor', ['slope_limiter/limiter_common.h', 'slope_limiter/hierarchical_taylor.h'])
 _MODULES.add_module('measure_local_maxima', ['slope_limiter/measure_local_maxima.h'])
+_MODULES.add_module('petsc_utils', ['petsc_utils.h'])
 
 
 def load_module(name, force_recompile=False):

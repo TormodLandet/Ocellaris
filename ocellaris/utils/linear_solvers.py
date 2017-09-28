@@ -1,5 +1,7 @@
 import dolfin
 import contextlib
+from petsc4py import PETSc
+from ocellaris.cpp import load_module
 
 
 def linear_solver_from_input(simulation, path, default_solver, default_preconditioner,
@@ -154,6 +156,84 @@ def petsc_options(opts):
             PETSc.Options().delValue(key)
 
 
+def create_block_matrix(V, blocks=1, use_cpp=False):
+    """
+    Create a sparse PETSc matrix to hold dense blocks that are larger than
+    the normal DG block diagonal mass matrices (super-cell dense blocks)
+    Based on code from Miro: https://fenicsproject.org/qa/11647
+    """
+    mesh = V.mesh()
+    dm = V.dofmap()
+    
+    if isinstance(blocks, int):
+        nnz_max = blocks
+    else:
+        # Create block diagonal matrix
+        nnz_max = 0
+        for _cells, dofs, _dof_idx in blocks:
+            nnz_max = max(nnz_max, len(dofs))
+    
+    if use_cpp:
+        # Implemented in C++ due to unfinished petsc4py support in 
+        # dolfin's new pybind11 version (as of 2017-09-25)
+        mod = load_module('petsc_utils')
+        bm = mod.create_block_matrix(V._cpp_object, nnz_max)
+        return bm
+    
+    comm = mesh.mpi_comm().tompi4py() 
+    mat = PETSc.Mat()
+    mat.create(comm)
+    
+    # Set local and global size of the matrix
+    sizes = [dm.index_map().size(dolfin.IndexMap.MapSize_OWNED), 
+             dm.index_map().size(dolfin.IndexMap.MapSize_GLOBAL)]
+    mat.setSizes([sizes, sizes])
+    
+    # Set matrix type
+    mat.setType('aij')
+    mat.setPreallocationNNZ(nnz_max)
+    mat.setUp()
+    
+    # Map from local rows to global rows
+    lgmap = [int(d) for d in dm.tabulate_local_to_global_dofs()]
+    lgmap = PETSc.LGMap().create(lgmap, comm=comm)
+    mat.setLGMap(lgmap, lgmap)
+    
+    return dolfin.PETScMatrix(mat)
+
+
+def matmul(A, B, out=None, use_cpp=False):
+    """
+    A B (and potentially out) must be PETScMatrix
+    The matrix out must be the result of a prior matmul
+    call with the same sparsity patterns in A and B
+    """
+    assert A is not None and B is not None
+    
+    if use_cpp:
+        # Implemented in C++ due to unfinished petsc4py support in 
+        # dolfin's new pybind11 version (as of 2017-09-25)
+        mod = load_module('petsc_utils')
+        if out is None:
+            C = mod.matmul(A, B)
+        else:
+            C = out
+            mod.matmul_reuse(A, B, C)
+    
+    else:
+        A = A.mat()
+        B = B.mat()
+        if out is not None:
+            A.matMult(B, out.mat())
+            C = out
+        else:
+            Cmat = A.matMult(B)
+            C = dolfin.PETScMatrix(Cmat)
+            C.apply('insert')
+    
+    return C
+
+
 def condition_number(A, method='simplified'):
     """
     Estimate the condition number of the matrix A
@@ -177,7 +257,6 @@ def condition_number(A, method='simplified'):
         return cond(A)
     
     elif method == 'SLEPc':
-        from petsc4py import PETSc
         from slepc4py import SLEPc
         
         # Get the petc4py matrix
