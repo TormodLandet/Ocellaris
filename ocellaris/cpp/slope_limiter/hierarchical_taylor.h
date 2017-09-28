@@ -282,6 +282,9 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
 PYBIND11_MODULE(SIGNATURE, m)
 {
   pybind11::class_<SlopeLimiterInput>(m, "SlopeLimiterInput")
+      .def(pybind11::init())
+      .def_readwrite("global_min", &SlopeLimiterInput::global_min)
+      .def_readwrite("global_max", &SlopeLimiterInput::global_max)
       .def("set_arrays", &SlopeLimiterInput::set_arrays)
       .def("set_limit_cell", &SlopeLimiterInput::set_limit_cell)
       .def("set_boundary_values", &SlopeLimiterInput::set_boundary_values);
