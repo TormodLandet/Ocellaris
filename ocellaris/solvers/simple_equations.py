@@ -1,8 +1,7 @@
 from collections import deque
 import numpy
-from petsc4py import PETSc
 import dolfin
-from ocellaris.utils import timeit, split_form_into_matrix
+from ocellaris.utils import timeit, split_form_into_matrix, create_block_matrix
 from .coupled_equations import define_dg_equations
 
 
@@ -149,8 +148,8 @@ class SimpleEquations(object):
         Aglobal = dolfin.as_backend_type(self.As[d])
         
         if self.A_tildes[d] is None:
-            At = create_block_matrix(self.simulation, Vu, 1)
-            Ati = create_block_matrix(self.simulation, Vu, 1)
+            At = create_block_matrix(Vu, 1)
+            Ati = create_block_matrix(Vu, 1)
             self.u_diag = dolfin.Vector(self.simulation.data['u0'].vector())
         else:
             At = self.A_tildes[d]
@@ -220,8 +219,8 @@ class SimpleEquations(object):
         Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
             #At = dolfin.PETScMatrix(Aglobal)
-            At = create_block_matrix(self.simulation, Vu, self.block_partitions)
-            Ati = create_block_matrix(self.simulation, Vu, self.block_partitions)
+            At = create_block_matrix(Vu, self.block_partitions)
+            Ati = create_block_matrix(Vu, self.block_partitions)
         else:
             At = self.A_tildes[d]
             Ati = self.A_tilde_invs[d]
@@ -334,45 +333,6 @@ def create_block_partitions(simulation, V, Ncells):
         partitions.append((super_cell, dofs, dof_idx))
     
     return partitions
-
-
-def create_block_matrix(simulation, V, blocks=1):
-    """
-    Create a sparse PETSc matrix to hold dense blocks that are larger than
-    the normal DG block diagonal mass matrices (super-cell dense blocks)
-    Based on code from Miro: https://fenicsproject.org/qa/11647
-    """
-    mesh = simulation.data['mesh']
-    dm = V.dofmap()
-    
-    if isinstance(blocks, int):
-        nnz_max = blocks
-    else:
-        # Create block diagonal matrix
-        nnz_max = 0
-        for _cells, dofs, _dof_idx in blocks:
-            nnz_max = max(nnz_max, len(dofs))
-    
-    comm = mesh.mpi_comm().tompi4py() 
-    mat = PETSc.Mat()
-    mat.create(comm)
-    
-    # Set local and global size of the matrix
-    sizes = [dm.index_map().size(dolfin.IndexMap.MapSize_OWNED), 
-             dm.index_map().size(dolfin.IndexMap.MapSize_GLOBAL)]
-    mat.setSizes([sizes, sizes])
-    
-    # Set matrix type
-    mat.setType('aij')
-    mat.setPreallocationNNZ(nnz_max)
-    mat.setUp()
-    
-    # Map from local rows to global rows
-    lgmap = [int(d) for d in dm.tabulate_local_to_global_dofs()]
-    lgmap = PETSc.LGMap().create(lgmap, comm=comm)
-    mat.setLGMap(lgmap, lgmap)
-    
-    return dolfin.PETScMatrix(mat)
 
 
 EQUATION_SUBTYPES = {

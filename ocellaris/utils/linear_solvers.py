@@ -156,13 +156,12 @@ def petsc_options(opts):
             PETSc.Options().delValue(key)
 
 
-def create_block_matrix(V, blocks=1, use_cpp=False):
+def create_block_matrix(V, blocks=1, use_cpp=True):
     """
     Create a sparse PETSc matrix to hold dense blocks that are larger than
     the normal DG block diagonal mass matrices (super-cell dense blocks)
     Based on code from Miro: https://fenicsproject.org/qa/11647
     """
-    mesh = V.mesh()
     dm = V.dofmap()
     
     if isinstance(blocks, int):
@@ -180,18 +179,20 @@ def create_block_matrix(V, blocks=1, use_cpp=False):
         bm = mod.create_block_matrix(V._cpp_object, nnz_max)
         return bm
     
-    comm = mesh.mpi_comm().tompi4py() 
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD #V.mesh().mpi_comm().tompi4py() #FIXME: replace this when pybind11 MPI wrapping is working 
     mat = PETSc.Mat()
     mat.create(comm)
     
     # Set local and global size of the matrix
-    sizes = [dm.index_map().size(dolfin.IndexMap.MapSize_OWNED), 
-             dm.index_map().size(dolfin.IndexMap.MapSize_GLOBAL)]
+    sizes = [dm.index_map().size(dolfin.IndexMap.MapSize.OWNED), 
+             dm.index_map().size(dolfin.IndexMap.MapSize.GLOBAL)]
     mat.setSizes([sizes, sizes])
     
     # Set matrix type
     mat.setType('aij')
     mat.setPreallocationNNZ(nnz_max)
+    mat.setValue(0, 0, 1.9)
     mat.setUp()
     
     # Map from local rows to global rows
@@ -199,10 +200,15 @@ def create_block_matrix(V, blocks=1, use_cpp=False):
     lgmap = PETSc.LGMap().create(lgmap, comm=comm)
     mat.setLGMap(lgmap, lgmap)
     
-    return dolfin.PETScMatrix(mat)
+    mat.setValue(0, 0, 1.9)
+    A = dolfin.PETScMatrix(mat)
+    mat.setValue(1, 1, 1.2)
+    A.mat().setValue(2, 2, 1.3)
+    
+    return A
 
 
-def matmul(A, B, out=None, use_cpp=False):
+def matmul(A, B, out=None, use_cpp=True):
     """
     A B (and potentially out) must be PETScMatrix
     The matrix out must be the result of a prior matmul

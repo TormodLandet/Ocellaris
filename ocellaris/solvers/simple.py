@@ -1,9 +1,11 @@
 import dolfin
-from ocellaris.utils import verify_key, timeit, linear_solver_from_input, \
-    create_vector_functions, shift_fields, velocity_change
+from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
+                             create_vector_functions, shift_fields,
+                             velocity_change, matmul)
 from . import Solver, register_solver, BDM
-from ..solver_parts import VelocityBDMProjection, HydrostaticPressure, SlopeLimiterVelocity, \
-    before_simulation, after_timestep
+from ..solver_parts import (VelocityBDMProjection, HydrostaticPressure,
+                            SlopeLimiterVelocity, before_simulation,
+                            after_timestep)
 from .simple_equations import EQUATION_SUBTYPES
 
 
@@ -328,7 +330,7 @@ class SolverSIMPLE(Solver):
                 RHS.axpy(relax, A * u_star.vector())
                 RHS.apply('insert')
             
-            with dolfin_log_level(dolfin.ERROR):
+            with dolfin_log_level(dolfin.LogLevel.ERROR):
                 self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
             
             self.u_tmp.vector().axpy(-1, u_star.vector())
@@ -412,7 +414,7 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        with dolfin_log_level(dolfin.ERROR):
+        with dolfin_log_level(dolfin.LogLevel.ERROR):
             self.niters_p = solver.solve(LHS, p_hat.vector(), RHS)
         
         # Removing the null space of the matrix system is not strictly the same as removing
@@ -557,25 +559,6 @@ class SolverSIMPLE(Solver):
         
         # We are done
         sim.hooks.simulation_ended(success=True)
-
-
-def matmul(A, B, out):
-    """
-    A B (and potentially out) must be PETScMatrix
-    The matrix out must be the result of a prior matmul
-    call with the same sparsity patterns in A and B
-    """
-    A = A.mat()
-    B = B.mat()
-    if out is not None:
-        A.matMult(B, out.mat())
-        C = out
-    else:
-        Cmat = A.matMult(B)
-        C = dolfin.PETScMatrix(Cmat)
-    
-    C.apply('insert')
-    return C
 
 
 from contextlib import contextmanager

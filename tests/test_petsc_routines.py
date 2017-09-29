@@ -7,14 +7,16 @@ from ocellaris.utils import matmul, create_block_matrix
 # Generate empty matrix using the block matrix routine 
 use_block_matrix = true_false_fixture
 
+# Use petc4py or PETSc C++ routines
+use_cpp = true_false_fixture
 
-def mk_mat(mesh_size=1, order=2, block=False):
+
+def mk_mat(mesh_size=1, order=2, block=False, use_cpp=True):
     mesh = dolfin.UnitSquareMesh(mesh_size, mesh_size)
     V = dolfin.FunctionSpace(mesh, 'DG', order)
     
     if block:
-        A = create_block_matrix(V, order*3)
-        A.apply('insert')
+        A = create_block_matrix(V, order*3, use_cpp=use_cpp)
     else:
         u, v = dolfin.TrialFunction(V), dolfin.TestFunction(V)    
         A = dolfin.assemble(u*v*dolfin.dx)
@@ -24,21 +26,17 @@ def mk_mat(mesh_size=1, order=2, block=False):
 
 
 @skip_in_parallel
-def test_matmul(use_block_matrix):
-    dolfin.set_log_level(dolfin.LogLevel.TRACE)
+def test_matmul(use_block_matrix, use_cpp):
     indices = numpy.array([1, 2, 4], numpy.intc)
     blockA = numpy.array([[1, 2, 3],
                           [4, 5, 6],
                           [7, 8, 9]], float)
     blockB = numpy.identity(3, float)
     
-    A = mk_mat(block=use_block_matrix)
-    B = mk_mat(block=use_block_matrix)
+    A = mk_mat(block=use_block_matrix, use_cpp=use_cpp)
+    B = mk_mat(block=use_block_matrix, use_cpp=use_cpp)
     
-    print(A.getrow(0))
-    print(A.getrow(1))
-    print(A.getrow(2))
-    A.set(blockA, indices, indices) 
+    A.set(blockA, indices, indices)
     B.set(blockB, indices, indices)
     A.apply('insert')
     B.apply('insert')
@@ -49,7 +47,7 @@ def test_matmul(use_block_matrix):
     print('A:\n', A.array())
     print('B:\n', B.array())
     
-    C = matmul(A, B)
+    C = matmul(A, B, use_cpp=use_cpp)
     print('C:\n', C.array())
     
     assert A.rank() == B.rank() == C.rank()

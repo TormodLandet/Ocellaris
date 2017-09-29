@@ -25,14 +25,11 @@ create_block_matrix(const dolfin::FunctionSpace & V,
     std::size_t N = im->size(IndexMap::MapSize::GLOBAL);
 
     Mat A;
-    ierr = MatCreateSeqAIJ(comm, N, N, nnz, PETSC_NULL, &A);
 
-    /*
     ierr = MatCreate(comm, &A);
     if (ierr != 0) po::petsc_error(ierr, __FILE__, "MatCreate");
 
     // Set matrix size and number of non zeros
-
 
     ierr = MatSetSizes(A, n, n, N, N);
     if (ierr != 0) po::petsc_error(ierr, __FILE__, "MatSetSizes");
@@ -45,8 +42,6 @@ create_block_matrix(const dolfin::FunctionSpace & V,
 
     ierr = MatMPIAIJSetPreallocation(A, nnz, NULL, 0, NULL);
     if (ierr != 0) po::petsc_error(ierr, __FILE__, "MatMPIAIJSetPreallocation");
-
-    */
 
     // Set up local to global mapping
 

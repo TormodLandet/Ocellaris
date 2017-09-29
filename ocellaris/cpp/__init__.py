@@ -1,8 +1,8 @@
-from dolfin import compile_cpp_code
-from collections import OrderedDict
-import numpy
 import os
 import time
+from collections import OrderedDict
+import numpy
+from dolfin import compile_cpp_code
 
 
 def _get_cpp_module(cpp_files, force_recompile=False):
@@ -27,8 +27,10 @@ def _get_cpp_module(cpp_files, force_recompile=False):
     
     sep = '\n\n// ' + '$' * 77 + '\n\n'
     cpp_code = sep.join(cpp_sources)
+    
     module =  compile_cpp_code(cpp_code)
     assert module is not None
+    
     return module
 
 
