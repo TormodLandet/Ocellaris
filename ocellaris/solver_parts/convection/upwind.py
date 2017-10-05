@@ -17,7 +17,7 @@ class ConvectionSchemeUpwind(ConvectionScheme):
         # Set downwind factor to 0.0
         self.blending_function.vector().zero()
     
-    def update(self, t, dt, velocity):
+    def update(self, dt, velocity):
         """
         Update the values of the blending function beta at the facets
         """

@@ -68,11 +68,11 @@ class _ModuleCache(object):
 # Functions to be used by other modules
 
 _MODULES = _ModuleCache()
-_MODULES.add_module('gradient_reconstruction', ['gradient_reconstruction/gradient_reconstruction.h'])
 _MODULES.add_module('naive_nodal', ['slope_limiter/naive_nodal.h'])
 _MODULES.add_module('hierarchical_taylor', ['slope_limiter/limiter_common.h', 'slope_limiter/hierarchical_taylor.h'])
 _MODULES.add_module('measure_local_maxima', ['slope_limiter/measure_local_maxima.h'])
 _MODULES.add_module('petsc_utils', ['petsc_utils.h'])
+_MODULES.add_module('linear_convection', ['gradient_reconstruction.h', 'linear_convection.h'])
 
 
 def load_module(name, force_recompile=False):

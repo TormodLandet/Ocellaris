@@ -59,7 +59,7 @@ def precompute_cell_data(simulation):
     mesh = simulation.data['mesh']
     ndim = simulation.ndim
     
-    cell_info = {}        
+    cell_info = [None] * mesh.num_cells()
     for cell in dolfin.cells(mesh):
         mp = cell.midpoint()
         if ndim == 2:
@@ -86,10 +86,7 @@ def precompute_facet_data(simulation):
     areas = {}
     for cell in dolfin.cells(mesh):
         # Get the connected facets 
-        if ndim == 2:
-            facet_idxs = cell.entities(1)
-        else:
-            facet_idxs = cell.entities(2)
+        facet_idxs = cell.entities(ndim - 1)
         
         # Loop over connected facets and get the area
         for i, fidx in enumerate(facet_idxs):
@@ -100,7 +97,7 @@ def precompute_facet_data(simulation):
                 areas[fidx] = a
     
     # Loop over facets and gather the required information
-    facet_info = {}
+    facet_info = [None] * mesh.num_facets()
     for facet in dolfin.facets(mesh):
         fidx = facet.index()
         
