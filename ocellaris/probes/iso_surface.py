@@ -113,19 +113,20 @@ class IsoSurface(Probe):
                 self.output_file.write(' '.join('%10.5f' % 0 for v in x) + '\n')
         
         if update_plot and self.simulation.rank == 0:
-            self.ax.clear()
-            for x, y in lines:
-                self.ax.plot(x, y)
-            self.ax.set_xlabel('x')
-            self.ax.set_ylabel('y')
-            self.ax.relim()
-            self.ax.autoscale_view()
-            if self.xlim != (None, None):
-                self.ax.set_xlim(*self.xlim)
-            if self.ylim != (None, None):
-                self.ax.set_ylim(*self.ylim)
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
+            with dolfin.Timer('Ocellaris plot iso surface'):
+                self.ax.clear()
+                for x, y in lines:
+                    self.ax.plot(x, y)
+                self.ax.set_xlabel('x')
+                self.ax.set_ylabel('y')
+                self.ax.relim()
+                self.ax.autoscale_view()
+                if self.xlim != (None, None):
+                    self.ax.set_xlim(*self.xlim)
+                if self.ylim != (None, None):
+                    self.ax.set_ylim(*self.ylim)
+                self.fig.canvas.draw()
+                #self.fig.canvas.flush_events()
     
     def end_of_simulation(self):
         """
@@ -363,7 +364,7 @@ def contour_lines_from_endpoints(endpoints, crossing_points, connections):
     Given facet ids of endpoints, follow the contour line and create contours
     """
     contours = []
-    for endpoint in endpoints:
+    for endpoint in list(endpoints):
         if not endpoint in crossing_points:
             # This has been taken by the other end
             continue
