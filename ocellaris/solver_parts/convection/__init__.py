@@ -149,7 +149,7 @@ class VelocityDGT0Projector(object):
         
         ndim = simulation.ndim
         w = u_conv
-        simulation.data['u_conv_dgt0'] = [dolfin.Function(V_dgt0) for _ in range(ndim)]
+        w_new = dolfin.as_vector([dolfin.Function(V_dgt0) for _ in range(ndim)])
         
         dot, avg, dS, ds = dolfin.dot, dolfin.avg, dolfin.dS, dolfin.ds
         a = dot(avg(u), avg(v))*dS + dot(u, v)*ds
@@ -161,7 +161,7 @@ class VelocityDGT0Projector(object):
         self.lhs = L 
         self.A = dolfin.assemble(a)
         self.solver = dolfin.PETScKrylovSolver('cg')
-        self.velocity = simulation.data['u_conv_dgt0']
+        self.velocity = simulation.data['u_conv_dgt0'] = w_new
     
     def update(self):
         with dolfin.Timer('Ocellaris produce u_conv_dgt0'):

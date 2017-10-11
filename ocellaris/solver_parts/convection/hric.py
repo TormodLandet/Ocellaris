@@ -33,8 +33,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
           Il-Ryong Park, Kwang-Soo Kim, Jin Kim and Suak-Ho Van
         """
         super(ConvectionSchemeHric2D, self).__init__(simulation, func_name)
-        self.variant = simulation.input.get_value('convection/%s/HRIC_version' % func_name, 'HRIC')
-        self.use_cpp = simulation.input.get_value('convection/%s/use_cpp' % func_name, True)
+        self.variant = simulation.input.get_value('convection/%s/HRIC_version' % func_name, 'HRIC', 'string')
+        self.use_cpp = simulation.input.get_value('convection/%s/use_cpp' % func_name, True, 'bool')
     
     def update(self, dt, velocity):
         """
