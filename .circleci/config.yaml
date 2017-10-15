@@ -1,0 +1,21 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: trlandet/fenics-dev:py3_CI
+    working_directory: /home/fenics/working
+    steps:
+      - checkout
+      - run:
+          name: Install/update dependencies
+          command: sudo pip3 install pytest pytest-xdist six flake8 --upgrade
+      - run:
+          name: Run pytest
+          command: python3 -m pytest -v tests/
+      - run:
+          name: Run pytest with MPI
+          command: mpirun -np 3 python3 -m pytest -v tests/
+      - run:
+          name: Run flake8
+          command: python3 -m flake8 ocellaris*
+
