@@ -21,11 +21,13 @@ jobs:
       - run:
           name: Run pytest
           command: python3 -m pytest -v tests/ --junitxml=/reports/pytest/serial.xml
-      - run:
-          name: Run pytest with MPI
-          command: mpirun -np 3 python3 -m pytest -v tests/ --junitxml=/reports/pytest/MPI.xml
+#      - run:
+#          name: Run pytest with MPI
+#          command: mpirun -np 3 python3 -m pytest -v tests/ --junitxml=/reports/pytest/MPI.xml
       - run:
           name: Run flake8
           command: python3 -m flake8 ocellaris*
       - store_test_results:
+          path: /reports
+      - store_artifacts:
           path: /reports
