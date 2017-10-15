@@ -111,8 +111,8 @@ def test_hric_cpp():
         Cofs.append(Cof_max)
         
         print(use_cpp, repr(bn), bn - ANS1, repr(Cof_max), Cof_max - ANS2)
-        assert abs(bn - ANS1) < 1e-16
-        assert abs(Cof_max - ANS2) < 1e-16
+        assert abs(bn - ANS1) < 1e-15
+        assert abs(Cof_max - ANS2) < 1e-15
     
     diff = betas[0].copy(deepcopy=True)
     diff.vector().axpy(-1, betas[1].vector())
