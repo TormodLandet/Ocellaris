@@ -115,10 +115,12 @@ solver:
             absolute_tolerance: 1.0e-15
     p:
         #solver: lu
-        #lu_method: petsc
+        #lu_method: mumps
         parameters:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
+            #maximum_iterations: 1000
+            #nonzero_initial_guess: no
     _coupled:
         solver: gmres
         preconditioner: petsc_amg

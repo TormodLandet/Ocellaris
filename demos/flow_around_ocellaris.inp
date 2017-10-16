@@ -43,8 +43,8 @@ boundary_conditions:
     selector: mesh_facet_region
     mesh_facet_regions: [1]
     u0:
-        type: CodedValue
-        code: value[0] = min(1, t)
+        type: CppCodedValue
+        cpp_code: std::min(1.0, t)
     u1:
         type: ConstantValue
         value: 0
@@ -70,24 +70,20 @@ time:
     tmax: 20.0
 
 output:
-    prefix: flow_around_ocellaris_CG
+    prefix: output/flow_around_ocellaris_py2
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
 
 solver:
-    type: IPCS
+    type: SIMPLE
     num_inner_iter: 20
     allowable_error_inner: 5.0e-3
     polynomial_degree_pressure: 1
     polynomial_degree_velocity: 2
-    function_space_pressure: CG
-    function_space_velocity: CG
+    function_space_pressure: DG
+    function_space_velocity: DG
     timestepping_method: BDF
 
-convection:
-    u:
-        convection_scheme: Upwind
-
-console_at_end: true
+#console_at_end: true
 console_on_error: true

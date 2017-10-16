@@ -50,7 +50,7 @@ initial_conditions:
 
 time:
     dt: 0.001
-    tmax: 1.0
+    tmax: 0.1
 
 output:
     prefix: output/diagonal_advection_of_square_DG1_upwind
@@ -62,7 +62,7 @@ output:
 multiphase_solver:
     type: BlendedAlgebraicVOF
     function_space_colour: DG
-    polynomial_degree_colour: 1
+    polynomial_degree_colour: 0
 
 solver:
     type: AnalyticalSolution
@@ -73,12 +73,14 @@ solver:
 
 convection:
     c:
-        convection_scheme: Upwind
+        convection_scheme: HRIC # Upwind
         #HRIC_version: HRIC
+        #use_cpp: no
+        #use_cpp_gradient: no
 
 slope_limiter:
     c:
-        method: HierarchicalTaylor
+        method: None # HierarchicalTaylor
         plot: yes
         skip_boundary: no
         enforce_bounds: yes
@@ -89,9 +91,10 @@ probes:
         value: 0.5
         field: c
         file_name: '_c05.out'
-        show_interval: 1
+        show_interval: 0
         xlim: [0, 1.5]
         ylim: [0, 1.5]
+        enabled: no
     -   name: c=0.1
         type: IsoSurface
         value: 0.1
