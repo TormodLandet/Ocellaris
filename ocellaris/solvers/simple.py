@@ -20,7 +20,7 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'absolute_tolerance': 1e-15,
                      'monitor_convergence': False,
                      'report': False}
-MAX_INNER_ITER = 100
+MAX_INNER_ITER = 10
 ALLOWABLE_ERROR_INNER = 1e-10
 
 # Equations - default values, can be changed in the input file
@@ -38,7 +38,7 @@ LIMIT_INNER = False
 
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
-PROJECT_RHS = True
+PROJECT_RHS = False
 
 
 @register_solver('SIMPLE')
@@ -352,6 +352,7 @@ class SolverSIMPLE(Solver):
             """
             if not self.project_rhs or not self.velocity_postprocessor:
                 return
+            print('PROJ PROJ PROJ PROJ PROJ PROJ PROJ PROJ PROJ!')
             
             if not hasattr(self, 'rhs_tmp'):
                 # Setup RHS projection
@@ -478,7 +479,7 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        with dolfin_log_level(dolfin.LogLevel.WARNING):
+        with dolfin_log_level(dolfin.LogLevel.ERROR):
             #print('STARTING PRESSURE KRYLOV SOLVER',
             #      'it=', self.simulation.timestep, 
             #      'iit=', self.inner_iteration)

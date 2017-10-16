@@ -149,11 +149,8 @@ class SimpleEquations(object):
         Aglobal = dolfin.as_backend_type(self.As[d])
         
         if self.A_tildes[d] is None:
-            n0, n1 = Aglobal.local_range(0)
-            N = n1 - n0  # number of local dofs
-            block_dofs = numpy.arange(N).reshape((N, 1))
-            At = create_block_matrix(Vu, block_dofs)
-            Ati = create_block_matrix(Vu, block_dofs)
+            At = create_block_matrix(Vu, 'diag')
+            Ati = create_block_matrix(Vu, 'diag')
             self.u_diag = dolfin.Vector(self.simulation.data['u0'].vector())
         else:
             At = self.A_tildes[d]
@@ -222,7 +219,7 @@ class SimpleEquations(object):
         
         Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
-            block_dofs = [b[1] for b in self.block_partitions]
+            block_dofs = [dofs for _, dofs, _ in self.block_partitions]
             At = create_block_matrix(Vu, block_dofs)
             Ati = At.copy()
         else:
