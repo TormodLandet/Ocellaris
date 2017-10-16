@@ -8,7 +8,8 @@ from .coupled_equations import define_dg_equations
 class SimpleEquations(object):
     def __init__(self, simulation, use_stress_divergence_form, use_grad_p_form,
                  use_grad_q_form, use_lagrange_multiplicator, 
-                 include_hydrostatic_pressure, incompressibility_flux_type):
+                 include_hydrostatic_pressure, incompressibility_flux_type,
+                 num_elements_in_block, lump_diagonal):
         """
         This class assembles the coupled Navier-Stokes equations as a set of
         matrices and vectors
@@ -31,8 +32,8 @@ class SimpleEquations(object):
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
         self.incompressibility_flux_type = incompressibility_flux_type
-        self.num_elements_in_block = 0
-        self.lump_diagonal = False
+        self.num_elements_in_block = num_elements_in_block
+        self.lump_diagonal = lump_diagonal
         self.block_partitions = None
         
         assert self.incompressibility_flux_type in ('central', 'upwind')
@@ -148,8 +149,11 @@ class SimpleEquations(object):
         Aglobal = dolfin.as_backend_type(self.As[d])
         
         if self.A_tildes[d] is None:
-            At = create_block_matrix(Vu, 1)
-            Ati = create_block_matrix(Vu, 1)
+            n0, n1 = Aglobal.local_range(0)
+            N = n1 - n0  # number of local dofs
+            block_dofs = numpy.arange(N).reshape((N, 1))
+            At = create_block_matrix(Vu, block_dofs)
+            Ati = create_block_matrix(Vu, block_dofs)
             self.u_diag = dolfin.Vector(self.simulation.data['u0'].vector())
         else:
             At = self.A_tildes[d]
@@ -179,8 +183,8 @@ class SimpleEquations(object):
         """
         Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
-            At = dolfin.PETScMatrix(Aglobal)
-            Ati = dolfin.PETScMatrix(Aglobal)
+            At = Aglobal.copy()
+            Ati = Aglobal.copy()
         else:
             At = self.A_tildes[d]
             Ati = self.A_tilde_invs[d]
@@ -218,9 +222,9 @@ class SimpleEquations(object):
         
         Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
-            #At = dolfin.PETScMatrix(Aglobal)
-            At = create_block_matrix(Vu, self.block_partitions)
-            Ati = create_block_matrix(Vu, self.block_partitions)
+            block_dofs = [b[1] for b in self.block_partitions]
+            At = create_block_matrix(Vu, block_dofs)
+            Ati = At.copy()
         else:
             At = self.A_tildes[d]
             Ati = self.A_tilde_invs[d]
@@ -278,6 +282,7 @@ def create_block_partitions(simulation, V, Ncells):
     Create super-cell partitions of Ncells cells each 
     """
     mesh = simulation.data['mesh']
+    dm = V.dofmap()
     
     # Construct a cell connectivity mapping
     con_CF = simulation.data['connectivity_CF']
@@ -290,11 +295,6 @@ def create_block_partitions(simulation, V, Ncells):
             for inb in con_FC(ifacet):
                 if inb != icell:
                     con_CFC.setdefault(icell, []).append(inb)
-
-    # Get dofs per cell
-    dm = V.dofmap()
-    Ndof = dm.cell_dofs(0).shape[0]
-    N = Ncells*Ndof
     
     # Partition all local cells into super-cells 
     picked = [False]*num_cells_owned

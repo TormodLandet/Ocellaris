@@ -1,11 +1,12 @@
 import dolfin
 from dolfin import FiniteElement, VectorElement, MixedElement, FunctionSpace, VectorFunctionSpace
 from dolfin import FacetNormal, TrialFunction, TestFunction, TestFunctions, Function 
-from dolfin import dot, as_vector, dx, dS, LocalSolver
+from dolfin import dot, as_vector, dx, dS, ds, LocalSolver
 
 
 class VelocityBDMProjection():
-    def __init__(self, simulation, w, incompressibility_flux_type='central', D12=None, degree=None):
+    def __init__(self, simulation, w, incompressibility_flux_type='central', 
+                 D12=None, degree=None, use_bcs=True):
         """
         Implement equation 4a and 4b in "Two new techniques for generating exactly
         incompressible approximate velocities" by Bernardo Cocburn (2009)
@@ -38,11 +39,11 @@ class VelocityBDMProjection():
         assert incompressibility_flux_type in ('central', 'upwind')
         
         if self.degree == 1:
-            self._setup_dg1_projection(w, incompressibility_flux_type, D12)
+            self._setup_dg1_projection(w, incompressibility_flux_type, D12, use_bcs)
         else:
-            self._setup_dg2_projection(w, incompressibility_flux_type, D12)
+            self._setup_dg2_projection(w, incompressibility_flux_type, D12, use_bcs)
     
-    def _setup_dg1_projection(self, w, incompressibility_flux_type, D12):
+    def _setup_dg1_projection(self, w, incompressibility_flux_type, D12, use_bcs):
         """
         Implement the projection where the result is BDM embeded in a DG1 function
         """
@@ -72,17 +73,25 @@ class VelocityBDMProjection():
         for R in '+-':
             a += dot(u(R), n(R))*v1(R)*dS
             L += dot(u_hat_dS, n(R))*v1(R)*dS
-        for d in range(2):
-            dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
-            neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
-            outlet_bcs = sim.data['outlet_bcs']
-            for dbc in dirichlet_bcs:
-                u_bc = dbc.func()
-                a += u[d]*n[d]*v1*dbc.ds()
-                L += u_bc*n[d]*v1*dbc.ds()
-            for nbc in neumann_bcs + outlet_bcs:
-                a += u[d]*n[d]*v1*nbc.ds()
-                L += w[d]*n[d]*v1*nbc.ds()
+        
+        # Eq. 1 cont. - flux through external boundaries
+        if use_bcs:
+            for d in range(2):
+                dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
+                neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                outlet_bcs = sim.data['outlet_bcs']
+                
+                for dbc in dirichlet_bcs:
+                    u_bc = dbc.func()
+                    a += u[d]*n[d]*v1*dbc.ds()
+                    L += u_bc*n[d]*v1*dbc.ds()
+                
+                for nbc in neumann_bcs + outlet_bcs:
+                    a += u[d]*n[d]*v1*nbc.ds()
+                    L += w[d]*n[d]*v1*nbc.ds()
+        else:
+            a += dot(u, n)*v1*ds
+            L += dot(u, n)*v1*ds
         
         # Equation 2 - internal shape   :   empty for DG1
         # Equation 3 - BDM Phi          :   empty for DG1
@@ -95,7 +104,7 @@ class VelocityBDMProjection():
         self.assigner0 = dolfin.FunctionAssigner(self.Vout, V.sub(0))
         self.assigner1 = dolfin.FunctionAssigner(self.Vout, V.sub(1))
     
-    def _setup_dg2_projection(self, w, incompressibility_flux_type, D12):
+    def _setup_dg2_projection(self, w, incompressibility_flux_type, D12, use_bcs):
         """
         Implement the projection where the result is BDM embeded in a DG2 function
         """
@@ -130,17 +139,25 @@ class VelocityBDMProjection():
         for R in '+-':
             a += dot(u(R), n(R))*v1(R)*dS
             L += dot(u_hat_dS, n(R))*v1(R)*dS
-        for d in range(2):
-            dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
-            neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
-            outlet_bcs = sim.data['outlet_bcs']
-            for dbc in dirichlet_bcs:
-                u_bc = dbc.func()
-                a += u[d]*n[d]*v1*dbc.ds()
-                L += u_bc*n[d]*v1*dbc.ds()
-            for nbc in neumann_bcs + outlet_bcs:
-                a += u[d]*n[d]*v1*nbc.ds()
-                L += w[d]*n[d]*v1*nbc.ds()
+            
+        # Eq. 1 cont. - flux through external boundaries
+        if use_bcs:
+            for d in range(2):
+                dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
+                neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                outlet_bcs = sim.data['outlet_bcs']
+                
+                for dbc in dirichlet_bcs:
+                    u_bc = dbc.func()
+                    a += u[d]*n[d]*v1*dbc.ds()
+                    L += u_bc*n[d]*v1*dbc.ds()
+                
+                for nbc in neumann_bcs + outlet_bcs:
+                    a += u[d]*n[d]*v1*nbc.ds()
+                    L += w[d]*n[d]*v1*nbc.ds()
+        else:
+            a += dot(u, n)*v1*ds
+            L += dot(u, n)*v1*ds
         
         # Equation 2 - internal shape
         a += dot(u, v2)*dx

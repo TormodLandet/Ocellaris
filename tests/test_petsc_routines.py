@@ -11,12 +11,13 @@ use_block_matrix = true_false_fixture
 use_cpp = true_false_fixture
 
 
-def mk_mat(mesh_size=1, order=2, block=False, use_cpp=True):
+def mk_mat(mesh_size=1, order=2, block=False):
     mesh = dolfin.UnitSquareMesh(mesh_size, mesh_size)
     V = dolfin.FunctionSpace(mesh, 'DG', order)
     
     if block:
-        A = create_block_matrix(V, order*3, use_cpp=use_cpp)
+        blocks = [list(range(order*3)), list(range(order*3*1, order*3*2))]
+        A = create_block_matrix(V, blocks)
     else:
         u, v = dolfin.TrialFunction(V), dolfin.TestFunction(V)    
         A = dolfin.assemble(u*v*dolfin.dx)
@@ -33,8 +34,8 @@ def test_matmul(use_block_matrix, use_cpp):
                           [7, 8, 9]], float)
     blockB = numpy.identity(3, float)
     
-    A = mk_mat(block=use_block_matrix, use_cpp=use_cpp)
-    B = mk_mat(block=use_block_matrix, use_cpp=use_cpp)
+    A = mk_mat(block=use_block_matrix)
+    B = mk_mat(block=use_block_matrix)
     
     A.set(blockA, indices, indices)
     B.set(blockB, indices, indices)

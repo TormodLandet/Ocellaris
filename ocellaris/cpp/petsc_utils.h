@@ -72,7 +72,6 @@ matmul(const dolfin::PETScMatrix & A, const dolfin::PETScMatrix & B)
   ierr = MatMatMult(A.mat(), B.mat(), MAT_INITIAL_MATRIX, rval, &Cpetsc);
   if (ierr != 0) po::petsc_error(ierr, __FILE__, "MatMatMult");
 
-  std::cout << "PTR" << Cpetsc << std::endl;
   auto C = std::make_shared<dolfin::PETScMatrix>(Cpetsc);
   C->apply("insert");
 

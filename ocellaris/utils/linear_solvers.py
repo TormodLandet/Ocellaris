@@ -1,3 +1,4 @@
+import numpy
 import dolfin
 import contextlib
 from petsc4py import PETSc
@@ -77,32 +78,29 @@ class LinearSolverWrapper(object):
         else:
             precon = dolfin.PETScPreconditioner(preconditioner)
             solver = dolfin.PETScKrylovSolver(solver_method, precon)
-            self.preconditioner = precon # Keep from going out of scope
+            self._pre_obj = precon # Keep from going out of scope
             self.is_iterative = True
         
         for parameter_set in parameters:
             apply_settings(solver_method, solver.parameters, parameter_set)
         
-        self.created_with_preconditioner = preconditioner
-        self.created_with_lu_method = lu_method
-        self.created_with_parameters = parameters
-        self.solver = solver
+        self._solver = solver
     
     def solve(self, *argv, **kwargs):
-        ret = self.solver.solve(*argv, **kwargs)
+        ret = self._solver.solve(*argv, **kwargs)
         self.is_first_solve = False
         return ret
     
     @property
     def parameters(self):
-        return self.solver.parameters 
+        return self._solver.parameters 
     
     def set_reuse_preconditioner(self, *argv, **kwargs):
         if self.is_iterative and self.is_first_solve:
             return  # Nov 2016: this segfaults if running before the first solve
         else:
-            return self.solver.set_reuse_preconditioner(*argv, **kwargs)
-        
+            return self._solver.set_reuse_preconditioner(*argv, **kwargs)
+    
     def __repr__(self):
         return ('<LinearSolverWrapper iterative=%r ' % self.is_iterative + 
                                      'direct=%r ' % self.is_direct +
@@ -156,59 +154,45 @@ def petsc_options(opts):
             PETSc.Options().delValue(key)
 
 
-def create_block_matrix(V, blocks=1, use_cpp=True):
+def create_block_matrix(V, blocks):
     """
-    Create a sparse PETSc matrix to hold dense blocks that are larger than
+    Create a sparse matrix to hold dense blocks that are larger than
     the normal DG block diagonal mass matrices (super-cell dense blocks)
-    Based on code from Miro: https://fenicsproject.org/qa/11647
+    
+    The argument ``blocks`` should be a list of lists/arrays containing
+    the dofs in each block. The dofs are assumed to be the same for
+    both rows and columns.
     """
+    comm = V.mesh().mpi_comm()
     dm = V.dofmap()
+    im = dm.index_map()
     
-    if isinstance(blocks, int):
-        nnz_max = blocks
-    else:
-        # Create block diagonal matrix
-        nnz_max = 0
-        for _cells, dofs, _dof_idx in blocks:
-            nnz_max = max(nnz_max, len(dofs))
+    # Create a tensor layout for the matrix
+    ROW_MAJOR = 0
+    tl = dolfin.TensorLayout(comm, ROW_MAJOR, dolfin.TensorLayout.Sparsity.SPARSE)
+    tl.init([im, im], dolfin.TensorLayout.Ghosts.GHOSTED)
     
-    if use_cpp:
-        # Implemented in C++ due to unfinished petsc4py support in 
-        # dolfin's new pybind11 version (as of 2017-09-25)
-        mod = load_module('petsc_utils')
-        bm = mod.create_block_matrix(V._cpp_object, nnz_max)
-        return bm
+    # Setup the tensor layout's sparsity pattern
+    sp = tl.sparsity_pattern()
+    sp.init([im, im])
+    entries = None
+    for block in blocks:
+        N = len(block)
+        if entries is None or entries.shape[1] != N:
+            entries = numpy.empty((2, N), dtype=numpy.intc)
+        entries[0,:] = block
+        entries[1,:] = entries[0,:]
+        sp.insert_local(entries)
+    sp.apply()
     
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD #V.mesh().mpi_comm().tompi4py() #FIXME: replace this when pybind11 MPI wrapping is working 
-    mat = PETSc.Mat()
-    mat.create(comm)
-    
-    # Set local and global size of the matrix
-    sizes = [dm.index_map().size(dolfin.IndexMap.MapSize.OWNED), 
-             dm.index_map().size(dolfin.IndexMap.MapSize.GLOBAL)]
-    mat.setSizes([sizes, sizes])
-    
-    # Set matrix type
-    mat.setType('aij')
-    mat.setPreallocationNNZ(nnz_max)
-    mat.setValue(0, 0, 1.9)
-    mat.setUp()
-    
-    # Map from local rows to global rows
-    lgmap = [int(d) for d in dm.tabulate_local_to_global_dofs()]
-    lgmap = PETSc.LGMap().create(lgmap, comm=comm)
-    mat.setLGMap(lgmap, lgmap)
-    
-    mat.setValue(0, 0, 1.9)
-    A = dolfin.PETScMatrix(mat)
-    mat.setValue(1, 1, 1.2)
-    A.mat().setValue(2, 2, 1.3)
+    # Create a matrix with the newly created tensor layout
+    A = dolfin.PETScMatrix(comm)
+    A.init(tl)
     
     return A
 
 
-def matmul(A, B, out=None, use_cpp=True):
+def matmul(A, B, out=None, use_cpp=False):
     """
     A B (and potentially out) must be PETScMatrix
     The matrix out must be the result of a prior matmul

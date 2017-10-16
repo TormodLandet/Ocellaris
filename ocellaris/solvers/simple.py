@@ -17,7 +17,9 @@ PRECONDITIONER_P = 'hypre_amg'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'maximum_iterations': 100,
                      'relative_tolerance': 1e-10,
-                     'absolute_tolerance': 1e-15}
+                     'absolute_tolerance': 1e-15,
+                     'monitor_convergence': False,
+                     'report': False}
 MAX_INNER_ITER = 100
 ALLOWABLE_ERROR_INNER = 1e-10
 
@@ -33,6 +35,10 @@ INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 ALPHA_U = 0.5
 ALPHA_P = 0.5
 LIMIT_INNER = False
+
+NUM_ELEMENTS_IN_BLOCK = 0
+LUMP_DIAGONAL = False
+PROJECT_RHS = True
 
 
 @register_solver('SIMPLE')
@@ -110,7 +116,9 @@ class SolverSIMPLE(Solver):
                             use_grad_q_form=self.use_grad_q_form,
                             use_lagrange_multiplicator=self.use_lagrange_multiplicator,
                             include_hydrostatic_pressure=self.ph_every_timestep,
-                            incompressibility_flux_type=self.incompressibility_flux_type)
+                            incompressibility_flux_type=self.incompressibility_flux_type,
+                            num_elements_in_block=self.num_elements_in_block,
+                            lump_diagonal=self.lump_diagonal)
         self.matrices = matrices
         
         # Slope limiter for the momentum equation velocity components
@@ -188,6 +196,7 @@ class SolverSIMPLE(Solver):
         # Velocity post_processing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
+        self.project_rhs = sim.input.get_value('solver/project_rhs', PROJECT_RHS, 'bool')
         verify_key('velocity post processing', self.velocity_postprocessing, ('none', BDM), 'SIMPLE solver')
         
         # Quasi-steady simulation input
@@ -200,6 +209,10 @@ class SolverSIMPLE(Solver):
         
         # Limiter inside inner iterations
         self.limit_inner_iterations = sim.input.get_value('solver/limit_inner_iterations', LIMIT_INNER, 'bool')
+        
+        # How to approximate A_tilde
+        self.num_elements_in_block = sim.input.get_value('solver/num_elements_in_A_tilde_block', NUM_ELEMENTS_IN_BLOCK, 'int')
+        self.lump_diagonal = sim.input.get_value('solver/lump_A_tilde_diagonal', LUMP_DIAGONAL, 'bool')
     
     def create_functions(self):
         """
@@ -284,58 +297,109 @@ class SolverSIMPLE(Solver):
         """
         Solve the momentum prediction equation
         """
-        solver = self.velocity_solver
-        p_star = self.simulation.data['p']
+        sim = self.simulation
         
-        if solver.is_iterative:
-            if self.inner_iteration == 1:
-                solver.set_reuse_preconditioner(False)
-            else:
-                solver.set_reuse_preconditioner(True)
-                #solver.parameters['maximum_iterations'] = 3
-        
-        err = 0.0
-        for d in range(self.simulation.ndim):
-            u_star = self.simulation.data['u%d' % d]
-            self.u_tmp.assign(u_star)
-            
-            # Assemble the LHS matrices only the first inner iteration
-            if self.inner_iteration == 1:
-                (self.A[d], self.A_tilde[d], self.A_tilde_inv[d],
-                 self.B[d], self.C[d]) = self.matrices.assemble_matrices(d)
-            
-            A = self.A[d]
-            A_tilde = self.A_tilde[d]
-            B = self.B[d]
-            D = self.matrices.assemble_D(d)
+        def mom_assemble():
+            """
+            Assemble the linear systems
+            """
+            p_star = sim.data['p']
             alpha = self.alpha_u
             assert 0 < alpha
             relax = (1 - alpha) / alpha
             
-            if True:
-                LHS = dolfin.as_backend_type(A.copy())
-                LHS.axpy(relax, A_tilde, False)
-                LHS.apply('insert')
-                RHS = D
-                RHS.axpy(-1.0, B * p_star.vector())
-                RHS.axpy(relax, A_tilde * u_star.vector())
-                RHS.apply('insert')
+            lhs, rhs = [], []
+            for d in range(sim.ndim):
+                u_star = sim.data['u%d' % d]
+                self.u_tmp.assign(u_star)
+                
+                # Assemble the LHS matrices only the first inner iteration
+                if self.inner_iteration == 1:
+                    (self.A[d], self.A_tilde[d], self.A_tilde_inv[d],
+                     self.B[d], self.C[d]) = self.matrices.assemble_matrices(d)
+                
+                A = self.A[d]
+                A_tilde = self.A_tilde[d]
+                B = self.B[d]
+                D = self.matrices.assemble_D(d)
+                
+                if True:
+                    LHS = dolfin.as_backend_type(A.copy())
+                    LHS.axpy(relax, A_tilde, False)
+                    LHS.apply('insert')
+                    RHS = D
+                    RHS.axpy(-1.0, B * p_star.vector())
+                    RHS.axpy(relax, A_tilde * u_star.vector())
+                    RHS.apply('insert')
+                
+                else:
+                    LHS = dolfin.as_backend_type(A.copy())
+                    LHS._scale(1/alpha)
+                    LHS.apply('insert')
+                    RHS = D
+                    RHS.axpy(-1.0, B * p_star.vector())
+                    RHS.axpy(relax, A * u_star.vector())
+                    RHS.apply('insert')
+                
+                lhs.append(LHS)
+                rhs.append(RHS)
             
-            else:
-                LHS = dolfin.as_backend_type(A.copy())
-                LHS._scale(1/alpha)
-                LHS.apply('insert')
-                RHS = D
-                RHS.axpy(-1.0, B * p_star.vector())
-                RHS.axpy(relax, A * u_star.vector())
-                RHS.apply('insert')
+            return lhs, rhs
+        
+        def mom_proj_rhs(rhs):
+            """
+            Project the RHS into BDM (embedded in DG)
+            """
+            if not self.project_rhs or not self.velocity_postprocessor:
+                return
             
-            with dolfin_log_level(dolfin.LogLevel.ERROR):
-                self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
+            if not hasattr(self, 'rhs_tmp'):
+                # Setup RHS projection
+                Vu = sim.data['Vu']
+                funcs = [dolfin.Function(Vu) for _ in range(sim.ndim)]
+                self.rhs_tmp = dolfin.as_vector(funcs)
+                self.rhs_postprocessor = VelocityBDMProjection(sim, self.rhs_tmp,
+                    incompressibility_flux_type=self.incompressibility_flux_type)
             
-            self.u_tmp.vector().axpy(-1, u_star.vector())
-            self.u_tmp.vector().apply('insert')
-            err += self.u_tmp.vector().norm('l2')
+            ndim = self.simulation.ndim
+            for d in range(ndim):
+                self.rhs_tmp[d].vector()[:] = rhs[d]
+            
+            self.rhs_postprocessor.run()
+            
+            for d in range(ndim):
+                rhs[d][:] = self.rhs_tmp[d].vector()
+        
+        def mom_solve(lhs, rhs):
+            """
+            Solve the linear systems
+            """
+            solver = self.velocity_solver
+            if solver.is_iterative:
+                if self.inner_iteration == 1:
+                    solver.set_reuse_preconditioner(False)
+                else:
+                    solver.set_reuse_preconditioner(True)
+                    #solver.parameters['maximum_iterations'] = 3
+            
+            err = 0.0
+            for d in range(sim.ndim):
+                LHS, RHS = lhs[d], rhs[d]
+                u_star = self.simulation.data['u%d' % d]
+                self.u_tmp.assign(u_star)
+                
+                with dolfin_log_level(dolfin.LogLevel.ERROR):
+                    self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
+                
+                self.u_tmp.vector().axpy(-1, u_star.vector())
+                self.u_tmp.vector().apply('insert')
+                err += self.u_tmp.vector().norm('l2')
+            return err
+        
+        # Assemble LHS and RHS, project RHS and finally solve the linear systems
+        lhs, rhs = mom_assemble()
+        mom_proj_rhs(rhs)
+        err = mom_solve(lhs, rhs)
         
         return err
     
@@ -414,7 +478,10 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        with dolfin_log_level(dolfin.LogLevel.ERROR):
+        with dolfin_log_level(dolfin.LogLevel.WARNING):
+            #print('STARTING PRESSURE KRYLOV SOLVER',
+            #      'it=', self.simulation.timestep, 
+            #      'iit=', self.inner_iteration)
             self.niters_p = solver.solve(LHS, p_hat.vector(), RHS)
         
         # Removing the null space of the matrix system is not strictly the same as removing
