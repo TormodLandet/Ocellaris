@@ -7,9 +7,6 @@ from ocellaris.utils import matmul, create_block_matrix
 # Generate empty matrix using the block matrix routine 
 use_block_matrix = true_false_fixture
 
-# Use petc4py or PETSc C++ routines
-use_cpp = true_false_fixture
-
 
 def mk_mat(mesh_size=1, order=2, block=False):
     mesh = dolfin.UnitSquareMesh(mesh_size, mesh_size)
@@ -27,7 +24,7 @@ def mk_mat(mesh_size=1, order=2, block=False):
 
 
 @skip_in_parallel
-def test_matmul(use_block_matrix, use_cpp):
+def test_matmul(use_block_matrix):
     indices = numpy.array([1, 2, 4], numpy.intc)
     blockA = numpy.array([[1, 2, 3],
                           [4, 5, 6],
@@ -48,7 +45,7 @@ def test_matmul(use_block_matrix, use_cpp):
     print('A:\n', A.array())
     print('B:\n', B.array())
     
-    C = matmul(A, B, use_cpp=use_cpp)
+    C = matmul(A, B)
     print('C:\n', C.array())
     
     assert A.rank() == B.rank() == C.rank()

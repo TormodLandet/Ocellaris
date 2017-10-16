@@ -1,7 +1,6 @@
 import numpy
 import dolfin
 import contextlib
-from petsc4py import PETSc
 from ocellaris.cpp import load_module
 
 
@@ -161,7 +160,8 @@ def create_block_matrix(V, blocks):
     
     The argument ``blocks`` should be a list of lists/arrays containing
     the dofs in each block. The dofs are assumed to be the same for
-    both rows and columns.
+    both rows and columns. If blocks == 'diag' then a diagonal matrix is
+    returned
     """
     comm = V.mesh().mpi_comm()
     dm = V.dofmap()
@@ -175,14 +175,21 @@ def create_block_matrix(V, blocks):
     # Setup the tensor layout's sparsity pattern
     sp = tl.sparsity_pattern()
     sp.init([im, im])
-    entries = None
-    for block in blocks:
-        N = len(block)
-        if entries is None or entries.shape[1] != N:
-            entries = numpy.empty((2, N), dtype=numpy.intc)
-        entries[0,:] = block
-        entries[1,:] = entries[0,:]
-        sp.insert_local(entries)
+    if blocks == 'diag':
+        Ndofs = im.size(im.MapSize.OWNED)
+        entries = numpy.empty((2, 1), dtype=numpy.intc)
+        for dof in range(Ndofs):
+            entries[:] = dof
+            sp.insert_local(entries)
+    else:
+        entries = None
+        for block in blocks:
+            N = len(block)
+            if entries is None or entries.shape[1] != N:
+                entries = numpy.empty((2, N), dtype=numpy.intc)
+                entries[0,:] = block
+                entries[1,:] = entries[0,:]
+                sp.insert_local(entries)
     sp.apply()
     
     # Create a matrix with the newly created tensor layout
@@ -192,7 +199,7 @@ def create_block_matrix(V, blocks):
     return A
 
 
-def matmul(A, B, out=None, use_cpp=False):
+def matmul(A, B, out=None):
     """
     A B (and potentially out) must be PETScMatrix
     The matrix out must be the result of a prior matmul
@@ -200,26 +207,15 @@ def matmul(A, B, out=None, use_cpp=False):
     """
     assert A is not None and B is not None
     
-    if use_cpp:
-        # Implemented in C++ due to unfinished petsc4py support in 
-        # dolfin's new pybind11 version (as of 2017-09-25)
-        mod = load_module('petsc_utils')
-        if out is None:
-            C = mod.matmul(A, B)
-        else:
-            C = out
-            mod.matmul_reuse(A, B, C)
-    
+    A = A.mat()
+    B = B.mat()
+    if out is not None:
+        A.matMult(B, out.mat())
+        C = out
     else:
-        A = A.mat()
-        B = B.mat()
-        if out is not None:
-            A.matMult(B, out.mat())
-            C = out
-        else:
-            Cmat = A.matMult(B)
-            C = dolfin.PETScMatrix(Cmat)
-            C.apply('insert')
+        Cmat = A.matMult(B)
+        C = dolfin.PETScMatrix(Cmat)
+        C.apply('insert')
     
     return C
 
@@ -247,6 +243,7 @@ def condition_number(A, method='simplified'):
         return cond(A)
     
     elif method == 'SLEPc':
+        from petsc4py import PETSc
         from slepc4py import SLEPc
         
         # Get the petc4py matrix
@@ -294,7 +291,6 @@ def mat_to_scipy_csr(dolfin_matrix):
     """
     assert dolfin.MPI.size(dolfin.mpi_comm_world()) == 1, 'mat_to_csr assumes single process'
     import scipy.sparse
-    import numpy
     
     rows = [0]
     cols = []
