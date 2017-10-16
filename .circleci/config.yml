@@ -16,6 +16,9 @@ jobs:
             python3 -c 'import ffc; print(ffc.git_commit_hash(), ffc.ufc_signature())'
             python3 -c 'import dolfin; print(dolfin.git_commit_hash())'
       - run:
+          name: Install Ocellaris
+          command: sudo pip3 install .
+      - run:
           name: Import Ocellaris - runs some JIT and prints version info
           command: python3 -c 'import ocellaris; print(ocellaris.get_detailed_version())'
       - run:

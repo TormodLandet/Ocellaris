@@ -14,8 +14,7 @@ for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8
         version = line.split('=')[1].strip()[1:-1]
 
 # Which packages we depend on
-#dependencies = ['dolfin', 'numpy', 'matplotlib']
-dependencies = [] # dolfin still has no installable packe on PyPI
+dependencies = [] #'fenics-dolfin', 'numpy', 'h5py']
 
 # No need to install dependencies on ReadTheDocs
 if os.environ.get('READTHEDOCS') == 'True':
@@ -61,13 +60,12 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
         'Programming Language :: C++'
     ],
 
     # What does your project relate to?
-    keywords='fem fenics cfd navier-stokes multi-phase flow',
+    keywords='fem fenics cfd dg navier-stokes multi-phase flow',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
@@ -80,7 +78,7 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={
-        'ocellaris': ['cpp/*/*.h'],
+        'ocellaris': ['cpp/*.h', 'cpp/*/*.h'],
     },
 
     # To provide executable scripts, use entry points in preference to the
@@ -89,6 +87,7 @@ setup(
     entry_points={
         'console_scripts': [
             'ocellaris=ocellaris.__main__:run_from_console',
+            'ocellaris_inspector=ocellaris_post.inspector.__main__:main',
         ],
     },
 )
