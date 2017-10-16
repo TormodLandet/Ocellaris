@@ -77,12 +77,10 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: Coupled
+    type: SIMPLE
     num_inner_iter: 4
     polynomial_degree_velocity: 2  # Overridden in convergence.py
     polynomial_degree_pressure: 1  # Overridden in convergence.py
     function_space_velocity: DG
     function_space_pressure: DG
-    equation_subtype: DG
     steady_velocity_stopping_criterion: 1.0e-8
-
