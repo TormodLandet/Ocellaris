@@ -1,0 +1,42 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: trlandet/fenics-dev:py3_CI
+    working_directory: /home/fenics/working
+    steps:
+      - checkout
+      - run:
+          name: Install/update dependencies
+          command: sudo pip3 install pytest pytest-xdist six flake8 --upgrade
+      - run:
+          name: Environment and FEniCS version info
+          command: |
+            echo $USER $HOME $PWD $PATH $LD_LIBRARY_PATH $CMAKE_PREFIX_PATH
+            python3 -c 'import ffc; print(ffc.git_commit_hash(), ffc.ufc_signature())'
+            python3 -c 'import dolfin; print(dolfin.git_commit_hash())'
+      - run:
+          name: Install Ocellaris
+          command: sudo pip3 install .
+      - run:
+          name: Import Ocellaris - runs some JIT and prints version info
+          command: python3 -c 'import ocellaris; print(ocellaris.get_detailed_version())'
+      - run:
+          name: Run pytest
+          command: python3 -m pytest -v tests/ --junitxml=/reports/pytest/serial.xml
+#      - run:
+#          name: Run pytest with MPI
+#          command: mpirun -np 3 python3 -m pytest -v tests/ --junitxml=/reports/pytest/MPI.xml
+      - run:
+          name: Run regression tests
+          command: python3 -m pytest -vs cases/regression_tests.py --junitxml=/reports/pytest/regressions_serial.xml
+      - run:
+          name: Run demo tests
+          command: python3 -m pytest -vs demos/ --junitxml=/reports/pytest/demos_serial.xml
+#      - run:
+#          name: Run flake8
+#          command: python3 -m flake8 ocellaris*
+      - store_test_results:
+          path: /reports
+      - store_artifacts:
+          path: /reports

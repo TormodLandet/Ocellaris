@@ -1,4 +1,3 @@
-# encoding: utf-8
 """
 Convert to and from a Taylor basis
 
@@ -6,7 +5,6 @@ This code follows the definition of cell average Taylor DG polynomial expansion
 as described in Dmitri Kuzmin (2010) "A vertex-based hierarchial slope limiter
 for p-adaptive discontinuous Galerkin methods"
 """
-from __future__ import division
 import numpy
 from dolfin import cells
 from ocellaris.utils import ocellaris_error
@@ -53,7 +51,7 @@ def lagrange_to_taylor(u, t):
     key2 = ('cell_dofs', degree)
     if key2 not in CACHE:
         dm = V.dofmap()
-        cell_dofs = [dm.cell_dofs(i) for i in xrange(Ncells)]
+        cell_dofs = [dm.cell_dofs(i) for i in range(Ncells)]
         CACHE[key2] = numpy.array(cell_dofs, int)
     cell_dofs = CACHE[key2]
     
@@ -103,7 +101,7 @@ def taylor_to_lagrange(t, u):
     key2 = ('cell_dofs', degree)
     if key2 not in CACHE:
         dm = V.dofmap()
-        cell_dofs = [dm.cell_dofs(i) for i in xrange(Ncells)]
+        cell_dofs = [dm.cell_dofs(i) for i in range(Ncells)]
         CACHE[key2] = numpy.array(cell_dofs, int)
     cell_dofs = CACHE[key2]
     
@@ -412,7 +410,7 @@ def produce_code_with_sympy_DG1():
             v = v.simplify()
             code.append('A[icell,%d,%d] = %s' % (index, i, v))
         code.append('')
-        print '\n'.join(code)
+        print('\n'.join(code))
     
     print_code('Value at xc (also the cell average value)', lambda q: q, 0)
     print_code('d/dx', lambda q: q.diff(x), 1)
@@ -472,7 +470,7 @@ def produce_code_with_sympy_DG2():
             v = v.simplify()
             code.append('A[icell,%d,%d] = %s' % (index, i, v))
         code.append('')
-        print '\n'.join(code)
+        print('\n'.join(code))
     
     print_code('Value at xc (MODIFY ME TO GET THE CELL AVERAGE)', lambda q: q, 0)
     print_code('d/dx', lambda q: q.diff(x), 1)
@@ -513,22 +511,22 @@ def produce_code_with_sympy_DG2():
         v = v.simplify().simplify()
         v = v.subs({x1: Symbol('x1'), x2: Symbol('x2'), x3: Symbol('x3'),
                     y1: Symbol('y1'), y2: Symbol('y2'), y3: Symbol('y3')})
-        print '%s = %s' % (name, v)
+        print('%s = %s' % (name, v))
 
 
 if __name__ == '__main__':
     produce_code_with_sympy_DG1()
-    print '-------------------------------------------------------------\n'
+    print('-------------------------------------------------------------\n')
     produce_code_with_sympy_DG2()
-    print '-------------------------------------------------------------\n'
+    print('-------------------------------------------------------------\n')
     
     from dolfin import UnitTriangleMesh, UnitSquareMesh, FunctionSpace, Function, errornorm
     numpy.set_printoptions(linewidth=120)
     
     mesh = UnitTriangleMesh()
     V = FunctionSpace(mesh, 'DG', 2)
-    print mesh.coordinates()
-    print
+    print(mesh.coordinates())
+    print()
     
     u, u2, t, tn = Function(V), Function(V), Function(V), Function(V)
     for vec in (numpy.array([0, 1, 2, 3, 4, 5], float),
@@ -544,21 +542,21 @@ if __name__ == '__main__':
         # Convert to Taylor basis
         DG2_to_taylor_numpy(u, tn)
         lagrange_to_taylor(u, t)
-        print tn.vector().get_local()[dofs], 'numpy solve'
-        print t.vector().get_local()[dofs], 'sympy expressions'
-        print 'Error norm 1:', errornorm(tn, t, degree_rise=0)
+        print(tn.vector().get_local()[dofs], 'numpy solve')
+        print(t.vector().get_local()[dofs], 'sympy expressions')
+        print('Error norm 1:', errornorm(tn, t, degree_rise=0))
         
         # Convert to back to DG basis
         taylor_to_lagrange(t, u2)
-        print u.vector().get_local()[dofs], 'original'
-        print u2.vector().get_local()[dofs], 'round trip'
-        print 'Error norm 2:', errornorm(u, u2, degree_rise=0)
-        print
+        print(u.vector().get_local()[dofs], 'original')
+        print(u2.vector().get_local()[dofs], 'round trip')
+        print('Error norm 2:', errornorm(u, u2, degree_rise=0))
+        print()
     
     ######################################
     
     for degree in (1, 2):
-        print '\n' + '#'*80 + '\nDegree %d' % degree
+        print('\n' + '#'*80 + '\nDegree %d' % degree)
         mesh = UnitSquareMesh(4, 4)
         V = FunctionSpace(mesh, 'DG', degree)
         u, u2, t = Function(V), Function(V), Function(V)
@@ -567,12 +565,12 @@ if __name__ == '__main__':
         lagrange_to_taylor(u, t)
         taylor_to_lagrange(t, u2)
         
-        print 'L2 error roundtrip:', errornorm(u, u2, degree_rise=0)
+        print('L2 error roundtrip:', errornorm(u, u2, degree_rise=0))
 
     ######################################
     
     for degree in (1, 2):
-        print '\n' + '#'*80 + '\nDegree %d' % degree
+        print('\n' + '#'*80 + '\nDegree %d' % degree)
         mesh = UnitSquareMesh(1, 1)
         V = FunctionSpace(mesh, 'DG', degree)
         u, u2, t = Function(V), Function(V), Function(V)
@@ -581,17 +579,17 @@ if __name__ == '__main__':
         for i, (x, y) in enumerate(dofs_x):
             u.vector()[i] = x + y**2 + 3 - 7*x*y
         u.vector().apply('insert')
-        for icell in range(mesh.num_cells()): print 'u', icell, u.vector().get_local()[V.dofmap().cell_dofs(icell)]
+        for icell in range(mesh.num_cells()): print('u', icell, u.vector().get_local()[V.dofmap().cell_dofs(icell)])
         
         lagrange_to_taylor(u, t)
-        for icell in range(mesh.num_cells()): print 't', icell, t.vector().get_local()[V.dofmap().cell_dofs(icell)]
+        for icell in range(mesh.num_cells()): print('t', icell, t.vector().get_local()[V.dofmap().cell_dofs(icell)])
         
         if degree == 2:
             DG2_to_taylor_numpy(u, t)
-            for icell in range(mesh.num_cells()): print 't', icell, t.vector().get_local()[V.dofmap().cell_dofs(icell)]
+            for icell in range(mesh.num_cells()): print('t', icell, t.vector().get_local()[V.dofmap().cell_dofs(icell)])
         
         taylor_to_lagrange(t, u2)
-        for icell in range(mesh.num_cells()): print 'u2', icell, u2.vector().get_local()[V.dofmap().cell_dofs(icell)]
+        for icell in range(mesh.num_cells()): print('u2', icell, u2.vector().get_local()[V.dofmap().cell_dofs(icell)])
         
-        print 'L2 error roundtrip:', errornorm(u, u2, degree_rise=0)
+        print('L2 error roundtrip:', errornorm(u, u2, degree_rise=0))
     

@@ -1,4 +1,3 @@
-# encoding: utf8
 import dolfin
 from dolfin import cells, Constant, avg
 

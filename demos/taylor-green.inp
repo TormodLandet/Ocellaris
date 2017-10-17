@@ -83,7 +83,6 @@ output:
 
 solver:
     type: SIMPLE
-    equation_subtype: Default
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     function_space_velocity: DG
@@ -101,33 +100,6 @@ solver:
     _p:
         solver: lu
         preconditioner: petsc
-
-slope_limiter:
-    u:
-        method: Solenoidal
-
-hooks:
-#    pre-solve:
-#    -   name: set params
-#        code: |
-#            parameters["linear_algebra_backend"] = "PETSc"
-#            parameters["form_compiler"]["optimize"] = True
-#            parameters["form_compiler"]["cpp_optimize"] = True
-#            parameters["form_compiler"]["representation"] = "quadrature"
-#            #parameters["form_compiler"]["quadrature_degree"] = 4
-#            #parameters["form_compiler"]["cache_dir"] = "instant"
-#            parameters["form_compiler"]["cpp_optimize_flags"] = "-O3 --fast-math"
-#            parameters["mesh_partitioner"] = "ParMETIS"
-#            parameters["form_compiler"].add("no_ferari", True)
-#            #parameters["ghost_mode"] = "shared_vertex"
-#            #set_log_active(False)
-                        
-    post_timestep:
-    -   name: calculate divergence
-        code: |
-            div_u = project(div(u), Vp)
-            print 'max_div_u|Vp = %10.3e' % abs(div_u.vector().array()).max(),
-            print 'l2 %10.3e h1 %10.3e' % (norm(div_u, 'L2'), norm(div_u, 'H1'))
 
 #console_at_end: false
 #console_on_error: true

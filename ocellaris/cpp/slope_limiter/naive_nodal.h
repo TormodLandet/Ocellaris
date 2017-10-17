@@ -5,20 +5,28 @@
 #include <dolfin/function/Function.h>
 #include <dolfin/la/GenericVector.h>
 #include <dolfin/fem/GenericDofMap.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
+#include <Eigen/Core>
+
 
 namespace dolfin
 {
+
+
+using IntVecIn = Eigen::Ref<const Eigen::VectorXi>;
+using DoubleVec = Eigen::Ref<Eigen::VectorXd>;
 
 void naive_nodal_slope_limiter_dg1(const Array<int>& num_neighbours,
                                    const int num_cells_all,
                                    const int num_cells_owned,
                                    const int num_cell_dofs,
                                    const int max_neighbours,
-                                   const Array<int>& neighbours,
-                                   const Array<int>& cell_dofs,
-                                   const Array<int>& cell_dofs_dg0,
-                                   double* exceedances,
-                                   double* results)
+                                   IntVecIn neighbours,
+                                   IntVecIn cell_dofs,
+                                   IntVecIn cell_dofs_dg0,
+                                   DoubleVec exceedances,
+                                   DoubleVec results)
 {
   if (num_cell_dofs != 3)
     dolfin_error("naive_nodal.h", "naive nodal slope limiter",
@@ -111,6 +119,13 @@ void naive_nodal_slope_limiter_dg1(const Array<int>& num_neighbours,
     }
   }
 }
+
+
+PYBIND11_MODULE(SIGNATURE, m)
+{
+  m.def("naive_nodal_slope_limiter_dg1", &naive_nodal_slope_limiter_dg1);
+}
+
 
 }
 

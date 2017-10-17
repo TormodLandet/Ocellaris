@@ -3,7 +3,9 @@ The HRIC upwind/downwind blending sheme
 """
 import numpy
 import dolfin
+from ocellaris.utils import ocellaris_error
 from . import ConvectionScheme, register_convection_scheme
+
 
 @register_convection_scheme('HRIC')
 class ConvectionSchemeHric2D(ConvectionScheme):
@@ -31,34 +33,68 @@ class ConvectionSchemeHric2D(ConvectionScheme):
           Il-Ryong Park, Kwang-Soo Kim, Jin Kim and Suak-Ho Van
         """
         super(ConvectionSchemeHric2D, self).__init__(simulation, func_name)
-        self.variant = simulation.input.get_value('convection/%s/HRIC_version' % func_name, 'HRIC')
+        self.variant = simulation.input.get_value('convection/%s/HRIC_version' % func_name, 'HRIC', 'string')
+        self.use_cpp = simulation.input.get_value('convection/%s/use_cpp' % func_name, True, 'bool')
     
-    def update(self, t, dt, velocity):
+    def update(self, dt, velocity):
         """
         Update the values of the blending function beta at the facets
         according to the HRIC algorithm. Several versions of HRIC
         are implemented
         """
-        timer = dolfin.Timer('Ocellaris update HRIC')
+        degree_b = self.blending_function.ufl_element().degree()
+        degree_u = velocity[0].ufl_element().degree()
+        assert degree_b == 0, 'Only facetwise constant blending factors are supported! Got order %d' % degree_b
+        assert degree_u == 0, 'VelocityDGT0Projector must be enabled! Got order %d' % degree_u
+        
+        # Check that the input is supported by the C++ code
+        degree_a = self.alpha_function.ufl_element().degree()
+        if degree_a != 0:
+            ocellaris_error('HRIC scalar field order must be 0',
+                            'HRIC implementation does not support order %d fields' % degree_a)
+        
+        with dolfin.Timer('Ocellaris update HRIC'):
+            if self.use_cpp:
+                Co_max = self.update_cpp(dt, velocity)
+            else:
+                Co_max = self.update_python(dt, velocity)
+                
+        self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
+    
+    def update_cpp(self, dt, velocity):
+        alpha = self.alpha_function
+        beta = self.blending_function
+        gradient = self.gradient_reconstructor.gradient
+        
+        return self.cpp_mod.hric(self.cpp_inp,
+                                 alpha._cpp_object,
+                                 [gi._cpp_object for gi in gradient],
+                                 [vi._cpp_object for vi in velocity],
+                                 beta._cpp_object,
+                                 dt, self.variant)
+    
+    def update_python(self, dt, velocity):
         alpha_arr = self.alpha_function.vector().get_local()
         beta_arr = self.blending_function.vector().get_local()
         
-        ndim = self.simulation.ndim
+        cell_dofs = self.cpp_inp.cell_dofmap
+        facet_dofs = self.cpp_inp.facet_dofmap
+        
         polydeg = self.alpha_function.ufl_element().degree()
         conFC = self.simulation.data['connectivity_FC']
         facet_info = self.simulation.data['facet_info']
         cell_info = self.simulation.data['cell_info']
         
-        # Get the alpha function gradient to calculate upstream values
+        # Get the numpy arrays of the input functions
         gradient = self.gradient_reconstructor.gradient
-        gradient_dofmaps = self.gradient_reconstructor.gradient_dofmaps
-        gradient_arr = gradient.vector().get_local()
+        gradient_arrs = [gi.vector().get_local() for gi in gradient]
+        velocity_arrs = [vi.vector().get_local() for vi in velocity]
         
         EPS = 1e-6
         Co_max = 0
         for facet in dolfin.facets(self.mesh):
             fidx = facet.index()
-            fdof = self.blending_function_facet_dofmap[fidx]
+            fdof = facet_dofs[fidx] 
             finfo = facet_info[fidx]
             
             # Find the local cells (the two cells sharing this face)
@@ -73,10 +109,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             # Indices of the two local cells
             ic0, ic1 = connected_cells
             
-            # Velocity at the midpoint (do not care which side of the face)
-            ump = numpy.zeros(ndim, float)
-            for d in range(ndim):
-                velocity[d].eval(ump[d:d+1], finfo.midpoint)
+            # Velocity at the facet
+            ump = [vi[fdof] for vi in velocity_arrs]
             
             # Midpoint of local cells
             cell0_mp = cell_info[ic0].midpoint
@@ -101,8 +135,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             
             # Find alpha in D and C cells
             if polydeg == 0:
-                aD = alpha_arr[self.alpha_dofmap[iaD]]
-                aC = alpha_arr[self.alpha_dofmap[iaC]]
+                aD = alpha_arr[cell_dofs[iaD]]
+                aC = alpha_arr[cell_dofs[iaC]]
             elif polydeg == 1:
                 aD, aC = numpy.zeros(1), numpy.zeros(1)
                 self.alpha_function.eval(aD, cell_info[iaD].midpoint)
@@ -114,9 +148,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 beta_arr[fdof] = 0.0
                 continue
             
-            # Gradient
-            gdofs  = [dm[iaC] for dm in gradient_dofmaps]
-            gC = [gradient_arr[gd] for gd in gdofs]
+            # Gradient of alpha in the central cell
+            gC = [gi[cell_dofs[iaC]] for gi in gradient_arrs]
             len_gC2 = numpy.dot(gC, gC)
             
             if len_gC2 == 0:
@@ -197,19 +230,18 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             tilde_beta = (tilde_aF_final - tilde_aC)/(1 - tilde_aC)
             
             if not (0.0 <= tilde_beta <= 1.0):
-                print 'ERROR, tilde_beta %r is out of range [0, 1]' % tilde_beta
-                print ' face normal: %r' % normal
-                print ' surface gradient: %r' % gC
-                print ' cos(theta): %r' % cos_theta
-                print ' sqrt(abs(cos(theta))) %r' % t
-                print ' tilde_aF_final %r' % tilde_aF_final
-                print ' tilde_aC %r' % tilde_aC
-                print ' aU %r, aC %r, aD %r' % (aU, aC, aD)
+                print('ERROR, tilde_beta %r is out of range [0, 1]' % tilde_beta)
+                print(' face normal: %r' % normal)
+                print(' surface gradient: %r' % gC)
+                print(' cos(theta): %r' % cos_theta)
+                print(' sqrt(abs(cos(theta))) %r' % t)
+                print(' tilde_aF_final %r' % tilde_aF_final)
+                print(' tilde_aC %r' % tilde_aC)
+                print(' aU %r, aC %r, aD %r' % (aU, aC, aD))
             
             assert 0.0 <= tilde_beta <= 1.0
             beta_arr[fdof] = tilde_beta
         
         self.blending_function.vector().set_local(beta_arr)
         self.blending_function.vector().apply('insert')
-        self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
-        timer.stop()
+        return Co_max

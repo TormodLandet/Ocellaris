@@ -1,10 +1,8 @@
-# encoding: utf-8
-from __future__ import division
 import dolfin
 from dolfin import Function, Constant
 from ocellaris.solver_parts import SlopeLimiter
 from . import register_multi_phase_model, MultiPhaseModel
-from ..convection import get_convection_scheme, StaticScheme
+from ..convection import get_convection_scheme, StaticScheme, VelocityDGT0Projector
 from .vof import VOFMixin
 from .advection_equation import AdvectionEquation
 
@@ -137,14 +135,14 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         Vc = sim.data['Vc']
         if self.degree == 0:
             self.vel_dgt0_projector = VelocityDGT0Projector(sim, sim.data['u_conv'])
-            u_conv = self.vel_dgt0_projector.velocity
+            self.u_conv = self.vel_dgt0_projector.velocity
         else:
-            u_conv = sim.data['u_conv']
-        self.eq = AdvectionEquation(sim, Vc, cp, cpp, u_conv, beta, self.time_coeffs, dirichlet_bcs)
+            self.u_conv = sim.data['u_conv']
+        self.eq = AdvectionEquation(sim, Vc, cp, cpp, self.u_conv, beta, self.time_coeffs, dirichlet_bcs)
         
         if self.need_gradient:
             # Reconstruct the gradient from the colour function DG0 field
-            self.convection_scheme.gradient_reconstructor.initialize()
+            self.convection_scheme.initialize_gradient()
         
         self.update_plot_fields()
     
@@ -206,6 +204,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             # Update the previous values
             cpp.assign(cp)
             cp.assign(c)
+            
+            if self.degree == 0:
+                self.vel_dgt0_projector.update()
         
         self.dt.assign(dt)
         is_static = isinstance(self.convection_scheme, StaticScheme)
@@ -216,9 +217,8 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         
         # Update the convection blending factors
         if not is_static:
-            vel = self.simulation.data['up']
-            self.convection_scheme.update(t, dt, vel)
-            
+            self.convection_scheme.update(dt, self.u_conv)
+        
         # Update global bounds in slope limiter 
         if self.is_first_timestep:
             lo, hi = self.slope_limiter.set_global_bounds(lo=0.0, hi=1.0)
@@ -229,8 +229,6 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if timestep_number == 1 or is_static:
             c.assign(cp)
         else:
-            if self.degree == 0:
-                self.vel_dgt0_projector.update()
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
             dolfin.solve(A, c.vector(), b)
@@ -254,33 +252,3 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         timer.stop()
         self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
         self.is_first_timestep = False
-
-
-class VelocityDGT0Projector(object):
-    def __init__(self, simulation, u_conv):
-        """
-        Given a velocity in DG, e.g DG2, produce a velocity in DGT0,
-        i.e. a constant on each facet 
-        """
-        V = u_conv[0].function_space()
-        V_dgt0 = dolfin.VectorFunctionSpace(V.mesh(), 'DGT', 0)
-        simulation.data['u_conv_dgt0'] = Function(V_dgt0)
-        
-        u = dolfin.TrialFunction(V_dgt0)
-        v = dolfin.TestFunction(V_dgt0)
-        
-        dot, avg, dS, ds = dolfin.dot, dolfin.avg, dolfin.dS, dolfin.ds
-        w = u_conv
-        a = dot(avg(u), avg(v))*dS + dot(u, v)*ds
-        L = dot(avg(w), avg(v))*dS + dot(w, v)*ds
-        
-        self.lhs = L 
-        self.A = dolfin.assemble(a)
-        self.solver = dolfin.PETScKrylovSolver('cg')
-        self.velocity = dolfin.Function(V_dgt0)
-    
-    def update(self):
-        t  = dolfin.Timer('Ocellaris produce u_conv_dgt0')
-        b = dolfin.assemble(self.lhs)
-        self.solver.solve(self.A, self.velocity.vector(), b)
-        t.stop()

@@ -5,9 +5,15 @@
 #include <dolfin/mesh/Mesh.h>
 #include <dolfin/fem/DofMap.h>
 #include <dolfin/la/GenericVector.h>
+#include <dolfin/function/FunctionSpace.h>
 #include <dolfin/function/Function.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
+#include <Eigen/Core>
+
 
 namespace dolfin {
+
 
 class LocalMaximaMeasurer
 {
@@ -150,4 +156,13 @@ private:
     }
   }
 }; // end class
+
+
+PYBIND11_MODULE(SIGNATURE, m)
+{
+  pybind11::class_<LocalMaximaMeasurer>(m, "LocalMaximaMeasurer")
+      .def(pybind11::init<const Mesh &>())
+      .def("measure", &LocalMaximaMeasurer::measure);
+}
+
 } // end namespace dolfin

@@ -1,10 +1,11 @@
 import dolfin
 import numpy
+from ocellaris.utils import cell_dofmap
 from ocellaris.cpp import load_module
 
 
 class GradientReconstructor(object):
-    def __init__(self, simulation, alpha_func, use_vertex_neighbours=True):
+    def __init__(self, simulation, alpha_func, alpha_name, use_vertex_neighbours=True):
         """
         Reconstructor for the gradient in each cell.
         
@@ -12,35 +13,26 @@ class GradientReconstructor(object):
         The Finite Volume Method" by Versteeg & Malalasekera (2007), 
         specifically equation 11.36 on page 322 for details on the method
         """
+        assert alpha_func.ufl_element().degree() == 0
         self.simulation = simulation
         self.alpha_function = alpha_func
         self.mesh = alpha_func.function_space().mesh()
         self.use_vertex_neighbours = use_vertex_neighbours
         self.reconstruction_initialized = False
-        self.use_cpp = simulation.input.get_value('use_cpp_extensions', True, 'bool')
+        cpp_key = 'convection/%s/use_cpp_gradient' % alpha_name
+        self.use_cpp = simulation.input.get_value(cpp_key, True, 'bool')
+        self.initialize()
     
     def initialize(self):
         """
-        Initialize the gradient function and dofmap
-        
-        For DG0 fields we must also precompute the least squares matrices
-        needed to reconstruct gradients since the gradient of a constant
-        is zero in each cell so a FEM projection will not work
+        Initialize the gradient function and lstsq matrices
         """
         V = self.alpha_function.function_space()
-        cd = self.simulation.data['constrained_domain']
-        Vvec = dolfin.VectorFunctionSpace(self.mesh, 'DG', 0, constrained_domain=cd)
         ndim = V.ufl_cell().topological_dimension()
         ncells = self.mesh.num_cells()
         
         # To be used by others accessing this class
-        self.gradient = dolfin.Function(Vvec)
-        self.gradient_dofmaps = [Vvec.sub(d).dofmap().dofs() for d in range(ndim)]
-        
-        if self.alpha_function.ufl_element().degree() > 0:
-            # We do not need the rest of the precomputed data for
-            # higher order functions
-            return
+        self.gradient = [dolfin.Function(V) for __ in range(ndim)]
         
         # Connectivity info needed in calculations
         cell_info = self.simulation.data['cell_info']
@@ -94,7 +86,7 @@ class GradientReconstructor(object):
         NBmax = self.num_neighbours.max()
         self.neighbours = numpy.zeros((N, NBmax), dtype='i', order='C')
         self.lstsq_matrices = numpy.zeros((N, ndim, NBmax), float, order='C')
-        for i in xrange(N):
+        for i in range(N):
             Nnb = self.num_neighbours[i]
             self.neighbours[i,:Nnb] = everyones_neighbours[i]
             self.lstsq_matrices[i,:,:Nnb] = lstsq_matrices[i] 
@@ -120,30 +112,28 @@ class GradientReconstructor(object):
         if not self.reconstruction_initialized:
             self.initialize()
         
-        if self.alpha_function.ufl_element().degree() > 0:
-            # We use projection for higher degrees
-            V = self.gradient.function_space()
-            dolfin.project(dolfin.nabla_grad(self.alpha_function), V, function=self.gradient)
-        else:
-            if not self.use_cpp:
-                # Pure Python version
-                reconstructor = _reconstruct_gradient 
-            else:
-                # Faster C++ version
-                cpp_gradient_reconstruction = load_module('gradient_reconstruction')
-                reconstructor = cpp_gradient_reconstruction.reconstruct_gradient
+        assert self.alpha_function.ufl_element().degree() == 0
             
-            # Run the gradient reconstruction
-            reconstructor(self.alpha_function,
-                          self.num_neighbours,
-                          self.max_neighbours,
-                          self.neighbours, 
-                          self.lstsq_matrices,
-                          self.lstsq_inv_matrices,
-                          self.gradient)
+        if not self.use_cpp:
+            # Pure Python version
+            reconstructor = _reconstruct_gradient 
+        else:
+            # Faster C++ version
+            cpp_mod = load_module('linear_convection')
+            reconstructor = cpp_mod.reconstruct_gradient
+        
+        # Run the gradient reconstruction
+        reconstructor(self.alpha_function._cpp_object,
+                      self.num_neighbours,
+                      self.max_neighbours,
+                      self.neighbours, 
+                      self.lstsq_matrices,
+                      self.lstsq_inv_matrices,
+                      [gi._cpp_object for gi in self.gradient])
 
 
-def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours, lstsq_matrices, lstsq_inv_matrices, gradient):
+def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours,
+                          lstsq_matrices, lstsq_inv_matrices, gradient):
     """
     Reconstruct the gradient, Python version of the code
     
@@ -156,12 +146,10 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
     mesh = alpha_function.function_space().mesh()
     
     V = alpha_function.function_space()
-    alpha_dofmap = V.dofmap().dofs()
-    Vvec = gradient.function_space()
-    gradient_dofmap0 = Vvec.sub(0).dofmap().dofs()
-    gradient_dofmap1 = Vvec.sub(1).dofmap().dofs()
+    assert V == gradient[0].function_space()
     
-    np_gradient = gradient.vector().get_local()
+    cell_dofs = cell_dofmap(V)
+    np_gradient = [gi.vector().get_local() for gi in gradient]
 
     # Reshape arrays. The C++ version needs flatt arrays
     # (limitation in Instant/Dolfin) and we have the same
@@ -174,21 +162,22 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
     
     for i, cell in enumerate(dolfin.cells(mesh)):
         idx = cell.index()
-        dix = alpha_dofmap[idx]
+        cdof = cell_dofs[idx]
         Nnbs = num_neighbours[i]
         nbs = neighbours[i,:Nnbs]
         
         # Get the matrices
         AT = lstsq_matrices[i,:,:Nnbs]
         ATAI = lstsq_inv_matrices[i]
-        a0  = a_cell_vec[dix]
-        b = [(a_cell_vec[alpha_dofmap[ni]] - a0) for ni in nbs]
+        a0  = a_cell_vec[cdof]
+        b = [(a_cell_vec[cell_dofs[ni]] - a0) for ni in nbs]
         b = numpy.array(b, float)
         
         # Calculate the and store the gradient
         g = numpy.dot(ATAI, numpy.dot(AT, b))
-        np_gradient[gradient_dofmap0[idx]] = g[0]
-        np_gradient[gradient_dofmap1[idx]] = g[1]
+        np_gradient[0][cdof] = g[0]
+        np_gradient[1][cdof] = g[1]
     
-    gradient.vector().set_local(np_gradient)
-    gradient.vector().apply('insert')
+    for i, np_grad in enumerate(np_gradient):
+        gradient[i].vector().set_local(np_grad)
+        gradient[i].vector()

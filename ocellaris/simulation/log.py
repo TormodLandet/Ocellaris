@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import os
 import dolfin
 
@@ -13,16 +11,16 @@ YELLOW = '\033[93m%s\033[0m' # ANSI escape code Bright Yellow
 class Log(object):
     # Names for the available log levels in Dolfin and Ocellaris
     AVAILABLE_LOG_LEVELS = {'all': ALWAYS_WRITE,
-                            'critical': dolfin.CRITICAL,
-                            'error': dolfin.ERROR,
-                            'warning': dolfin.WARNING,
-                            'info': dolfin.INFO,
-                            'progress': dolfin.PROGRESS,
-                            'debug': dolfin.DEBUG}
+                            'critical': dolfin.LogLevel.CRITICAL,
+                            'error': dolfin.LogLevel.ERROR,
+                            'warning': dolfin.LogLevel.WARNING,
+                            'info': dolfin.LogLevel.INFO,
+                            'progress': dolfin.LogLevel.PROGRESS,
+                            'debug': dolfin.LogLevel.DEBUG}
     
     def __init__(self, simulation):
         self.simulation = simulation
-        self.log_level = dolfin.INFO
+        self.log_level = dolfin.LogLevel.INFO
         self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation(), 'Flush log file')
         self.write_log = False
         self.write_stdout = False
@@ -38,7 +36,7 @@ class Log(object):
             if self.write_log:
                 self.log_file.write(message + '\n')
             if self.write_stdout:
-                print color % message
+                print(color % message)
         
         # Store all messages irrespective of the log level
         self._the_log.append(message)
@@ -52,19 +50,19 @@ class Log(object):
     
     def error(self, message):
         "Log an error message"
-        self.write(message, dolfin.ERROR, RED)
+        self.write(message, dolfin.LogLevel.ERROR, RED)
     
     def warning(self, message=''):
         "Log a warning message"
-        self.write(message, dolfin.WARNING, YELLOW)
+        self.write(message, dolfin.LogLevel.WARNING, YELLOW)
     
     def info(self, message=''):
         "Log an info message"
-        self.write(message, dolfin.INFO)
+        self.write(message, dolfin.LogLevel.INFO)
     
     def debug(self, message=''):
         "Log a debug message"
-        self.write(message, dolfin.DEBUG)
+        self.write(message, dolfin.LogLevel.DEBUG)
     
     def setup(self):
         """

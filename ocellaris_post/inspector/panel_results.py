@@ -108,7 +108,7 @@ class OcellarisReportsPanel(wx.Panel):
         all_rep_names = set()
         all_rep_lengths = {}
         for res in self.istate.results:
-            rep_names = res.reports.keys()
+            rep_names = list(res.reports.keys())
             all_rep_names.update(rep_names)
             for rep_name in rep_names:
                 all_rep_lengths[rep_name] = max(all_rep_lengths.get(rep_name, 0),

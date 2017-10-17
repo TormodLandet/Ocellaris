@@ -1,17 +1,15 @@
-# encoding: utf8
-from __future__ import division
 from collections import deque
 import numpy
-from petsc4py import PETSc
 import dolfin
-from ocellaris.utils import timeit, split_form_into_matrix
+from ocellaris.utils import timeit, split_form_into_matrix, create_block_matrix
 from .coupled_equations import define_dg_equations
 
 
 class SimpleEquations(object):
     def __init__(self, simulation, use_stress_divergence_form, use_grad_p_form,
                  use_grad_q_form, use_lagrange_multiplicator, 
-                 include_hydrostatic_pressure, incompressibility_flux_type):
+                 include_hydrostatic_pressure, incompressibility_flux_type,
+                 num_elements_in_block, lump_diagonal):
         """
         This class assembles the coupled Navier-Stokes equations as a set of
         matrices and vectors
@@ -34,8 +32,8 @@ class SimpleEquations(object):
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.include_hydrostatic_pressure = include_hydrostatic_pressure
         self.incompressibility_flux_type = incompressibility_flux_type
-        self.num_elements_in_block = 0
-        self.lump_diagonal = False
+        self.num_elements_in_block = num_elements_in_block
+        self.lump_diagonal = lump_diagonal
         self.block_partitions = None
         
         assert self.incompressibility_flux_type in ('central', 'upwind')
@@ -151,8 +149,8 @@ class SimpleEquations(object):
         Aglobal = dolfin.as_backend_type(self.As[d])
         
         if self.A_tildes[d] is None:
-            At = create_block_matrix(self.simulation, Vu, 1)
-            Ati = create_block_matrix(self.simulation, Vu, 1)
+            At = create_block_matrix(Vu, 'diag')
+            Ati = create_block_matrix(Vu, 'diag')
             self.u_diag = dolfin.Vector(self.simulation.data['u0'].vector())
         else:
             At = self.A_tildes[d]
@@ -182,8 +180,8 @@ class SimpleEquations(object):
         """
         Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
-            At = dolfin.PETScMatrix(Aglobal)
-            Ati = dolfin.PETScMatrix(Aglobal)
+            At = Aglobal.copy()
+            Ati = Aglobal.copy()
         else:
             At = self.A_tildes[d]
             Ati = self.A_tilde_invs[d]
@@ -221,9 +219,9 @@ class SimpleEquations(object):
         
         Aglobal = dolfin.as_backend_type(self.As[d])
         if self.A_tildes[d] is None:
-            #At = dolfin.PETScMatrix(Aglobal)
-            At = create_block_matrix(self.simulation, Vu, self.block_partitions)
-            Ati = create_block_matrix(self.simulation, Vu, self.block_partitions)
+            block_dofs = [dofs for _, dofs, _ in self.block_partitions]
+            At = create_block_matrix(Vu, block_dofs)
+            Ati = At.copy()
         else:
             At = self.A_tildes[d]
             Ati = self.A_tilde_invs[d]
@@ -281,6 +279,7 @@ def create_block_partitions(simulation, V, Ncells):
     Create super-cell partitions of Ncells cells each 
     """
     mesh = simulation.data['mesh']
+    dm = V.dofmap()
     
     # Construct a cell connectivity mapping
     con_CF = simulation.data['connectivity_CF']
@@ -293,11 +292,6 @@ def create_block_partitions(simulation, V, Ncells):
             for inb in con_FC(ifacet):
                 if inb != icell:
                     con_CFC.setdefault(icell, []).append(inb)
-
-    # Get dofs per cell
-    dm = V.dofmap()
-    Ndof = dm.cell_dofs(0).shape[0]
-    N = Ncells*Ndof
     
     # Partition all local cells into super-cells 
     picked = [False]*num_cells_owned
@@ -336,45 +330,6 @@ def create_block_partitions(simulation, V, Ncells):
         partitions.append((super_cell, dofs, dof_idx))
     
     return partitions
-
-
-def create_block_matrix(simulation, V, blocks=1):
-    """
-    Create a sparse PETSc matrix to hold dense blocks that are larger than
-    the normal DG block diagonal mass matrices (super-cell dense blocks)
-    Based on code from Miro: https://fenicsproject.org/qa/11647
-    """
-    mesh = simulation.data['mesh']
-    dm = V.dofmap()
-    
-    if isinstance(blocks, int):
-        nnz_max = blocks
-    else:
-        # Create block diagonal matrix
-        nnz_max = 0
-        for _cells, dofs, _dof_idx in blocks:
-            nnz_max = max(nnz_max, len(dofs))
-    
-    comm = mesh.mpi_comm().tompi4py() 
-    mat = PETSc.Mat()
-    mat.create(comm)
-    
-    # Set local and global size of the matrix
-    sizes = [dm.index_map().size(dolfin.IndexMap.MapSize_OWNED), 
-             dm.index_map().size(dolfin.IndexMap.MapSize_GLOBAL)]
-    mat.setSizes([sizes, sizes])
-    
-    # Set matrix type
-    mat.setType('aij')
-    mat.setPreallocationNNZ(nnz_max)
-    mat.setUp()
-    
-    # Map from local rows to global rows
-    lgmap = map(int, dm.tabulate_local_to_global_dofs())
-    lgmap = PETSc.LGMap().create(lgmap, comm=comm)
-    mat.setLGMap(lgmap, lgmap)
-    
-    return dolfin.PETScMatrix(mat)
 
 
 EQUATION_SUBTYPES = {

@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import numpy
 import dolfin as df
 from dolfin import dot, ds, dS, dx
@@ -44,7 +42,7 @@ class LeastSquaresSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         
         # Fast access to cell dofs
         dm = V.dofmap()
-        indices = range(self.mesh.num_cells())
+        indices = list(range(self.mesh.num_cells()))
         self.cell_dofs = [dm.cell_dofs(i) for i in indices]
         
         self.additional_plot_funcs = sum((sl.additional_plot_funcs for sl in self.slope_limiters), [])
@@ -170,7 +168,7 @@ class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
-        indices = range(self.mesh.num_cells())
+        indices = list(range(self.mesh.num_cells()))
         self.cell_dofs_V = [tuple(dm.cell_dofs(i)) for i in indices]
         self.cell_dofs_V0 = [int(dm0.cell_dofs(i)) for i in indices]
         
@@ -212,7 +210,7 @@ class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         num_cells_owned = mesh.topology().ghost_offset(tdim)
         
         # Slope limit one cell at a time
-        for icell in xrange(num_cells_owned):
+        for icell in range(num_cells_owned):
             dofs = self.cell_dofs_V[icell]
             
             # vertex coordinates and the cell center
@@ -231,7 +229,7 @@ class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
                     center_phiyy, center_phixy) = center_values
                 
                 for taylor_dof in (0, 1, 2): 
-                    for ivert in xrange(3):
+                    for ivert in range(3):
                         dof = dofs[ivert]
                         dx = cell_vertices[ivert][0] - center_pos_x
                         dy = cell_vertices[ivert][1] - center_pos_y

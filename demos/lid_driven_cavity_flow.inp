@@ -51,7 +51,7 @@ time:
     tmax: 30.0
 
 output:
-    prefix: lid_driven_cavity_flow
+    prefix: output/lid_driven_cavity_flow
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info

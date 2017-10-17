@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import dolfin
 from dolfin import Constant
 from ocellaris.utils import timeit, ocellaris_interpolate
@@ -45,6 +43,7 @@ class AnalyticalSolution(Solver):
         sim.data['up'] = dolfin.as_vector(up_list)
         sim.data['upp'] = dolfin.as_vector(upp_list)
         sim.data['p'] = dolfin.Function(Vp)
+        sim.data['u_conv'] = sim.data['u']
         
     @timeit
     def apply_analytical_solution(self):

@@ -1,5 +1,6 @@
 import os
 import numpy
+import h5py
 import dolfin
 from ocellaris.utils import ocellaris_error
 
@@ -43,9 +44,9 @@ class InputOutputHandling():
                                                          HDF5_WRITE_INTERVAL, 'int')
         
         # Create XDMF file object
-        create_vec_func = False
+        need_vec_func = False
         if self.xdmf_write_interval > 0:
-            create_vec_func = True
+            need_vec_func = True
             file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
             file_name2 = os.path.splitext(file_name)[0] + '.h5'
             
@@ -82,10 +83,10 @@ class InputOutputHandling():
             return vec_func, assigners
         
         # Some output formats cannot save functions given as "as_vector(list)" 
-        if create_vec_func:
+        if need_vec_func:
             self._vel_func, self._vel_func_assigners = create_vec_func(sim.data['Vu'])
             self._vel_func.rename('u', 'Velocity')
-        if sim.mesh_morpher.active and create_vec_func:
+        if sim.mesh_morpher.active and need_vec_func:
             self._mesh_vel_func, self._mesh_vel_func_assigners = create_vec_func(sim.data['Vmesh'])
             self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
         
@@ -157,7 +158,7 @@ class InputOutputHandling():
         """
         Is the given file an Ocellaris restart file
         """
-        HDF5_SIGNATURE = '\211HDF\r\n\032\n'
+        HDF5_SIGNATURE = b'\211HDF\r\n\032\n'
         try:
             # The HDF5 header is not guaranteed to be at offset 0, but for our 
             # purposes this can be assumed as we do nothing special when writing
@@ -224,90 +225,96 @@ class InputOutputHandling():
             h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_savepoint_%08d.h5') 
             h5_file_name = h5_file_name % sim.timestep
         
-        # Create HDF5 file object
+        # Write dolfin objects using dolfin.HDF5File
         sim.log.info('Creating HDF5 restart file %s' % h5_file_name)
-        h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'w')
-        
-        # Skip these functions
-        skip = {'coupled', }
-        
-        # Write mesh
-        h5.write(sim.data['mesh'], '/mesh')
-        if sim.data['mesh_facet_regions'] is not None:
-            h5.write(sim.data['mesh_facet_regions'], '/mesh_facet_regions')
-            
-        # Write functions
-        funcnames = []
-        for name, value in sim.data.items():
-            if isinstance(value, dolfin.Function) and name not in skip:
-                h5.write(value, '/%s' % name)
+        with dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'w') as h5:
+            # Write mesh
+            h5.write(sim.data['mesh'], '/mesh')
+            if sim.data['mesh_facet_regions'] is not None:
+                h5.write(sim.data['mesh_facet_regions'], '/mesh_facet_regions')
                 
-                # Save function names in a separate HDF attribute due to inability to 
-                # list existing HDF groups when using the dolfin HDF5Function wrapper 
-                assert ',' not in name
-                funcnames.append(name) 
+            # Write functions
+            funcnames = []
+            skip = {'coupled', } # Skip these functions
+            for name, value in sim.data.items():
+                if isinstance(value, dolfin.Function) and name not in skip:
+                    h5.write(value, '/%s' % name)
+                    
+                    # Save function names in a separate HDF attribute due to inability to 
+                    # list existing HDF groups when using the dolfin HDF5Function wrapper 
+                    assert ',' not in name
+                    funcnames.append(name)
         
-        # Metadata
-        tinfo = numpy.array([sim.time, sim.timestep, sim.dt])
-        h5.write(tinfo, '/ocellaris/time_info')
-        h5.attributes('/ocellaris')['time'] = sim.time
-        h5.attributes('/ocellaris')['iteration'] = sim.timestep
-        h5.attributes('/ocellaris')['restart_file_format'] = 1
-        h5.attributes('/ocellaris')['input_file'] = str(sim.input)
-        h5.attributes('/ocellaris')['functions'] = ','.join(funcnames)
+        # Only write metadata on root process
+        if self.simulation.rank != 0:
+            return
         
-        # Save the log taking into account that older HDF5 formats
-        # have limits on attribute size 
-        full_log = sim.log.get_full_log()
-        N = len(full_log)
-        M = 64*1000 # the HDF5 limit prior to 1.8.0
-        i = 0
-        while i*M < N:
-            log_part = full_log[i*M:(i+1)*M]
-            h5.attributes('/ocellaris')['full_log_%d' % i] = log_part
-            i += 1
-        
-        # Save reports
-        timesteps = numpy.array(sim.reporting.timesteps, dtype=float)
-        h5.write(timesteps, '/reports/timesteps')
-        for rep_name, values in sim.reporting.timestep_xy_reports.items():
-            assert ',' not in rep_name
-            values = numpy.array(values, dtype=float)
-            h5.write(values, '/reports/%s' % rep_name)
-        repnames = ','.join(sim.reporting.timestep_xy_reports)
-        if repnames: # Size of a HDF5 string  value must be > 0
-            h5.attributes('/reports')['report_names'] = repnames 
-        
-        h5.close()
+        # Write numpy objects and metadata using h5py.File
+        with h5py.File(h5_file_name, 'r+') as hdf:
+            # Metadata
+            meta = hdf.create_group('ocellaris')
+            meta.attrs['time'] = sim.time
+            meta.attrs['iteration'] = sim.timestep
+            meta.attrs['dt'] = sim.dt
+            meta.attrs['restart_file_format'] = 2
+            
+            # Functions to save strings
+            string_dt = h5py.special_dtype(vlen=str)
+            def np_string(root, name, strdata):
+                np_data = numpy.array(str(strdata).encode('utf8'), dtype=object)
+                root.create_dataset(name, data=np_data, dtype=string_dt)
+            def np_stringlist(root, name, strlist):
+                np_list = numpy.array([str(s).encode('utf8') for s in strlist], dtype=object)
+                root.create_dataset(name, data=np_list, dtype=string_dt)
+            
+            # List of names
+            repnames = list(sim.reporting.timestep_xy_reports.keys())
+            np_stringlist(meta, 'function_names', funcnames)
+            np_stringlist(meta, 'report_names', repnames)
+            
+            # Save the current input and the full log file
+            np_string(meta, 'input_file', sim.input)
+            np_string(meta, 'full_log', sim.log.get_full_log())
+            
+            # Save reports
+            reps = hdf.create_group('reports')
+            timesteps = numpy.array(sim.reporting.timesteps, dtype=float)
+            h5.write(timesteps, '/reports/timesteps')
+            for rep_name, values in sim.reporting.timestep_xy_reports.items():
+                reps[rep_name] = numpy.array(values, dtype=float)
     
     def _read_hdf5(self, h5_file_name, read_input=True, read_results=True):
         """
         Read an HDF5 restart file on the format written by _write_hdf5()
         """
-        # Check for valid restart file
-        h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'r')
-        if not h5.has_dataset('ocellaris'):
-            ocellaris_error('Error reading restart file',
-                            'Restart file %r does not contain Ocellaris meta data'
-                            % h5_file_name)
-        restart_file_version = h5.attributes('/ocellaris')['restart_file_format']
-        if restart_file_version != 1:
-            ocellaris_error('Error reading restart file',
-                            'Restart file version is %d, this version of Ocellaris only ' %
-                            restart_file_version + 'supports version 1')
-        
-        # Read ocellaris metadata from h5 restart file
-        t = h5.attributes('/ocellaris')['time']
-        it = h5.attributes('/ocellaris')['iteration']
-        inpdata = h5.attributes('/ocellaris')['input_file']
-        funcnames = h5.attributes('/ocellaris')['functions'].split(',')
+        # Check file format and read metadata
+        with h5py.File(h5_file_name, 'r') as hdf:
+            if not 'ocellaris' in hdf:
+                ocellaris_error('Error reading restart file',
+                                'Restart file %r does not contain Ocellaris meta data'
+                                % h5_file_name)
+            
+            meta = hdf['ocellaris']
+            restart_file_version = meta.attrs['restart_file_format']
+            if restart_file_version != 2:
+                ocellaris_error('Error reading restart file',
+                                'Restart file version is %d, this version of Ocellaris only ' %
+                                restart_file_version + 'supports version 2')
+            
+            t = float(meta.attrs['time'])
+            it = int(meta.attrs['iteration'])
+            dt = float(meta.attrs['dt'])
+            inpdata = meta['input_file'].value
+            funcnames = list(meta['function_names'])
         
         sim = self.simulation
+        h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'r')
         
         if read_input:
             # Read the input file
             sim.input.read_yaml(yaml_string=inpdata)
             sim.input.set_value('time/tstart', t)
+            sim.input.set_value('time/dt', dt)
             
             # Read mesh data
             mesh = dolfin.Mesh()
@@ -331,7 +338,6 @@ class InputOutputHandling():
                 sim.log.info('    Function %s' % name)
                 h5.read(sim.data[name], '/%s' % name)
 
-
     ###########################################################
     # Debugging routines
     # These routines are not used during normal runs
@@ -354,7 +360,7 @@ class InputOutputHandling():
                 cols = []
                 values = []
                 N, M = value.size(0), value.size(1)
-                for irow in xrange(value.size(0)):
+                for irow in range(value.size(0)):
                     indices, row_values = value.getrow(irow)
                     rows.append(len(indices) + rows[-1])
                     cols.extend(indices)
@@ -364,7 +370,7 @@ class InputOutputHandling():
             else:
                 raise ValueError('Cannot save object of type %r' % type(value))
         
-        import cPickle as pickle
+        import pickle
         with open(file_name, 'wb') as out:
             pickle.dump(data, out, protocol=pickle.HIGHEST_PROTOCOL)
         self.simulation.log.info('Saved LA objects to %r (%r)' % (file_name, kwargs.keys()))
@@ -377,7 +383,7 @@ class InputOutputHandling():
         """
         assert self.simulation.ncpu == 1, 'Not supported in parallel'
         
-        import cPickle as pickle
+        import pickle
         with open(file_name, 'rb') as inp:
             data = pickle.load(inp)
         

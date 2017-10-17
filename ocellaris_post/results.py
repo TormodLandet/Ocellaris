@@ -1,7 +1,7 @@
 import os
 import numpy
 import yaml
-import cStringIO as StringIO
+from io import StringIO
 
 
 class Results(object):
@@ -166,7 +166,7 @@ def read_h5_data(results):
         N = min(N, len(arr))
     
     # Ensure equal length arrays
-    for key in reps.keys():
+    for key in list(reps.keys()):
         reps[key] = reps[key][:N]
     
     # Read log
@@ -233,7 +233,7 @@ def read_log_data(results):
     
     # Ensure equal length arrays in case of partially written 
     # time steps on the log file
-    for key in reps.keys():
+    for key in list(reps.keys()):
         reps[key] = reps[key][:N]
     
     results.reports = reps

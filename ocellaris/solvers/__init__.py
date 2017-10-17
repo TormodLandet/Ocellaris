@@ -39,6 +39,33 @@ def get_solver(name):
 class Solver(object):
     description = 'No description available'
     
+    @classmethod
+    def create_function_spaces(cls, simulation):
+        """
+        Function space setup for standard flow solvers
+        """
+        # Get function space names
+        Vu_name = simulation.input.get_value('solver/function_space_velocity', 'Lagrange', 'string')
+        Vp_name = simulation.input.get_value('solver/function_space_pressure', 'Lagrange', 'string')
+        
+        # Get function space polynomial degrees
+        Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
+        Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
+        
+        # Get the constrained domain
+        cd = simulation.data['constrained_domain']
+        if cd is None:
+            simulation.log.info('Creating function spaces without periodic boundaries (none found)')
+        else:
+            simulation.log.info('Creating function spaces with periodic boundaries')
+        
+        # Create the Navier-Stokes function spaces
+        mesh = simulation.data['mesh']
+        Vu = dolfin.FunctionSpace(mesh, Vu_name, Pu, constrained_domain=cd)
+        Vp = dolfin.FunctionSpace(mesh, Vp_name, Pp, constrained_domain=cd)
+        simulation.data['Vu'] = Vu
+        simulation.data['Vp'] = Vp
+
 
 class BaseEquation(object):
     # Will be shadowed by object properties after first assemble

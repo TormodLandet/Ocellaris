@@ -1,14 +1,14 @@
 try:
     import wx
 except ImportError:
-    print 'Missing python module "wx"'
-    print
-    print 'You must install wxPython to run the GUI. Python wheels are'
-    print 'available for most platforms in addition to conda and other'
-    print 'packages. The code has been tested with wxPython-4.0.0a3, an'
-    print 'alpha release of wxPython 4 (which seems to work perfectly).'
-    print
-    print 'ERROR: missing wxPython'
+    print('Missing python module "wx"')
+    print()
+    print('You must install wxPython to run the GUI. Python wheels are')
+    print('available for most platforms in addition to conda and other')
+    print('packages. The code has been tested with wxPython-4.0.0a3, an')
+    print('alpha release of wxPython 4 (which seems to work perfectly).')
+    print()
+    print('ERROR: missing wxPython')
     exit(1)
 
 
@@ -137,7 +137,7 @@ def setup_yaml():
     mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
 
     def dict_representer(dumper, data):
-        return dumper.represent_dict(data.iteritems())
+        return dumper.represent_dict(data.items())
 
     def dict_constructor(loader, node):
         return collections.OrderedDict(loader.construct_pairs(node))

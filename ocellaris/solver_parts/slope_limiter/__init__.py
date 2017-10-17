@@ -66,8 +66,8 @@ class SlopeLimiterBase(object):
         """
         if self.enforce_global_bounds:
             if phi is None:
-                assert isinstance(lo, (int, long, float))
-                assert isinstance(hi, (int, long, float))
+                assert isinstance(lo, (int, float))
+                assert isinstance(hi, (int, float))
             else:    
                 lo = phi.vector().min()
                 hi = phi.vector().max()

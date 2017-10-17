@@ -11,8 +11,8 @@ def check_is_zero(expr, expected, verbose=True):
     val = is_zero_ufl_expression(expr, return_val=True)
     
     if verbose:
-        print 'is_zero_ufl_expression', val, expected,
-        print '   expr: %s    expr-repr: %r' % (expr, expr)
+        print('is_zero_ufl_expression', val, expected, end=' ')
+        print('   expr: %s    expr-repr: %r' % (expr, expr))
     
     val2 = 1 if val != 0 else 0
     assert val2 == expected
@@ -73,7 +73,7 @@ def test_form_splitter_coupled():
     for name in 'A00 A01 A10 A11 B0 B1 C0 C1 D E0 E1 F'.split():
         ufl_form = locals()[name]
         
-        print '%s:' % name,
+        print('%s:' % name, end=' ')
         if ufl_form is not None:
             jited_form = dolfin.Form(ufl_form)
             linalg_obj = dolfin.assemble(jited_form)
@@ -82,7 +82,7 @@ def test_form_splitter_coupled():
                 print (linalg_obj.size(0), linalg_obj.size(1)),
             else:
                 print (linalg_obj.size(),),
-    print ufl_form
+    print(ufl_form)
     
     # No coupling between velocity components
     assert A01 is None and A10 is None

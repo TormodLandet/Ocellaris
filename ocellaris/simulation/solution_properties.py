@@ -1,5 +1,3 @@
-# enconding: utf8
-from __future__ import division
 import dolfin as df
 from dolfin import dot, sqrt, grad, jump, avg, dx, dS
 from ocellaris.utils import timeit

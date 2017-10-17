@@ -1,8 +1,5 @@
-# encoding: utf8
-from __future__ import division
 import numpy
 import dolfin
-from solenoidal import SolenoidalLimiter, COST_FUNCTIONS
 from ocellaris.utils import verify_key
 from ocellaris.solver_parts.boundary_conditions import mark_cell_layers
 from ocellaris.solver_parts.slope_limiter import SlopeLimiter
@@ -23,6 +20,8 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         w and and use a prelimiter to limit the convected velocity u and set the 
         target for the convecting velocity w
         """
+        from solenoidal import SolenoidalLimiter, COST_FUNCTIONS
+        
         inp = simulation.input.get_value('slope_limiter/%s' % vel_name, required_type='Input')
         self.additional_plot_funcs = []
         
@@ -115,7 +114,7 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         tdim = self.mesh.topology().dim()
         Ncells = self.mesh.topology().ghost_offset(tdim)
         dm0 = V0.dofmap()
-        self.cell_dofs_V0 = numpy.array([int(dm0.cell_dofs(i)) for i in xrange(Ncells)], int)
+        self.cell_dofs_V0 = numpy.array([int(dm0.cell_dofs(i)) for i in range(Ncells)], int)
 
         # Boundary cells where we do not fully trust the prelimiter targets (we trust BCs more)
         self.skip_target_cells = mark_cell_layers(simulation, V, layers=0)

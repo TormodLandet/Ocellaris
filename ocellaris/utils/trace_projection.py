@@ -1,4 +1,3 @@
-# encoding: utf8
 from dolfin import TrialFunction, TestFunction, FacetNormal, Function
 from dolfin import ds, dS, dot, as_vector
 from dolfin import assemble_system, solve, cells, facets
@@ -174,22 +173,22 @@ def test_interpolation_to_dgt_scalar(vector=False):
     t1 = time.time()
     u_hat1 = Function(V)
     convert_to_dgt(w, u_hat1, interpolate=False)
-    print 'Project takes %.3f seconds' % (time.time()-t1)
+    print('Project takes %.3f seconds' % (time.time()-t1))
     
     t1 = time.time()
     u_hat2 = Function(V)
     convert_to_dgt(w, u_hat2, interpolate=True)
-    print 'Interpolate takes %.3f seconds' % (time.time()-t1)
+    print('Interpolate takes %.3f seconds' % (time.time()-t1))
     
     rounded = lambda x: numpy.array([round(v, 8) for v in x.vector().array()][:10])
-    print
-    print rounded(u_hat1)
-    print rounded(u_hat2)
-    print
+    print()
+    print(rounded(u_hat1))
+    print(rounded(u_hat2))
+    print()
     
     norm = (u_hat1.vector().array()**2).sum()
     err = ((u_hat1.vector().array() - u_hat2.vector().array())**2).sum()
-    print 'ERROR:', err, err/norm
+    print('ERROR:', err, err/norm)
     assert err/norm < 1e-20
 
 
@@ -200,8 +199,8 @@ def test_interpolation_to_dgt_vector():
 if __name__ == '__main__':
     for func in (test_interpolation_to_dgt_scalar,
                  test_interpolation_to_dgt_vector):
-        print '#'*80
-        print func.__name__
-        print
+        print('#'*80)
+        print(func.__name__)
+        print()
         func()
-        print
+        print()

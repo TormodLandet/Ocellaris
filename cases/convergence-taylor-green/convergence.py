@@ -5,7 +5,7 @@ import dolfin
 from ocellaris import Simulation, setup_simulation, run_simulation
 
 
-def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
+def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     """
     Run Ocellaris and return L2 & H1 errors in the last time step
     """
@@ -40,6 +40,9 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
         
     if N == 24 and False:
         sim.input.set_value('output/xdmf_write_interval', 1)
+    
+    if modifier:
+        modifier(sim) # Running regression tests, modify some input params
     
     say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'), sim.input.get_value('solver/function_space_velocity')))
     t1 = time.time()
@@ -77,7 +80,9 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p):
     err_u1_H1 = calc_err(sim.data['u1'], u1a, 'H1')
     err_p_H1 = calc_err(sim.data['p'], pa, 'H1')
     
-    say('Num iterations:', sim.timestep)
+    say('Number of time steps:', sim.timestep)
+    loglines = sim.log.get_full_log().split('\n')
+    say('Num inner iterations:', sum(1 if 'Inner iteration' in line else 0 for line in loglines))
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
     say('p*dx', int_p)
     div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
@@ -208,7 +213,8 @@ def run_convergence_time(dt_list):
         print_results(results, dt_list, 'dt')
 
 
-run_convergence_space([8, 16, 24, 32, 40])
-#run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
-#run_convergence_time([2, 1, 0.5, 0.25, 0.125])
-#dolfin.interactive()
+if __name__ == '__main__':
+    run_convergence_space([8, 16, 24, 32, 40])
+    #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
+    #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
+    #dolfin.interactive()

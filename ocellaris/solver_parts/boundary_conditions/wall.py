@@ -1,4 +1,3 @@
-# encoding: utf8
 import dolfin
 from . import register_boundary_condition, BoundaryConditionCreator
 from .neumann import OcellarisNeumannBC

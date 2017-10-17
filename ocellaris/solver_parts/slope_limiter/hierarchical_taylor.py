@@ -1,5 +1,3 @@
-# encoding: utf8
-from __future__ import division
 import numpy
 import dolfin as df
 from ocellaris.utils import verify_key, get_dof_neighbours
@@ -68,7 +66,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
-        indices = range(self.mesh.num_cells())
+        indices = list(range(self.mesh.num_cells()))
         self.cell_dofs_V = [tuple(dm.cell_dofs(i)) for i in indices]
         self.cell_dofs_V0 = [int(dm0.cell_dofs(i)) for i in indices]
         self.limit_cell = numpy.ones(self.num_cells_owned, numpy.intc)
@@ -189,7 +187,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         Perform slope limiting of a DG1 function
         """
         lagrange_arr = self.phi.vector().get_local()
-        for icell in xrange(self.num_cells_owned):
+        for icell in range(self.num_cells_owned):
             dofs = self.cell_dofs_V[icell]
             center_value = taylor_arr[dofs[0]]
             skip_this_cell = (self.limit_cell[icell] == 0)
@@ -197,7 +195,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             # Find the minimum slope limiter coefficient alpha 
             alpha = 1.0
             if not skip_this_cell:
-                for i in xrange(3):
+                for i in range(3):
                     dof = dofs[i]
                     nn = self.num_neighbours[dof]
                     if nn == 0:
@@ -243,7 +241,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         Perform slope limiting of a DG2 function
         """
         # Slope limit one cell at a time
-        for icell in xrange(self.num_cells_owned):
+        for icell in range(self.num_cells_owned):
             dofs = self.cell_dofs_V[icell]
             assert len(dofs) == 6
             center_values = [taylor_arr[dof] for dof in dofs]
@@ -261,7 +259,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             for taylor_dof in (0, 1, 2): 
                 if skip_this_cell:
                     break
-                for ivert in xrange(3):
+                for ivert in range(3):
                     dof = dofs[ivert]
                     dx = cell_vertices[ivert][0] - center_pos_x
                     dy = cell_vertices[ivert][1] - center_pos_y

@@ -1,5 +1,3 @@
-# encoding: utf-8
-from __future__ import division
 import dolfin
 from . import register_multi_phase_model, MultiPhaseModel
 from .vof import VOFMixin

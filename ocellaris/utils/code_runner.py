@@ -62,35 +62,49 @@ class RunnablePythonString(object):
         """
         Run the code
         """
-        # Make sure the simulation data is available
-        simulation = self.simulation 
-        locals().update(simulation.data)
+        # Make sure some usefull variables are available
+        sim = simulation = self.simulation
         t = time = simulation.time
         it = timestep = simulation.timestep
         dt = simulation.dt
         ndim = simulation.ndim
         
+        # Make the simulation data is available
+        code_locals = locals()
+        code_locals.update(simulation.data)
+        
         # Make sure the keyword arguments accessible
-        locals().update(kwargs)
+        code_locals.update(kwargs)
         
         # Make sure the user constants are accessible
         user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:float)')
         constants = {}
-        for name, value in user_constants.iteritems():
+        for name, value in user_constants.items():
             constants[name] = value
-        locals().update(constants)
+        code_locals.update(constants)
         
         if self.needs_exec:
-            exec(self.code)
+            try:
+                exec(self.code, globals(), code_locals)
+            except:
+                sim.log.error('Python code exec failed for the below code:')
+                sim.log.error(self.code)
+                raise
+            
             if self.var_name is not None:
                 # The code defined a variable. Return it
-                return locals()[self.var_name]
+                return code_locals[self.var_name]
             else:
                 # No return value
                 return
         else:
             # Return the result of evaluating the expression
-            return eval(self.code)
+            try:
+                return eval(self.code, globals(), code_locals)
+            except:
+                sim.log.error('Python code eval failed for the below code:')
+                sim.log.error(self.code)
+                raise
 
 
 def CodedExpression(simulation, code_string, description, value_shape=()):
@@ -107,29 +121,34 @@ def CodedExpression(simulation, code_string, description, value_shape=()):
     elif value_shape == (3,):
         expr = CodedExpression2()
     
-    expr.runnable = RunnablePythonString(simulation, code_string, description, 'value')
+    expr._runnable = RunnablePythonString(simulation, code_string, description, 'value')
     return expr
 
 
 ################################################################################
 # We need to subclass once per value_shape() for some reason
 
-class CodedExpression0(dolfin.Expression):
+class CodedExpression0(dolfin.UserExpression):
     def eval_cell(self, value, x, ufc_cell):
-        self.runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        ret = self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        if not self._runnable.needs_exec:
+            value[:] = ret
 
-
-class CodedExpression2(dolfin.Expression):
+class CodedExpression2(dolfin.UserExpression):
     def eval_cell(self, value, x, ufc_cell):
-        self.runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        ret = self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        if not self._runnable.needs_exec:
+            value[:] = ret
     
     def value_shape(self):
         return (2,)
 
 
-class CodedExpression3(dolfin.Expression):
+class CodedExpression3(dolfin.UserExpression):
     def eval_cell(self, value, x, ufc_cell):
-        self.runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        ret = self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        if not self._runnable.needs_exec:
+            value[:] = ret
 
     def value_shape(self):
         return (3,)

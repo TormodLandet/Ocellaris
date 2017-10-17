@@ -3,7 +3,7 @@ from .verify_environment import verify_env
 verify_env()
 
 
-__version__ = '2017.2.0'
+__version__ = '2017.3.0.dev0'
 
 
 def get_version():
@@ -24,7 +24,7 @@ def get_detailed_version():
     if os.path.isdir(os.path.join(proj_dir, '.git')):
         cmd = ['git', 'describe', '--always']
         version = subprocess.check_output(cmd, cwd=proj_dir)
-        local_version = '+git.' + version.strip()
+        local_version = '+git.' + version.decode('utf8').strip()
     else:
         local_version = ''
     return get_version() + local_version

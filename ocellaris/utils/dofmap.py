@@ -1,13 +1,34 @@
-from __future__ import division
 import numpy
 import dolfin
+
+
+def cell_dofmap(V):
+    """
+    This is intended to be used only when V is DG0  
+    Returns a list mapping from local cell index to local dof 
+    """
+    mesh = V.mesh()
+    dofmap = V.dofmap()
+    
+    # Loop through cells and get dofs for each cell
+    cell_dofmap = [None] * mesh.num_cells()
+    for cell in dolfin.cells(mesh):
+        dofs = dofmap.cell_dofs(cell.index())
+        assert len(dofs) == 1
+        cell_dofmap[cell.index()] = dofs[0]
+    
+    return cell_dofmap
 
 
 def facet_dofmap(V):
     """
     When working with Crouzeix-Raviart and DGT elements with dofs on the facets
     it can be useful to get the dof corresponding to a facet index.
-    This function returns a list which gives such a mapping.
+    
+    Returns a list mapping from local facet index to local dof
+    
+    TODO: verify if dofmap.dofs(mesh, mesh.topology().dim()-1) is guaranteed to
+          always give the same result as this
     """
     mesh = V.mesh()
     dofmap = V.dofmap()
@@ -18,12 +39,7 @@ def facet_dofmap(V):
     facet_dofmap = [None] * mesh.num_facets()
     for cell in dolfin.cells(mesh):
         dofs = dofmap.cell_dofs(cell.index())
-        
-        if ndim == 2:
-            facet_idxs = cell.entities(1)
-        elif ndim == 3:
-            facet_idxs = cell.entities(2)
-        
+        facet_idxs = cell.entities(ndim - 1)        
         assert len(dofs) == len(facet_idxs)
         
         # Loop through connected facets and store dofs for each facet
@@ -45,7 +61,7 @@ def get_dof_neighbours(V):
     
     # Get "owning cell" indices for all dofs
     cell_for_dof = [None] * V.dim()
-    for ic in xrange(num_cells_all):
+    for ic in range(num_cells_all):
         dofs = dm.cell_dofs(ic)
         for dof in dofs:
             assert cell_for_dof[dof] is None
@@ -55,7 +71,7 @@ def get_dof_neighbours(V):
     # will share the same location
     coord_to_dofs = {}
     max_neighbours = 0
-    for dof in xrange(len(dof_coordinates)):
+    for dof in range(len(dof_coordinates)):
         coord = tuple(round(x, 5) for x in dof_coordinates[dof])
         dofs = coord_to_dofs.setdefault(coord, [])
         dofs.append(dof)

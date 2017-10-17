@@ -97,9 +97,9 @@ def override_input_variables(simulation, input_override):
         try:
             py_value = eval(value)
         except Exception as e:
-            print 'ERROR: Input variable given via command line argument failed:'
-            print 'ERROR:       --set-input "%s"' % overrider
-            print 'ERROR: Got exception: %s' % str(e)
+            print('ERROR: Input variable given via command line argument failed:')
+            print('ERROR:       --set-input "%s"' % overrider)
+            print('ERROR: Got exception: %s' % str(e))
             exit(-1)
         
         # Update the input sub-dictionary

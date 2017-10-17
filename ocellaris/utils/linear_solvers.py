@@ -1,5 +1,7 @@
+import numpy
 import dolfin
 import contextlib
+from ocellaris.cpp import load_module
 
 
 def linear_solver_from_input(simulation, path, default_solver, default_preconditioner,
@@ -75,32 +77,29 @@ class LinearSolverWrapper(object):
         else:
             precon = dolfin.PETScPreconditioner(preconditioner)
             solver = dolfin.PETScKrylovSolver(solver_method, precon)
-            self.preconditioner = precon # Keep from going out of scope
+            self._pre_obj = precon # Keep from going out of scope
             self.is_iterative = True
         
         for parameter_set in parameters:
             apply_settings(solver_method, solver.parameters, parameter_set)
         
-        self.created_with_preconditioner = preconditioner
-        self.created_with_lu_method = lu_method
-        self.created_with_parameters = parameters
-        self.solver = solver
+        self._solver = solver
     
     def solve(self, *argv, **kwargs):
-        ret = self.solver.solve(*argv, **kwargs)
+        ret = self._solver.solve(*argv, **kwargs)
         self.is_first_solve = False
         return ret
     
     @property
     def parameters(self):
-        return self.solver.parameters 
+        return self._solver.parameters 
     
     def set_reuse_preconditioner(self, *argv, **kwargs):
         if self.is_iterative and self.is_first_solve:
             return  # Nov 2016: this segfaults if running before the first solve
         else:
-            return self.solver.set_reuse_preconditioner(*argv, **kwargs)
-        
+            return self._solver.set_reuse_preconditioner(*argv, **kwargs)
+    
     def __repr__(self):
         return ('<LinearSolverWrapper iterative=%r ' % self.is_iterative + 
                                      'direct=%r ' % self.is_direct +
@@ -142,16 +141,83 @@ def petsc_options(opts):
     """
     from petsc4py import PETSc
     orig_opts = PETSc.Options().getAll()
-    for key, val in opts.iteritems():
+    for key, val in opts.items():
         PETSc.Options().setValue(key, val)
     
     yield # run the code
     
-    for key in opts.iterkeys():
+    for key in opts.keys():
         if key in orig_opts:
             PETSc.Options().setValue(key, orig_opts[key])
         else:
             PETSc.Options().delValue(key)
+
+
+def create_block_matrix(V, blocks):
+    """
+    Create a sparse matrix to hold dense blocks that are larger than
+    the normal DG block diagonal mass matrices (super-cell dense blocks)
+    
+    The argument ``blocks`` should be a list of lists/arrays containing
+    the dofs in each block. The dofs are assumed to be the same for
+    both rows and columns. If blocks == 'diag' then a diagonal matrix is
+    returned
+    """
+    comm = V.mesh().mpi_comm()
+    dm = V.dofmap()
+    im = dm.index_map()
+    
+    # Create a tensor layout for the matrix
+    ROW_MAJOR = 0
+    tl = dolfin.TensorLayout(comm, ROW_MAJOR, dolfin.TensorLayout.Sparsity.SPARSE)
+    tl.init([im, im], dolfin.TensorLayout.Ghosts.GHOSTED)
+    
+    # Setup the tensor layout's sparsity pattern
+    sp = tl.sparsity_pattern()
+    sp.init([im, im])
+    if blocks == 'diag':
+        Ndofs = im.size(im.MapSize.OWNED)
+        entries = numpy.empty((2, 1), dtype=numpy.intc)
+        for dof in range(Ndofs):
+            entries[:] = dof
+            sp.insert_local(entries)
+    else:
+        entries = None
+        for block in blocks:
+            N = len(block)
+            if entries is None or entries.shape[1] != N:
+                entries = numpy.empty((2, N), dtype=numpy.intc)
+                entries[0,:] = block
+                entries[1,:] = entries[0,:]
+                sp.insert_local(entries)
+    sp.apply()
+    
+    # Create a matrix with the newly created tensor layout
+    A = dolfin.PETScMatrix(comm)
+    A.init(tl)
+    
+    return A
+
+
+def matmul(A, B, out=None):
+    """
+    A B (and potentially out) must be PETScMatrix
+    The matrix out must be the result of a prior matmul
+    call with the same sparsity patterns in A and B
+    """
+    assert A is not None and B is not None
+    
+    A = A.mat()
+    B = B.mat()
+    if out is not None:
+        A.matMult(B, out.mat())
+        C = out
+    else:
+        Cmat = A.matMult(B)
+        C = dolfin.PETScMatrix(Cmat)
+        C.apply('insert')
+    
+    return C
 
 
 def condition_number(A, method='simplified'):
@@ -202,7 +268,7 @@ def condition_number(A, method='simplified'):
             else:
                 raise ValueError('Could not find the highest singular value (%d)'
                                  % S.getConvergedReason())
-            print 'Highest singular value:', sigma_1
+            print('Highest singular value:', sigma_1)
             
             S.setWhichSingularTriplets(SLEPc.SVD.Which.SMALLEST)
             S.solve()
@@ -211,9 +277,9 @@ def condition_number(A, method='simplified'):
             else:
                 raise ValueError('Could not find the lowest singular value (%d)'
                                  % S.getConvergedReason())
-            print 'Lowest singular value:', sigma_n
-            print PETSc.Options().getAll()
-        print PETSc.Options().getAll()
+            print('Lowest singular value:', sigma_n)
+            print(PETSc.Options().getAll())
+        print(PETSc.Options().getAll())
         
         return sigma_1/sigma_n
 
@@ -225,7 +291,6 @@ def mat_to_scipy_csr(dolfin_matrix):
     """
     assert dolfin.MPI.size(dolfin.mpi_comm_world()) == 1, 'mat_to_csr assumes single process'
     import scipy.sparse
-    import numpy
     
     rows = [0]
     cols = []
