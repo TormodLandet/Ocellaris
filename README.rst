@@ -49,10 +49,13 @@ also contains an (incomplete) description of the input file format.
 
 Please feel free to test Ocellaris, but please keep in mind:
 
-- Ocellaris is in a state of constant development and does not have a stable API or input file format
-- Ocellaris supports Python 2 only, not Python 3 (currently, hopefully this will change some day).
+- Ocellaris is in a state of constant development and does not have a stable API or input file format. 
+- Ocellaris supports Python 3 only (after October 2017). There is an old Python2 branch ``legacy-py2``
+  that may or may not work. Dolfin with pybind11 Python3 wrappers is required (master version, still
+  unreleased as of 2017-10-17).
 - This is a research project, do not expect anything to work properly without testing it thoroughly first!
-- Documentation has not been a priority, sorry!
+- Documentation has not been a big priority, sorry! See the demos, regression tests etc in the code 
+  repository in addition to the documentation and of course the source code itself.
 
 Documentation
 -------------
@@ -63,7 +66,16 @@ The documentation can be found on the `Ocellaris web page <https://trlandet.bitb
 
 .. TOC_ENDS_HERE
 
+Automated testing
+-----------------
+
+Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/trlandet/ocellaris/tree/master>`_  
+and the current CI build status is |circleci_status|.
+
+.. |circleci_status| image:: https://circleci.com/bb/trlandet/ocellaris.svg?style=svg&circle-token=886a679594f958395d69c0720b04c4d88056f49d
+
 Copyright and license
 ---------------------
 
-Ocellaris is copyright Tormod Landet, 2015-2017. Ocellaris is licensed under the Apache 2.0 license.
+Ocellaris is copyright Tormod Landet, 2015-2017. Ocellaris is licensed under the Apache 2.0 license, a 
+permissive free software license, compatible with version 3 of the GNU GPL.
