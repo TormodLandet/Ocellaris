@@ -9,6 +9,8 @@ behaviour of the free surface.
 Ocellaris is implemented in Python and C++ with FEniCS_ as the backend for numerics, mesh and 
 finite element calculations.
 
+.. contents:: Quick start
+
 .. _FEniCS: https://fenicsproject.org/
 
 Ocellaris is named after the `Amphiprion Ocellaris <https://en.wikipedia.org/wiki/Ocellaris_clownfish>`_
@@ -24,28 +26,48 @@ Installation and running
 ------------------------
 
 Ocellaris requires a full installation of FEniCS_ with the PETSc linear algebra backend. You can
-install the dependecies yourself (you need at least dolfin, h5py, matplotlib and PyYAML) and then
-install ocellaris to somewhere in the python module search path. You can then run::
+install the dependecies yourself (you need at least dolfin, h5py, matplotlib and PyYAML) or use 
+a preconfigured Singularity or Docker container, see below.
 
-  python -m ocellaris INPUTFILE.INP
+To install Ocellaris in an environment where the prerequisites are present run::
 
-You can also install using the preliminary support for Singularity containers::
+  cd path/to/ocellaris/source
+  pip3 install .
 
-  # Bootstrap a Singularity image from the file "Singularity" which
-  # is located in the root of the Ocellaris git repository
-  singularity create -s 3000 ocellaris.img
-  sudo singularity bootstrap ocellaris.img Singularity
+You should now be ready to run the solver::
 
-  # Run bash inside the newly created Singularity container
-  singularity run -H /some/empty/dir/to/use/as/home ocellaris.img
+  ocellaris INPUTFILE.INP
 
-  # Or, just run Ocellaris directly, the container exits along with Ocellaris
-  singularity run -H /some/empty/dir/to/use/as/home ocellaris.img -c "ocellaris INPUTFILE.INP"
+If you did not pip install the ocellaris package, but just put it somewhere in the Python path,
+you may need to instead run::
+
+  python3 -m ocellaris INPUTFILE.INP
+
+Singularity and Docker
+~~~~~~~~~~~~~~~~~~~~~~
+
+You can also install using the preliminary support for Singularity containers. First, create a Singularity image from the file "Singularity" which is located in the root of the Ocellaris git repository::
+
+  cd path/to/ocellaris/source
+  singularity build ocellaris.img Singularity
+
+You can now run Ocellaris from inside the newly created Singularity container::
+
+  singularity run ocellaris.img INPUTFILE.INP
+
+The Singularity image is based on the Docker image that is used by the Ocallaris automated testing
+environment, see `setup.yml <https://bitbucket.org/trlandet/ocellaris/src/master/.circleci/config.yml>`_
+for up to date details about which Docker image is used. You can use this Docker image to run
+Ocellaris as well, but you will then have to install Ocellaris yourself inside the container,
+see details in the ``setup.yml`` or ```Singularity`` files, it is basically just ``pip install``.
+
+First steps
+~~~~~~~~~~~
   
 To test the code there are some demo input files in the ``demos/`` directory. Complete input files along
-with driver scripts are provided for several of the normal benchmark cases like Kovasznay flow and the
+with driver scripts are provided for several of the standard benchmark cases like Kovasznay flow and the
 Taylor-Green vortex in the ``cases/`` directory. More information can be found in the documentation which
-also contains an (incomplete) description of the input file format.
+also contains a (currently incomplete) description of the input file format.
 
 Please feel free to test Ocellaris, but please keep in mind:
 
