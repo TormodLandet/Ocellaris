@@ -30,6 +30,9 @@ jobs:
       - run:
           name: Run regression tests
           command: python3 -m pytest -vs cases/regression_tests.py --junitxml=/reports/pytest/regressions_serial.xml
+      - run:
+          name: Run demo tests
+          command: python3 -m pytest -vs demos/ --junitxml=/reports/pytest/demos_serial.xml
 #      - run:
 #          name: Run flake8
 #          command: python3 -m flake8 ocellaris*

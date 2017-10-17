@@ -150,7 +150,7 @@ class SolverIPCS(Solver):
         # Velocity post_processing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
-        verify_key('velocity post processing', self.velocity_postprocessing, ('none', BDM), 'ipcs solver')
+        verify_key('velocity post processing', self.velocity_postprocessing, (None, BDM), 'ipcs solver')
         
         # Quasi-steady simulation input
         self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
