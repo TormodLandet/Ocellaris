@@ -44,9 +44,9 @@ class InputOutputHandling():
                                                          HDF5_WRITE_INTERVAL, 'int')
         
         # Create XDMF file object
-        create_vec_func = False
+        need_vec_func = False
         if self.xdmf_write_interval > 0:
-            create_vec_func = True
+            need_vec_func = True
             file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
             file_name2 = os.path.splitext(file_name)[0] + '.h5'
             
@@ -83,10 +83,10 @@ class InputOutputHandling():
             return vec_func, assigners
         
         # Some output formats cannot save functions given as "as_vector(list)" 
-        if create_vec_func:
+        if need_vec_func:
             self._vel_func, self._vel_func_assigners = create_vec_func(sim.data['Vu'])
             self._vel_func.rename('u', 'Velocity')
-        if sim.mesh_morpher.active and create_vec_func:
+        if sim.mesh_morpher.active and need_vec_func:
             self._mesh_vel_func, self._mesh_vel_func_assigners = create_vec_func(sim.data['Vmesh'])
             self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
         

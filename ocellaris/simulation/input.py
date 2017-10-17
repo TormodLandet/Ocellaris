@@ -171,7 +171,7 @@ class Input(collections.OrderedDict):
                     p = int(p)
                 except ValueError:
                     ocellaris_error('List index not integer',
-                                    'Not a valid list index:  %s' % p)    
+                                    'Not a valid list index:  %s' % p)
             elif p not in d:
                 if default_value is UNDEFINED:
                     ocellaris_error('Missing parameter on input file',
@@ -217,7 +217,13 @@ class Input(collections.OrderedDict):
         
         d = self
         for p in path[:-1]:
-            if p not in d:
+            if isinstance(d, list):
+                try:
+                    p = int(p)
+                except ValueError:
+                    ocellaris_error('List index not integer',
+                                    'Not a valid list index:  %s' % p)
+            elif p not in d:
                 d[p] = {}
             d = d[p]
         d[path[-1]] = value

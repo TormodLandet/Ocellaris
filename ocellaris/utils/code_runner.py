@@ -130,12 +130,15 @@ def CodedExpression(simulation, code_string, description, value_shape=()):
 
 class CodedExpression0(dolfin.UserExpression):
     def eval_cell(self, value, x, ufc_cell):
-        self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
-
+        ret = self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        if not self._runnable.needs_exec:
+            value[:] = ret
 
 class CodedExpression2(dolfin.UserExpression):
     def eval_cell(self, value, x, ufc_cell):
-        self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        ret = self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        if not self._runnable.needs_exec:
+            value[:] = ret
     
     def value_shape(self):
         return (2,)
@@ -143,7 +146,9 @@ class CodedExpression2(dolfin.UserExpression):
 
 class CodedExpression3(dolfin.UserExpression):
     def eval_cell(self, value, x, ufc_cell):
-        self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        ret = self._runnable.run(value=value, x=x, ufc_cell=ufc_cell)
+        if not self._runnable.needs_exec:
+            value[:] = ret
 
     def value_shape(self):
         return (3,)

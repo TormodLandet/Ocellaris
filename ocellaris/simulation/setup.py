@@ -24,9 +24,15 @@ def setup_simulation(simulation):
     assert simulation.dt > 0
     
     # Preliminaries, before setup begins
+    
     # Get the multi phase model class
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
     multiphase_class = get_multi_phase_model(multiphase_model_name)
+    
+    # Get the main solver class
+    solver_name = simulation.input.get_value('solver/type', required_type='string')
+    simulation.log.info('Creating equation solver %s' % solver_name)
+    solver_class = get_solver(solver_name)
     
     ###########################################################################
     # Setup the Ocellaris simulation
@@ -46,7 +52,7 @@ def setup_simulation(simulation):
     
     # Create function spaces. This must be done before
     # creating Dirichlet boundary conditions
-    setup_function_spaces(simulation, multiphase_class)
+    setup_function_spaces(simulation, solver_class, multiphase_class)
     
     # Load the mesh morpher used for prescribed mesh velocities and ALE multiphase solvers
     simulation.mesh_morpher = MeshMorpher(simulation)
@@ -63,9 +69,7 @@ def setup_simulation(simulation):
     setup_sources(simulation)
     
     # Create the solver
-    solver_name = simulation.input.get_value('solver/type', required_type='string')
-    simulation.log.info('Creating Navier-Stokes solver %s' % solver_name)
-    simulation.solver = get_solver(solver_name)(simulation)
+    simulation.solver = solver_class(simulation)
     
     # Setup postprocessing probes
     setup_probes(simulation)
@@ -222,33 +226,14 @@ def setup_periodic_domain(simulation):
         region.create_periodic_boundary_conditions()
 
 
-def setup_function_spaces(simulation, multiphase_class):
+def setup_function_spaces(simulation, solver_class, multiphase_class):
     """
-    Create function spaces for velocity and pressure
+    Create function spaces for equation solver and multiphase solver
     """
-    # Get function space names
-    Vu_name = simulation.input.get_value('solver/function_space_velocity', 'Lagrange', 'string')
-    Vp_name = simulation.input.get_value('solver/function_space_pressure', 'Lagrange', 'string')
+    # Create pressure, velocity etc spaces
+    solver_class.create_function_spaces(simulation)
     
-    # Get function space polynomial degrees
-    Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
-    Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
-    
-    # Get the constrained domain
-    cd = simulation.data['constrained_domain']
-    if cd is None:
-        simulation.log.info('Creating function spaces without periodic boundaries (none found)')
-    else:
-        simulation.log.info('Creating function spaces with periodic boundaries')
-    
-    # Create the Navier-Stokes function spaces
-    mesh = simulation.data['mesh']
-    Vu = dolfin.FunctionSpace(mesh, Vu_name, Pu, constrained_domain=cd)
-    Vp = dolfin.FunctionSpace(mesh, Vp_name, Pp, constrained_domain=cd)
-    simulation.data['Vu'] = Vu
-    simulation.data['Vp'] = Vp
-    
-    # Create multi phase related function spaces (density or colour function etc)
+    # Create multi phase related function space (typically density or colour function)
     multiphase_class.create_function_space(simulation)
     
     for name, V in simulation.data.items():
