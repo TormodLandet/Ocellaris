@@ -19,7 +19,7 @@ for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8
 
 
 # Which packages we depend on
-dependencies = [] #'fenics-dolfin', 'numpy', 'h5py']
+dependencies = ['PyYAML', 'h5py', 'numpy'] #'fenics-dolfin']
 
 
 # No need to install dependencies on ReadTheDocs

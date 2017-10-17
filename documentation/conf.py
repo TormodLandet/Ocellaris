@@ -35,7 +35,7 @@ if os.environ.get('READTHEDOCS') == 'True':
             return MagicMock()
     
     MOCK_MODULES = ['dolfin', 'numpy', 'matplotlib', 'matplotlib.collections',
-                    'matplotlib.tri', 'petsc4py', 'h5py', 'solenoidal']
+                    'matplotlib.tri', 'petsc4py', 'h5py', 'yaml', 'solenoidal']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 
