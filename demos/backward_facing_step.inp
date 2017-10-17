@@ -24,8 +24,8 @@ physical_properties:
 
 mesh:
     type: XML
-    mesh_file: datafiles/backward_facing_step.xml
-    facet_region_file: datafiles/backward_facing_step_facet_region.xml
+    mesh_file: datafiles/backward_facing_step.xml.gz
+    facet_region_file: datafiles/backward_facing_step_facet_region.xml.gz
 
 boundary_conditions:
 -   name: Inlet
