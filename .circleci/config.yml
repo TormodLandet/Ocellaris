@@ -29,7 +29,7 @@ jobs:
 #          command: mpirun -np 3 python3 -m pytest -v tests/ --junitxml=/reports/pytest/MPI.xml
       - run:
           name: Run regression tests
-          command: python3 -m pytest -v cases/regresion_tests.py --junitxml=/reports/pytest/regressions_serial.xml
+          command: python3 -m pytest -vs cases/regression_tests.py --junitxml=/reports/pytest/regressions_serial.xml
 #      - run:
 #          name: Run flake8
 #          command: python3 -m flake8 ocellaris*

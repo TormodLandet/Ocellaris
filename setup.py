@@ -1,24 +1,60 @@
 from setuptools import setup, find_packages
+from setuptools.command.test import test as TestCommand
 from codecs import open
-import os
+import os, sys
+
 
 here = os.path.abspath(os.path.dirname(__file__))
+
 
 # Get the long description from the README file
 with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
     
+
 # Get the version
 for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8'):
     if line.startswith('__version__'):
         version = line.split('=')[1].strip()[1:-1]
 
+
 # Which packages we depend on
 dependencies = [] #'fenics-dolfin', 'numpy', 'h5py']
+
 
 # No need to install dependencies on ReadTheDocs
 if os.environ.get('READTHEDOCS') == 'True':
     dependencies = []
+
+
+# Make the setup.py test command work
+class PyTest(TestCommand):
+    description = 'Run Ocellaris\' tests with pytest'
+    user_options = [('run-unit-tests=', 'u', "Run unit tests"),
+                    ('run-regression-tests=', 'r', "Run regression tests")]
+    
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+        self.run_unit_tests = True
+        self.run_regression_tests = True
+    
+    def finalize_options(self):
+        TestCommand.finalize_options(self)
+        assert self.run_unit_tests or self.run_regression_tests
+    
+    def run_tests(self):
+        import pytest
+        args = []
+        if self.verbose:
+            args.append('-vs')
+        if self.run_unit_tests:
+            args.append(os.path.join(here, 'tests/'))
+        if self.run_regression_tests:
+            args.append(os.path.join(here, 'cases/regression_tests.py'))
+        
+        errno = pytest.main(args)
+        sys.exit(errno)
+
 
 # Give setuptools/pip informattion about the Ocellaris package
 setup(
@@ -90,4 +126,8 @@ setup(
             'ocellaris_inspector=ocellaris_post.inspector.__main__:main',
         ],
     },
+    
+    # Configure the "test" command
+    tests_require=['pytest'],
+    cmdclass = {'test': PyTest},
 )
