@@ -21,12 +21,6 @@ as plugins (hooks), logging, reporting, plotting and input file handling.
         An :class:`ocellaris.simulation.hooks.Hooks` object that keeps track of
         functions that should run at certain times during the simulation
 
-    .. attribute:: plotting
-        :annotation:
-        
-        An :class:`ocellaris.simulation.plotting.Plotting` object that helps creating 
-        plots of the solution while the simulation is running
-
     .. attribute:: reporting
         :annotation:
         
@@ -42,8 +36,8 @@ as plugins (hooks), logging, reporting, plotting and input file handling.
     .. attribute:: data
         :annotation: a dictionary
         
-        In a typical IPCS simulation the :attr:`data` attribute will contain
-        the following contents:
+        In a typical simulation the :attr:`data` attribute will contain contents
+        such as:
         
         .. list-table:: 
             :header-rows: 1
@@ -104,8 +98,6 @@ as plugins (hooks), logging, reporting, plotting and input file handling.
 .. autoclass:: ocellaris.simulation.input.Input
 
 .. autoclass:: ocellaris.simulation.hooks.Hooks
-
-.. autoclass:: ocellaris.simulation.plotting.Plotting
 
 .. autoclass:: ocellaris.simulation.reporting.Reporting
 
