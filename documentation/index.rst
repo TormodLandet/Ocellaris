@@ -14,7 +14,6 @@
    :maxdepth: 2
    
    user_guide/user_guide
-   theory/theory
    programmers_guide/programmers_guide
    
 .. toctree::
@@ -30,12 +29,6 @@
     * :ref:`genindex`
     * :ref:`modindex`
     * :ref:`search`
-    
-Download
---------
-
-Ocellaris is developed on Bitbucket using Git and can be downloaded from
-the `project page <https://bitbucket.org/trlandet/ocellaris>`_.
 
 .. ##############################################################
 

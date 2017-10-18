@@ -42,25 +42,26 @@ The same can be accomplished from a script which uses the Ocellaris Python API:
 
 .. code-block:: python
 
-    from ocellaris import Simulation, run_simulation
-
+    from ocellaris import Simulation, setup_simulation, run_simulation
+    
     for dt in [0.1, 0.05]:
         prefix = 'test_dt_%.3f' % dt
         
         # Create a simulation object, load an input file and modify the time step
         sim = Simulation()
         sim.input.read_yaml('template.inp')
-        sim.input['time']['dt'] = dt
-        sim.input['output']['prefix'] = prefix
+        sim.input.set_value('time/dt', dt)
+        sim.input.set_value('output/prefix', prefix)
         
         # Run Ocellaris
+        setup_simulation(sim)
         run_simulation(sim)
-        
+
 For more information about what you can do with the simulation object, see the
 :ref:`sec-simulation` documentation.
 
-A full example can be seen in the Taylor-Green convergence script which can be
-found under :ref:`sec-taylor-green-convergence-script`.
+Examples of this can be seen in the convergence scripts which can be found in
+the ``cases/`` subdirectory of the Ocellaris repository.
 
 
 .. _sec-interactive-console:

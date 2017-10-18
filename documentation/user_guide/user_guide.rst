@@ -13,19 +13,26 @@ Installing Ocellaris
 --------------------
 
 Ocellaris is a Python package and it contains no modules that must be compiled
-before running. Before running Ocellaris you must ensure that the ocellaris
-Python package is in the Python search path. This can be done by installing
-the package directory to a ``site-packages`` directory that is already in the
-Python search path, or setting the ``PYTHONPATH`` environmental variable to
-contain the directory where the ``ocellaris`` Python package is found (a Python
-package == directory containing an ``__init__.py`` file).
+before running. Some internal modules will be compiled on the first program
+startup by use of the DOLFIN JIT compiler. This can take some time. Subsequent
+runs of Ocellaris will use the precompiled modules. Before running Ocellaris
+you must ensure that the ``ocellaris`` Python package is on the Python search
+path. This is most easily done by running ``pip install .`` in the root
+directory of the source code. If the package is installed via ``pip`` then the
+``ocellaris`` command will be available, otherwise you can do ``alias 
+ocellaris="python3 -m ocellaris"``.
 
-You must also ensure that FEniCS is installed. If you can run ``import ocellaris``
-inside Python then Ocellaris should be working..
+Ocellaris depends on an installation of FEniCS, compiled with support for
+PETSc, and some additional Python packages like PyYAML and h5py. Ocellaris will
+inform you about any missing packages when you run it for the first time.
 
-Ocellaris will eventually be available on PYPI for installarion through the
+Eventually Ocellaris will be available on PYPI for installation through the
 ``pip``, command but currently you must download the package manually from 
-`the Ocellaris Bitbucket <https://bitbucket.org/trlandet/ocellaris/src>`_.
+`the Ocellaris Bitbucket git repository
+<https://bitbucket.org/trlandet/ocellaris/src>`_ before you can install it. You
+can get the source code by::
+
+  git clone https://bitbucket.org/trlandet/ocellaris.git ocellaris_src
 
 
 Running Ocellaris
@@ -36,13 +43,13 @@ as the first argument:
 
 .. code-block:: sh
 
-    python -m ocellaris taylor-green.inp
+    ocellaris taylor-green.inp
     
 You can optionally override parameters given on the input file:
 
 .. code-block:: sh
 
-    python -m ocellaris taylor-green.inp \
+    ocellaris taylor-green.inp \
         --set-input time/dt=0.1 \
         --set-input 'solver/velocity_function_space="CG"'  
 
@@ -50,7 +57,7 @@ You can see a summary of the command line options by running:
 
 .. code-block:: sh
 
-    python -m ocellaris --help
+    ocellaris --help
     
 Ocellaris will normally create a log file with the information that is also 
 shown on screen. This will contain a listing of the input after modification
@@ -66,7 +73,7 @@ YAML format and allows you to control most of the solution process. The
 different sections of the input file are described below. 
 
 Note that since JSON is a valid subset of YAML you can also specify the input
-file in JSON format. JSON has no easy support for multi-line strings and
+file in JSON format. JSON has no simple support for multi-line strings and
 comments, so YAML is the format used by the Ocellaris demos and also in the
 descriptions below.
 
@@ -77,7 +84,9 @@ Gotchas
 Some errors that are easy to make when writing a YAML input file:
 
 - Boleans in YAML are written all lower case  (:code:`true, false`) unlike
-  in Python where the first letter is upper case (:code:`True, False`).
+  in Python where the first letter is upper case (:code:`True, False`). It
+  can be easier to use the alternatives :code:`on` or :code:`off` so this
+  confusion is avoided.
 - The value ``5e-3`` is a string in YAML while ``5.0e-3`` is a float.
 - Indentation is significant, just like in Python
 
