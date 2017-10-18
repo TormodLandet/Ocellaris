@@ -17,8 +17,11 @@ make html
 
 
 # Configure git
+# Git commit access given to CircleCI following this procedure
+# https://discuss.circleci.com/t/checkout-fails-with-user-key-bitbucket/8735/7
 git config --global user.email "nobody@example.com"
 git config --global user.name "CircleCI Ocellaris Doc Builder"
+git config --global push.default simple
 
 
 # Clone and update the webpage git repo

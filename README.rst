@@ -59,7 +59,7 @@ The Singularity image is based on the Docker image that is used by the Ocallaris
 environment, see `setup.yml <https://bitbucket.org/trlandet/ocellaris/src/master/.circleci/config.yml>`_
 for up to date details about which Docker image is used. You can use this Docker image to run
 Ocellaris as well, but you will then have to install Ocellaris yourself inside the container,
-see details in the ``setup.yml`` or ```Singularity`` files, it is basically just ``pip install``.
+see details in the ``setup.yml`` or ``Singularity`` files, it is basically just ``pip install``.
 
 First steps
 ~~~~~~~~~~~
@@ -95,6 +95,7 @@ Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/trlandet
 and the current CI build status is |circleci_status|.
 
 .. |circleci_status| image:: https://circleci.com/bb/trlandet/ocellaris.svg?style=svg&circle-token=886a679594f958395d69c0720b04c4d88056f49d
+  :target: https://circleci.com/bb/trlandet/ocellaris/tree/master
 
 Copyright and license
 ---------------------
