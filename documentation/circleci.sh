@@ -1,10 +1,16 @@
 #!/bin/bash
 # Build documentation and upload to bitbucket pages
 # Runs as a part of the automated testing on CircleCI
+set -euxo pipefail
+
+# Only update documentation based on the master branch
+if [[ ! "$(git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
+  echo "Not on master branch, skipping documentation build"
+  exit 0
+fi
 
 
 # Script setup
-set -euxo pipefail
 REPO=trlandet@bitbucket.org:trlandet/trlandet.bitbucket.io.git
 CMESSAGE="CircleCI Ocellaris doc update"
 cd documentation/
