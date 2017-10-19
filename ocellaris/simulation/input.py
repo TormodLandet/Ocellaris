@@ -69,7 +69,9 @@ class Input(collections.OrderedDict):
             default_value: the value to return if the path does
                 not exist in the input dictionary
             required_type: expected type of the variable. Giving 
-                type="any" does no type checking
+                type="any" does no type checking. Other options
+                are "int", "float", "string", "bool", "Input",
+                "list(float)", "dict(string:any)" etc
             mpi_root_value: get the value on the root MPI process
             safe_mode: do not evaluate python expressions "py$ xxx"
         
