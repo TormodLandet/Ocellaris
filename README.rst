@@ -88,8 +88,13 @@ The documentation can be found on the `Ocellaris web page <https://trlandet.bitb
 
 .. TOC_ENDS_HERE
 
-Automated testing
------------------
+Development
+-----------
+
+Ocellaris is developed in Python and C++ on `Bitbucket <https://bitbucket.org/trlandet/ocellaris>`_ by use
+of the Git version control system. If you are reading this on github, please be aware that you are seeing a
+mirror that could potentially be months out of date. The github mirror is only updated sporadically—to trigger
+new Singularity Hub container builds. All pull requests and issues should go to the Bitbucket repository.
 
 Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/trlandet/ocellaris/tree/master>`_  
 and the current CI build status is |circleci_status|.
@@ -101,4 +106,4 @@ Copyright and license
 ---------------------
 
 Ocellaris is copyright Tormod Landet, 2015-2017. Ocellaris is licensed under the Apache 2.0 license, a 
-permissive free software license, compatible with version 3 of the GNU GPL.
+permissive free software license compatible with version 3 of the GNU GPL.
