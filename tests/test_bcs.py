@@ -54,7 +54,6 @@ def mms_case(omega='1.23'):
             f.replace('omega', omega))
 
 
-@skip_in_parallel
 @pytest.mark.parametrize("method", ['py_eval', 'py_exec', 'cpp'])
 def test_dirichlet_bcs_scalar_mms(method):
     sim = Simulation()
@@ -97,7 +96,6 @@ def test_dirichlet_bcs_scalar_mms(method):
     assert relative_error < 0.074
 
 
-@skip_in_parallel
 @pytest.mark.parametrize("method", ['py_eval', 'py_exec', 'cpp'])
 def test_neumann_bcs_scalar_mms(method):
     sim = Simulation()
@@ -153,7 +151,12 @@ def test_neumann_bcs_scalar_mms(method):
     phia = dolfin.interpolate(phi, Vphi)
     
     # Correct the constant offset due to how the null space is handled
-    phih.vector()[:] += phia.vector()[0] - phih.vector()[0]
+    if sim.rank == 0:
+        mod = phia.vector()[0] - phih.vector()[0]
+        mod = dolfin.MPI.max(dolfin.MPI.comm_world, mod)
+    else:
+        mod = dolfin.MPI.max(dolfin.MPI.comm_world, -1.0e100)
+    phih.vector()[:] += mod
     phih.vector().apply('insert')
     
     # Compute relative error and check that it is reasonable
