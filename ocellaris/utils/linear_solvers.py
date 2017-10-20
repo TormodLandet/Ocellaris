@@ -1,11 +1,13 @@
 import numpy
 import dolfin
 import contextlib
-from ocellaris.cpp import load_module
 
 
-def linear_solver_from_input(simulation, path, default_solver, default_preconditioner,
-                             default_lu_method, default_parameters):
+def linear_solver_from_input(simulation, path,
+                             default_solver='default',
+                             default_preconditioner='default',
+                             default_lu_method='default',
+                             default_parameters=None):
     """
     From specifications in the input at the given path create a linear solver
     
@@ -31,7 +33,11 @@ def linear_solver_from_input(simulation, path, default_solver, default_precondit
     preconditioner = simulation.input.get_value('%s/preconditioner' % path, default_preconditioner, 'string')
     lu_method = simulation.input.get_value('%s/lu_method' % path, default_lu_method, 'string')
     solver_parameters = simulation.input.get_value('%s/parameters' % path, {}, 'dict(string:any)')
-    params = [default_parameters, solver_parameters]
+    
+    if default_parameters:
+        params = [default_parameters, solver_parameters]
+    else:
+        params = [solver_parameters]
     
     simulation.log.info('    Creating linear equation solver from input "%s"' % path)
     simulation.log.info('        Method:         %s' % solver_method)
@@ -92,7 +98,10 @@ class LinearSolverWrapper(object):
     
     @property
     def parameters(self):
-        return self._solver.parameters 
+        return self._solver.parameters
+    
+    def set_operator(self, A):
+        return self._solver.set_operator(A)
     
     def set_reuse_preconditioner(self, *argv, **kwargs):
         if self.is_iterative and self.is_first_solve:

@@ -5,6 +5,7 @@ import dolfin
 from dolfin import dot, grad, dx, dS, jump, avg
 from ocellaris.solvers import Solver, register_solver
 from ocellaris.solver_parts import define_penalty
+from ocellaris.utils import linear_solver_from_input
 
 
 BASE_INPUT = """
@@ -19,6 +20,12 @@ mesh:
 
 solver:
     type: PoissonDG
+    phi:
+        solver: cg
+        preconditioner: hypre_amg
+        parameters:
+            relative_tolerance: 1.0e-10
+            absolute_tolerance: 1.0e-15
 
 output:
     solution_properties: off
@@ -49,7 +56,7 @@ class PoissonDGSolver(Solver):
     def __init__(self, simulation):
         """
         A discontinuous Galerkin Poisson solver for use in 
-        the Ocellaris solution framework. Solves -∇⋅∇u = f
+        the Ocellaris solution framework. Solves -∇⋅∇φ = f
         by use of the Symmetric Interior Penalty method
         """
         self.simulation = simulation
@@ -78,7 +85,7 @@ class PoissonDGSolver(Solver):
         a = dot(grad(u), grad(v))*dx
         L = f*v*dx
         
-        # Symmetric Interior Penalty method for -∇⋅∇u
+        # Symmetric Interior Penalty method for -∇⋅∇φ
         n = dolfin.FacetNormal(mesh)
         a -= dot(n('+'), avg(grad(u)))*jump(v)*dS
         a -= dot(n('+'), avg(grad(v)))*jump(u)*dS
@@ -91,7 +98,7 @@ class PoissonDGSolver(Solver):
         for dbc in dirichlet_bcs:
             bcval, dds = dbc.func(), dbc.ds()
             
-            # SIPG for -∇⋅∇p
+            # SIPG for -∇⋅∇φ
             a -= dot(n, grad(u))*v*dds
             a -= dot(n, grad(v))*u*dds
             L -= dot(n, grad(v))*bcval*dds
@@ -101,9 +108,12 @@ class PoissonDGSolver(Solver):
             L += penalty_ds*bcval*v*dds
         
         # Neumann boundary conditions
-        neumann_bcs = sim.data['neumann_bcs'].get('p', [])
+        neumann_bcs = sim.data['neumann_bcs'].get('phi', [])
         for nbc in neumann_bcs:
             L += nbc.func()*v*nbc.ds()
+        
+        # Does the system have a null-space?
+        self.has_null_space = len(dirichlet_bcs) == 0
         
         self.form_lhs = a
         self.form_rhs = L
@@ -113,9 +123,29 @@ class PoissonDGSolver(Solver):
         sim.hooks.simulation_started()
         sim.hooks.new_timestep(timestep_number=1, t=1.0, dt=1.0)
         
+        # Assemble system
         A = dolfin.assemble(self.form_lhs)
         b = dolfin.assemble(self.form_rhs)
-        dolfin.solve(A, self.simulation.data['phi'].vector(), b)
+        
+        # Create Krylov solver
+        solver = linear_solver_from_input(sim, 'solver/phi', 'cg')
+        solver.set_operator(A)
+        
+        # The function where the solution is stored
+        phi = self.simulation.data['phi']
+        
+        # Remove null space if present (pure Neumann BCs)
+        if self.has_null_space:
+            null_vec = dolfin.Vector(phi.vector())
+            phi.function_space().dofmap().set(null_vec, 1.0)
+            null_vec *= 1.0/null_vec.norm("l2")
+            
+            null_space = dolfin.VectorSpaceBasis([null_vec])
+            dolfin.as_backend_type(A).set_nullspace(null_space)
+            null_space.orthogonalize(b)
+        
+        # Solve the linear system using the default solver (direct LU solver)
+        solver.solve(phi.vector(), b)
         
         sim.hooks.end_timestep()
         sim.hooks.simulation_ended(success=True)
