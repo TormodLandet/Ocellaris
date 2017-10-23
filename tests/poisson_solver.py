@@ -27,6 +27,14 @@ solver:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
 
+boundary_conditions:
+-   name: all walls
+    selector: code
+    inside_code: on_boundary
+    phi:
+        type: ConstantValue
+        value: 1.0
+
 output:
     solution_properties: off
     xdmf_write_interval: 0
@@ -36,9 +44,9 @@ output:
 # solution framework has some assumptions that all solvers
 # are (quasi) time stepping flow solvers
 time:
-    dt: 1
+    dt: 1.0
 physical_properties:
-    nu0: 1
+    nu0: 1.0
 """
  
 

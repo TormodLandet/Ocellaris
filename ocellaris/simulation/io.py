@@ -151,8 +151,9 @@ class InputOutputHandling():
         Write a file that can be used to restart the simulation
         """
         t = dolfin.Timer('Ocellaris save hdf5')
-        self._write_hdf5(h5_file_name)
+        fn = self._write_hdf5(h5_file_name)
         t.stop()
+        return fn
     
     def is_restart_file(self, file_name):
         """
@@ -247,7 +248,7 @@ class InputOutputHandling():
         
         # Only write metadata on root process
         if self.simulation.rank != 0:
-            return
+            return h5_file_name
         
         # Write numpy objects and metadata using h5py.File
         with h5py.File(h5_file_name, 'r+') as hdf:
@@ -282,6 +283,8 @@ class InputOutputHandling():
             h5.write(timesteps, '/reports/timesteps')
             for rep_name, values in sim.reporting.timestep_xy_reports.items():
                 reps[rep_name] = numpy.array(values, dtype=float)
+        
+        return h5_file_name
     
     def _read_hdf5(self, h5_file_name, read_input=True, read_results=True):
         """

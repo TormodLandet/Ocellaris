@@ -1,3 +1,8 @@
+"""
+Test solving the Poisson equation with different boundary conditions
+This also test the whole Ocellaris solver framework with input file
+reading and the setup/run functionality
+"""
 import numpy
 import dolfin
 from ocellaris import Simulation, setup_simulation, run_simulation
