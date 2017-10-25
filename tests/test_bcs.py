@@ -180,8 +180,8 @@ def test_neumann_bcs_scalar_mms(method):
     assert relative_error < 0.055
 
 
-@pytest.mark.parametrize("bcs", ['robin', 'neumann'])
-def test_robin_bcs_scalar_mms(bcs):
+@pytest.mark.parametrize("bcs,b", [('robin', 1), ('robin', 0.1), ('robin', 0.01), ('neumann', None)])
+def test_robin_bcs_scalar_mms(bcs, b):
     """
     Test Robin BCs using a Poisson solver to solve
     
@@ -212,11 +212,11 @@ def test_robin_bcs_scalar_mms(bcs):
     # Setup the boundary conditions to test
     if bcs == 'robin':
         sim.input.set_value('boundary_conditions/0/phi/type', 'ConstantRobin')
-        sim.input.set_value('boundary_conditions/0/phi/blend', 1.0)
+        sim.input.set_value('boundary_conditions/0/phi/blend', b)
         sim.input.set_value('boundary_conditions/0/phi/dval', 1.0)
         sim.input.set_value('boundary_conditions/0/phi/nval', -1.0)
         sim.input.set_value('boundary_conditions/1/phi/type', 'ConstantRobin')
-        sim.input.set_value('boundary_conditions/1/phi/blend', 1.0)
+        sim.input.set_value('boundary_conditions/1/phi/blend', b)
         sim.input.set_value('boundary_conditions/1/phi/dval', 2.0)
         sim.input.set_value('boundary_conditions/1/phi/nval', 1.0)
         sim.input.set_value('boundary_conditions/2/phi/type', 'ConstantGradient')
@@ -242,18 +242,18 @@ def test_robin_bcs_scalar_mms(bcs):
     phia = dolfin.interpolate(phi, Vphi)
     
     # Correct the constant offset due to how the null space is handled
-    if bcs == 'neumann' or True:
+    if bcs == 'neumann':
         correct_constant_offset(sim, phih, phia)
-    
+       
     # Plot to file for debugging
-    debug_phi_plot(phia, phih, 'test_robin_bcs_scalar_mms_%s.png' % bcs)
+    #debug_phi_plot(phia, phih, 'test_robin_bcs_scalar_mms_%s.png' % bcs)
     
     # Compute relative error and check that it is reasonable
     phidiff = dolfin.errornorm(phi, phih)
     analytical = dolfin.norm(phia)
     relative_error = phidiff/analytical
     print('RELATIVE ERROR IS %.3f' % relative_error)
-    assert relative_error < 0.015 # Expected 0.014 with Neumann and 0.0139 with Robin
+    assert relative_error < 0.015 # Expect 0.0139 with Robin
 
 
 def debug_phi_plot(phia, phih, plotname, **plotargs):
