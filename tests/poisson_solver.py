@@ -87,6 +87,7 @@ class PoissonDGSolver(Solver):
         penalty = define_penalty(mesh, P, k_min=1.0, k_max=1.0)
         penalty_dS = dolfin.Constant(penalty)
         penalty_ds = dolfin.Constant(penalty*2)
+        yh = dolfin.Constant(1/(penalty*2))
         
         # Define weak form
         u, v = dolfin.TrialFunction(V), dolfin.TestFunction(V) 
@@ -102,8 +103,9 @@ class PoissonDGSolver(Solver):
         a += penalty_dS*jump(u)*jump(v)*dS
         
         # Dirichlet boundary conditions
+        # Nitsche's (1971) method, see e.g. Epshteyn and Rivière (2007)
         dirichlet_bcs = sim.data['dirichlet_bcs'].get('phi', [])
-        for dbc in dirichlet_bcs:
+        for dbc in dirichlet_bcs: 
             bcval, dds = dbc.func(), dbc.ds()
             
             # SIPG for -∇⋅∇φ
@@ -120,8 +122,30 @@ class PoissonDGSolver(Solver):
         for nbc in neumann_bcs:
             L += nbc.func()*v*nbc.ds()
         
+        # Robin boundary conditions
+        # See Juntunen and Stenberg (2009)
+        # n⋅∇φ = 1/b (φ0 - φ) + g
+        robin_bcs = sim.data['robin_bcs'].get('phi', [])
+        for rbc in robin_bcs:
+            b, dval, nval, rds = rbc.blend(), rbc.dfunc(), rbc.nfunc(), rbc.ds()
+            byh = b + yh
+            
+            # SIPG for -∇⋅∇φ
+            a -= yh/byh*dot(n, grad(u))*v*rds
+            a -= yh/byh*dot(n, grad(v))*u*rds
+            L -= yh/byh*dot(n, grad(v))*dval*rds
+            
+            # Weak Dirichlet
+            a += 1/byh*u*v*rds
+            L += 1/byh*dval*v*rds
+            
+            # Weak Neumann
+            a -= b*yh/byh*dot(n, grad(u))*dot(n, grad(v))*rds
+            L -= b*yh/byh*nval*dot(n, grad(v))*rds
+            L += b/byh*nval*v*rds
+        
         # Does the system have a null-space?
-        self.has_null_space = len(dirichlet_bcs) == 0
+        self.has_null_space = len(dirichlet_bcs) + len(robin_bcs) == 0
         
         self.form_lhs = a
         self.form_rhs = L

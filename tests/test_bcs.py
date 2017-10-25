@@ -6,14 +6,13 @@ reading and the setup/run functionality
 import numpy
 import dolfin
 from ocellaris import Simulation, setup_simulation, run_simulation
-from dolfin_utils.test import skip_in_parallel
 from poisson_solver import BASE_INPUT
 import pytest
 
 
-@skip_in_parallel
 @pytest.mark.parametrize("method", ['const', 'py_eval', 'py_exec', 'cpp'])
 def test_dirichlet_bcs_scalar_constant_value(method):
+    "Test inhomogenous Dirichlet BCs using a Poisson solver"
     sim = Simulation()
     sim.input.read_yaml(yaml_string=BASE_INPUT)
     sim.input.set_value('boundary_conditions', [{}])
@@ -61,6 +60,7 @@ def mms_case(omega='1.23'):
 
 @pytest.mark.parametrize("method", ['py_eval', 'py_exec', 'cpp'])
 def test_dirichlet_bcs_scalar_mms(method):
+    "Test inhomogenous coded Dirichlet BCs using a Poisson solver"
     sim = Simulation()
     sim.input.read_yaml(yaml_string=BASE_INPUT)
     sim.input.set_value('boundary_conditions', [{}])
@@ -101,8 +101,22 @@ def test_dirichlet_bcs_scalar_mms(method):
     assert relative_error < 0.074
 
 
+def correct_constant_offset(sim, phih, phia):
+    """
+    Correct the constant offset due to how the null space is handled
+    """
+    if sim.rank == 0:
+        mod = phia.vector()[0] - phih.vector()[0]
+        mod = dolfin.MPI.max(dolfin.MPI.comm_world, mod)
+    else:
+        mod = dolfin.MPI.max(dolfin.MPI.comm_world, -1.0e100)
+    phih.vector()[:] += mod
+    phih.vector().apply('insert')
+
+
 @pytest.mark.parametrize("method", ['py_eval', 'py_exec', 'cpp'])
 def test_neumann_bcs_scalar_mms(method):
+    "Test pure Neumann BCs using a Poisson solver"
     sim = Simulation()
     sim.input.read_yaml(yaml_string=BASE_INPUT)
     sim.input.set_value('mesh/Nx', 20)
@@ -156,13 +170,7 @@ def test_neumann_bcs_scalar_mms(method):
     phia = dolfin.interpolate(phi, Vphi)
     
     # Correct the constant offset due to how the null space is handled
-    if sim.rank == 0:
-        mod = phia.vector()[0] - phih.vector()[0]
-        mod = dolfin.MPI.max(dolfin.MPI.comm_world, mod)
-    else:
-        mod = dolfin.MPI.max(dolfin.MPI.comm_world, -1.0e100)
-    phih.vector()[:] += mod
-    phih.vector().apply('insert')
+    correct_constant_offset(sim, phih, phia)
     
     # Compute relative error and check that it is reasonable
     phidiff = dolfin.errornorm(phi, phih)
@@ -170,3 +178,107 @@ def test_neumann_bcs_scalar_mms(method):
     relative_error = phidiff/analytical
     print('RELATIVE ERROR IS %.3f' % relative_error)
     assert relative_error < 0.055
+
+
+@pytest.mark.parametrize("bcs", ['robin', 'neumann'])
+def test_robin_bcs_scalar_mms(bcs):
+    """
+    Test Robin BCs using a Poisson solver to solve
+    
+      -∇⋅∇φ = f
+    
+    where φ = 1 + x and hence f = 0. We use Neumann
+    BCs n⋅∇φ = 0 on the horizontal walls and Robin
+    BCs on the vertical walls
+    """
+    sim = Simulation()
+    sim.input.read_yaml(yaml_string=BASE_INPUT)
+    
+    # Create boundary regions
+    sim.input.set_value('boundary_conditions', [{}, {}, {}])
+    sim.input.set_value('boundary_conditions/0/name', 'vertical wall x=0')
+    sim.input.set_value('boundary_conditions/0/selector', 'code')
+    sim.input.set_value('boundary_conditions/0/inside_code',
+                        'on_boundary and x[0] < 1e-6')
+    sim.input.set_value('boundary_conditions/1/name', 'vertical walls x=1')
+    sim.input.set_value('boundary_conditions/1/selector', 'code')
+    sim.input.set_value('boundary_conditions/1/inside_code',
+                        'on_boundary and x[0] > 1 - 1e-6')
+    sim.input.set_value('boundary_conditions/2/name', 'horizontal walls')
+    sim.input.set_value('boundary_conditions/2/selector', 'code')
+    sim.input.set_value('boundary_conditions/2/inside_code',
+                        'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)')
+    
+    # Setup the boundary conditions to test
+    if bcs == 'robin':
+        sim.input.set_value('boundary_conditions/0/phi/type', 'ConstantRobin')
+        sim.input.set_value('boundary_conditions/0/phi/blend', 1.0)
+        sim.input.set_value('boundary_conditions/0/phi/dval', 1.0)
+        sim.input.set_value('boundary_conditions/0/phi/nval', -1.0)
+        sim.input.set_value('boundary_conditions/1/phi/type', 'ConstantRobin')
+        sim.input.set_value('boundary_conditions/1/phi/blend', 1.0)
+        sim.input.set_value('boundary_conditions/1/phi/dval', 2.0)
+        sim.input.set_value('boundary_conditions/1/phi/nval', 1.0)
+        sim.input.set_value('boundary_conditions/2/phi/type', 'ConstantGradient')
+        sim.input.set_value('boundary_conditions/2/phi/value', 0.0)
+    elif bcs == 'neumann':
+        sim.input.set_value('boundary_conditions/0/phi/type', 'ConstantGradient')
+        sim.input.set_value('boundary_conditions/0/phi/value', -1.0)
+        sim.input.set_value('boundary_conditions/1/phi/type', 'ConstantGradient')
+        sim.input.set_value('boundary_conditions/1/phi/value', 1.0)
+    
+    # RHS
+    sim.input.set_value('solver/source', '2*pi*pi*(pow(sin(x[0]*pi), 2) - pow(cos(x[0]*pi), 2))')
+    
+    # Run Ocellaris
+    setup_simulation(sim)
+    run_simulation(sim)
+    
+    # The numeric (phih) and analytic (phia) solution functions
+    cphi = '1.0 + x[0] + pow(sin(x[0]*pi), 2)'
+    Vphi = sim.data['Vphi']
+    phi = dolfin.Expression(cphi, degree=5)
+    phih = sim.data['phi']
+    phia = dolfin.interpolate(phi, Vphi)
+    
+    # Correct the constant offset due to how the null space is handled
+    if bcs == 'neumann' or True:
+        correct_constant_offset(sim, phih, phia)
+    
+    # Plot to file for debugging
+    debug_phi_plot(phia, phih, 'test_robin_bcs_scalar_mms_%s.png' % bcs)
+    
+    # Compute relative error and check that it is reasonable
+    phidiff = dolfin.errornorm(phi, phih)
+    analytical = dolfin.norm(phia)
+    relative_error = phidiff/analytical
+    print('RELATIVE ERROR IS %.3f' % relative_error)
+    assert relative_error < 0.015 # Expected 0.014 with Neumann and 0.0139 with Robin
+
+
+def debug_phi_plot(phia, phih, plotname, **plotargs):
+    diff = phia.copy(deepcopy=True)
+    diff.vector().axpy(-1, phih.vector())
+    diff.vector().apply('insert')
+    
+    from matplotlib import pyplot
+    pyplot.figure(figsize=(10,20))
+    
+    pyplot.subplot(311)
+    c = dolfin.plot(phia, **plotargs)
+    pyplot.colorbar(c)
+    pyplot.title('Analytical (norm: %g)' % dolfin.norm(phia))
+    
+    pyplot.subplot(312)
+    c = dolfin.plot(phih, **plotargs)
+    pyplot.colorbar(c)
+    pyplot.title('Numerical (norm: %g)' % dolfin.norm(phih))
+    
+    pyplot.subplot(313)
+    c = dolfin.plot(diff, **plotargs)
+    pyplot.colorbar(c)
+    pyplot.title('Diff (norm: %g)' % dolfin.norm(diff))
+    
+    pyplot.tight_layout()
+    pyplot.savefig(plotname)
+    pyplot.close()

@@ -270,6 +270,7 @@ def setup_boundary_conditions(simulation):
     # Make dicts to gather Dirichlet and Neumann boundary conditions
     simulation.data['dirichlet_bcs'] = {}
     simulation.data['neumann_bcs'] = {}
+    simulation.data['robin_bcs'] = {}
     simulation.data['outlet_bcs'] = []
     
     for region in simulation.data['boundary']:
