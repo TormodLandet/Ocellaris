@@ -61,7 +61,7 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
     
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """
-        Dirichlet condition with constant value
+        Robin condition with constant values
         """
         self.simulation = simulation
         if var_name[-1].isdigit():
@@ -71,9 +71,9 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
         
-        blend = inp_dict.get_value('blend', DEFAULT_BLEND, required_type='float')
-        dval = inp_dict.get_value('dval', DEFAULT_DVAL, required_type='float')
-        nval = inp_dict.get_value('nval', DEFAULT_NVAL, required_type='float')
+        blend = inp_dict.get_value('blend', DEFAULT_BLEND, required_type='any')
+        dval = inp_dict.get_value('dval', DEFAULT_DVAL, required_type='any')
+        nval = inp_dict.get_value('nval', DEFAULT_NVAL, required_type='any')
         if isinstance(blend, list):
             assert len(blend) == simulation.ndim
             assert len(dval) == simulation.ndim
@@ -84,21 +84,20 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
         else:
             self.register_robin_condition(var_name, blend, dval, nval, subdomains, subdomain_id)
     
-    def register_robin_condition(self, var_name, scale, base, grad_scale, subdomains, subdomain_id):
+    def register_robin_condition(self, var_name, blend, dval, nval, subdomains, subdomain_id):
         """
         Add a Dirichlet condition to this variable
         """
-        assert isinstance(scale, (float, int))
-        assert isinstance(base, (float, int))
-        assert isinstance(grad_scale, (float, int))
-        df_scale = dolfin.Constant(scale)
-        df_base = dolfin.Constant(base)
-        df_grad_scale = dolfin.Constant(grad_scale)
+        assert isinstance(blend, (float, int))
+        assert isinstance(dval, (float, int))
+        assert isinstance(nval, (float, int))
+        df_blend = dolfin.Constant(blend)
+        df_dval = dolfin.Constant(dval)
+        df_nval = dolfin.Constant(nval)
         
         # Store the boundary condition for use in the solver
-        bc = OcellarisRobinBC(self.simulation, self.func_space, df_scale, df_base, df_grad_scale, subdomains, subdomain_id)
+        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend, df_dval, df_nval, subdomains, subdomain_id)
         bcs = self.simulation.data['robin_bcs']
         bcs.setdefault(var_name, []).append(bc)
         
-        self.simulation.log.info('    Constant Robin BC %r X = %r + %r dX/dn for X = %s' % (scale, base, grad_scale, var_name))
-
+        self.simulation.log.info('    Constant Robin BC "dX/dn = 1/%r (%r - X) + %r" for X = %s' % (blend, dval, nval, var_name))
