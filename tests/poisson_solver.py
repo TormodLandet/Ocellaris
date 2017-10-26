@@ -127,22 +127,39 @@ class PoissonDGSolver(Solver):
         # n⋅∇φ = 1/b (φ0 - φ) + g
         robin_bcs = sim.data['robin_bcs'].get('phi', [])
         for rbc in robin_bcs:
-            b, dval, nval, rds = rbc.blend(), rbc.dfunc(), rbc.nfunc(), rbc.ds()
-            byh = b + yh
+            b, dval, nval = rbc.blend(), rbc.dfunc(), rbc.nfunc()
+            nscale, rds = rbc.nscale(), rbc.ds()
             
-            # SIPG for -∇⋅∇φ
-            a -= yh/byh*dot(n, grad(u))*v*rds
-            a -= yh/byh*dot(n, grad(v))*u*rds
-            L -= yh/byh*dot(n, grad(v))*dval*rds
+            if False:
+                dudn = dot(n, grad(u))
+                dvdn = dot(n, grad(v))
+                
+                # Main equation
+                a -= dudn*v*rds
+                
+                # BC with test functions penalty1*v and penalty2*dvdn
+                for z in [v/(b + yh), -yh*dvdn/(b + yh)]:
+                    a += b*nscale*dudn*z*rds
+                    a += u*z*rds
+                    L += dval*z*rds
+                    L += b*nval*z*rds
             
-            # Weak Dirichlet
-            a += 1/byh*u*v*rds
-            L += 1/byh*dval*v*rds
-            
-            # Weak Neumann
-            a += b*yh/byh*dot(n, grad(u))*dot(n, grad(v))*rds
-            L -= b*yh/byh*nval*dot(n, grad(v))*rds
-            L += b/byh*nval*v*rds
+            else:
+                byh = b + yh
+                
+                # SIPG for -∇⋅∇φ
+                a -= yh/byh*dot(n, grad(u))*v*nscale*rds
+                a -= yh/byh*dot(n, grad(v))*u*nscale*rds
+                L -= yh/byh*dot(n, grad(v))*dval*nscale*rds
+                
+                # Weak Dirichlet
+                a += 1/byh*u*v*rds
+                L += 1/byh*dval*v*rds
+                
+                # Weak Neumann
+                a -= b*yh/byh*dot(n, grad(u))*dot(n, grad(v))*nscale**2*rds
+                L -= b*yh/byh*nval*dot(n, grad(v))*nscale*rds
+                L += b/byh*nval*v*rds
         
         # Does the system have a null-space?
         self.has_null_space = len(dirichlet_bcs) + len(robin_bcs) == 0

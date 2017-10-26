@@ -5,23 +5,25 @@ from . import register_boundary_condition, BoundaryConditionCreator
 DEFAULT_BLEND = 1.0
 DEFAULT_DVAL = 0.0
 DEFAULT_NVAL = 0.0
-
+DEFAULT_NSCALE = 1.0
 
 class OcellarisRobinBC():
-    def __init__(self, simulation, V, blend, dirichlet_value, neumann_value,
+    def __init__(self, simulation, V, blend, dirichlet_value, neumann_value, neumann_scale,
                  subdomain_marker, subdomain_id, updater=None):
         """
         A storage class for a Robin boundary conditions on the form
         
-          n⋅∇φ = 1/b (φ0 - φ) + g
+          S n⋅∇φ = 1/b (φ0 - φ) + g
         
         Where b is a blending parameter and u0 and g are the Dirichlet
-        and Neumann values for b → 0 and b → ∞ respectively.
+        and Neumann values for b → 0 and b → ∞ respectively. S is a
+        scaling of the Neumann term, typically 1.0 or -1.0
         """
         self.simulation = simulation
         self._blend = blend
         self._dfunc = dirichlet_value
         self._nfunc = neumann_value
+        self._nscale = neumann_scale
         self.subdomain_marker = subdomain_marker
         self.subdomain_id = subdomain_id
         self._updater = updater
@@ -34,6 +36,9 @@ class OcellarisRobinBC():
     
     def nfunc(self):
         return self._nfunc
+    
+    def nscale(self):
+        return self._nscale
     
     def ds(self):
         """
@@ -74,17 +79,21 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
         blend = inp_dict.get_value('blend', DEFAULT_BLEND, required_type='any')
         dval = inp_dict.get_value('dval', DEFAULT_DVAL, required_type='any')
         nval = inp_dict.get_value('nval', DEFAULT_NVAL, required_type='any')
+        nscale = inp_dict.get_value('nscale', DEFAULT_NSCALE, required_type='any')
         if isinstance(blend, list):
             assert len(blend) == simulation.ndim
             assert len(dval) == simulation.ndim
             assert len(nval) == simulation.ndim
+            assert len(nscale) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
-                self.register_robin_condition(name, blend[d], dval[d], nval[d], subdomains, subdomain_id)
+                self.register_robin_condition(name, blend[d], dval[d], nval[d],
+                                              nscale[d], subdomains, subdomain_id)
         else:
-            self.register_robin_condition(var_name, blend, dval, nval, subdomains, subdomain_id)
+            self.register_robin_condition(var_name, blend, dval, nval, 
+                                          nscale, subdomains, subdomain_id)
     
-    def register_robin_condition(self, var_name, blend, dval, nval, subdomains, subdomain_id):
+    def register_robin_condition(self, var_name, blend, dval, nval, nscale, subdomains, subdomain_id):
         """
         Add a Dirichlet condition to this variable
         """
@@ -94,10 +103,13 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
         df_blend = dolfin.Constant(blend)
         df_dval = dolfin.Constant(dval)
         df_nval = dolfin.Constant(nval)
+        df_nscale = dolfin.Constant(nscale)
         
         # Store the boundary condition for use in the solver
-        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend, df_dval, df_nval, subdomains, subdomain_id)
+        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend, df_dval, 
+                              df_nval, df_nscale, subdomains, subdomain_id)
         bcs = self.simulation.data['robin_bcs']
         bcs.setdefault(var_name, []).append(bc)
         
-        self.simulation.log.info('    Constant Robin BC "dX/dn = 1/%r (%r - X) + %r" for X = %s' % (blend, dval, nval, var_name))
+        self.simulation.log.info('    Constant Robin BC "dX/dn = 1/%r (%r - X) + %r" for X = %s'
+                                 % (blend, dval, nval, var_name))

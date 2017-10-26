@@ -30,10 +30,13 @@ class ConstantSlipLengthBoundary(BoundaryConditionCreator):
         df_blend = dolfin.Constant(length)
         df_dval = dolfin.Constant(base)
         df_nval = 0.0
+        df_nscale = 1.0
         
         # Store the boundary condition for use in the solver
-        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend, df_dval, df_nval, subdomains, subdomain_id)
+        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend, df_dval, 
+                              df_nval, df_nscale, subdomains, subdomain_id)
         bcs = self.simulation.data['robin_bcs']
         bcs.setdefault(var_name, []).append(bc)
         
-        self.simulation.log.info('    Constant slip length = %r (base %r) for %s' % (length, base, var_name))
+        self.simulation.log.info('    Constant slip length = %r (base %r) for %s'
+                                 % (length, base, var_name))

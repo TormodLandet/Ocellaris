@@ -307,7 +307,7 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length):
     phia = dolfin.interpolate(phi, Vphi)
     
     # Plot to file for debugging
-    debug_phi_plot(phi, phia, phih, 'test_slip_length_bcs_scalar_mms_%g.png' % slip_length)
+    #debug_phi_plot(phi, phia, phih, 'test_slip_length_bcs_scalar_mms_%g.png' % slip_length)
     
     # Compute relative error and check that it is reasonable
     phidiff = dolfin.errornorm(phi, phih)
@@ -315,7 +315,7 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length):
     relative_error = phidiff/analytical
     print('RELATIVE ERROR IS %.3f' % relative_error)
     
-    assert relative_error < 0.016 # Expect 0.0154 for 𝛿=0.01
+    assert relative_error < 0.01 # Expect 0.0097 for 𝛿=0.01
 
 
 def debug_phi_plot(phi, phia, phih, plotname, **plotargs):
