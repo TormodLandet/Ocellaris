@@ -199,7 +199,7 @@ def test_robin_bcs_scalar_mms(bcs, b):
     sim.input.set_value('boundary_conditions/0/name', 'vertical wall x=0')
     sim.input.set_value('boundary_conditions/0/selector', 'code')
     sim.input.set_value('boundary_conditions/0/inside_code',
-                        'on_boundary and x[0] < 1e-6')
+                         'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)')
     sim.input.set_value('boundary_conditions/1/name', 'vertical walls x=1')
     sim.input.set_value('boundary_conditions/1/selector', 'code')
     sim.input.set_value('boundary_conditions/1/inside_code',
@@ -256,10 +256,77 @@ def test_robin_bcs_scalar_mms(bcs, b):
     assert relative_error < 0.015 # Expect 0.0139 with Robin
 
 
-def debug_phi_plot(phia, phih, plotname, **plotargs):
+@pytest.mark.parametrize("slip_length", [0.1, 0.01, 0.001])
+def test_slip_length_robin_bcs_scalar_mms(slip_length):
+    """
+    Test slip length Robin BCs using a Poisson solver to solve
+    
+      -∇⋅∇φ = f
+    
+    where φ = (6x² - 6x + 6𝛿)/(6𝛿  - 1) and hence f = -12/(6𝛿  - 1). 
+    
+    We use Neumann BCs n⋅∇φ = 0 on the horizontal walls and Navier's
+    slip length boundary condition on the vertical walls. The selected
+    analytical solution is such that for any slip length 𝛿 the average
+    value of φ is 1.0
+    
+    This mimics a flow profile going vertically in a 1.0 wide channel
+    """
+    sim = Simulation()
+    sim.input.read_yaml(yaml_string=BASE_INPUT)
+    
+    # Create boundary regions
+    sim.input.set_value('boundary_conditions', [{}, {}])
+    sim.input.set_value('boundary_conditions/0/name', 'vertical walls')
+    sim.input.set_value('boundary_conditions/0/selector', 'code')
+    sim.input.set_value('boundary_conditions/0/inside_code',
+                         'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)')
+    sim.input.set_value('boundary_conditions/1/name', 'horizontal walls')
+    sim.input.set_value('boundary_conditions/1/selector', 'code')
+    sim.input.set_value('boundary_conditions/1/inside_code',
+                        'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)')
+    
+    # Setup the boundary conditions to test
+    sim.input.set_value('boundary_conditions/0/phi/type', 'ConstantSlipLength')
+    sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
+    sim.input.set_value('boundary_conditions/1/phi/type', 'ConstantGradient')
+    sim.input.set_value('boundary_conditions/1/phi/value', 0.0)
+    
+    # RHS
+    sim.input.set_value('solver/source', '12/(6*𝛿  - 1.0)'.replace('𝛿', repr(slip_length)))
+    
+    # Run Ocellaris
+    setup_simulation(sim)
+    run_simulation(sim)
+    
+    # The numeric (phih) and analytic (phia) solution functions
+    cphi = '(-6*x[0]*x[0] + 6*x[0] + 6*𝛿)/(6*𝛿  - 1.0)'.replace('𝛿', repr(slip_length))
+    Vphi = sim.data['Vphi']
+    phi = dolfin.Expression(cphi, degree=5)
+    phih = sim.data['phi']
+    phia = dolfin.interpolate(phi, Vphi)
+    
+    # Plot to file for debugging
+    debug_phi_plot(phi, phia, phih, 'test_slip_length_bcs_scalar_mms_%g.png' % slip_length)
+    
+    # Compute relative error and check that it is reasonable
+    phidiff = dolfin.errornorm(phi, phih)
+    analytical = dolfin.norm(phia)
+    relative_error = phidiff/analytical
+    print('RELATIVE ERROR IS %.3f' % relative_error)
+    
+    assert relative_error < 0.016 # Expect 0.0154 for 𝛿=0.01
+
+
+def debug_phi_plot(phi, phia, phih, plotname, **plotargs):
     diff = phia.copy(deepcopy=True)
     diff.vector().axpy(-1, phih.vector())
     diff.vector().apply('insert')
+    
+    na = dolfin.norm(phia)
+    nh = dolfin.norm(phih)
+    nd = dolfin.norm(diff)
+    nd2 = dolfin.errornorm(phi, phih)
     
     from matplotlib import pyplot
     pyplot.figure(figsize=(10,20))
@@ -267,17 +334,17 @@ def debug_phi_plot(phia, phih, plotname, **plotargs):
     pyplot.subplot(311)
     c = dolfin.plot(phia, **plotargs)
     pyplot.colorbar(c)
-    pyplot.title('Analytical (norm: %g)' % dolfin.norm(phia))
+    pyplot.title('Analytical (norm: %g)' % na)
     
     pyplot.subplot(312)
     c = dolfin.plot(phih, **plotargs)
     pyplot.colorbar(c)
-    pyplot.title('Numerical (norm: %g)' % dolfin.norm(phih))
+    pyplot.title('Numerical (norm: %g)' % nh)
     
     pyplot.subplot(313)
     c = dolfin.plot(diff, **plotargs)
     pyplot.colorbar(c)
-    pyplot.title('Diff (norm: %g)' % dolfin.norm(diff))
+    pyplot.title('Diff (norm: %g, errornorm: %g, rel: %g)' % (nd, nd2, nd2/na))
     
     pyplot.tight_layout()
     pyplot.savefig(plotname)

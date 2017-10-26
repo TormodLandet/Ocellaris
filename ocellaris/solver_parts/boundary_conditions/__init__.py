@@ -46,5 +46,6 @@ from .dof_marker import get_dof_region_marks, mark_cell_layers
 from . import dirichlet
 from . import neumann
 from . import robin
+from . import slip_length
 from . import wall
 from . import outlet

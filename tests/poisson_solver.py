@@ -140,7 +140,7 @@ class PoissonDGSolver(Solver):
             L += 1/byh*dval*v*rds
             
             # Weak Neumann
-            a -= b*yh/byh*dot(n, grad(u))*dot(n, grad(v))*rds
+            a += b*yh/byh*dot(n, grad(u))*dot(n, grad(v))*rds
             L -= b*yh/byh*nval*dot(n, grad(v))*rds
             L += b/byh*nval*v*rds
         
