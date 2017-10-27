@@ -5,7 +5,7 @@ from collections import namedtuple
 
 # Compact way to store the information, may turn into classes later if needed
 CellInfo = namedtuple('CellData', 'volume midpoint')
-FacetInfo = namedtuple('FacetData', 'area midpoint normal')
+FacetInfo = namedtuple('FacetData', 'area midpoint normal on_boundary')
 
 
 def init_connectivity(simulation):
@@ -111,6 +111,7 @@ def precompute_facet_data(simulation):
         # connected cells, we only need the first one 
         connected_cells = conFC(fidx)
         icell0 = connected_cells[0]
+        on_boundary = len(connected_cells) == 1
         
         # Midpoint of local cell 0
         cell0_mp = cell_info[icell0].midpoint
@@ -125,6 +126,6 @@ def precompute_facet_data(simulation):
             normal *= -1
         
         area = areas[fidx]
-        facet_info[fidx] = FacetInfo(area, midpoint, normal)
+        facet_info[fidx] = FacetInfo(area, midpoint, normal, on_boundary)
     
     simulation.data['facet_info'] = facet_info

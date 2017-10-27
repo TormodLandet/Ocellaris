@@ -130,6 +130,13 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # Make sure the convection scheme has something usefull in the first iteration
         c.assign(cp)
         
+        # Plot density and viscosity
+        self.update_plot_fields()
+        
+        # Stop early if the free surface is forced to stay still 
+        if self.force_steady:
+            return
+        
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
         Vc = sim.data['Vc']
@@ -143,8 +150,6 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if self.need_gradient:
             # Reconstruct the gradient from the colour function DG0 field
             self.convection_scheme.initialize_gradient()
-        
-        self.update_plot_fields()
     
     def get_colour_function(self, k):
         """
@@ -193,6 +198,10 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field
         """
+        if self.force_steady:
+            self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
+            return
+        
         timer = dolfin.Timer('Ocellaris update VOF')
         
         # Get the functions

@@ -256,8 +256,9 @@ def test_robin_bcs_scalar_mms(bcs, b):
     assert relative_error < 0.015 # Expect 0.0139 with Robin
 
 
-@pytest.mark.parametrize("slip_length", [1000.0, 1.0, 0.001])
-def test_slip_length_robin_bcs_scalar_mms(slip_length):
+@pytest.mark.parametrize("const_slip", [True, False])
+@pytest.mark.parametrize("slip_length", [1000.0, 1.0, 0.001, 0.0])
+def test_slip_length_robin_bcs_scalar_mms(slip_length, const_slip):
     """
     Test slip length Robin BCs using a Poisson solver to solve
     
@@ -286,9 +287,27 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length):
     sim.input.set_value('boundary_conditions/1/inside_code',
                         'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)')
     
-    # Setup the boundary conditions to test
-    sim.input.set_value('boundary_conditions/0/phi/type', 'ConstantSlipLength')
-    sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
+    # Vertical wall BCs
+    if const_slip:
+        sim.input.set_value('boundary_conditions/0/phi/type', 'ConstantSlipLength')
+        sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
+    else:
+        sim.input.set_value('boundary_conditions/0/phi/type', 'VariableSlipLength')
+        sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
+        sim.input.set_value('boundary_conditions/0/phi/slip_factor_distance', 0.1)
+        
+        # Create dummy scalar field
+        sim.input.set_value('multiphase_solver/type', 'BlendedAlgebraicVOF')
+        sim.input.set_value('multiphase_solver/function_space_colour', 'DG')
+        sim.input.set_value('multiphase_solver/polynomial_degree_colour', 0)
+        sim.input.set_value('multiphase_solver/force_steady', True)
+        sim.input.set_value('initial_conditions/cp/cpp_code', '0.5') # The interface is everywhere
+        
+        sim.input.set_value('physical_properties/rho0', 1.0)
+        sim.input.set_value('physical_properties/rho1', 1.0)
+        sim.input.set_value('physical_properties/nu1', 1.0)
+    
+    # Horizontal wall BCs
     sim.input.set_value('boundary_conditions/1/phi/type', 'ConstantGradient')
     sim.input.set_value('boundary_conditions/1/phi/value', 0.0)
     
