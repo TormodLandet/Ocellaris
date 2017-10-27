@@ -30,30 +30,38 @@ if os.environ.get('READTHEDOCS') == 'True':
 # Make the setup.py test command work
 class PyTest(TestCommand):
     description = 'Run Ocellaris\' tests with pytest'
-    user_options = [('run-unit-tests=', 'u', "Run unit tests"),
-                    ('run-regression-tests=', 'r', "Run regression tests")]
+    user_options = [('skip-unit-tests=', 'u', "Skip unit tests"),
+                    ('skip-regression-tests=', 'r', "Skip regression tests"),
+                    ('skip-demo-tests=', 'd', "Skip demo tests")]
     
     def initialize_options(self):
         TestCommand.initialize_options(self)
-        self.run_unit_tests = True
-        self.run_regression_tests = True
+        self.skip_unit_tests = False
+        self.skip_regression_tests = False
+        self.skip_demo_tests = False
     
     def finalize_options(self):
         TestCommand.finalize_options(self)
-        assert self.run_unit_tests or self.run_regression_tests
     
     def run_tests(self):
         import pytest
-        args = []
+        args = ['-v']
         if self.verbose:
-            args.append('-vs')
-        if self.run_unit_tests:
-            args.append(os.path.join(here, 'tests/'))
-        if self.run_regression_tests:
-            args.append(os.path.join(here, 'cases/regression_tests.py'))
+            args.append('-s')
         
-        errno = pytest.main(args)
-        sys.exit(errno)
+        if not self.skip_unit_tests:
+            args.append(os.path.join(here, 'tests/'))
+        if not self.skip_regression_tests:
+            args.append(os.path.join(here, 'cases/regression_tests.py'))
+        if not self.skip_demo_tests:
+            args.append(os.path.join(here, 'demos/'))
+        
+        if (self.skip_unit_tests and self.skip_regression_tests and self.skip_demo_tests):
+            print('WARNING: You skipped all tests!')
+            sys.exit(0)
+        else:
+            errno = pytest.main(args)
+            sys.exit(errno)
 
 
 # Give setuptools/pip informattion about the Ocellaris package
