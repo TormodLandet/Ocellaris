@@ -124,42 +124,25 @@ class PoissonDGSolver(Solver):
         
         # Robin boundary conditions
         # See Juntunen and Stenberg (2009)
-        # n⋅∇φ = 1/b (φ0 - φ) + g
+        # S*n⋅∇φ = (φ0 - φ)/b + S*g
         robin_bcs = sim.data['robin_bcs'].get('phi', [])
         for rbc in robin_bcs:
-            b, dval, nval = rbc.blend(), rbc.dfunc(), rbc.nfunc()
-            nscale, rds = rbc.nscale(), rbc.ds()
+            b, rds = rbc.blend(), rbc.ds()
+            dval, nval = rbc.dfunc(), rbc.nfunc()
             
-            if False:
-                dudn = dot(n, grad(u))
-                dvdn = dot(n, grad(v))
-                
-                # Main equation
-                a -= dudn*v*rds
-                
-                # BC with test functions penalty1*v and penalty2*dvdn
-                for z in [v/(b + yh), -yh*dvdn/(b + yh)]:
-                    a += b*nscale*dudn*z*rds
-                    a += u*z*rds
-                    L += dval*z*rds
-                    L += b*nval*z*rds
+            # From IBP of the main equation
+            a -= dot(n, grad(u))*v*rds
             
-            else:
-                byh = b + yh
-                
-                # SIPG for -∇⋅∇φ
-                a -= yh/byh*dot(n, grad(u))*v*nscale*rds
-                a -= yh/byh*dot(n, grad(v))*u*nscale*rds
-                L -= yh/byh*dot(n, grad(v))*dval*nscale*rds
-                
-                # Weak Dirichlet
-                a += 1/byh*u*v*rds
-                L += 1/byh*dval*v*rds
-                
-                # Weak Neumann
-                a -= b*yh/byh*dot(n, grad(u))*dot(n, grad(v))*nscale**2*rds
-                L -= b*yh/byh*nval*dot(n, grad(v))*nscale*rds
-                L += b/byh*nval*v*rds
+            # Test functions for the Robin BC
+            z1 = 1/(b + yh)*v
+            z2 = -yh/(b + yh)*dot(n, grad(v))
+            
+            # Robin BC added twice with different test functions
+            for z in [z1, z2]:
+                a += b*dot(n, grad(u))*z*rds
+                a += u*z*rds
+                L += dval*z*rds
+                L += b*nval*z*rds
         
         # Does the system have a null-space?
         self.has_null_space = len(dirichlet_bcs) + len(robin_bcs) == 0

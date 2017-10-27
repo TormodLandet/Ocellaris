@@ -241,7 +241,7 @@ def test_robin_bcs_scalar_mms(bcs, b):
     phih = sim.data['phi']
     phia = dolfin.interpolate(phi, Vphi)
     
-    # Correct the constant offset due to how the null space is handled
+    # Correct the constant offset due to how the null space is handledFalse
     if bcs == 'neumann':
         correct_constant_offset(sim, phih, phia)
        
@@ -256,17 +256,17 @@ def test_robin_bcs_scalar_mms(bcs, b):
     assert relative_error < 0.015 # Expect 0.0139 with Robin
 
 
-@pytest.mark.parametrize("slip_length", [0.1, 0.01, 0.001])
+@pytest.mark.parametrize("slip_length", [1000.0, 1.0, 0.001])
 def test_slip_length_robin_bcs_scalar_mms(slip_length):
     """
     Test slip length Robin BCs using a Poisson solver to solve
     
       -∇⋅∇φ = f
     
-    where φ = (6x² - 6x + 6𝛿)/(6𝛿  - 1) and hence f = -12/(6𝛿  - 1). 
+    where φ = (-6x² + 6x + 6𝛿)/(6𝛿  - 1) and hence f = 12/(6𝛿  - 1). 
     
     We use Neumann BCs n⋅∇φ = 0 on the horizontal walls and Navier's
-    slip length boundary condition on the vertical walls. The selected
+    slip length boundary condition on the vertical walls. The selectedFalse
     analytical solution is such that for any slip length 𝛿 the average
     value of φ is 1.0
     
@@ -313,12 +313,16 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length):
     phidiff = dolfin.errornorm(phi, phih)
     analytical = dolfin.norm(phia)
     relative_error = phidiff/analytical
-    print('RELATIVE ERROR IS %.3f' % relative_error)
+    print('RELATIVE ERROR IS %.4f for 𝛿=%r' % (relative_error, slip_length))
     
-    assert relative_error < 0.01 # Expect 0.0097 for 𝛿=0.01
+    assert relative_error < 0.0099 # Expect 0.0097 for 𝛿=0.001
 
 
-def debug_phi_plot(phi, phia, phih, plotname, **plotargs):
+def debug_phi_plot(phi, phia, phih, plotname, compare_historical=False, **plotargs):
+    """
+    Only used while developing the tests, left here in case more tests are
+    added that need some debug plotting as well
+    """
     diff = phia.copy(deepcopy=True)
     diff.vector().axpy(-1, phih.vector())
     diff.vector().apply('insert')
@@ -349,3 +353,26 @@ def debug_phi_plot(phi, phia, phih, plotname, **plotargs):
     pyplot.tight_layout()
     pyplot.savefig(plotname)
     pyplot.close()
+    
+    if not compare_historical:
+        return
+    hist_file = plotname + '.npy'
+    
+    comm = phih.function_space().mesh().mpi_comm()
+    mpi_size = dolfin.MPI.size(comm)
+    if mpi_size != 1:
+        return
+    
+    import os
+    arr = phih.vector().get_local()
+    if not os.path.isfile(hist_file):
+        numpy.save(hist_file, arr)
+        return
+    
+    hist = numpy.load(hist_file)
+    print('hist', hist[:5])
+    print('arr ', arr[:5])
+    print('diff', (hist - arr)[:5])
+    print('maxabs', abs(hist - arr).max())
+    
+    assert abs(hist - arr).max() < 1e-12
