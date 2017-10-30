@@ -144,93 +144,61 @@ class SlipFactorUpdater():
             raise NotImplementedError('Slip factor must currently be piecewice constant')
         
         # Create the slip factor field
-        self.scalar_field = sim.data[self.scalar_field_name]
-        mesh = self.scalar_field.function_space().mesh()
+        scalar_field = sim.data[self.scalar_field_name]
+        mesh = scalar_field.function_space().mesh()
         V = dolfin.FunctionSpace(mesh, 'DGT', 0)
-        self.slip_factor = dolfin.Function(V)
-        sim.data[self.slip_factor_name] = self.slip_factor
+        self.facet_dofs = facet_dofmap(V)
+        sim.data[self.slip_factor_name] = self.slip_factor = dolfin.Function(V)
         
-        # Get external facing facet midpoints and neighbours
-        self.simulation = sim
-        self.preprocess_facets()
+        # We need to find where the interface intersects the boundary
+        self.intersector = BoundaryLevelSetIntersector(sim, scalar_field, self.scalar_field_level_set)
         
         # Update the field before each time step
         sim.hooks.add_custom_hook(self.custom_hook_point, self.update,
                                   'Update slip length "%s"' % self.slip_factor_name)
         return self.slip_factor_name
     
-    def preprocess_facets(self):
-        sim = self.simulation
-        conn_FV = sim.data['connectivity_FV']
-        conn_VF = sim.data['connectivity_VF']
-        
-        self.facets = [(fidx, f) for fidx, f in enumerate(sim.data['facet_info']) if f.on_boundary]
-        self.facet_dofs = facet_dofmap(self.slip_factor.function_space())
-        
-        # For each boundary facet find the neighbour external facets
-        external_facets = set(fidx for fidx, _ in self.facets) 
-        self.facet_neighbours = {}
-        for fidx, _facet in self.facets:
-            self.facet_neighbours[fidx] = nbs = []
-            vs = conn_FV(fidx)
-            for v in vs:
-                for nb in conn_VF(v):
-                    if nb != fidx and nb in external_facets:
-                        nbs.append(nb)
-    
     @timeit.named('SlipFactorUpdater')
     def update(self):
-        phi = self.scalar_field
         fac = self.slip_factor
-        ls = self.scalar_field_level_set
         D = self.slip_factor_distance
         
-        # Get the value of the colur function in the midpoint of each external facet
-        values = {}
-        val = numpy.zeros(1, float)
-        for fidx, facet in self.facets:
-            mp = facet.midpoint
-            phi.eval(val, mp)
-            values[fidx] = val[0]
+        intersection_points = self.intersector.get()
         
-        # Find where the level set touches the boundary
-        intersections = []
-        for fidx, facet in self.facets:
-            nbmin, nbmax = 1e100, -1e100
-            for nb in self.facet_neighbours[fidx]:
-                v = values[nb]
-                nbmin = min(nbmin, v)
-                nbmax = max(nbmax, v)
-            
-            v = values[fidx]
-            if v <= ls and nbmax >= ls:
-                intersections.append(facet.midpoint)
-        
-        # Update the slip factor
+        # Initialize the factor to 0 (far away from the interface)
         arr = fac.vector().get_local()
         arr[:] = 0.0
-        if intersections:
-            for fidx, facet in self.facets:
-                # Find the distance to the closest intersection
-                min_dist = 1e100
-                mp = facet.midpoint
-                for pos in intersections:
-                    d1 = mp - pos
-                    d = numpy.dot(d1, d1)
-                    min_dist = min(min_dist, d)
-                min_dist = min_dist**0.5
-                
-                # Update the slip factor for this facet
-                dof = self.facet_dofs[fidx]
-                r = min_dist/D
-                if r < 1:
-                    arr[dof] = 1
-                elif r < 2:
-                    # Smooth transition from 1 to 0 when r goes from 1 to 2
-                    # The slope in both ends is 0
-                    arr[dof] = 2*r**3 - 9*r**2 + 12*r - 4
-                else:
-                    arr[dof] = 0 
+        if not intersection_points:
+            fac.vector().set_local(arr)
+            fac.vector().apply('insert')
+            return
+        
+        # Update the slip factor for facets close to the interface
+        for fidx, facet in self.intersector.boundary_facets:
+            # Find the distance to the closest intersection by linear search and
+            # not using fancier nearest neighbour techniques. Assuming that there
+            # are very few intersections compared to the total number of facets 
+            # this is should be much faster (not tested)
+            min_dist = 1e100
+            mp = facet.midpoint
+            for pos in intersection_points:
+                d1 = mp - pos
+                d = numpy.dot(d1, d1)
+                min_dist = min(min_dist, d)
+            min_dist = min_dist**0.5
+            
+            # Update the slip factor for this facet
+            dof = self.facet_dofs[fidx]
+            r = min_dist/D
+            if r < 1:
+                arr[dof] = 1
+            elif r < 2:
+                # Smooth transition from 1 to 0 when r goes from 1 to 2
+                # The slope in both ends is 0
+                arr[dof] = 2*r**3 - 9*r**2 + 12*r - 4
+            else:
+                arr[dof] = 0
+        
         fac.vector().set_local(arr)
         fac.vector().apply('insert')
         #from matplotlib import pyplot
@@ -238,3 +206,78 @@ class SlipFactorUpdater():
         #c = plot_matplotlib_dgt(fac)
         #pyplot.colorbar(c)
         #pyplot.savefig('debug.png')
+
+
+class BoundaryLevelSetIntersector:
+    def __init__(self, sim, scalar_field, level_set):
+        """
+        Helper class to locate where the level set (a real number)
+        of a scalar field intersects the domain boundary
+        """
+        self.scalar_field = scalar_field
+        self.level_set = level_set
+        
+        conn_FV = sim.data['connectivity_FV']
+        conn_VF = sim.data['connectivity_VF']
+        
+        # Get external facing facets
+        self.boundary_facets = [(fidx, f) for fidx, f in enumerate(sim.data['facet_info'])
+                                if f.on_boundary]
+        
+        # For each boundary facet find the neighbour external facets
+        external_facets = set(fidx for fidx, _ in self.boundary_facets) 
+        self.facet_neighbours = {}
+        self.facet_midpoints = {}
+        for fidx, facet in self.boundary_facets:
+            self.facet_neighbours[fidx] = nbs = []
+            vs = conn_FV(fidx)
+            for v in vs:
+                for nb in conn_VF(v):
+                    if nb != fidx and nb in external_facets:
+                        nbs.append(nb)
+            self.facet_midpoints[fidx] = facet.midpoint
+    
+    def get(self):
+        """
+        Get the current boundary intersections
+        """
+        phi = self.scalar_field
+        ls = self.level_set
+        
+        # Get the value of the colur function in the midpoint of each external facet
+        values = {}
+        val = numpy.zeros(1, float)
+        for fidx, facet in self.boundary_facets:
+            mp = facet.midpoint
+            phi.eval(val, mp)
+            values[fidx] = val[0]
+        
+        # Find where the level set touches the boundary
+        intersections = []
+        for fidx, facet in self.boundary_facets:
+            # We only check the facets that are "below" the interface
+            fval = values[fidx] 
+            if fval > ls:
+                continue
+            
+            # Find the maximum scalar value among all neighbour facets
+            nbmax = -1e100
+            nbmax_idx = None
+            for nb in self.facet_neighbours[fidx]:
+                v = values[nb]
+                if v > nbmax:
+                    nbmax = v
+                    nbmax_idx = nb
+            assert nbmax_idx is not None
+            
+            # Determine the position of the interface if a neighbour is "above" it
+            # (above in value, not necessarily in spatial coordinate)  
+            if nbmax >= ls:
+                nb_mp = self.facet_midpoints[nbmax_idx]
+                f = 0
+                if v != nbmax:
+                    f = (ls - fval)/(nbmax - fval)
+                pt = nb_mp * f + facet.midpoint * (1 - f)
+                intersections.append(pt)
+        
+        return intersections
