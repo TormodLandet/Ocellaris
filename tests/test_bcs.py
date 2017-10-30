@@ -256,9 +256,13 @@ def test_robin_bcs_scalar_mms(bcs, b):
     assert relative_error < 0.015 # Expect 0.0139 with Robin
 
 
-@pytest.mark.parametrize("const_slip", [True, False])
-@pytest.mark.parametrize("slip_length", [1000.0, 1.0, 0.001, 0.0])
-def test_slip_length_robin_bcs_scalar_mms(slip_length, const_slip):
+@pytest.mark.parametrize("method,slip_length", [('Constant', 1000.0),
+                                                ('Constant', 1.0),
+                                                ('Constant', 0.001),
+                                                ('Constant', 0.0),
+                                                ('C++', 1.0),
+                                                ('Interface', 1.0)])
+def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
     """
     Test slip length Robin BCs using a Poisson solver to solve
     
@@ -288,11 +292,14 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, const_slip):
                         'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)')
     
     # Vertical wall BCs
-    if const_slip:
-        sim.input.set_value('boundary_conditions/0/phi/type', 'ConstantSlipLength')
+    if method == 'Constant':
+        sim.input.set_value('boundary_conditions/0/phi/type', 'SlipLength')
         sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
+    elif method == 'C++':
+        sim.input.set_value('boundary_conditions/0/phi/type', 'SlipLength')
+        sim.input.set_value('boundary_conditions/0/phi/slip_length', repr(slip_length))
     else:
-        sim.input.set_value('boundary_conditions/0/phi/type', 'VariableSlipLength')
+        sim.input.set_value('boundary_conditions/0/phi/type', 'InterfaceSlipLength')
         sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
         sim.input.set_value('boundary_conditions/0/phi/slip_factor_distance', 0.1)
         

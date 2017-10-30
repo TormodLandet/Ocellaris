@@ -83,7 +83,7 @@ def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
         return function
 
 
-def OcellarisCppExpression(simulation, cpp_code, description, degree, update=False, return_updater=False):
+def OcellarisCppExpression(simulation, cpp_code, description, degree, update=True, return_updater=False):
     """
     Create a dolfin.Expression and make sure it has variables like time
     available when executing.
