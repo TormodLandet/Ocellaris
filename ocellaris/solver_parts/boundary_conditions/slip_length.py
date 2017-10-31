@@ -136,8 +136,8 @@ class SlipFactorUpdater():
     
     def register(self, sim):
         if self.slip_factor_name in sim.data:
-            self.simulation.log.info('    Found existing slip factor %r for %r. Reusing that'
-                                     % (self.slip_factor_name, self.bc_var_name))
+            sim.log.info('    Found existing slip factor %r for %r. Reusing that'
+                         % (self.slip_factor_name, self.bc_var_name))
             return self.slip_factor_name
         
         if self.slip_factor_degree != 0:

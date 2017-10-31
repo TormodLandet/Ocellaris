@@ -66,5 +66,5 @@ class SlopeLimiterInput(object):
         """
         Transfer the boundary dof data to the C++ side
         """
-        assert boundary_dof_type.min() >= 0 and boundary_dof_type.max() <= 2
+        assert boundary_dof_type.min() >= 0 and boundary_dof_type.max() <= 3
         self.cpp_obj.set_boundary_values(boundary_dof_type, boundary_dof_value, enforce)

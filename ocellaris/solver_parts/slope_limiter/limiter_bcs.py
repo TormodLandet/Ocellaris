@@ -6,6 +6,7 @@ class SlopeLimiterBoundaryConditions(object):
     BC_TYPE_NOT_ON_BOUNDARY = 0
     BC_TYPE_DIRICHLET = 1
     BC_TYPE_NEUMANN = 2
+    BC_TYPE_ROBIN = 3
     
     def __init__(self, simulation, field_name, dof_region_marks, V):
         """
@@ -42,7 +43,7 @@ class SlopeLimiterBoundaryConditions(object):
     
     def activate(self, active=True):
         self.active = active
-        
+    
     def _warn(self, message):
         if not message in self._allready_warned:
             self.simulation.log.warning(message)
@@ -77,6 +78,12 @@ class SlopeLimiterBoundaryConditions(object):
             region_number = bc.subdomain_id - 1
             neumann[region_number] = bc
         
+        # Collect Robin BCs for this field
+        robin = {}
+        for bc in sim.data['robin_bcs'].get(self.field_name, []):
+            region_number = bc.subdomain_id - 1
+            robin[region_number] = bc
+        
         regions = sim.data['boundary']
         for region_number, dofs in self.region_dofs.items():
             boundary_region = regions[region_number]
@@ -88,12 +95,16 @@ class SlopeLimiterBoundaryConditions(object):
             elif region_number in neumann:
                 bc_type = self.BC_TYPE_NEUMANN
                 value = neumann[region_number].func()
+            elif region_number in robin:
+                bc_type = self.BC_TYPE_ROBIN
+                value = None
             else:
                 self._warn('WARNING: Field %s has no BC in region %s' %
                            (self.field_name, boundary_region.name))
                 continue
             
-            if bc_type == self.BC_TYPE_DIRICHLET and weak_dof_values is not None:
+            DnR = (self.BC_TYPE_DIRICHLET, self.BC_TYPE_ROBIN) 
+            if bc_type in DnR and weak_dof_values is not None:
                 # Take values from a field which has (weak) Dirichlet BCs applied
                 for dof in dofs:
                     boundary_dof_type[dof] = bc_type
@@ -127,7 +138,6 @@ class SlopeLimiterBoundaryConditions(object):
         
         timer.stop()
         return boundary_dof_type, boundary_dof_value
-    
     
     def _get_dof_to_cell_mapping(self):
         """

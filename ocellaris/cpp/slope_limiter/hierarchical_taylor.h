@@ -81,7 +81,8 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
         }
 
         // Modify local bounds to incorporate the boundary conditions
-        if (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET)
+        if (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET or
+            boundary_dof_type[dof] == BoundaryDofType::ROBIN)
         {
           double bc_value = boundary_dof_value[dof];
           lo = std::min(lo, bc_value);
@@ -208,8 +209,9 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
           hi = std::max(hi, nb_val);
         }
 
-        // Handle boundary conditions and global bounds
-        bool dof_is_dirichlet = (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET);
+        // Handle boundary conditions and global bounds (assumes Robin with small blend factor)
+        bool dof_is_dirichlet = (boundary_dof_type[dof] == BoundaryDofType::DIRICHLET or
+                                 boundary_dof_type[dof] == BoundaryDofType::ROBIN);
         if (itaylor == 0)
         {
           // Modify local bounds to incorporate the boundary conditions
