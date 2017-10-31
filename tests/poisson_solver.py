@@ -124,7 +124,7 @@ class PoissonDGSolver(Solver):
         
         # Robin boundary conditions
         # See Juntunen and Stenberg (2009)
-        # S*n⋅∇φ = (φ0 - φ)/b + S*g
+        # n⋅∇φ = (φ0 - φ)/b + g
         robin_bcs = sim.data['robin_bcs'].get('phi', [])
         for rbc in robin_bcs:
             b, rds = rbc.blend(), rbc.ds()

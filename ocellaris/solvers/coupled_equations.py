@@ -142,6 +142,7 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
     # Elliptic penalties
     penalty_dS, penalty_ds, D11, D12 = navier_stokes_stabilization_penalties(sim, nu, 
          velocity_continuity_factor_D12, pressure_continuity_factor)
+    yh = 1/penalty_ds
     
     # Upwind and downwind velocities
     w_nU = (dot(u_conv, n) + abs(dot(u_conv, n)))/2.0
@@ -236,6 +237,8 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
             eq -= f[d]*v[d]*dx
         
         # Dirichlet boundary
+        # Nitsche method, see, e.g, Epshteyn and Rivière (2007),
+        # "Estimation of penalty parameters for SIPG" 
         dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
         for dbc in dirichlet_bcs:
             u_bc = dbc.func()
@@ -251,13 +254,18 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
             eq += rho*u[d]*w_nU*v[d]*dbc.ds()
             eq += rho*u_bc*w_nD*v[d]*dbc.ds()
             
-            # SIPG for -∇⋅μ∇u
+            # From IBP of the main equation
             eq -= mu*dot(n, grad(u[d]))*v[d]*dbc.ds()
-            eq -= mu*dot(n, grad(v[d]))*u[d]*dbc.ds()
-            eq += mu*dot(n, grad(v[d]))*u_bc*dbc.ds()
             
-            # Weak Dirichlet
-            eq += penalty_ds*(u[d] - u_bc)*v[d]*dbc.ds()
+            # Test functions for the Dirichlet BC
+            z1 = penalty_ds*v[d]
+            z2 = -mu*dot(n, grad(v[d]))
+            
+            # Dirichlet BC added twice with different test functions
+            # This is SIPG for -∇⋅μ∇u
+            for z in [z1, z2]:
+                eq += u[d]*z*dbc.ds()
+                eq -= u_bc*z*dbc.ds()
             
             # Pressure
             if not use_grad_p_form:
@@ -281,6 +289,43 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
             # Pressure
             if not use_grad_p_form:
                 eq += p*v[d]*n[d]*nbc.ds()
+        
+        # Robin boundary
+        # See Juntunen and Stenberg (2009)
+        # n⋅∇u = (u0 - u)/b + g
+        robin_bcs = sim.data['robin_bcs'].get('u%d' % d, [])
+        for rbc in robin_bcs:
+            b, rds = rbc.blend(), rbc.ds()
+            dval, nval = rbc.dfunc(), rbc.nfunc()
+            
+            # Divergence free criterion
+            if use_grad_q_form:
+                eq += q*u_bc*n[d]*rds
+            else:
+                eq -= q*u[d]*n[d]*rds
+                eq += q*u_bc*n[d]*rds
+            
+            # Convection
+            eq += rho*u[d]*w_nU*v[d]*rds
+            eq += rho*dval*w_nD*v[d]*rds
+            
+            # From IBP of the main equation
+            eq -= mu*dot(n, grad(u[d]))*v[d]*rds
+            
+            # Test functions for the Robin BC
+            z1 = 1/(b + yh)*v[d]
+            z2 = -mu*yh/(b + yh)*dot(n, grad(v[d]))
+            
+            # Robin BC added twice with different test functions
+            for z in [z1, z2]:
+                eq += b*dot(n, grad(u[d]))*z*rds
+                eq += u[d]*z*rds
+                eq -= dval*z*rds
+                eq -= b*nval*z*rds
+            
+            # Pressure
+            if not use_grad_p_form:
+                eq += p*v[d]*n[d]*dbc.ds()
         
         # Outlet boundary
         for obc in sim.data['outlet_bcs']:
