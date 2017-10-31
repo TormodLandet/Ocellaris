@@ -13,22 +13,24 @@ def timeit(f):
     
     Functions are identified by their names
     """
+    # Extract name at defition time, not at run time
+    if timeit.next_name:
+        # Used by timeit_named as a way to pass information
+        timed_task_name = timeit.next_name
+        timeit.next_name = None
+    else:
+        timed_task_name = f.__name__
+    
     @wraps(f)
-    def wrapper(*args, **kwds):
-        if timeit.next_name:
-            task = timeit.next_name
-            timeit.next_name = None
-        else:
-            task = f.__name__
-        timer = dolfin.Timer('Ocellaris %s' % task)
-        #print '<%s>' % task
-        ret =  f(*args, **kwds)
-        #print '</%s>' % task 
-        t = timer.stop()
-        timeit.timings[task].append(t)
+    def wrapper(*args, **kwds):    
+        with dolfin.Timer('Ocellaris %s' % timed_task_name):
+            #print '<%s>' % timed_task_name
+            ret = f(*args, **kwds)
+            #print '</%s>' % timed_task_name
         return ret
+    
     return wrapper
-timeit.timings = defaultdict(list)
+
 timeit.next_name = None 
 
 
@@ -39,6 +41,7 @@ def timeit_named(name):
     """
     timeit.next_name = name
     return timeit
+
 timeit.named = timeit_named
 
 
