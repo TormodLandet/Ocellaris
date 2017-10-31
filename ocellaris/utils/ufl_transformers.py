@@ -186,10 +186,12 @@ class EstimateZeroForms(MultiFunction):
     as many true zero forms as we can
     """
     def visit(self, expr):
+        if isinstance(expr, (int, float)):
+            return 1 if expr else 0
         return map_expr_dag(self, expr)
-    
+
     # --- Terminal objects ---
-    
+
     def zero(self, o):
         return 0
 
@@ -202,7 +204,7 @@ class EstimateZeroForms(MultiFunction):
     def facet_normal(self, o):
         assert len(o.ufl_shape) == 1
         return as_vector([1] * o.ufl_shape[0])
-    
+
     def argument(self, o):
         shape = o.ufl_shape
         if len(shape) == 0:
@@ -217,26 +219,29 @@ class EstimateZeroForms(MultiFunction):
 
     def multi_index(self, o):
         return o # Handle further up
-    
+
     def variable(self, o):
         raise NotImplementedError()
-    
+
     # --- Non-terminal objects ---
 
     def index_sum(self, o, f, i):
         raise NotImplementedError()
 
     def sum(self, o, *ops):
-        return sum(ops)
+        return sum(self.visit(o) for o in ops)
 
     def product(self, o, *ops):
-        return numpy.cumprod(ops)[-1]
-
-    def division(self, o, a, b):
+        a = 1
+        for oi in ops:
+            a *= self.visit(oi)
         return a
 
+    def division(self, o, a, b):
+        return self.visit(a)
+
     def abs(self, o, a):
-        return abs(a)
+        return abs(self.visit(a))
 
     def transposed(self, o, a):
         raise NotImplementedError()
@@ -285,7 +290,7 @@ class EstimateZeroForms(MultiFunction):
 
     # Functions of one scalar argument that are zero for zero arguments
     def sqrt(self, o, f):
-        return f
+        return self.visit(f)
     sin = tan = errf = sqrt
     sinh = tanh = asin = atan = sqrt
     
@@ -300,7 +305,7 @@ class EstimateZeroForms(MultiFunction):
     bessel_j = bessel_y = bessel_i = bessel_K = atan2
     
     def power(self, o, a, b):
-        return a
+        return self.visit(a)
 
     def outer(self, o, a, b):
         raise NotImplementedError()
@@ -344,18 +349,14 @@ class EstimateZeroForms(MultiFunction):
                               for row in o.ufl_operands])
         else:
             raise NotImplementedError()
-    
+
     def component_tensor(self, o, *ops):
         raise NotImplementedError()
-    
+
     def positive_restricted(self, o, f):
-        return f
+        return self.visit(f)
 
-    def negative_restricted(self, o, f):
-        return f
-
-    def cell_avg(self, o, f):
-        return f
+    negative_restricted = cell_avg = positive_restricted
 
     # The value of a condition is not important, 
     # we will assume both true and false anyway
@@ -371,10 +372,11 @@ class EstimateZeroForms(MultiFunction):
             raise NotImplementedError()
 
     def min_value(self, o, a, b):
+        a = self.visit(a)
+        b = self.visit(b)
         return max(a, b) # not a typo, should be max!
 
-    def max_value(self, o, a, b):
-        return max(a, b)
+    max_value = min_value
 
     def expr(self, o):
         raise NotImplementedError("Missing handler for type %s" % str(type(o)))
