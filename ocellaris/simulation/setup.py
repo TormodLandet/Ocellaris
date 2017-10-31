@@ -11,11 +11,13 @@ def setup_simulation(simulation):
     """
     Prepare an Ocellaris simulation for running
     """
-    simulation.log.info('Preparing simulation ...\n')
+    simulation.log.info('Preparing simulation')
+    simulation.log.info('Output prefix is: %s\n' % 
+                        simulation.input.get_value('output/prefix', '', 'string'))
     t_start = time.time()
     
     # Set linear algebra backend to PETSc
-    setup_fenics(simulation)
+    setup_fenics(simulation) 
     
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')

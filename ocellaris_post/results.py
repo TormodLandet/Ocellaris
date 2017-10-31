@@ -70,6 +70,7 @@ class Results(object):
         of the restart/log file
         """
         prefix = self.input.get('output', {}).get('prefix', '')
+        prefix = self._process_inp(prefix)
         fn = prefix + name
         
         loc = self.file_name.rfind(prefix)
@@ -87,6 +88,20 @@ class Results(object):
                               % (name, prefix, self.file_name))
         
         return pth
+    
+    def _process_inp(self, value):
+        """
+        Simplified handling of Python coded input fields
+        """
+        if not isinstance(value, str) or not 'py$' in value:
+            return value
+        value = value.strip()
+        assert value.startswith('py$')
+        return self._eval(value[3:])
+    
+    def _eval(self, code):
+        consts = self.input.get('user_code', {}).get('constants')
+        return eval(code, globals(), consts)
 
 
 class IsoSurfaces(object):
@@ -153,8 +168,13 @@ def read_h5_data(results):
     import h5py
     hdf = h5py.File(results.file_name, 'r')
     
+    string_datasets = 'input_file' in hdf['/ocellaris']
+    
     # Read the input file
-    input_str = hdf['/ocellaris'].attrs['input_file']
+    if string_datasets:
+        input_str = hdf['/ocellaris/input_file'].value
+    else:
+        input_str = hdf['/ocellaris'].attrs['input_file']
     results.input = yaml.load(input_str)
     
     # Read reports
@@ -170,15 +190,18 @@ def read_h5_data(results):
         reps[key] = reps[key][:N]
     
     # Read log
-    log = []
-    i = 0
-    while True:
-        logname = 'full_log_%d' % i
-        i += 1
-        if not logname in hdf['/ocellaris'].attrs:
-            break
-        log.append(hdf['/ocellaris'].attrs[logname])
-    log = ''.join(log)
+    if string_datasets:
+        log = hdf['/ocellaris/full_log'].value
+    else:
+        log = []
+        i = 0
+        while True:
+            logname = 'full_log_%d' % i
+            i += 1
+            if not logname in hdf['/ocellaris'].attrs:
+                break
+            log.append(hdf['/ocellaris'].attrs[logname])
+        log = ''.join(log)
     
     results.reports = reps
     results.log = log
@@ -243,7 +266,7 @@ def read_log_data(results):
 def read_iteration_reports(results):
     STARTMARKER = '  Inner iteration'
     iter_reps = {}
-    for line in StringIO.StringIO(results.log):
+    for line in StringIO(unicode(results.log)):
         if not line.startswith(STARTMARKER):
             continue
         # Parse the line
@@ -263,7 +286,7 @@ def read_iteration_reports(results):
                     name = ' '.join(wds[:-1])
                     value = float(wds[-1])
                     iter_reps.setdefault(name, []).append(value)
-                    
+        
         except:
             pass
     

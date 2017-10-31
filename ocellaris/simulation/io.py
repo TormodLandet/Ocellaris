@@ -279,8 +279,7 @@ class InputOutputHandling():
             
             # Save reports
             reps = hdf.create_group('reports')
-            timesteps = numpy.array(sim.reporting.timesteps, dtype=float)
-            h5.write(timesteps, '/reports/timesteps')
+            reps['timesteps'] = numpy.array(sim.reporting.timesteps, dtype=float)
             for rep_name, values in sim.reporting.timestep_xy_reports.items():
                 reps[rep_name] = numpy.array(values, dtype=float)
         
