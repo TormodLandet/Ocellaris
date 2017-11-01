@@ -2,7 +2,7 @@
 Plot timestep reports from one or more Ocellaris restart files 
 """
 import os
-import StringIO
+from io import StringIO
 import urllib, base64
 import re
 import h5py
@@ -101,7 +101,7 @@ def save_reports_to_html(fig, report_names, Nfiles, all_reps, labels, plot_rep):
             fig.tight_layout()
             
             # Get png data as base64 encoded <img> element
-            imgdata = StringIO.StringIO()
+            imgdata = StringIO()
             fig.savefig(imgdata, format='png')
             imgdata.seek(0)  # rewind the data
             png = base64.b64encode(imgdata.buf)
@@ -120,7 +120,7 @@ def save_reports_to_html(fig, report_names, Nfiles, all_reps, labels, plot_rep):
                            (labels[i], y.min(), y.max(), y.mean(), y.std()))
             html.write('</table>\n')
         html.write('\n\n</body>\n</html>')
-        print 'Wrote report file', html_file_name
+        print('Wrote report file', html_file_name)
 
 
 def plot_reports(file_names, lables, save=False, logy=False):

@@ -1,4 +1,4 @@
-import time
+import sys, time, importlib
 import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.probes import setup_probes
@@ -17,7 +17,10 @@ def setup_simulation(simulation):
     t_start = time.time()
     
     # Set linear algebra backend to PETSc
-    setup_fenics(simulation) 
+    setup_fenics(simulation)
+    
+    # Setup user code (custom sys.path, custom module imports)
+    setup_user_code(simulation)
     
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')
@@ -115,6 +118,21 @@ def setup_fenics(simulation):
     # Form compiler "uflacs" needed for isoparametric elements
     form_compiler = simulation.input.get_value('solver/form_compiler', 'auto', 'string')
     dolfin.parameters['form_compiler']['representation'] = form_compiler
+
+
+def setup_user_code(simulation):
+    """
+    Setup custom path and user code imports
+    """
+    # Extend the Python search path
+    paths = simulation.input.get_value('user_code/python_path', [], 'list(string)')
+    for path in paths[::-1]:
+        sys.path.insert(0, path)
+    
+    # Import modules, possibly defining new solvers etc
+    modules = simulation.input.get_value('user_code/modules', [], 'list(string)')
+    for module in modules:
+        importlib.import_module(module.strip())
 
 
 def load_mesh(simulation):
