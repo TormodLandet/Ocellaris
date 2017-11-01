@@ -34,7 +34,7 @@ metadata:
         Made to test/develop 3D support in Ocellaris  
 
 physical_properties:
-    g: [0, -9.81]
+    g: [0, 0, -9.81]
     nu0: 1.5e-5
     rho0: 1.0
 
@@ -48,13 +48,13 @@ boundary_conditions:
     inside_code: 'on_boundary'
 -   name: Inlet
     selector: code
-    inside_code: 'on_boundary and x[1] < 1e-5'
+    inside_code: 'on_boundary and x[2] < 1e-5'
 -   name: Outlet
     selector: code
-    inside_code: 'on_boundary and x[1] > H - 1e-5'
+    inside_code: 'on_boundary and x[2] > H - 1e-5'
 -   name: Sphere
     selector: code
-    inside_code: 'on_boundary and (pow(x[0], 2) + pow(x[1] - h, 2)) < 1.01*pow(r, 2)'    
+    inside_code: 'on_boundary and (pow(x[0], 2) + pow(x[1], 2) + pow(x[2] - h, 2)) < 1.01*pow(r, 2)'    
 
 time:
     dt: 0.01

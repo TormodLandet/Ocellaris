@@ -121,7 +121,10 @@ def precompute_facet_data(simulation):
 
         # Find a normal pointing out from cell 0
         normalpt = facet.normal()
-        normal = numpy.array([normalpt.x(), normalpt.y()], float)
+        if ndim == 2:
+            normal = numpy.array([normalpt.x(), normalpt.y()], float)
+        else:
+            normal = numpy.array([normalpt.x(), normalpt.y(), normalpt.z()], float)
         if numpy.dot(vec0, normal) < 0:
             normal *= -1
         
