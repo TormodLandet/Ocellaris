@@ -18,7 +18,7 @@ def pytest_generate_tests(metafunc):
 
 def test_setup_demo(demo_inp_file, monkeypatch):
     "Run setup on demo input file"
-    skip = {'linear_sloshing.inp'}
+    skip = {'linear_sloshing.inp', 'falling_sphere.inp'}
     if demo_inp_file in skip:
         return pytest.skip()
     
