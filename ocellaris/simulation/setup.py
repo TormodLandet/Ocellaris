@@ -11,6 +11,9 @@ def setup_simulation(simulation):
     """
     Prepare an Ocellaris simulation for running
     """
+    # Setup user code (custom sys.path, custom module imports)
+    setup_user_code(simulation)
+    
     simulation.log.info('Preparing simulation')
     simulation.log.info('Output prefix is: %s\n' % 
                         simulation.input.get_value('output/prefix', '', 'string'))
@@ -18,9 +21,6 @@ def setup_simulation(simulation):
     
     # Set linear algebra backend to PETSc
     setup_fenics(simulation)
-    
-    # Setup user code (custom sys.path, custom module imports)
-    setup_user_code(simulation)
     
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')
@@ -104,6 +104,30 @@ def setup_simulation(simulation):
     simulation.hooks.show_hook_info()
     
 
+def setup_user_code(simulation):
+    """
+    Setup custom path and user code imports
+    """
+    # Extend the Python search path
+    paths = simulation.input.get_value('user_code/python_path', [], 'list(string)')
+    for path in paths[::-1]:
+        sys.path.insert(0, path)
+    
+    # Import modules, possibly defining new solvers etc
+    modules = simulation.input.get_value('user_code/modules', [], 'list(string)')
+    for module in modules:
+        importlib.import_module(module.strip())
+        
+    # Code to run right before setup (custom mesh generation etc)
+    code = simulation.input.get_value('user_code/code', '', 'string')
+    if code:
+        consts = simulation.input.get_value('user_code/constants', {}, 'dict(string:any)')
+        variables = consts.copy()
+        variables['simulation'] = simulation
+        variables['__file__'] = simulation.input.file_name 
+        exec(code, globals(), variables)
+
+
 def setup_fenics(simulation):
     """
     Setup FEniCS parameters like linear algebra backend
@@ -118,21 +142,6 @@ def setup_fenics(simulation):
     # Form compiler "uflacs" needed for isoparametric elements
     form_compiler = simulation.input.get_value('solver/form_compiler', 'auto', 'string')
     dolfin.parameters['form_compiler']['representation'] = form_compiler
-
-
-def setup_user_code(simulation):
-    """
-    Setup custom path and user code imports
-    """
-    # Extend the Python search path
-    paths = simulation.input.get_value('user_code/python_path', [], 'list(string)')
-    for path in paths[::-1]:
-        sys.path.insert(0, path)
-    
-    # Import modules, possibly defining new solvers etc
-    modules = simulation.input.get_value('user_code/modules', [], 'list(string)')
-    for module in modules:
-        importlib.import_module(module.strip())
 
 
 def load_mesh(simulation):
