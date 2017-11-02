@@ -6,7 +6,7 @@ from dolfin import dot, as_vector, dx, dS, ds, LocalSolver
 
 class VelocityBDMProjection():
     def __init__(self, simulation, w, incompressibility_flux_type='central', 
-                 D12=None, degree=None, use_bcs=True):
+                 D12=None, degree=None, use_bcs=True, use_nedelec=True):
         """
         Implement equation 4a and 4b in "Two new techniques for generating exactly
         incompressible approximate velocities" by Bernardo Cocburn (2009)
@@ -34,16 +34,23 @@ class VelocityBDMProjection():
             self.Vout = FunctionSpace(V.mesh(), 'DG', degree)
         
         assert ue.family() == 'Discontinuous Lagrange'
-        assert self.degree in (1, 2)
-        assert w.ufl_shape == (2,)
         assert incompressibility_flux_type in ('central', 'upwind')
         
-        if self.degree == 1:
-            self._setup_dg1_projection(w, incompressibility_flux_type, D12, use_bcs)
+        # Polynomial degree and geometrical dimension 
+        pdeg = self.degree
+        gdim = w.ufl_shape[0]
+        pg = (pdeg, gdim)
+        if use_nedelec:
+            self._setup_projection_nedelec(w, incompressibility_flux_type, D12, use_bcs, pdeg)
+        elif pg == (1, 2):
+            self._setup_dg1_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
+        elif pg == (2, 2):
+            self._setup_dg2_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
         else:
-            self._setup_dg2_projection(w, incompressibility_flux_type, D12, use_bcs)
+            raise NotImplementedError('VelocityBDMProjection does not support '
+                                      'degree %d and dimension %d' % pg)
     
-    def _setup_dg1_projection(self, w, incompressibility_flux_type, D12, use_bcs):
+    def _setup_dg1_projection_2D(self, w, incompressibility_flux_type, D12, use_bcs):
         """
         Implement the projection where the result is BDM embeded in a DG1 function
         """
@@ -104,7 +111,7 @@ class VelocityBDMProjection():
         self.assigner0 = dolfin.FunctionAssigner(self.Vout, V.sub(0))
         self.assigner1 = dolfin.FunctionAssigner(self.Vout, V.sub(1))
     
-    def _setup_dg2_projection(self, w, incompressibility_flux_type, D12, use_bcs):
+    def _setup_dg2_projection_2D(self, w, incompressibility_flux_type, D12, use_bcs):
         """
         Implement the projection where the result is BDM embeded in a DG2 function
         """
@@ -167,6 +174,72 @@ class VelocityBDMProjection():
         v3 = as_vector([v3b.dx(1), -v3b.dx(0)]) # Curl of [0, 0, v3b]
         a += dot(u, v3)*dx
         L += dot(w, v3)*dx
+        
+        # Pre-factorize matrices and store for usage in projection
+        self.local_solver = LocalSolver(a, L)
+        self.local_solver.factorize()
+        self.temp_function = Function(V)
+        self.w = w
+        self.assigner0 = dolfin.FunctionAssigner(self.Vout, V.sub(0))
+        self.assigner1 = dolfin.FunctionAssigner(self.Vout, V.sub(1))
+    
+    def _setup_projection_nedelec(self, w, incompressibility_flux_type, D12, use_bcs, pdeg):
+        """
+        Implement the BDM-like projection using Nedelec elements in the test function
+        """
+        sim = self.simulation
+        k = pdeg
+        mesh = w[0].function_space().mesh()
+        V = VectorFunctionSpace(mesh, 'DG', k)
+        n = FacetNormal(mesh)
+        
+        # The mixed function space of the projection test functions
+        e1 = FiniteElement('DGT', mesh.ufl_cell(), k)
+        e2 = FiniteElement('N1curl', mesh.ufl_cell(), k-1)
+        em = MixedElement([e1, e2])
+        W = FunctionSpace(mesh, em)
+        v1, v2 = TestFunctions(W)
+        u = TrialFunction(V)
+        
+        # The same fluxes that are used in the incompressibility equation
+        if incompressibility_flux_type == 'central':    
+            u_hat_dS = dolfin.avg(w)
+        elif incompressibility_flux_type == 'upwind':
+            w_nU = (dot(w, n) + abs(dot(w, n)))/2.0
+            switch = dolfin.conditional(dolfin.gt(w_nU('+'), 0.0), 1.0, 0.0)
+            u_hat_dS = switch*w('+') + (1 - switch)*w('-')
+        
+        if D12 is not None:
+            u_hat_dS += dolfin.Constant([D12, D12])*dolfin.jump(w, n)
+        
+        # Equation 1 - flux through the sides
+        a = L = 0
+        for R in '+-':
+            a += dot(u(R), n(R))*v1(R)*dS
+            L += dot(u_hat_dS, n(R))*v1(R)*dS
+            
+        # Eq. 1 cont. - flux through external boundaries
+        if use_bcs:
+            for d in range(2):
+                dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
+                neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                outlet_bcs = sim.data['outlet_bcs']
+                
+                for dbc in dirichlet_bcs:
+                    u_bc = dbc.func()
+                    a += u[d]*n[d]*v1*dbc.ds()
+                    L += u_bc*n[d]*v1*dbc.ds()
+                
+                for nbc in neumann_bcs + outlet_bcs:
+                    a += u[d]*n[d]*v1*nbc.ds()
+                    L += w[d]*n[d]*v1*nbc.ds()
+        else:
+            a += dot(u, n)*v1*ds
+            L += dot(u, n)*v1*ds
+        
+        # Equation 2 - internal shape using 'Nedelec 1st kind H(curl)' elements
+        a += dot(u, v2)*dx
+        L += dot(w, v2)*dx
         
         # Pre-factorize matrices and store for usage in projection
         self.local_solver = LocalSolver(a, L)
