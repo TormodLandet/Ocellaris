@@ -37,36 +37,50 @@ class InputOutputHandling():
     def _setup_io(self):
         sim = self.simulation
         sim.log.info('Setting up simulation IO')
-        self.xdmf_write_interval = sim.input.get_value('output/xdmf_write_interval',
-                                                       XDMF_WRITE_INTERVAL, 'int')
-        self.xdmf_flush =  sim.input.get_value('output/xdmf_flush', XDMF_FLUSH, 'bool')
-        self.hdf5_write_interval = sim.input.get_value('output/hdf5_write_interval',
-                                                         HDF5_WRITE_INTERVAL, 'int')
+        self.xdmf_file = None
         
-        # Create XDMF file object
-        need_vec_func = False
-        if self.xdmf_write_interval > 0:
-            need_vec_func = True
-            file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
-            file_name2 = os.path.splitext(file_name)[0] + '.h5'
-            
-            # Remove previous files
-            if os.path.isfile(file_name):
-                sim.log.info('    Removing existing XDMF file %s' % file_name)
-                os.remove(file_name)
-            if os.path.isfile(file_name2):
-                sim.log.info('    Removing existing XDMF file %s' % file_name2)
-                os.remove(file_name2)
-            
-            sim.log.info('    Creating XDMF file %s' % file_name)
-            self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
-            self.xdmf_file.parameters['flush_output'] = self.xdmf_flush
-            self.xdmf_file.parameters['rewrite_function_mesh'] = False
-            try:
-                self.xdmf_file.parameters['functions_share_mesh'] = True
-            except KeyError:
-                # the parameter 'functions_share_mesh' is new in FEniCS 2017.01
-                pass
+        # Make sure functions have nice names for output
+        for name, description in (('p', 'Pressure'),
+                                  ('p_hydrostatic', 'Hydrostatic pressure'),
+                                  ('c', 'Colour function'),
+                                  ('rho', 'Density'),
+                                  ('u0', 'X-component of velocity'),
+                                  ('u1', 'Y-component of velocity'),
+                                  ('u2', 'Z-component of velocity')):
+            if not name in sim.data:
+                continue
+            func = sim.data[name]
+            if hasattr(func, 'rename'):
+                func.rename(name, description)
+                
+        # Dump initial state
+        self.ready = True
+        self.write_fields()
+    
+    def setup_xdmf(self):
+        """
+        Create XDMF file object
+        """
+        sim = self.simulation
+        xdmf_flush =  sim.input.get_value('output/xdmf_flush', XDMF_FLUSH, 'bool')
+        
+        need_vec_func = True
+        file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
+        file_name2 = os.path.splitext(file_name)[0] + '.h5'
+        
+        # Remove previous files
+        if os.path.isfile(file_name):
+            sim.log.info('    Removing existing XDMF file %s' % file_name)
+            os.remove(file_name)
+        if os.path.isfile(file_name2):
+            sim.log.info('    Removing existing XDMF file %s' % file_name2)
+            os.remove(file_name2)
+        
+        sim.log.info('    Creating XDMF file %s' % file_name)
+        self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
+        self.xdmf_file.parameters['flush_output'] = xdmf_flush
+        self.xdmf_file.parameters['rewrite_function_mesh'] = False
+        self.xdmf_file.parameters['functions_share_mesh'] = True
         
         def create_vec_func(V):
             "Create a vector function from the components"
@@ -90,23 +104,6 @@ class InputOutputHandling():
             self._mesh_vel_func, self._mesh_vel_func_assigners = create_vec_func(sim.data['Vmesh'])
             self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
         
-        # Make sure functions have nice names for output
-        for name, description in (('p', 'Pressure'),
-                                  ('p_hydrostatic', 'Hydrostatic pressure'),
-                                  ('c', 'Colour function'),
-                                  ('rho', 'Density'),
-                                  ('u0', 'X-component of velocity'),
-                                  ('u1', 'Y-component of velocity'),
-                                  ('u2', 'Z-component of velocity')):
-            if not name in sim.data:
-                continue
-            func = sim.data[name]
-            if hasattr(func, 'rename'):
-                func.rename(name, description)
-                
-        # Dump initial state
-        self.ready = True
-        self.write_fields()
         
     def _close_files(self):
         """
@@ -122,8 +119,7 @@ class InputOutputHandling():
             h5_file_name = h5_file_name % sim.timestep
             self.write_restart_file(h5_file_name)
         
-        if self.xdmf_write_interval > 0:
-            del self.xdmf_file
+        self.xdmf_file = None
     
     def write_fields(self):
         """
@@ -131,10 +127,14 @@ class InputOutputHandling():
         """
         sim = self.simulation
         
-        if self.xdmf_write_interval > 0 and sim.timestep % self.xdmf_write_interval == 0:
+        # Allow these to change over time
+        hdf5_write_interval = sim.input.get_value('output/hdf5_write_interval', HDF5_WRITE_INTERVAL, 'int')
+        xdmf_write_interval = sim.input.get_value('output/xdmf_write_interval', XDMF_WRITE_INTERVAL, 'int')
+        
+        if xdmf_write_interval > 0 and sim.timestep % xdmf_write_interval == 0:
             self.write_plot_file()
         
-        if self.hdf5_write_interval > 0 and sim.timestep % self.hdf5_write_interval == 0:
+        if hdf5_write_interval > 0 and sim.timestep % hdf5_write_interval == 0:
             self.write_restart_file()
     
     def write_plot_file(self):
@@ -142,18 +142,17 @@ class InputOutputHandling():
         Write a file that can be used for visualization. The fluid fields will be automatically
         downgraded (interpolated) into something VTK can accept, typically linear CG elements.
         """
-        t = dolfin.Timer('Ocellaris save xdmf')
-        self._write_xdmf()
-        t.stop()
+        with dolfin.Timer('Ocellaris save xdmf'):
+            if self.xdmf_file is None:
+                self.setup_xdmf()
+            self._write_xdmf()
     
     def write_restart_file(self, h5_file_name=None):
         """
         Write a file that can be used to restart the simulation
         """
-        t = dolfin.Timer('Ocellaris save hdf5')
-        fn = self._write_hdf5(h5_file_name)
-        t.stop()
-        return fn
+        with dolfin.Timer('Ocellaris save hdf5'):
+            return self._write_hdf5(h5_file_name)
     
     def is_restart_file(self, file_name):
         """
