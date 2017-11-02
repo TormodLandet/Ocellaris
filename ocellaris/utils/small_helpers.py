@@ -63,5 +63,9 @@ def velocity_change(u1, u2, ui_tmp):
         ui_tmp.assign(u1[d])
         ui_tmp.vector().axpy(-1, u2[d].vector())
         ui_tmp.vector().apply('insert')
-        diff += ui_tmp.vector().norm('l2') / u1[d].vector().norm('l2')
+        
+        nd = ui_tmp.vector().norm('l2')
+        n1 = u1[d].vector().norm('l2')
+        if n1 != 0:
+            diff += nd / n1 
     return diff
