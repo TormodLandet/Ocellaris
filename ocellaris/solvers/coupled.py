@@ -155,11 +155,6 @@ class SolverCoupled(Solver):
         self.velocity_postprocessing_method = sim.input.get_value('solver/velocity_postprocessing',
                                                                   default_postprocessing, 'string')
         
-        # Quasi-steady simulation input
-        self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
-                                                       None, 'float')
-        self.is_steady = self.steady_velocity_eps is not None
-        
         # Check if there is any gravity
         self.has_gravity = any(gi != 0 for gi in sim.data['g'].values())
     
@@ -353,7 +348,8 @@ class SolverCoupled(Solver):
         sim.hooks.simulation_started()
         
         # Setup timestepping and initial convecting velocity
-        before_simulation(sim)
+        force_steady = sim.input.get_value('solver/force_steady', False, 'bool')
+        before_simulation(sim, force_steady)
         
         # Time loop
         t = sim.time
@@ -362,6 +358,8 @@ class SolverCoupled(Solver):
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
             tmax = sim.input.get_value('time/tmax', required_type='float')
+            steady_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion', -1, 'float')
+            force_steady = sim.input.get_value('solver/force_steady', False, 'bool')
             
             # Check if the simulation is done
             if t + dt > tmax + 1e-6:
@@ -392,13 +390,13 @@ class SolverCoupled(Solver):
                 sim.reporting.report_timestep_value('ulim_diff', change_lim)
             
             # Move u -> up, up -> upp and prepare for the next time step
-            vel_diff = after_timestep(sim, self.is_steady)
+            vel_diff = after_timestep(sim, steady_eps >= 0, force_steady)
             
             # Stop steady state simulation if convergence has been reached
-            if self.is_steady:
+            if steady_eps >= 0:
                 vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
                 sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)
-                if vel_diff < self.steady_velocity_eps:
+                if vel_diff < steady_eps:
                     sim.log.info('Stopping simulation, steady state achieved')
                     sim.input.set_value('time/tmax', t)
             

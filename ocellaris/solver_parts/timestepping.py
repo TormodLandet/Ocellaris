@@ -2,7 +2,7 @@ import dolfin
 from ocellaris.utils import shift_fields
 
 
-def before_simulation(simulation):
+def before_simulation(simulation, force_steady=False):
     """
     Handle timestepping issues before starting the simulation. There are
     basically two options, either we have full velocity history available,
@@ -21,14 +21,19 @@ def before_simulation(simulation):
     if maxabs > 0:
         starting_order = 2
     
-    # Switch to second order time stepping
-    if starting_order == 2:
+    if force_steady:
+        simulation.log.info('Setting time derivatives to zero')
+        simulation.data['time_coeffs'].assign(dolfin.Constant([0.0, 0.0, 0.0]))
+    elif starting_order == 2:
+        # Switch to second order time stepping
         simulation.log.info('Initial values for upp are found and used')
-        simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+        simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2.0, 1/2]))
+    else:
+        simulation.data['time_coeffs'].assign(dolfin.Constant([1.0, -1.0, 0.0]))
     update_convection(simulation, starting_order)
 
 
-def after_timestep(simulation, is_steady):
+def after_timestep(simulation, is_steady, force_steady=False):
     """
     Move u -> up, up -> upp and prepare for the next time step
     """
@@ -45,8 +50,11 @@ def after_timestep(simulation, is_steady):
     shift_fields(simulation, ['u%d', 'up%d', 'upp%d'])
     shift_fields(simulation, ['u_conv%d', 'up_conv%d', 'upp_conv%d'])
     
-    # Change time coefficient to second order
-    simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
+    if force_steady:
+        simulation.data['time_coeffs'].assign(dolfin.Constant([0.0, 0.0, 0.0]))
+    else:
+        # Change time coefficient to second order
+        simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
     
     # Extrapolate the convecting velocity to the next step
     update_convection(simulation)
