@@ -46,7 +46,7 @@ def test_kovasznay(solver_type, monkeypatch):
     tmax = 3.0
     polydeg_u = 2
     polydeg_p = 1
-    limits = {'Coupled': [0.00036, 0.007, 0.02, 0.015, 0.023, 0.07],
+    limits = {'Coupled': [0.00037, 0.007, 0.02, 0.016, 0.023, 0.07],
               'SIMPLE':  [0.00500, 0.084, 0.08, 0.075, 0.130, 0.12]}
     
     def modifier(sim):
