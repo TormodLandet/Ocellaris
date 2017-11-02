@@ -151,7 +151,7 @@ class SolverCoupled(Solver):
         self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
         
         # Local DG velocity postprocessing
-        default_postprocessing = None#BDM if self.vel_is_discontinuous else None
+        default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing_method = sim.input.get_value('solver/velocity_postprocessing',
                                                                   default_postprocessing, 'string')
         
