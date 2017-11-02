@@ -26,29 +26,38 @@ class VelocityBDMProjection():
         
         V = w[0].function_space()
         ue = V.ufl_element()
+        gdim = w.ufl_shape[0]
         if degree is None:
-            self.degree = ue.degree()
-            self.Vout = V
+            pdeg = ue.degree()
+            Vout = V
         else:
-            self.degree = degree
-            self.Vout = FunctionSpace(V.mesh(), 'DG', degree)
+            pdeg = degree
+            Vout = FunctionSpace(V.mesh(), 'DG', degree)
+        pg = (pdeg, gdim)
         
         assert ue.family() == 'Discontinuous Lagrange'
         assert incompressibility_flux_type in ('central', 'upwind')
         
-        # Polynomial degree and geometrical dimension 
-        pdeg = self.degree
-        gdim = w.ufl_shape[0]
-        pg = (pdeg, gdim)
         if use_nedelec:
-            self._setup_projection_nedelec(w, incompressibility_flux_type, D12, use_bcs, pdeg)
-        elif pg == (1, 2):
-            self._setup_dg1_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
-        elif pg == (2, 2):
-            self._setup_dg2_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
+            a, L, V = self._setup_projection_nedelec(w, incompressibility_flux_type, D12, use_bcs, pdeg, gdim)
+        elif gdim == 2 and pdeg == 1:
+            a, L, V = self._setup_dg1_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
+        elif gdim == 2 and pdeg == 2:
+            a, L, V = self._setup_dg2_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
         else:
             raise NotImplementedError('VelocityBDMProjection does not support '
                                       'degree %d and dimension %d' % pg)
+        
+        # Pre-factorize matrices and store for usage in projection
+        self.local_solver = LocalSolver(a, L)
+        self.local_solver.factorize()
+        self.temp_function = Function(V)
+        self.w = w
+        
+        # Create function assigners
+        self.assigners = []
+        for i in range(gdim):
+            self.assigners.append(dolfin.FunctionAssigner(Vout, V.sub(i)))
     
     def _setup_dg1_projection_2D(self, w, incompressibility_flux_type, D12, use_bcs):
         """
@@ -103,13 +112,7 @@ class VelocityBDMProjection():
         # Equation 2 - internal shape   :   empty for DG1
         # Equation 3 - BDM Phi          :   empty for DG1
         
-        # Pre-factorize matrices and store for usage in projection
-        self.local_solver = LocalSolver(a, L)
-        self.local_solver.factorize()
-        self.temp_function = Function(V)
-        self.w = w
-        self.assigner0 = dolfin.FunctionAssigner(self.Vout, V.sub(0))
-        self.assigner1 = dolfin.FunctionAssigner(self.Vout, V.sub(1))
+        return a, L, V
     
     def _setup_dg2_projection_2D(self, w, incompressibility_flux_type, D12, use_bcs):
         """
@@ -175,15 +178,9 @@ class VelocityBDMProjection():
         a += dot(u, v3)*dx
         L += dot(w, v3)*dx
         
-        # Pre-factorize matrices and store for usage in projection
-        self.local_solver = LocalSolver(a, L)
-        self.local_solver.factorize()
-        self.temp_function = Function(V)
-        self.w = w
-        self.assigner0 = dolfin.FunctionAssigner(self.Vout, V.sub(0))
-        self.assigner1 = dolfin.FunctionAssigner(self.Vout, V.sub(1))
+        return a, L, V
     
-    def _setup_projection_nedelec(self, w, incompressibility_flux_type, D12, use_bcs, pdeg):
+    def _setup_projection_nedelec(self, w, incompressibility_flux_type, D12, use_bcs, pdeg, gdim):
         """
         Implement the BDM-like projection using Nedelec elements in the test function
         """
@@ -210,7 +207,7 @@ class VelocityBDMProjection():
             u_hat_dS = switch*w('+') + (1 - switch)*w('-')
         
         if D12 is not None:
-            u_hat_dS += dolfin.Constant([D12, D12])*dolfin.jump(w, n)
+            u_hat_dS += dolfin.Constant([D12]*gdim)*dolfin.jump(w, n)
         
         # Equation 1 - flux through the sides
         a = L = 0
@@ -241,13 +238,7 @@ class VelocityBDMProjection():
         a += dot(u, v2)*dx
         L += dot(w, v2)*dx
         
-        # Pre-factorize matrices and store for usage in projection
-        self.local_solver = LocalSolver(a, L)
-        self.local_solver.factorize()
-        self.temp_function = Function(V)
-        self.w = w
-        self.assigner0 = dolfin.FunctionAssigner(self.Vout, V.sub(0))
-        self.assigner1 = dolfin.FunctionAssigner(self.Vout, V.sub(1))
+        return a, L, V
     
     def run(self, w=None):
         """
@@ -258,8 +249,6 @@ class VelocityBDMProjection():
         
         # Assign to w
         w = self.w if w is None else w
-        
-        U0, U1 = self.temp_function.split()
-        
-        self.assigner0.assign(w[0], U0)
-        self.assigner1.assign(w[1], U1)
+        U = self.temp_function.split()
+        for i, a in enumerate(self.assigners):
+            a.assign(w[i], U[i])
