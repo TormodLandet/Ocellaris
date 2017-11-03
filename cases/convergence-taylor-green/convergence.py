@@ -1,5 +1,5 @@
 from __future__ import division, print_function
-import time, subprocess, os
+import time, subprocess, os, sys
 from math import log
 import dolfin
 from ocellaris import Simulation, setup_simulation, run_simulation
@@ -37,9 +37,9 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     
     if sim.input.get_value('solver/timestepping_method', 'BDF') == 'CN':
         sim.input.set_value('initial_conditions/p/cpp_code', '-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*(t+dt/2))/4') 
-        
-    if N == 24 and False:
-        sim.input.set_value('output/xdmf_write_interval', 1)
+    
+    # Turn off BDM
+    sim.input.set_value('solver/velocity_postprocessing', 'None')
     
     if modifier:
         modifier(sim) # Running regression tests, modify some input params
@@ -54,17 +54,15 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     # Interpolate the analytical solution to the same function space
     Vu = sim.data['Vu']
     Vp = sim.data['Vp']
-    vals = dict(t=sim.time, dt=sim.dt, nu=sim.input['physical_properties']['nu0'], rho=sim.input['physical_properties']['rho0'])
-    u0e = dolfin.Expression(sim.input.get_value('initial_conditions/up0/cpp_code'), degree=polydeg_u, **vals)
-    u1e = dolfin.Expression(sim.input.get_value('initial_conditions/up1/cpp_code'), degree=polydeg_u, **vals)
+    vals = dict(t=sim.time,
+                dt=sim.dt,
+                nu=sim.input['physical_properties']['nu0'],
+                rho=sim.input['physical_properties']['rho0'])
+    u0e = dolfin.Expression(sim.input.get_value('initial_conditions/up0/cpp_code'), degree=polydeg_u+3, **vals)
+    u1e = dolfin.Expression(sim.input.get_value('initial_conditions/up1/cpp_code'), degree=polydeg_u+3, **vals)
     if sim.input.get_value('solver/timestepping_method', 'BDF') == 'CN':
         vals['t'] = sim.time - sim.dt
-    pe  = dolfin.Expression(sim.input.get_value('initial_conditions/p/cpp_code'), degree=polydeg_p, **vals)
-    
-    #vals = dict(t=sim.time, nu=sim.input['physical_properties']['nu0'])
-    #u0e = dolfin.Expression('-sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)', **vals)
-    #u1e = dolfin.Expression(' sin(pi*x[0])*cos(pi*x[1])*exp(-2*pi*pi*nu*t)', **vals)
-    #pe  = dolfin.Expression('-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*t)/4', **vals)
+    pe  = dolfin.Expression(sim.input.get_value('initial_conditions/p/cpp_code'), degree=polydeg_p+3, **vals)
     
     u0a = dolfin.project(u0e, Vu)
     u1a = dolfin.project(u1e, Vu)
@@ -84,6 +82,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     loglines = sim.log.get_full_log().split('\n')
     say('Num inner iterations:', sum(1 if 'Inner iteration' in line else 0 for line in loglines))
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
+    say('Number of mesh cells:', sim.data['mesh'].num_cells())
     say('p*dx', int_p)
     div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
     say('div(u)|Vp', div_u_Vp)
@@ -191,30 +190,69 @@ def say(*args, **kwargs):
         print(*args, **kwargs)
 
 
-def run_convergence_space(N_list):
+def run_convergence_space(N_list, modifier=None):
     dt = 0.01
     tmax = 1.0
     results = {}
     prev_N = None
     for N in N_list:
         say('Running N = %g with dt = %g' % (N, dt))
-        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1)
+        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1, modifier=modifier)
         print_results(results, N_list, 'h')
 
 
-def run_convergence_time(dt_list):
+def run_convergence_time(dt_list, modifier=None):
     N = 200
     tmax = 6.0
     results = {}
     for dt in dt_list:
         t1 = time.time()
         say('Running dt =', dt)
-        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1)
+        results[dt] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1, modifier=modifier)
         print_results(results, dt_list, 'dt')
 
 
+def make_quasi_3D(sim):
+    """
+    Quasi 3D - run the same 2D Taylor-Green, but on a 3D mesh with
+    Neumann conditions in the z-direction so simthat u3 should allways
+    be zero
+    """
+    say('Making Quasi 3D simulation')
+    
+    inp = sim.input
+    
+    # Change mesh
+    Nx = inp.get_value('mesh/Nx')
+    depth = 2/Nx
+    inp.set_value('mesh/Nz', 1)
+    inp.set_value('mesh/endz', depth)
+    inp.set_value('mesh/type', 'Box')
+    
+    # Fix gravity
+    inp.set_value('physical_properties/g', [0, 0, 0])
+    
+    # Modify existing pure Dirichlet BC
+    inp.get_value('boundary_conditions/0/u/cpp_code').append('0.0') # Z-vel on boundary
+    
+    # Add new BC with pure Neumann BCs
+    bc2 = {'name': 'back and front',
+           'selector': 'code',
+           'inside_code': 'on_boundary and (x[2] < 1e-5 or x[2] > %r - 1e-5)' % depth,
+           'u0': {'type': 'ConstantGradient', 'value': 0},
+           'u1': {'type': 'ConstantGradient', 'value': 0},
+           'u2': {'type': 'ConstantValue', 'value': 0},
+           'p':  {'type': 'ConstantGradient', 'value': 0}
+           }
+    inp.get_value('boundary_conditions').append(bc2)
+
 if __name__ == '__main__':
-    run_convergence_space([8, 16, 24, 32, 40])
+    modifier = None
+    
+    if '--Q3D' in sys.argv:
+        modifier = make_quasi_3D
+    
+    run_convergence_space([8, 16, 24, 32, 40], modifier)
     #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])
     #run_convergence_time([2, 1, 0.5, 0.25, 0.125])
     #dolfin.interactive()

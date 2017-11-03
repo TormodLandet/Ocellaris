@@ -170,7 +170,24 @@ def load_mesh(simulation):
         diagonal = inp.get_value('mesh/diagonal', 'right', required_type='string')
         
         mesh = dolfin.RectangleMesh(start, end, Nx, Ny, diagonal)
+    
+    elif mesh_type == 'Box':
+        simulation.log.info('Creating box mesh')
         
+        startx = inp.get_value('mesh/startx', 0, 'float')
+        starty = inp.get_value('mesh/starty', 0, 'float')
+        startz = inp.get_value('mesh/startz', 0, 'float')
+        start = dolfin.Point(startx, starty, startz)
+        endx = inp.get_value('mesh/endx', 1, 'float')
+        endy = inp.get_value('mesh/endy', 1, 'float')
+        endz = inp.get_value('mesh/endz', 1, 'float')
+        end = dolfin.Point(endx, endy, endz)
+        Nx = inp.get_value('mesh/Nx', required_type='int')
+        Ny = inp.get_value('mesh/Ny', required_type='int')
+        Nz = inp.get_value('mesh/Nz', required_type='int')
+        
+        mesh = dolfin.BoxMesh(start, end, Nx, Ny, Nz)
+    
     elif mesh_type == 'UnitDisc':
         simulation.log.info('Creating circular mesh')
         

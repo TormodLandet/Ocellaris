@@ -107,7 +107,7 @@ class VelocityBDMProjection():
                     L += w[d]*n[d]*v1*nbc.ds()
         else:
             a += dot(u, n)*v1*ds
-            L += dot(u, n)*v1*ds
+            L += dot(w, n)*v1*ds
         
         # Equation 2 - internal shape   :   empty for DG1
         # Equation 3 - BDM Phi          :   empty for DG1
@@ -167,7 +167,7 @@ class VelocityBDMProjection():
                     L += w[d]*n[d]*v1*nbc.ds()
         else:
             a += dot(u, n)*v1*ds
-            L += dot(u, n)*v1*ds
+            L += dot(w, n)*v1*ds
         
         # Equation 2 - internal shape
         a += dot(u, v2)*dx
@@ -232,7 +232,7 @@ class VelocityBDMProjection():
                     L += w[d]*n[d]*v1*nbc.ds()
         else:
             a += dot(u, n)*v1*ds
-            L += dot(u, n)*v1*ds
+            L += dot(w, n)*v1*ds
         
         # Equation 2 - internal shape using 'Nedelec 1st kind H(curl)' elements
         a += dot(u, v2)*dx
