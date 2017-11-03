@@ -65,6 +65,7 @@ class VelocityBDMProjection():
         """
         sim = self.simulation
         k = 1
+        gdim = 2
         mesh = w[0].function_space().mesh()
         V = VectorFunctionSpace(mesh, 'DG', k)
         W = FunctionSpace(mesh, 'DGT', k)
@@ -92,9 +93,10 @@ class VelocityBDMProjection():
         
         # Eq. 1 cont. - flux through external boundaries
         if use_bcs:
-            for d in range(2):
+            for d in range(gdim):
                 dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
                 neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                robin_bcs = sim.data['robin_bcs'].get('u%d' % d, [])
                 outlet_bcs = sim.data['outlet_bcs']
                 
                 for dbc in dirichlet_bcs:
@@ -102,7 +104,7 @@ class VelocityBDMProjection():
                     a += u[d]*n[d]*v1*dbc.ds()
                     L += u_bc*n[d]*v1*dbc.ds()
                 
-                for nbc in neumann_bcs + outlet_bcs:
+                for nbc in neumann_bcs + robin_bcs + outlet_bcs:
                     a += u[d]*n[d]*v1*nbc.ds()
                     L += w[d]*n[d]*v1*nbc.ds()
         else:
@@ -120,6 +122,7 @@ class VelocityBDMProjection():
         """
         sim = self.simulation
         k = 2
+        gdim = 2
         mesh = w[0].function_space().mesh()
         V = VectorFunctionSpace(mesh, 'DG', k)
         n = FacetNormal(mesh)
@@ -152,9 +155,10 @@ class VelocityBDMProjection():
             
         # Eq. 1 cont. - flux through external boundaries
         if use_bcs:
-            for d in range(2):
+            for d in range(gdim):
                 dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
                 neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                robin_bcs = sim.data['robin_bcs'].get('u%d' % d, [])
                 outlet_bcs = sim.data['outlet_bcs']
                 
                 for dbc in dirichlet_bcs:
@@ -162,7 +166,7 @@ class VelocityBDMProjection():
                     a += u[d]*n[d]*v1*dbc.ds()
                     L += u_bc*n[d]*v1*dbc.ds()
                 
-                for nbc in neumann_bcs + outlet_bcs:
+                for nbc in neumann_bcs + robin_bcs + outlet_bcs:
                     a += u[d]*n[d]*v1*nbc.ds()
                     L += w[d]*n[d]*v1*nbc.ds()
         else:
@@ -217,9 +221,10 @@ class VelocityBDMProjection():
             
         # Eq. 1 cont. - flux through external boundaries
         if use_bcs:
-            for d in range(2):
+            for d in range(gdim):
                 dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
                 neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
+                robin_bcs = sim.data['robin_bcs'].get('u%d' % d, [])
                 outlet_bcs = sim.data['outlet_bcs']
                 
                 for dbc in dirichlet_bcs:
@@ -227,7 +232,7 @@ class VelocityBDMProjection():
                     a += u[d]*n[d]*v1*dbc.ds()
                     L += u_bc*n[d]*v1*dbc.ds()
                 
-                for nbc in neumann_bcs + outlet_bcs:
+                for nbc in neumann_bcs + robin_bcs + outlet_bcs:
                     a += u[d]*n[d]*v1*nbc.ds()
                     L += w[d]*n[d]*v1*nbc.ds()
         else:

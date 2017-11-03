@@ -39,7 +39,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
         sim.input.set_value('initial_conditions/p/cpp_code', '-(cos(2*pi*x[0]) + cos(2*pi*x[1])) * exp(-4*pi*pi*nu*(t+dt/2))/4') 
     
     # Turn off BDM
-    sim.input.set_value('solver/velocity_postprocessing', 'None')
+    #sim.input.set_value('solver/velocity_postprocessing', 'None')
     
     if modifier:
         modifier(sim) # Running regression tests, modify some input params
@@ -47,6 +47,8 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'), sim.input.get_value('solver/function_space_velocity')))
     t1 = time.time()
     setup_simulation(sim)
+    if 'Vcoupled' in sim.data:
+        say('Num unknowns', sim.data['Vcoupled'].dim())
     run_simulation(sim)
     duration = time.time() - t1
     say('DONE')
@@ -245,6 +247,9 @@ def make_quasi_3D(sim):
            'p':  {'type': 'ConstantGradient', 'value': 0}
            }
     inp.get_value('boundary_conditions').append(bc2)
+    
+    inp.set_value('solver/coupled', {'solver': 'lu', 'lu_method': 'mumps'})
+
 
 if __name__ == '__main__':
     modifier = None
