@@ -444,7 +444,8 @@ def summarise_simulation_after_running(simulation, success):
         simulation.log.debug('%20s = %s' % (key, repr(type(value))[:57]))
     
     # Add details on the time spent in each part of the simulation to the log
-    log_timings(simulation)
+    clear = simulation.input.get_value('clear_timings_at_end', True, 'bool')
+    log_timings(simulation, clear)
     
     # Show the total duration
     tottime = time.time() - simulation.t_start

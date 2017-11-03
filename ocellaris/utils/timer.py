@@ -45,7 +45,7 @@ def timeit_named(name):
 timeit.named = timeit_named
 
 
-def log_timings(simulation):
+def log_timings(simulation, clear=False):
     """
     Print the FEniCS + Ocellaris timings to the log
     """
@@ -53,8 +53,9 @@ def log_timings(simulation):
     tottime = time.time() - simulation.t_start
     
     # Get timings from FEniCS and sort by total time spent
+    tclear = dolfin.TimingClear.clear if clear else dolfin.TimingClear.keep
     timingtypes = [dolfin.TimingType_user, dolfin.TimingType_system, dolfin.TimingType_wall]
-    table = dolfin.timings(dolfin.TimingClear_keep, timingtypes)
+    table = dolfin.timings(tclear, timingtypes)
     table_lines = table.str(True).split('\n')
     simulation.log.info('\nFEniCS timings:   %s  wall pst' % table_lines[0][18:])
     simulation.log.info(table_lines[1] + '-'*10)
