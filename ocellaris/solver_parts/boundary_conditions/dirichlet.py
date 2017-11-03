@@ -1,6 +1,6 @@
 import dolfin
 from . import register_boundary_condition, BoundaryConditionCreator
-from ocellaris.utils import CodedExpression, OcellarisCppExpression
+from ocellaris.utils import CodedExpression, OcellarisCppExpression, OcellarisError
 
 
 class OcellarisDirichletBC(dolfin.DirichletBC):
@@ -80,7 +80,9 @@ class ConstantDirichletBoundary(BoundaryConditionCreator):
         """
         Add a Dirichlet condition to this variable
         """
-        assert isinstance(value, (float, int))
+        if not isinstance(value, (float, int)):
+            raise OcellarisError('Error in ConstantValue BC for %s' % var_name,
+                                 'The value %r is not a number' % value)
         df_value = dolfin.Constant(value)
         
         # Store the boundary condition for use in the solver
