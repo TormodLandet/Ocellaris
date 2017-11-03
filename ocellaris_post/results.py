@@ -242,8 +242,11 @@ def read_log_data(results):
         del data['timestep']
     
     # Read the input section
-    input_str = ''.join(input_strs)
-    results.input = yaml.load(input_str)
+    if input_strs:
+        input_str = ''.join(input_strs)
+        results.input = yaml.load(input_str)
+    else:
+        results.input = {}
     
     reps = {}
     N = 1e100

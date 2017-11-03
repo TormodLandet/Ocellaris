@@ -72,7 +72,9 @@ class AdvectionEquation(object):
             # Discontinuous Galerkin implementation of the advection equation 
             eq = (c1*c + c2*self.cp + c3*self.cpp)/dt*d*dx + flux*jump(d)*dS
             
-            # Enforce Dirichlet BCs weakly
+            # On each facet either w_nD or w_nU will be 0, the other is multiplied
+            # with the appropriate flux, either the value c going out of the domain
+            # or the Dirichlet value coming into the domain
             for dbc in self.dirichlet_bcs:
                 eq += w_nD*dbc.func()*d*dbc.ds()
                 eq += w_nU*c*d*dbc.ds()

@@ -1,0 +1,185 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+user_code:
+    constants:
+        L: 150
+        H: 15
+        h: 6
+        DMS: 5
+        LWL: 34
+        V: 2
+        FRESH: 1000.0
+        SALT: 1028.0
+    code: |
+        # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
+        # with support for the OpenCASCADE geometry engine
+        import os, subprocess
+        mydir = os.path.dirname(os.path.abspath(__file__))
+        geo = os.path.join(mydir, 'datafiles', 'dead_water_2D.geo')
+        msh = os.path.join(mydir, 'datafiles', 'dead_water_2D.msh')
+        xml = os.path.join(mydir, 'datafiles', 'dead_water_2D.xml')
+        assert os.path.isfile(geo)
+        if not os.path.isfile(msh):
+            print('Running gmsh on', geo)
+            subprocess.call(['gmsh', '-2', '-optimize', geo, '-o', msh])
+        if not os.path.isfile(xml):
+            print('Running meshio-convert on', msh)
+            subprocess.call(['meshio-convert', '--input-format', 'gmsh-ascii',
+                             '--output-format', 'dolfin-xml', msh, xml])
+
+metadata:
+    author: Tormod Landet
+    date: 2017-11-03
+    description: |
+        Flow around a semi-sumberged circle in a stratified fluid  
+
+_physical_properties:
+    g: [0, -9.81]
+    nu0: 1.0e-6
+    rho0: py$ SALT
+    nu1: 1.0e-6
+    rho1: py$ FRESH
+
+physical_properties:
+    nu: 1.0e-6
+    rho_min: py$ FRESH
+    rho_max: py$ SALT
+    g: [0, -9.81]
+
+mesh:
+    type: XML
+    mesh_file: datafiles/dead_water_2D.xml
+
+_initial_conditions:
+    cp:
+        cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+    cpp:
+        cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+
+initial_conditions:
+    rho_p:
+        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+    rho_pp:
+        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+
+boundary_conditions:
+
+-   name: Hull
+    selector: code
+    inside_code: 'on_boundary'
+    u:
+        type: CppCodedValue
+        cpp_code: ['0', '0']
+    p:
+        type: WallPressure
+
+-   name: Inlet
+    selector: code
+    inside_code: 'on_boundary and x[0] < 1e-5'
+    u:
+        type: CppCodedValue
+        cpp_code: ['V', '0']
+    p:
+        type: WallPressure
+    #c:
+    #    type: CppCodedValue
+    #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+    rho:
+        type: CppCodedValue
+        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+
+-   name: Outlet
+    selector: code
+    inside_code: 'on_boundary and x[0] > L - 1e-5'
+    u:
+        type: CppCodedValue
+        cpp_code: ['V', '0']
+    p:
+        type: WallPressure
+    #c:
+    #    type: CppCodedValue
+    #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+    rho:
+        type: CppCodedValue
+        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+
+-   name: Bottom
+    selector: code
+    inside_code: 'on_boundary and x[1] < -H + 1e-5'
+    u:
+        type: CppCodedValue
+        cpp_code: ['V', '0']
+    p:
+        type: WallPressure
+
+-   name: Surface z=0
+    selector: code
+    inside_code: 'on_boundary and x[1] > -1e-5'
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantValue
+        value: 0
+    p:
+        type: ConstantGradient
+        value: 0
+
+time:
+    dt: 0.005
+    tmax: 20
+
+output:
+    prefix: output/dead_water_2D
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    xdmf_write_interval: 10
+
+solver:
+    type: Coupled
+    num_inner_iter: 20
+    allowable_error_inner: 5.0e-3
+    polynomial_degree_pressure: 1
+    polynomial_degree_velocity: 2
+    function_space_pressure: DG
+    function_space_velocity: DG
+    steady_velocity_stopping_criterion: 1e-5
+    
+    # PETSc solver selection
+    #coupled:
+    #    solver: lu
+    #    lu_method: mumps
+
+_multiphase_solver:
+    type: BlendedAlgebraicVOF
+    plot_fields: yes
+
+multiphase_solver:
+    type: VariableDensity
+    function_space_rho: DG
+    polynomial_degree_rho: 2
+
+slope_limiter:
+    rho:
+        method: HierarchicalTaylor
+        plot: yes
+        skip_boundary: no
+        enforce_bounds: yes
+
+hooks:
+    pre_simulation:
+    -   name: save mesh
+        enabled: yes
+        code: |
+            print('Writing Mesh ...')
+            prefix = sim.input.get_value('output/prefix', '')
+            fn = prefix + '_mesh.xdmf'
+            with XDMFFile(mesh.mpi_comm(), fn) as f:
+                f.write(boundary_marker)
+            print('    Wrote', fn)
+
+#console_at_end: true
+#console_on_error: true
