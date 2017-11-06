@@ -61,13 +61,16 @@ class IsoSurface(Probe):
             self.fig = pyplot.figure()
             self.ax = self.fig.add_subplot(111)
             self.ax.set_title('Iso surface %s' % self.name)
+            
+        # The class that finds the contour line
+        self.locator = IsoSurfaceLocator(simulation, self.field.function_space())
         
         if self.custom_hook_point is not None:
             simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
         else:
             self.end_of_timestep = self.run
     
-    def run(self):
+    def run(self, force_active=False):
         """
         Find and output the line probe
         """
@@ -84,11 +87,11 @@ class IsoSurface(Probe):
             update_file = True
         
         # Do not do any postprocessing for non-requested time steps
-        if not (update_file or update_plot):
+        if not (update_file or update_plot or force_active):
             return
         
         # Get the iso surfaces
-        surfaces, cells = get_iso_surfaces(self.simulation, self.field, self.value)
+        surfaces, cells = self.locator.get_iso_surface(self.field, self.value)
         self.cells_with_surface = cells
         
         # Get the boundary surfaces for cells with values above the given value
@@ -127,6 +130,9 @@ class IsoSurface(Probe):
                     self.ax.set_ylim(*self.ylim)
                 self.fig.canvas.draw()
                 #self.fig.canvas.flush_events()
+        
+        # Return value only used in unit testing
+        return lines
     
     def end_of_simulation(self):
         """
@@ -136,17 +142,38 @@ class IsoSurface(Probe):
             self.output_file.close()
 
 
-@timeit
+class Cache:
+    pass
+
+class IsoSurfaceLocator:
+    def __init__(self, simulation, V):
+        self.simulation = simulation
+        self.degree = V.ufl_element().degree() 
+        
+        self.cache = Cache()
+        if self.degree in (1, 2):
+            return prepare_DG1_DG2(self.cache, simulation, V)
+    
+    @timeit
+    def get_iso_surface(self, field, value):
+        """
+        Find the iso-surfaces (contour lines) of the
+        given field with the given scalar value 
+        """
+        sim = self.simulation
+        if self.degree == 0:
+            return get_iso_surfaces_picewice_constants(sim, field, value)
+        elif self.degree in (1, 2):
+            return get_iso_surface_DG1_DG2(sim, self.cache, field, value)
+        else:
+            return get_iso_surfaces(sim, field, value)
+
+
 def get_iso_surfaces(simulation, field, value):
     """
-    Find the iso-surfaces (contour lines) of the
-    given field with the given scalar value 
+    Slow fallback version that uses vertex values only
     """
     assert simulation.ndim == 2
-    
-    if field.function_space().ufl_element().degree() == 0:
-        return get_iso_surfaces_picewice_constants(simulation, field, value)
-    
     mesh = simulation.data['mesh']
     all_values = field.compute_vertex_values()
     
@@ -219,6 +246,7 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
     
     The field is assumed to be piecewice constant (DG0) 
     """
+    assert simulation.ndim == 2
     mesh = simulation.data['mesh']
     all_values = field.vector().get_local()
     dofmap = field.function_space().dofmap()
@@ -303,6 +331,197 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
     return contours_from_endpoints + contours_from_singles_and_loops, cells_with_surface
 
 
+def prepare_DG1_DG2(cache, simulation, V):
+    """
+    Prepare to find iso surfaces of the given field. Caches geometry and
+    topology data of the mesh and must be rerun if this data changes!
+    """
+    mesh = simulation.data['mesh']
+    gdim = mesh.geometry().dim()
+    degree = V.ufl_element().degree()
+    dofmap = V.dofmap()
+    dofs_x = V.tabulate_dof_coordinates().reshape((-1, gdim))
+    N = dofs_x.shape[0]
+    assert degree in (1, 2)
+    assert gdim == 2
+    
+    # Map location to dof
+    x_to_dof = {}
+    for dof, pos in enumerate(dofs_x):
+        x_to_dof.setdefault(tuple(pos), []).append(dof)
+    
+    # Create mapping from dof to other dofs at the same coordinate
+    same_loc = [[] for _ in range(N)]
+    for dofs in x_to_dof.values():
+        for d0 in dofs:
+            for d1 in dofs:
+                if d0 != d1:
+                    same_loc[d0].append(d1)
+    
+    # Find the immediate neighbours for all dofs where
+    # immediate neighbour is defined as
+    # either 1) sits in the same location (but different cell)
+    # or     2) sits next to each other on the same facet
+    immediate_neighbours = [None] * N
+    connected_cells = [None] * N
+    for cell in dolfin.cells(mesh):
+        cid = cell.index()
+        dofs = dofmap.cell_dofs(cid)
+        if degree == 1:
+            for i, dof in enumerate(dofs):
+                nbs = list(same_loc[dof])
+                immediate_neighbours[dof] = nbs
+                nbs.append(dofs[(i + 1) % 3])
+                nbs.append(dofs[(i + 2) % 3])
+                connected_cells[dof] = [cid]
+        else:
+            for i, dof in enumerate(dofs):
+                nbs = list(same_loc[dof])
+                immediate_neighbours[dof] = nbs
+                if i == 0:
+                    nbs.extend((dofs[4], dofs[5]))
+                elif i == 1:
+                    nbs.extend((dofs[3], dofs[5]))
+                elif i == 2:
+                    nbs.extend((dofs[3], dofs[4]))
+                elif i == 3:
+                    nbs.extend((dofs[1], dofs[2]))
+                elif i == 4:
+                    nbs.extend((dofs[0], dofs[2]))
+                elif i == 5:
+                    nbs.extend((dofs[0], dofs[1]))
+                
+                # The first connected cell is the cell owning the dof
+                connected_cells[dof] = [cid]
+    
+    # Extend list of connected cells
+    for dof, pos in enumerate(dofs_x):
+        p = tuple(pos)
+        for nb in x_to_dof[p]:
+            if nb != dof:
+                # Get the first connected cell (the cell containing the dof)
+                nb_cid = connected_cells[nb][0]
+                connected_cells[dof].append(nb_cid)
+    
+    # Find the extended neighbour dofs of all dofs. An extended neighbbour is
+    # a dof that can be the next point on a contour line. The line between a
+    # dof and its extended neighbour can hence not cut through a facet, but it
+    # can be parallell/incident with a facet
+    extended_neighbours = [None] * N
+    for dof, cell_ids in enumerate(connected_cells):
+        extended_neighbours[dof] = enbs = []
+        for cid in cell_ids:
+            # Add dofs in conneced cell as neighbours
+            for d in dofmap.cell_dofs(cid):
+                if d != dof and d not in enbs:
+                    enbs.append(d)
+                # Add other dofs at the same location
+                for d2 in same_loc[d]:
+                    if d2 != dof and d2 not in enbs:
+                        enbs.append(d2)
+    
+    # Sort extended neighbours by distance
+    for dof in range(N):
+        enbs = extended_neighbours[dof]
+        p = dofs_x[dof]
+        tmp = []
+        for n in enbs:
+            pn = dofs_x[n]
+            d = p - pn 
+            tmp.append((d.dot(d), n))
+        tmp.sort(reverse=True)
+        extended_neighbours[dof] = [n for _dist, n in tmp]
+    
+    cache.N = N
+    cache.dofs_x = dofs_x
+    cache.x_to_dof = x_to_dof
+    cache.immediate_neighbours = immediate_neighbours
+    cache.extended_neighbours = extended_neighbours
+    cache.connected_cells = connected_cells
+
+
+def get_iso_surface_DG1_DG2(simulation, cache, field, value):
+    """
+    Find the iso-surfaces (contour lines) of the given field with the 
+    given scalar value. The field is assumed to be linear or quadratic
+    
+    We assume that the field is discontinuous at internal facets. This
+    means that the iso surface could be incident with a facet since
+    the scalar field is dual valued there 
+    """
+    all_values = field.vector().get_local()
+    assert simulation.ndim == 2
+    assert len(all_values) == cache.N
+    
+    # We will collect the cells containing the iso surface
+    mesh = simulation.data['mesh']
+    cells_with_surface = numpy.zeros(mesh.num_cells(), bool)
+    
+    # Find where the iso surface crosses between two dofs
+    # Could be right at the same location, in the jump
+    # between two cells
+    crossing_points = {}
+    for dof, nbs in enumerate(cache.immediate_neighbours):
+        p0 = tuple(cache.dofs_x[dof])
+        v0 = all_values[dof]
+        for n in nbs:
+            v1 = all_values[n]
+            b0 = (v0 <= value and v1 >= value)
+            b1 = (v0 >= value and v1 <= value)
+            if not (b0 or b1):
+                continue
+            p1 = tuple(cache.dofs_x[n])
+            
+            # Check for surface at jump
+            if p0 == p1:
+                if dof == cache.x_to_dof[p0][0]:
+                    crossing_points[dof] = p0
+                    
+                    # Mark cell as surface cell
+                    cid = cache.connected_cells[dof][0]
+                    cells_with_surface[cid] = True
+            
+            # Check for surface crossing a facet
+            elif b0:
+                fac = (v0 - value)/(v0 - v1)
+                cp = ((1 - fac)*p0[0] + fac*p1[0],
+                      (1 - fac)*p0[1] + fac*p1[1])
+                
+                # Select the dof with the fewest connections to avoid
+                # the iso surface line crossing a facet (the dof with
+                # the most extended neighbours will be the corner dof)
+                num_enbs0 = len(cache.extended_neighbours[dof])
+                num_enbs1 = len(cache.extended_neighbours[n])
+                if num_enbs0 < num_enbs1:
+                    crossing_points[dof] = cp
+                else:
+                    crossing_points[n] = cp
+                
+                # Mark cell as surface cell
+                cid = cache.connected_cells[dof][0]
+                cells_with_surface[cid] = True
+    
+    # Get connections between crossing points using the extended 
+    # dof neighbourhood to look for possible connections
+    connections = {}
+    for dof in crossing_points:
+        connections[dof] = [n for n in cache.extended_neighbours[dof] if n in crossing_points]
+        
+    print('-------------------------------------')
+    for dof, c in connections.items():
+        print(dof, 'x: %4.2f %4.2f' % tuple(cache.dofs_x[dof]), '  connections:', c)#, 'EN:', cache.extended_neighbours[dof])
+    print(list(crossing_points.keys()))
+    print('-------------------------------------')
+    
+    # Make continous contour lines
+    possible_starting_points = crossing_points.keys()
+    contours = contour_lines_from_endpoints(possible_starting_points, crossing_points,
+                                            connections, backtrack_from_end=True)
+    
+    assert len(crossing_points) == 0
+    return contours, cells_with_surface
+
+
 @timeit
 def get_boundary_surface(simulation, field, value):
     """
@@ -359,31 +578,59 @@ def get_boundary_surface(simulation, field, value):
     return contours_from_endpoints + contours_from_singles_and_loops
 
 
-def contour_lines_from_endpoints(endpoints, crossing_points, connections):
+def contour_lines_from_endpoints(endpoints, crossing_points, connections, backtrack_from_end=False):
     """
-    Given facet ids of endpoints, follow the contour line and create contours
+    Follow contour lines and create contours
+    
+    - endpoints: an iterable of crossing point IDs (could be facet ids)
+    - crossing_points: a mapping from crossing point ID to position coordinates
+    - connections: a mapping from ID to IDs 
     """
     contours = []
-    for endpoint in list(endpoints):
-        if not endpoint in crossing_points:
+    endpoint_ids = list(endpoints)
+    
+    while endpoint_ids:
+        end_id = endpoint_ids.pop()
+        if not end_id in crossing_points:
             # This has been taken by the other end
             continue
         
         # Make a new contour line
-        contour = [crossing_points.pop(endpoint)]
+        contour = [crossing_points.pop(end_id)]
         
         # Loop over neighbours to the end of the contour
-        queue = list(connections[endpoint])
-        prev = endpoint
+        queue = list(connections[end_id])
+        prev = end_id
+        has_backtracked = False
         while queue:
-            facet_id = queue.pop()
-            if facet_id in crossing_points:
-                contour.append(crossing_points.pop(facet_id))
-                queue.extend(connections[facet_id])
-                prev = facet_id
-            if facet_id == endpoint and prev in connections[endpoint] and len(contour) != 2:
+            nb_id = queue.pop()
+            print('EP %d NB %d' % (end_id, nb_id))
+            
+            # Is this neighbour a possible next part of the contour line?
+            if nb_id in crossing_points:
+                # Found connection to use as next in contour
+                cpoint = crossing_points.pop(nb_id)
+                contour.append(cpoint)
+                
+                # Unused connections may be new end points (more than two connections)
+                for candidate in queue:
+                    if candidate in crossing_points:
+                        endpoint_ids.append(candidate)
+                
+                queue = list(connections[nb_id])
+                prev = nb_id
+            
+            # Is this the end of a loop?
+            if (nb_id == end_id and prev in connections[end_id] and 
+                len(contour) != 2 and not has_backtracked):
                 contour.append(contour[0])
                 break
+            
+            # Backtrack from endpoint in case it was not a true endpoint
+            if backtrack_from_end and not queue and not has_backtracked:
+                contour = contour[::-1]
+                queue = list(connections[end_id])
+                has_backtracked = True
         
         contours.append(contour)
     

@@ -4,6 +4,9 @@ from ocellaris import Simulation, setup_simulation
 
 # Dummy values to make setup_simulation() run without errors
 DUMMY = """
+ocellaris:
+    type: input
+    version: 1.0
 solver: {type: AnalyticalSolution}
 mesh: {type: Rectangle, Nx: 4, Ny: 4}
 boundary_conditions: []
@@ -13,10 +16,6 @@ physical_properties: {nu0: 1.0}
 
 
 INPUT_USER_CONSTANTS = """
-ocellaris:
-    type: input
-    version: 1.0
-
 user_code:
     constants:
         A: 21
@@ -34,10 +33,6 @@ def test_user_constants():
 
 # TODO: this depends on the CWD of the test runner
 INPUT_MODULE_IMPORT = """
-ocellaris:
-    type: input
-    version: 1.0
-
 user_code:
     python_path:
     -   scripts
@@ -59,10 +54,6 @@ def test_import_module():
 
 
 INPUT_USER_CODE = """
-ocellaris:
-    type: input
-    version: 1.0
-
 user_code:
     constants:
         Q: 1.0
