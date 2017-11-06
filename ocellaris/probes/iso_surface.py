@@ -506,12 +506,6 @@ def get_iso_surface_DG1_DG2(simulation, cache, field, value):
     connections = {}
     for dof in crossing_points:
         connections[dof] = [n for n in cache.extended_neighbours[dof] if n in crossing_points]
-        
-    print('-------------------------------------')
-    for dof, c in connections.items():
-        print(dof, 'x: %4.2f %4.2f' % tuple(cache.dofs_x[dof]), '  connections:', c)#, 'EN:', cache.extended_neighbours[dof])
-    print(list(crossing_points.keys()))
-    print('-------------------------------------')
     
     # Make continous contour lines
     possible_starting_points = crossing_points.keys()
