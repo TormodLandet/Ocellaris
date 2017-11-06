@@ -78,13 +78,13 @@ def test_isoline_circle(degree):
     probe = sim.probes['free_surface']    
     lines = probe.run(force_active=True)
 
-    from matplotlib import pyplot
-    c = dolfin.plot(sim.data['c'])
-    pyplot.colorbar(c)
-    for x, y in lines:
-      pyplot.plot(x, y)
-    pyplot.savefig('test_isoline_circle_%d.png' % degree)
-    pyplot.close()
+    #from matplotlib import pyplot
+    #c = dolfin.plot(sim.data['c'])
+    #pyplot.colorbar(c)
+    #for x, y in lines:
+    #  pyplot.plot(x, y)
+    #pyplot.savefig('test_isoline_circle_%d.png' % degree)
+    #pyplot.close()
     
     print(probe.name, probe.field_name, probe.value)
     print(len(lines))
