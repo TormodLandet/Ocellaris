@@ -303,7 +303,7 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
         # Find the location where the contour line crosses the LCCM
         v1, v2 = vertex_values
         fac = (v1 - value)/(v1 - v2)
-        crossing_points[fid] = (1 - fac)*vertex_coords[0] + fac*vertex_coords[1]
+        crossing_points[fid] = tuple((1 - fac)*vertex_coords[0] + fac*vertex_coords[1])
         
         # Find the cell containing the contour line
         surf_cid = cell_ids[0] if fac <= 0.5 else cell_ids[1]
@@ -335,6 +335,8 @@ def prepare_DG1_DG2(cache, simulation, V):
     """
     Prepare to find iso surfaces of the given field. Caches geometry and
     topology data of the mesh and must be rerun if this data changes!
+
+    This is rather slow, but it runs only once and the results are cached
     """
     mesh = simulation.data['mesh']
     gdim = mesh.geometry().dim()
@@ -368,14 +370,17 @@ def prepare_DG1_DG2(cache, simulation, V):
         cid = cell.index()
         dofs = dofmap.cell_dofs(cid)
         if degree == 1:
-            for i, dof in enumerate(dofs):
+            for dof in dofs:
+                # Immediate neighbours
                 nbs = list(same_loc[dof])
                 immediate_neighbours[dof] = nbs
-                nbs.append(dofs[(i + 1) % 3])
-                nbs.append(dofs[(i + 2) % 3])
+                nbs.extend(d for d in dofs if dof != d)
+                
+                # The first connected cell is the cell owning the dof
                 connected_cells[dof] = [cid]
         else:
             for i, dof in enumerate(dofs):
+                # Immediate neighbours
                 nbs = list(same_loc[dof])
                 immediate_neighbours[dof] = nbs
                 if i == 0:
@@ -427,12 +432,13 @@ def prepare_DG1_DG2(cache, simulation, V):
         tmp = []
         for n in enbs:
             pn = dofs_x[n]
-            d = p - pn 
+            d = p - pn
             tmp.append((d.dot(d), n))
         tmp.sort(reverse=True)
         extended_neighbours[dof] = [n for _dist, n in tmp]
     
     cache.N = N
+    cache.degree = degree
     cache.dofs_x = dofs_x
     cache.x_to_dof = x_to_dof
     cache.immediate_neighbours = immediate_neighbours
@@ -504,15 +510,23 @@ def get_iso_surface_DG1_DG2(simulation, cache, field, value):
     # Get connections between crossing points using the extended 
     # dof neighbourhood to look for possible connections
     connections = {}
-    for dof in crossing_points:
-        connections[dof] = [n for n in cache.extended_neighbours[dof] if n in crossing_points]
+    for dof, pos in crossing_points.items():
+        tmp = []
+        for n in cache.extended_neighbours[dof]:
+            if n not in crossing_points:
+                continue
+            p2 = crossing_points[n]
+            d = (pos[0] - p2[0])**2 + (pos[1] - p2[1])**2
+            tmp.append((d, n))
+        tmp.sort(reverse=True)
+        connections[dof] = [n for _, n in tmp]
     
     # Make continous contour lines
     possible_starting_points = crossing_points.keys()
     contours = contour_lines_from_endpoints(possible_starting_points, crossing_points,
-                                            connections, backtrack_from_end=True)
+                                            connections, min_length=3*cache.degree,
+                                            backtrack_from_end=True, extend_endpoints=False)
     
-    assert len(crossing_points) == 0
     return contours, cells_with_surface
 
 
@@ -572,7 +586,8 @@ def get_boundary_surface(simulation, field, value):
     return contours_from_endpoints + contours_from_singles_and_loops
 
 
-def contour_lines_from_endpoints(endpoints, crossing_points, connections, backtrack_from_end=False):
+def contour_lines_from_endpoints(endpoints, crossing_points, connections, min_length=3,
+                                 backtrack_from_end=False, extend_endpoints=True):
     """
     Follow contour lines and create contours
     
@@ -598,25 +613,26 @@ def contour_lines_from_endpoints(endpoints, crossing_points, connections, backtr
         has_backtracked = False
         while queue:
             nb_id = queue.pop()
-            print('EP %d NB %d' % (end_id, nb_id))
             
             # Is this neighbour a possible next part of the contour line?
             if nb_id in crossing_points:
                 # Found connection to use as next in contour
                 cpoint = crossing_points.pop(nb_id)
-                contour.append(cpoint)
+                if cpoint != contour[-1]:
+                    contour.append(cpoint)
                 
                 # Unused connections may be new end points (more than two connections)
-                for candidate in queue:
-                    if candidate in crossing_points:
-                        endpoint_ids.append(candidate)
+                if extend_endpoints:
+                    for candidate in queue:
+                        if candidate in crossing_points:
+                            endpoint_ids.append(candidate)
                 
                 queue = list(connections[nb_id])
                 prev = nb_id
             
             # Is this the end of a loop?
             if (nb_id == end_id and prev in connections[end_id] and 
-                len(contour) != 2 and not has_backtracked):
+                len(contour) > min_length - 1 and not has_backtracked):
                 contour.append(contour[0])
                 break
             
@@ -627,5 +643,6 @@ def contour_lines_from_endpoints(endpoints, crossing_points, connections, backtr
                 has_backtracked = True
         
         contours.append(contour)
-    
+        
     return contours
+
