@@ -171,7 +171,6 @@ class CppCodedDirichletBoundary(BoundaryConditionCreator):
         P = self.func_space.ufl_element().degree()
         expr, updater = OcellarisCppExpression(self.simulation, cpp_code, description,
                                                P, return_updater=True)
-        self.simulation.hooks.add_pre_timestep_hook(updater, 'Update C++ Dirichlet BC for %s' % var_name)
         
         bc = OcellarisDirichletBC(self.simulation, self.func_space, expr,
                                   subdomains, subdomain_id, updater=updater)

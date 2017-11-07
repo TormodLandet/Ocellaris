@@ -41,17 +41,21 @@ class Hooks(object):
         """
         self._pre_simulation_hooks.append((hook, description))
     
-    def add_pre_timestep_hook(self, hook, description):
+    def add_pre_timestep_hook(self, hook, description, timer_name=None):
         """
         Add a function that will run before the solver in each time step
         """
-        self._pre_timestep_hooks.append((hook, description))
+        if timer_name is None:
+            timer_name = description
+        self._pre_timestep_hooks.append((hook, description, timer_name))
     
-    def add_post_timestep_hook(self, hook, description):
+    def add_post_timestep_hook(self, hook, description, timer_name=None):
         """
         Add a function that will run after the solver in each time step
         """
-        self._post_timestep_hooks.append((hook, description))
+        if timer_name is None:
+            timer_name = description
+        self._post_timestep_hooks.append((hook, description, timer_name))
     
     def add_post_simulation_hook(self, hook, description):
         """
@@ -100,16 +104,14 @@ class Hooks(object):
         order they have been added 
         """
         self.simulation._at_start_of_timestep(timestep_number, t, dt)
-        for hook, description in self._pre_timestep_hooks[::-1]:
-            t = dolfin.Timer('Ocellaris hook %s' % description)
-            try:
-                hook(timestep_number=timestep_number, t=t, dt=dt)
-            except:
-                self.simulation.log.error('Got exception in hook: %s' % description)
-                self.simulation.log.error(traceback.format_exc())
-                raise
-            finally:
-                t.stop()
+        for hook, description, timer_name in self._pre_timestep_hooks[::-1]:
+            with dolfin.Timer('Ocellaris hook %s' % timer_name):
+                try:
+                    hook(timestep_number=timestep_number, t=t, dt=dt)
+                except:
+                    self.simulation.log.error('Got exception in hook: %s' % description)
+                    self.simulation.log.error(traceback.format_exc())
+                    raise
     
     @timeit
     def end_timestep(self):
@@ -119,16 +121,14 @@ class Hooks(object):
         Will run all post timestep hooks in the reverse
         order they have been added
         """
-        for hook, description in self._post_timestep_hooks[::-1]:
-            t = dolfin.Timer('Ocellaris hook %s' % description)
-            try:
-                hook()
-            except:
-                self.simulation.log.error('Got exception in hook: %s' % description)
-                self.simulation.log.error(traceback.format_exc())
-                raise
-            finally:
-                t.stop()
+        for hook, description, timer_name in self._post_timestep_hooks[::-1]:
+            with dolfin.Timer('Ocellaris hook %s' % timer_name):
+                try:
+                    hook()
+                except:
+                    self.simulation.log.error('Got exception in hook: %s' % description)
+                    self.simulation.log.error(traceback.format_exc())
+                    raise
         self.simulation._at_end_of_timestep()
     
     def simulation_ended(self, success):
@@ -201,5 +201,5 @@ class Hooks(object):
         show('\nRegistered hooks:')
         for hook_type, hooks in all_hooks:
             show('    %s:' % hook_type)
-            for _hook, description in hooks[::-1]:
-                show('        - %s' % description)
+            for info in hooks[::-1]:
+                show('        - %s' % info[1])
