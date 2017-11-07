@@ -4,12 +4,13 @@ ocellaris:
 
 user_code:
     constants:
-        L: 150
-        H: 15
-        h: 6
-        DMS: 5
-        LWL: 34
-        V: 2
+        L: 200       # domain length
+        H: 30        # total depth
+        h: 6         # depth to pycnocline
+        d: 5         # draught amidships
+        l: 34        # length of hull water line
+        C: 50        # distance from midships to inlet
+        V: 2         # initial speed
         FRESH: 1000.0
         SALT: 1028.0
     code: |
@@ -58,22 +59,13 @@ _initial_conditions:
     cpp:
         cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
 
-initial_conditions:
-    rho_p:
-        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
-    rho_pp:
-        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
-
 boundary_conditions:
 
 -   name: Hull
     selector: code
     inside_code: 'on_boundary'
     u:
-        type: CppCodedValue
-        cpp_code: ['0', '0']
-    p:
-        type: WallPressure
+        type: FreeSlip
 
 -   name: Inlet
     selector: code
@@ -81,8 +73,6 @@ boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code: ['V', '0']
-    p:
-        type: WallPressure
     #c:
     #    type: CppCodedValue
     #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
@@ -96,8 +86,6 @@ boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code: ['V', '0']
-    p:
-        type: WallPressure
     #c:
     #    type: CppCodedValue
     #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
@@ -111,28 +99,19 @@ boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code: ['V', '0']
-    p:
-        type: WallPressure
 
 -   name: Surface z=0
     selector: code
     inside_code: 'on_boundary and x[1] > -1e-5'
-    u0:
-        type: ConstantGradient
-        value: 0
-    u1:
-        type: ConstantValue
-        value: 0
-    p:
-        type: ConstantGradient
-        value: 0
+    u:
+        type: FreeSlip
 
 time:
-    dt: 0.005
-    tmax: 20
+    dt: 0.01
+    tmax: 100
 
 output:
-    prefix: output/dead_water_2D
+    prefix: output/dead_water_2D_freeslip_hull
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -169,10 +148,20 @@ slope_limiter:
         skip_boundary: no
         enforce_bounds: yes
 
+probes:
+    -   name: free_surface
+        enabled: yes
+        type: IsoSurface
+        value: py$ (SALT + FRESH) / 2
+        field: rho
+        file_name: '_free_surface.out'
+        write_interval: 10
+        custom_hook: MultiPhaseModelUpdated
+
 hooks:
     pre_simulation:
     -   name: save mesh
-        enabled: yes
+        enabled: no
         code: |
             print('Writing Mesh ...')
             prefix = sim.input.get_value('output/prefix', '')
@@ -180,6 +169,31 @@ hooks:
             with XDMFFile(mesh.mpi_comm(), fn) as f:
                 f.write(boundary_marker)
             print('    Wrote', fn)
+    -   name: Initial density field with discrete jump at z=-h
+        enabled: yes
+        code: |
+            # We assume that the mesh aligns with the pycnocline
+            dm = Vrho.dofmap()
+            arr = rho.vector().get_local()
+            for cell in cells(mesh):
+                rho_cell = SALT if cell.midpoint().y() < -h else FRESH
+                for dof in dm.cell_dofs(cell.index()):
+                    arr[dof] = rho_cell
+            rho.vector().set_local(arr)
+            rho.vector().apply('insert')
+            rho_p.assign(rho)
+            rho_pp.assign(rho)
+    post_timestep:
+    -   name: Forces on the hull
+        enabled: yes
+        code: |
+            hull_id = boundary_by_name['Hull'].mark_id
+            hull_ds = ds(hull_id)
+            n = FacetNormal(mesh)
+            Fpx = p * dot(n, as_vector([1, 0])) * hull_ds
+            Fpy = p * dot(n, as_vector([0, 1])) * hull_ds
+            simulation.reporting.report_timestep_value('Fpx', assemble(Fpx))
+            simulation.reporting.report_timestep_value('Fpy', assemble(Fpy))
 
 #console_at_end: true
 #console_on_error: true

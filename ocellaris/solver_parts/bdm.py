@@ -107,6 +107,9 @@ class VelocityBDMProjection():
                 for nbc in neumann_bcs + robin_bcs + outlet_bcs:
                     a += u[d]*n[d]*v1*nbc.ds()
                     L += w[d]*n[d]*v1*nbc.ds()
+            
+            for sbc in sim.data['slip_bcs'].get('u', []):
+                a += dot(u, n)*v1*sbc.ds()
         else:
             a += dot(u, n)*v1*ds
             L += dot(w, n)*v1*ds
@@ -169,6 +172,9 @@ class VelocityBDMProjection():
                 for nbc in neumann_bcs + robin_bcs + outlet_bcs:
                     a += u[d]*n[d]*v1*nbc.ds()
                     L += w[d]*n[d]*v1*nbc.ds()
+            
+            for sbc in sim.data['slip_bcs'].get('u', []):
+                a += dot(u, n)*v1*sbc.ds()
         else:
             a += dot(u, n)*v1*ds
             L += dot(w, n)*v1*ds
@@ -235,6 +241,9 @@ class VelocityBDMProjection():
                 for nbc in neumann_bcs + robin_bcs + outlet_bcs:
                     a += u[d]*n[d]*v1*nbc.ds()
                     L += w[d]*n[d]*v1*nbc.ds()
+            
+            for sbc in sim.data['slip_bcs'].get('u', []):
+                a += dot(u, n)*v1*sbc.ds()
         else:
             a += dot(u, n)*v1*ds
             L += dot(w, n)*v1*ds

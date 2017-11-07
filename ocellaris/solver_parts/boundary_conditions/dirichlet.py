@@ -6,9 +6,7 @@ from ocellaris.utils import CodedExpression, OcellarisCppExpression, OcellarisEr
 class OcellarisDirichletBC(dolfin.DirichletBC):
     def __init__(self, simulation, V, value, subdomain_marker, subdomain_id, updater=None):
         """
-        A simple storage class for Dirichlet conditions. This is
-        used when defining the linear part of the weak forms and
-        for normal boundary strong conditions
+        A simple storage class for Dirichlet boundary conditions
         """
         super(OcellarisDirichletBC, self).__init__(V, value, subdomain_marker, subdomain_id, method='geometric')
         self.simulation = simulation

@@ -6,8 +6,7 @@ from ocellaris.utils import CodedExpression, OcellarisCppExpression
 class OcellarisNeumannBC(object):
     def __init__(self, simulation, value, subdomain_id):
         """
-        A simple storage class for Neumann conditions. This is
-        used when defining the linear part of the weak forms
+        A simple storage class for Neumann boundary conditions
         """
         self.simulation = simulation
         self._value = value

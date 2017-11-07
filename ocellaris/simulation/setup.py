@@ -241,6 +241,7 @@ def mark_boundaries(simulation):
     
     simulation.data['boundary'] = boundary
     simulation.data['boundary_marker'] = marker
+    simulation.data['boundary_by_name'] = {b.name: b for b in boundary}
     
     # Create a boundary measure that is aware of the marked regions
     mesh = simulation.data['mesh']
@@ -317,6 +318,7 @@ def setup_boundary_conditions(simulation):
     simulation.data['dirichlet_bcs'] = {}
     simulation.data['neumann_bcs'] = {}
     simulation.data['robin_bcs'] = {}
+    simulation.data['slip_bcs'] = {}
     simulation.data['outlet_bcs'] = []
     
     for region in simulation.data['boundary']:

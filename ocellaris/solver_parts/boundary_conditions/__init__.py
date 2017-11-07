@@ -49,3 +49,4 @@ from . import robin
 from . import slip_length
 from . import wall
 from . import outlet
+from . import decomposed
