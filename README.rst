@@ -26,58 +26,34 @@ Installation and running
 ------------------------
 
 Ocellaris requires a full installation of FEniCS_ with the PETSc linear algebra backend. You can
-install the dependecies yourself (you need at least dolfin, h5py, matplotlib and PyYAML) or use 
-a preconfigured Singularity or Docker container, see below.
+install the dependecies yourself (you need at least dolfin, h5py, matplotlib and PyYAML), but the 
+easiest way by far is to use a preconfigured Singularity or Docker container. More information
+on these and installation in general can be found in the `user guide`_. 
 
-To install Ocellaris in an environment where the prerequisites are present run::
-
-  cd path/to/ocellaris/source
-  pip3 install .
-
-You should now be ready to run the solver::
+When Ocellaris is installed you can run the solver with an Ocellaris input file::
 
   ocellaris INPUTFILE.INP
 
-If you did not pip install the ocellaris package, but just put it somewhere in the Python path,
-you may need to instead run::
+Example input files can be found in the ``demos/`` sub-directory of the Ocellaris source code and
+a description of the Ocellaris input file format is given in the `user guide`_.
 
-  python3 -m ocellaris INPUTFILE.INP
-
-Singularity and Docker
-~~~~~~~~~~~~~~~~~~~~~~
-
-You can also install using the preliminary support for Singularity containers. First, create a Singularity image from the file "Singularity" which is located in the root of the Ocellaris git repository::
-
-  cd path/to/ocellaris/source
-  singularity build ocellaris.img Singularity
-
-You can now run Ocellaris from inside the newly created Singularity container::
-
-  singularity run ocellaris.img INPUTFILE.INP
-
-The Singularity image is based on the Docker image that is used by the Ocallaris automated testing
-environment, see `setup.yml <https://bitbucket.org/trlandet/ocellaris/src/master/.circleci/config.yml>`_
-for up to date details about which Docker image is used. You can use this Docker image to run
-Ocellaris as well, but you will then have to install Ocellaris yourself inside the container,
-see details in the ``setup.yml`` or ``Singularity`` files, it is basically just ``pip install``.
+.. _user guide: https://trlandet.bitbucket.io/ocellaris/user_guide/user_guide.html
 
 First steps
 ~~~~~~~~~~~
-  
+
 To test the code there are some demo input files in the ``demos/`` directory. Complete input files along
 with driver scripts are provided for several of the standard benchmark cases like Kovasznay flow and the
 Taylor-Green vortex in the ``cases/`` directory. More information can be found in the documentation which
-also contains a (currently incomplete) description of the input file format.
+also contains a description of the input file format.
 
 Please feel free to test Ocellaris, but please keep in mind:
 
-- Ocellaris is in a state of constant development and does not have a stable API or input file format. 
-- Ocellaris supports Python 3 only (after October 2017). There is an old Python2 branch ``legacy-py2``
-  that may or may not work. Dolfin with pybind11 Python3 wrappers is required (master version, still
-  unreleased as of 2017-10-17).
-- This is a research project, do not expect anything to work properly without testing it thoroughly first!
-- Documentation has not been a big priority, sorry! See the demos, regression tests etc in the code 
-  repository in addition to the documentation and of course the source code itself.
+- Ocellaris is in a state of constant development 
+- Ocellaris supports Python 3 only
+- FEniCS DOLFIN with pybind11 Python3 wrappers is required (master version, still unreleased as of 
+  November 2017)
+- This is a research project, do not expect results to be correct without proper validation!
 
 Documentation
 -------------
