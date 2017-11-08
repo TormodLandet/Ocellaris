@@ -21,7 +21,10 @@ class Log(object):
     def __init__(self, simulation):
         self.simulation = simulation
         self.log_level = dolfin.LogLevel.INFO
-        self.simulation.hooks.add_post_simulation_hook(lambda success: self.end_of_simulation(), 'Flush log file')
+        self.simulation.hooks.add_pre_simulation_hook(self.flush, 'Flush log file')
+        self.simulation.hooks.add_post_simulation_hook(lambda success: self.flush(), 'Flush log file')
+        self.simulation.hooks.register_custom_hook_point('flush')
+        self.simulation.hooks.add_custom_hook('flush', self.flush, 'Flush log file')
         self.write_log = False
         self.write_stdout = False
         self._the_log = []
@@ -99,8 +102,13 @@ class Log(object):
         df_log_level = self.simulation.input.get_value('output/dolfin_log_level', 'warning')
         dolfin.set_log_level(self.AVAILABLE_LOG_LEVELS[df_log_level])
     
-    def end_of_simulation(self):
+    def flush(self):
         """
+        The simulation has started, flush to make sure
+        input values are shown
+        
+        or
+        
         The simulation is done. Make sure the output
         file is flushed, but keep it open in case 
         some more output is coming

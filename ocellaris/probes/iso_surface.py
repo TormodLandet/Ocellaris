@@ -72,6 +72,9 @@ class IsoSurface(Probe):
             simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
         else:
             self.end_of_timestep = self.run
+        
+        # Flush output file
+        self.simulation.hooks.add_custom_hook('flush', self.flush, 'Flush log file')
     
     def run(self, force_active=False):
         """
@@ -136,6 +139,10 @@ class IsoSurface(Probe):
         
         # Return value only used in unit testing
         return lines
+    
+    def flush(self):
+        if self.write_file and self.simulation.rank == 0:
+            self.output_file.flush()
     
     def end_of_simulation(self):
         """

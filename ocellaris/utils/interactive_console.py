@@ -42,6 +42,10 @@ def interactive_console_hook(simulation):
             # d == "debug" -> start the debug console
             return run_debug_console(simulation)
         
+        if command == 'f':
+            # f == "flush" -> flush open files
+            simulation.hooks.run_custom_hook('flush')
+        
         elif command == 'p':
             # p == "plot" -> plot field variable
             funcs, _ = define_convenience_functions(simulation)
