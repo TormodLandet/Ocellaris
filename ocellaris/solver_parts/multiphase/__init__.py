@@ -51,4 +51,5 @@ from . import single_phase
 from . import blended_algebraic_vof
 from . import variable_density
 from . import lagrangian
+from . import height_function
 from . import height_function_ale

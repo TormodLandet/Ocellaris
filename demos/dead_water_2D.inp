@@ -36,14 +36,14 @@ metadata:
     description: |
         Flow around a semi-sumberged circle in a stratified fluid  
 
-_physical_properties:
+physical_properties:
     g: [0, -9.81]
     nu0: 1.0e-6
     rho0: py$ SALT
     nu1: 1.0e-6
     rho1: py$ FRESH
 
-physical_properties:
+_physical_properties:
     nu: 1.0e-6
     rho_min: py$ FRESH
     rho_max: py$ SALT
@@ -76,9 +76,9 @@ boundary_conditions:
     #c:
     #    type: CppCodedValue
     #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
-    rho:
-        type: CppCodedValue
-        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+    #rho:
+    #    type: CppCodedValue
+    #    cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
 
 -   name: Outlet
     selector: code
@@ -89,9 +89,9 @@ boundary_conditions:
     #c:
     #    type: CppCodedValue
     #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
-    rho:
-        type: CppCodedValue
-        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+    #rho:
+    #    type: CppCodedValue
+    #    cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
 
 -   name: Bottom
     selector: code
@@ -107,11 +107,12 @@ boundary_conditions:
         type: FreeSlip
 
 time:
-    dt: 0.01
+    #dt: 0.01
+    dt: 0.1
     tmax: 100
 
 output:
-    prefix: output/dead_water_2D_freeslip_hull
+    prefix: output/dead_water_2D_hfunc
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -137,9 +138,25 @@ _multiphase_solver:
     plot_fields: yes
 
 multiphase_solver:
-    type: VariableDensity
+    #type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 2
+    
+    type: HeightFunction
+    height_function_xmin: 0
+    height_function_xmax: 150
+    height_function_Nx: 300
+    surface_thickness: 2.0
+    height_initial_h: py$ -h
+    height_min_code: hmin = zeros_like(xpos) - H
+    height_max_code: |
+        xpos = numpy.linspace(0, 150, 300)
+        hmax = numpy.zeros_like(xpos)
+        C, d, l = 50, 5, 34
+        r = l**2/(8*d) + d/2
+        mask = (C - l/2 <= xpos) & (xpos <= C + l/2)
+        hmax[mask] = r - d - r * numpy.cos((xpos[mask] - C)/r)
+        hmax -= 0.1
 
 slope_limiter:
     rho:
@@ -153,7 +170,7 @@ probes:
         enabled: yes
         type: IsoSurface
         value: py$ (SALT + FRESH) / 2
-        field: rho
+        field: height_function
         file_name: '_free_surface.out'
         write_interval: 10
         custom_hook: MultiPhaseModelUpdated
@@ -170,7 +187,7 @@ hooks:
                 f.write(boundary_marker)
             print('    Wrote', fn)
     -   name: Initial density field with discrete jump at z=-h
-        enabled: yes
+        enabled: no
         code: |
             # We assume that the mesh aligns with the pycnocline
             dm = Vrho.dofmap()
@@ -190,8 +207,8 @@ hooks:
             hull_id = boundary_by_name['Hull'].mark_id
             hull_ds = ds(hull_id)
             n = FacetNormal(mesh)
-            Fpx = p * dot(n, as_vector([1, 0])) * hull_ds
-            Fpy = p * dot(n, as_vector([0, 1])) * hull_ds
+            Fpx = p * dot(-n, as_vector([1, 0])) * hull_ds
+            Fpy = p * dot(-n, as_vector([0, 1])) * hull_ds
             simulation.reporting.report_timestep_value('Fpx', assemble(Fpx))
             simulation.reporting.report_timestep_value('Fpy', assemble(Fpy))
 

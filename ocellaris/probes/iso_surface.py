@@ -61,9 +61,12 @@ class IsoSurface(Probe):
             self.fig = pyplot.figure()
             self.ax = self.fig.add_subplot(111)
             self.ax.set_title('Iso surface %s' % self.name)
-            
+        
         # The class that finds the contour line
-        self.locator = IsoSurfaceLocator(simulation, self.field.function_space())
+        if self.field_name == 'height_function':
+            self.locator = HeightFunctionLocator(simulation)
+        else:
+            self.locator = IsoSurfaceLocator(simulation, self.field.function_space())
         
         if self.custom_hook_point is not None:
             simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
@@ -167,6 +170,23 @@ class IsoSurfaceLocator:
             return get_iso_surface_DG1_DG2(sim, self.cache, field, value)
         else:
             return get_iso_surfaces(sim, field, value)
+
+
+class HeightFunctionLocator:
+    def __init__(self, simulation):
+        self.simulation = simulation
+    
+    @timeit
+    def get_iso_surface(self, field, value):
+        """
+        Find the iso-surfaces (contour lines) of the
+        given field with the given scalar value 
+        """
+        sim = self.simulation
+        xpos = sim.data['height_function_x']
+        ypos = sim.data['height_function'].vector().get_local()
+        line = [(x, h) for x, h in zip(xpos, ypos)]
+        return [line], None
 
 
 def get_iso_surfaces(simulation, field, value):

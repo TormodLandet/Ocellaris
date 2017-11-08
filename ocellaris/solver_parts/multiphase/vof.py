@@ -10,6 +10,7 @@ class VOFMixin(object):
     controls the way mu is calculated, "calculate_mu_directly_from_colour_function".
     """
     calculate_mu_directly_from_colour_function = True
+    default_polynomial_degree_colour = 0
     
     @classmethod
     def create_function_space(cls, simulation):
@@ -17,7 +18,8 @@ class VOFMixin(object):
         cd = simulation.data['constrained_domain']
         Vc_name = simulation.input.get_value('multiphase_solver/function_space_colour',
                                              'Discontinuous Lagrange', 'string')
-        Pc = simulation.input.get_value('multiphase_solver/polynomial_degree_colour', 0, 'int')
+        Pc = simulation.input.get_value('multiphase_solver/polynomial_degree_colour',
+                                        cls.default_polynomial_degree_colour, 'int')
         Vc = FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
         simulation.data['Vc'] = Vc
     
