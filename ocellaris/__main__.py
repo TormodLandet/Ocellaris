@@ -61,16 +61,6 @@ def override_input_variables(simulation, input_override):
     if input_override is None:
         return
     
-    def conv_path_element(element):
-        """
-        Take into account that the path element may
-        be a list index given as an integer
-        """ 
-        try:
-            return int(elem)
-        except ValueError:
-            return element
-    
     for overrider in input_override:
         # Overrider is something like "time/dt=0.1"
         path = overrider.split('=')[0]
@@ -78,20 +68,8 @@ def override_input_variables(simulation, input_override):
         
         # Find the correct input sub-dictionary
         path_elements = path.split('/')
-        d = simulation.input
-        for elem in path_elements[:-1]:
-            # Take into account that the path element may
-            # be a list index given as an integer 
-            try:
-                elem = int(elem)
-            except ValueError:
-                pass
-            
-            # Extract the sub-dictionary (or list)
-            idx = conv_path_element(elem)
-            if not idx in d:
-                d[idx] = {}
-            d = d[idx]
+        base_path = '/'.join(path_elements[:-1])
+        base = simulation.input.get_value(base_path)
         
         # Convert value to Python object
         try:
@@ -101,10 +79,16 @@ def override_input_variables(simulation, input_override):
             print('ERROR:       --set-input "%s"' % overrider)
             print('ERROR: Got exception: %s' % str(e))
             exit(-1)
+            
+        # The last path element may be a list index
+        try:
+            idx = int(path_elements[-1])
+        except ValueError:
+            idx = path_elements[-1]
         
         # Update the input sub-dictionary
-        idx = conv_path_element(path_elements[-1])
-        d[idx] = py_value
+        base[idx] = py_value
+        simulation.log.info('Command line overriding %r in %s to %r' % (idx, base_path, py_value))
 
 
 def run_from_console():
@@ -114,7 +98,7 @@ def run_from_console():
                                      description='Discontinuous Galerkin Navier-Stokes solver')
     parser.add_argument('inputfile', help='Name of file containing simulation '
                         'configuration on the Ocellaris YAML input format')
-    parser.add_argument('--set-input', '-i', action='append', help='Set an inpup key. Can be added several '
+    parser.add_argument('--set-input', '-i', action='append', help='Set an input key. Can be added several '
                         'times to set multiple input keys. Example: --set-input time/dt=0.1')
     
     args = parser.parse_args()

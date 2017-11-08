@@ -124,8 +124,12 @@ def setup_user_code(simulation):
         consts = simulation.input.get_value('user_code/constants', {}, 'dict(string:any)')
         variables = consts.copy()
         variables['simulation'] = simulation
-        variables['__file__'] = simulation.input.file_name 
-        exec(code, globals(), variables)
+        variables['__file__'] = simulation.input.file_name
+        try:
+            exec(code, globals(), variables)
+        except Exception:
+            simulation.log.error('Exception in input file user_code/code')
+            raise
 
 
 def setup_fenics(simulation):

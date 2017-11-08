@@ -314,6 +314,7 @@ class InputOutputHandling():
         if read_input:
             # Read the input file
             sim.input.read_yaml(yaml_string=inpdata)
+            sim.input.file_name = h5_file_name
             sim.input.set_value('time/tstart', t)
             sim.input.set_value('time/dt', dt)
             
