@@ -86,24 +86,24 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
     say('Number of mesh cells:', sim.data['mesh'].num_cells())
     say('p*dx', int_p)
-    div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().array()).max()
+    div_u_Vp = abs(dolfin.project(dolfin.div(sim.data['u']), Vp).vector().get_local()).max()
     say('div(u)|Vp', div_u_Vp)
-    div_u_Vu = abs(dolfin.project(dolfin.div(sim.data['u']), Vu).vector().array()).max()
+    div_u_Vu = abs(dolfin.project(dolfin.div(sim.data['u']), Vu).vector().get_local()).max()
     say('div(u)|Vu', div_u_Vu)
     Vdg0 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 0)
-    div_u_DG0 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg0).vector().array()).max()
+    div_u_DG0 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg0).vector().get_local()).max()
     say('div(u)|DG0', div_u_DG0)
     Vdg1 = dolfin.FunctionSpace(sim.data['mesh'], "DG", 1)
-    div_u_DG1 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg1).vector().array()).max()
+    div_u_DG1 = abs(dolfin.project(dolfin.div(sim.data['u']), Vdg1).vector().get_local()).max()
     say('div(u)|DG1', div_u_DG1)
     
     if 'u_mesh' in sim.data:
         Vmesh = sim.data['Vmesh']
-        div_u_mesh_Vmesh = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vmesh).vector().array()).max()
+        div_u_mesh_Vmesh = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vmesh).vector().get_local()).max()
         say('div(u_mesh)|V_mesh', div_u_mesh_Vmesh)
-        div_u_mesh_DG0 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg0).vector().array()).max()
+        div_u_mesh_DG0 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg0).vector().get_local()).max()
         say('div(u_mesh)|DG0', div_u_mesh_DG0)
-        div_u_mesh_DG1 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg1).vector().array()).max()
+        div_u_mesh_DG1 = abs(dolfin.project(dolfin.div(sim.data['u_mesh']), Vdg1).vector().get_local()).max()
         say('div(u_mesh)|DG1', div_u_mesh_DG1)
     
     if False:

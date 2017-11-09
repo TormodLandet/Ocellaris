@@ -128,7 +128,7 @@ hooks:
     -   name: debug on fishy values
         enabled: no
         code: |
-            umag = (u0.vector().array()**2 +  u1.vector().array()**2)
+            umag = (u0.vector().get_local()**2 +  u1.vector().get_local()**2)
             if max(umag) > 1:
                 run_debug_console(simulation, False)
 
