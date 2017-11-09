@@ -16,6 +16,7 @@ class SlopeLimiterBoundaryConditions(object):
         
         @param dict dof_region_marks: As created by get_dof_region_marks() 
         """
+        assert field_name is not None
         self.simulation = simulation
         self.field_name = field_name
         self.function_space = V
