@@ -82,4 +82,7 @@ Copyright and license
 ---------------------
 
 Ocellaris is copyright Tormod Landet, 2015-2017. Ocellaris is licensed under the Apache 2.0 license, a 
-permissive free software license compatible with version 3 of the GNU GPL.
+permissive free software license compatible with version 3 of the GNU GPL. See `License of Ocellaris`_ for
+the details.
+
+.. _`License of Ocellaris`:  https://trlandet.bitbucket.io/ocellaris/license.html

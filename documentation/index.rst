@@ -15,6 +15,7 @@
    
    user_guide/user_guide
    programmers_guide/programmers_guide
+   license
    
 .. toctree::
    :hidden:
