@@ -94,6 +94,8 @@ class Hooks(object):
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 self.simulation.log.error(traceback.format_exc())
                 raise
+        # Flush open files
+        self.simulation.hooks.run_custom_hook('flush')
     
     @timeit
     def new_timestep(self, timestep_number, t, dt):
@@ -150,6 +152,8 @@ class Hooks(object):
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 self.simulation.log.error(traceback.format_exc())
                 raise
+        # Flush open files
+        self.simulation.hooks.run_custom_hook('flush')
     
     @timeit
     def matrix_ready(self, Aname, A, b=None):

@@ -21,8 +21,6 @@ class Log(object):
     def __init__(self, simulation):
         self.simulation = simulation
         self.log_level = dolfin.LogLevel.INFO
-        self.simulation.hooks.add_pre_simulation_hook(self.flush, 'Flush log file')
-        self.simulation.hooks.add_post_simulation_hook(lambda success: self.flush(), 'Flush log file')
         self.simulation.hooks.register_custom_hook_point('flush')
         self.simulation.hooks.add_custom_hook('flush', self.flush, 'Flush log file')
         self.write_log = False
