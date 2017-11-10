@@ -46,7 +46,8 @@ class InputOutputHandling():
                                   ('rho', 'Density'),
                                   ('u0', 'X-component of velocity'),
                                   ('u1', 'Y-component of velocity'),
-                                  ('u2', 'Z-component of velocity')):
+                                  ('u2', 'Z-component of velocity'),
+                                  ('boundary_marker', 'Domain boundary regions')):
             if not name in sim.data:
                 continue
             func = sim.data[name]
@@ -81,6 +82,7 @@ class InputOutputHandling():
         self.xdmf_file.parameters['flush_output'] = xdmf_flush
         self.xdmf_file.parameters['rewrite_function_mesh'] = False
         self.xdmf_file.parameters['functions_share_mesh'] = True
+        self.xdmf_first_output = True
         
         def create_vec_func(V):
             "Create a vector function from the components"
@@ -191,6 +193,10 @@ class InputOutputHandling():
         """
         t = self.simulation.time
         
+        if self.xdmf_first_output:
+            bm = self.simulation.data['boundary_marker']
+            self.xdmf_file.write(bm)
+        
         # Write the fluid velocities
         for d in range(self.simulation.ndim):
             ui = self.simulation.data['up%d' % d]
@@ -214,6 +220,8 @@ class InputOutputHandling():
         # Write extra functions
         for func in self.extra_xdmf_functions:
             self.xdmf_file.write(func, t)
+        
+        self.xdmf_first_output = False
     
     def _write_hdf5(self, h5_file_name=None):
         """
