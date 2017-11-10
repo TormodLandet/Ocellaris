@@ -141,7 +141,7 @@ class IsoSurface(Probe):
         return lines
     
     def flush(self):
-        if self.write_file and self.simulation.rank == 0:
+        if self.write_file and self.simulation.rank == 0 and not self.output_file.closed:
             self.output_file.flush()
     
     def end_of_simulation(self):
@@ -152,15 +152,16 @@ class IsoSurface(Probe):
             self.output_file.close()
 
 
-class Cache:
+class IsoSurfaceLocatorCache:
     pass
+
 
 class IsoSurfaceLocator:
     def __init__(self, simulation, V):
         self.simulation = simulation
         self.degree = V.ufl_element().degree() 
         
-        self.cache = Cache()
+        self.cache = IsoSurfaceLocatorCache()
         if self.degree in (1, 2):
             return prepare_DG1_DG2(self.cache, simulation, V)
     
