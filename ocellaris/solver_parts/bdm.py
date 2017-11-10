@@ -228,7 +228,7 @@ class VelocityBDMProjection():
         # Eq. 1 cont. - flux through external boundaries
         if use_bcs:
             for d in range(gdim):
-                dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
+                dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
                 neumann_bcs = sim.data['neumann_bcs'].get('u%d' % d, [])
                 robin_bcs = sim.data['robin_bcs'].get('u%d' % d, [])
                 outlet_bcs = sim.data['outlet_bcs']

@@ -6,7 +6,7 @@ class SlopeLimiterBoundaryConditions(object):
     BC_TYPE_NOT_ON_BOUNDARY = 0
     BC_TYPE_DIRICHLET = 1
     BC_TYPE_NEUMANN = 2
-    BC_TYPE_ROBIN = 3
+    BC_TYPE_OTHER = 3
     
     def __init__(self, simulation, field_name, dof_region_marks, V):
         """
@@ -85,6 +85,12 @@ class SlopeLimiterBoundaryConditions(object):
             region_number = bc.subdomain_id - 1
             robin[region_number] = bc
         
+        # Collect Slip BCs for this field
+        slip = {}
+        for bc in sim.data['slip_bcs'].get(self.field_name, []):
+            region_number = bc.subdomain_id - 1
+            slip[region_number] = bc
+        
         regions = sim.data['boundary']
         for region_number, dofs in self.region_dofs.items():
             boundary_region = regions[region_number]
@@ -96,16 +102,15 @@ class SlopeLimiterBoundaryConditions(object):
             elif region_number in neumann:
                 bc_type = self.BC_TYPE_NEUMANN
                 value = neumann[region_number].func()
-            elif region_number in robin:
-                bc_type = self.BC_TYPE_ROBIN
+            elif region_number in robin or region_number in slip:
+                bc_type = self.BC_TYPE_OTHER
                 value = None
             else:
                 self._warn('WARNING: Field %s has no BC in region %s' %
                            (self.field_name, boundary_region.name))
                 continue
             
-            DnR = (self.BC_TYPE_DIRICHLET, self.BC_TYPE_ROBIN) 
-            if bc_type in DnR and weak_dof_values is not None:
+            if bc_type == self.BC_TYPE_DIRICHLET and weak_dof_values is not None:
                 # Take values from a field which has (weak) Dirichlet BCs applied
                 for dof in dofs:
                     boundary_dof_type[dof] = bc_type
@@ -134,7 +139,7 @@ class SlopeLimiterBoundaryConditions(object):
                     boundary_dof_value[dof] = val[0]
             
             else:
-                self._warn('WARNING: Field %s has unsupported BC %r in region %s' %
+                self._warn('WARNING: Field %s has unsupported limiter BC %r in region %s' %
                            (self.field_name, type(value), boundary_region.name))
         
         timer.stop()

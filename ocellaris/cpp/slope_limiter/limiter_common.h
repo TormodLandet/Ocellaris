@@ -21,7 +21,7 @@ enum BoundaryDofType {
   NOT_ON_BOUNDARY = 0,
   DIRICHLET = 1,
   NEUMANN = 2,
-  ROBIN = 3
+  OTHER = 3
 };
 
 
