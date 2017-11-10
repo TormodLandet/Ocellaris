@@ -30,7 +30,7 @@ def before_simulation(simulation, force_steady=False):
         simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2.0, 1/2]))
     else:
         simulation.data['time_coeffs'].assign(dolfin.Constant([1.0, -1.0, 0.0]))
-    update_convection(simulation, starting_order)
+    update_convection(simulation, starting_order, force_steady=force_steady)
 
 
 def after_timestep(simulation, is_steady, force_steady=False):
@@ -57,12 +57,12 @@ def after_timestep(simulation, is_steady, force_steady=False):
         simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
     
     # Extrapolate the convecting velocity to the next step
-    update_convection(simulation)
+    update_convection(simulation, force_steady=force_steady)
     
     return vel_diff
 
 
-def update_convection(simulation, order=2):
+def update_convection(simulation, order=2, force_steady=False):
     """
     Update terms used to linearise and discretise the convective term
     """
@@ -75,7 +75,7 @@ def update_convection(simulation, order=2):
         uip = data['up_conv%d' % d]
         uipp = data['upp_conv%d' % d]
         
-        if order == 1:
+        if order == 1 or force_steady:
             uic.assign(uip)
         else:
             # Backwards difference formulation - standard linear extrapolation

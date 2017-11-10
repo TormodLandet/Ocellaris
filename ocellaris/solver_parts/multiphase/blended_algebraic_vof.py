@@ -11,7 +11,7 @@ from .advection_equation import AdvectionEquation
 CONVECTION_SCHEME = 'Upwind'
 CONTINUOUS_FIELDS = False
 CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION = False
-FORCE_STEADY = False
+FORCE_STATIC = False
 FORCE_BOUNDED = False
 FORCE_SHARP = False
 PLOT_FIELDS = False
@@ -56,7 +56,6 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             self.continuous_c_old = dolfin.Function(V_cont)
             self.continuous_c_oldold = dolfin.Function(V_cont)
         
-        self.force_steady = simulation.input.get_value('multiphase_solver/force_steady', FORCE_STEADY, 'bool')
         self.force_bounded = simulation.input.get_value('multiphase_solver/force_bounded', FORCE_BOUNDED, 'bool')
         self.force_sharp = simulation.input.get_value('multiphase_solver/force_sharp', FORCE_SHARP, 'bool')
         
@@ -133,14 +132,11 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # Plot density and viscosity
         self.update_plot_fields()
         
-        # Stop early if the free surface is forced to stay still 
-        if self.force_steady:
-            return
-        
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
         Vc = sim.data['Vc']
-        if self.degree == 0:
+        project_dgt0 = sim.input.get_value('multiphase_solver/project_uconv_dgt0', True, 'bool')
+        if self.degree == 0 and project_dgt0:
             self.vel_dgt0_projector = VelocityDGT0Projector(sim, sim.data['u_conv'])
             self.u_conv = self.vel_dgt0_projector.velocity
         else:
@@ -171,9 +167,6 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             else:
                 c = self.simulation.data['cpp']
         
-        if self.force_steady:
-            c = self.simulation.data['c']
-        
         if self.force_bounded:
             c = dolfin.max_value(dolfin.min_value(c, Constant(1.0)), Constant(0.0))
         
@@ -198,16 +191,23 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         Update the VOF field by advecting it for a time dt
         using the given divergence free velocity field
         """
-        if self.force_steady:
-            self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
-            return
-        
         timer = dolfin.Timer('Ocellaris update VOF')
+        sim = self.simulation
         
         # Get the functions
-        c = self.simulation.data['c']
-        cp = self.simulation.data['cp']
-        cpp = self.simulation.data['cpp']
+        c = sim.data['c']
+        cp = sim.data['cp']
+        cpp = sim.data['cpp']
+        
+        # Stop early if the free surface is forced to stay still
+        force_static = sim.input.get_value('multiphase_solver/force_static', FORCE_STATIC, 'bool')
+        if force_static:
+            c.assign(cp)
+            cpp.assign(cp)
+            timer.stop() # Stop timer before hook
+            sim.hooks.run_custom_hook('MultiPhaseModelUpdated')
+            self.is_first_timestep = False
+            return
         
         if timestep_number != 1:
             # Update the previous values
@@ -232,7 +232,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if self.is_first_timestep:
             lo, hi = self.slope_limiter.set_global_bounds(lo=0.0, hi=1.0)
             if self.slope_limiter.has_global_bounds:
-                self.simulation.log.info('Setting global bounds [%r, %r] in BlendedAlgebraicVofModel' % (lo, hi))
+                sim.log.info('Setting global bounds [%r, %r] in BlendedAlgebraicVofModel' % (lo, hi))
         
         # Solve the advection equations for the colour field
         if timestep_number == 1 or is_static:
@@ -251,13 +251,13 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             dolfin.project(cpp, Vcg, function=self.continuous_c_oldold)
         
         # Report properties of the colour field
-        self.simulation.reporting.report_timestep_value('min(c)', c.vector().min())
-        self.simulation.reporting.report_timestep_value('max(c)', c.vector().max())
+        sim.reporting.report_timestep_value('min(c)', c.vector().min())
+        sim.reporting.report_timestep_value('max(c)', c.vector().max())
         
         # Use second order backward time difference after the first time step
         self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
         
         self.update_plot_fields()
-        timer.stop()
-        self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
+        timer.stop() # Stop timer before hook
+        sim.hooks.run_custom_hook('MultiPhaseModelUpdated')
         self.is_first_timestep = False

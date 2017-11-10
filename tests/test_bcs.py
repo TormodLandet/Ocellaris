@@ -307,12 +307,15 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
         sim.input.set_value('multiphase_solver/type', 'BlendedAlgebraicVOF')
         sim.input.set_value('multiphase_solver/function_space_colour', 'DG')
         sim.input.set_value('multiphase_solver/polynomial_degree_colour', 0)
-        sim.input.set_value('multiphase_solver/force_steady', True)
         sim.input.set_value('initial_conditions/cp/cpp_code', '0.5') # The interface is everywhere
         
         sim.input.set_value('physical_properties/rho0', 1.0)
         sim.input.set_value('physical_properties/rho1', 1.0)
         sim.input.set_value('physical_properties/nu1', 1.0)
+        
+        sim.input.set_value('multiphase_solver/project_uconv_dgt0', False)
+        sim.data['u_conv'] = dolfin.as_vector([0, 0])
+        sim.data['dt'] = dolfin.Constant(1.0)
     
     # Horizontal wall BCs
     sim.input.set_value('boundary_conditions/1/phi/type', 'ConstantGradient')

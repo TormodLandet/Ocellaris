@@ -1,5 +1,6 @@
 import dolfin
-from dolfin import dot, div, grad, jump, dx, dS
+from ufl.classes import Zero
+from dolfin import dot, div, grad, jump
 
 
 class AdvectionEquation(object):
@@ -20,11 +21,15 @@ class AdvectionEquation(object):
         Vc_family = Vc.ufl_element().family()
         self.colour_is_discontinuous = (Vc_family == 'Discontinuous Lagrange')
         
-        try:
-            Vu_family = u_conv[0].function_space().ufl_element().family()
-        except:
-            Vu_family = u_conv.function_space().ufl_element().family()
-        self.velocity_is_trace = (Vu_family == 'Discontinuous Lagrange Trace')
+        if isinstance(u_conv[0], (int, float, dolfin.Constant, Zero)):
+            self.velocity_is_trace = False
+        else:
+            try:
+                Vu_family = u_conv[0].function_space().ufl_element().family()
+            except:
+                Vu_family = u_conv.function_space().ufl_element().family()
+            self.velocity_is_trace = (Vu_family == 'Discontinuous Lagrange Trace')
+        
         if self.velocity_is_trace:
             assert self.colour_is_discontinuous
             assert Vc.ufl_element().degree() == 0
@@ -41,6 +46,7 @@ class AdvectionEquation(object):
         sim = self.simulation
         mesh = sim.data['mesh']
         n = dolfin.FacetNormal(mesh)
+        dS, dx = dolfin.dS(mesh), dolfin.dx(mesh)
         
         # Trial and test functions
         Vc = self.Vc

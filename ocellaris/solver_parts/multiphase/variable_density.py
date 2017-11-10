@@ -12,6 +12,7 @@ PRECONDITIONER = 'default'
 KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'relative_tolerance': 1e-15,
                      'absolute_tolerance': 1e-15}
+FORCE_STATIC = False
 
 
 @register_multi_phase_model('VariableDensity')
@@ -194,19 +195,27 @@ class VariableDensityModel(MultiPhaseModel):
         using the given divergence free velocity field
         """
         timer = dolfin.Timer('Ocellaris update rho')
+        sim = self.simulation
         
         if timestep_number != 1:
             # Update the previous values
             self.rho_pp.assign(self.rho_p)
             self.rho_p.assign(self.rho)
         
-        if self.use_analytical_solution:
+        # Check for steady solution every timestep, this can change over time
+        force_static = sim.input.get_value('multiphase_solver/force_static', FORCE_STATIC, 'bool')
+        
+        if force_static:
+            # Keep the existing solution
+            self.rho.assign(self.rho_p)
+        
+        elif self.use_analytical_solution:
             # Use an analytical density field for testing other parts of Ocellaris
-            cpp_code = self.simulation.input.get_value('initial_conditions/rho_p/cpp_code',
+            cpp_code = sim.input.get_value('initial_conditions/rho_p/cpp_code',
                                                        required_type='string')
             description = 'initial condition for rho_p'
-            V = self.simulation.data['Vrho']
-            ocellaris_interpolate(self.simulation, cpp_code, description, V, self.rho)
+            V = sim.data['Vrho']
+            ocellaris_interpolate(sim, cpp_code, description, V, self.rho)
         
         elif self.use_rk_method:
             # Strong-Stability-Preserving Runge-Kutta DG time integration
@@ -219,7 +228,7 @@ class VariableDensityModel(MultiPhaseModel):
             if self.is_first_timestep:
                 lo, hi = self.slope_limiter.set_global_bounds(self.rho)
                 if self.slope_limiter.has_global_bounds:
-                    self.simulation.log.info('Setting global bounds [%r, %r] in VariableDensity' % (lo, hi))
+                    sim.log.info('Setting global bounds [%r, %r] in VariableDensity' % (lo, hi))
             
             # Solve the implicit advection equation
             A = self.eq.assemble_lhs()
@@ -228,9 +237,9 @@ class VariableDensityModel(MultiPhaseModel):
             self.slope_limiter.run()
             self.time_coeffs.assign(Constant([3/2, -2, 1/2]))
         
-        self.simulation.reporting.report_timestep_value('min(rho)', self.rho.vector().min())
-        self.simulation.reporting.report_timestep_value('max(rho)', self.rho.vector().max())
+        sim.reporting.report_timestep_value('min(rho)', self.rho.vector().min())
+        sim.reporting.report_timestep_value('max(rho)', self.rho.vector().max())
         
-        timer.stop()
+        timer.stop() # Stop timer before hook
         self.simulation.hooks.run_custom_hook('MultiPhaseModelUpdated')
         self.is_first_timestep = False
