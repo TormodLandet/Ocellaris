@@ -1,6 +1,6 @@
 import numpy
 import dolfin
-from ocellaris.utils import timeit
+from ocellaris.utils import timeit, OcellarisError
 
 
 @timeit
@@ -14,22 +14,10 @@ def get_dof_region_marks(simulation, V):
     """
     # This function only supports a small subset of function spaces
     family = V.ufl_element().family()
-    degree = V.ufl_element().degree()
     assert family in ('Lagrange', 'Discontinuous Lagrange')
-    assert V.mesh().topology().dim() == 2
     
     # Get local indices for the facet dofs for each facet in the cell
-    if degree == 1:
-        facet_dof_indices = numpy.zeros((3, 2), dtype=int)
-        facet_dof_indices[0,:] = (1, 2)
-        facet_dof_indices[1,:] = (0, 2)
-        facet_dof_indices[2,:] = (0, 1)
-    else:
-        assert degree == 2
-        facet_dof_indices = numpy.zeros((3, 3), dtype=int)
-        facet_dof_indices[0,:] = (1, 2, 3)
-        facet_dof_indices[1,:] = (0, 2, 4)
-        facet_dof_indices[2,:] = (0, 1, 5)
+    facet_dof_indices = get_facet_dof_indices(V)
     
     # Get dofs that share the same location (relevant for DG)
     same_loc_dofs = get_same_loc_dofs(V)
@@ -62,6 +50,48 @@ def get_dof_region_marks(simulation, V):
     
     assert len(dof_region_marks) > 4
     return dof_region_marks
+
+
+def get_facet_dof_indices(V):
+    """
+    Get local indices for the facet dofs for each facet in the cell
+    """
+    ndim = V.mesh().topology().dim()
+    degree = V.ufl_element().degree()
+    ndim_deg = (ndim, degree)
+    
+    if ndim_deg == (2, 1):
+        # Linear triangle
+        facet_dof_indices = numpy.zeros((3, 2), dtype=int)
+        facet_dof_indices[0,:] = (1, 2)
+        facet_dof_indices[1,:] = (0, 2)
+        facet_dof_indices[2,:] = (0, 1)
+    elif ndim_deg == (2, 2):
+        # Quadratic triangle
+        facet_dof_indices = numpy.zeros((3, 3), dtype=int)
+        facet_dof_indices[0,:] = (1, 2, 3)
+        facet_dof_indices[1,:] = (0, 2, 4)
+        facet_dof_indices[2,:] = (0, 1, 5)
+    elif ndim_deg == (3, 1):
+        # Linear tetrahedron
+        facet_dof_indices = numpy.zeros((4, 3), dtype=int)
+        facet_dof_indices[0,:] = (1, 2, 3)
+        facet_dof_indices[1,:] = (0, 2, 3)
+        facet_dof_indices[2,:] = (0, 1, 3)
+        facet_dof_indices[3,:] = (0, 1, 2)
+    elif ndim_deg == (3, 2):
+        # Quadratic tetrahedron
+        facet_dof_indices = numpy.zeros((4, 6), dtype=int)
+        facet_dof_indices[0,:] = (1, 2, 3, 4, 5, 6)
+        facet_dof_indices[1,:] = (0, 2, 3, 4, 7, 8)
+        facet_dof_indices[2,:] = (0, 1, 3, 5, 7, 9)
+        facet_dof_indices[3,:] = (0, 1, 2, 6, 8, 9)
+    else:
+        raise OcellarisError('Unsupported element ndim=%d degree=%d' % ndim_deg,
+                             'The boundary condition get_dof_region_marks '
+                             'code does not support this element')
+    
+    return facet_dof_indices
 
 
 def get_same_loc_dofs(V):
