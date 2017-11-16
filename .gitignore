@@ -14,6 +14,7 @@ syntax: glob
 *.vtu
 *.msh
 *.xml
+*.img
 results/
 results_*
 documentation/_build
