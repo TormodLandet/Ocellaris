@@ -28,6 +28,7 @@ def lagrange_to_taylor(u, t):
     V = u.function_space()
     mesh = V.mesh()
     degree = V.ufl_element().degree()
+    ndim = mesh.geometry().dim()
     
     if 'mesh_hash' not in CACHE or CACHE['mesh_hash'] != mesh.hash():
         CACHE.clear()
@@ -37,10 +38,14 @@ def lagrange_to_taylor(u, t):
     # Get cached conversion matrices
     key = ('lagrange_to_taylor_matrices', degree)
     if key not in CACHE:
-        if degree == 1:
-            CACHE[key] = DG1_to_taylor_matrix(V)
-        elif degree == 2:
-            CACHE[key] = DG2_to_taylor_matrix(V)
+        if degree == 1 and ndim == 2:
+            CACHE[key] = DG1_to_taylor_matrix_2D(V)
+        elif degree == 1 and ndim == 3:
+            CACHE[key] = DG1_to_taylor_matrix_3D(V)
+        elif degree == 2 and ndim == 2:
+            CACHE[key] = DG2_to_taylor_matrix_2D(V)
+        elif degree == 2 and ndim == 3:
+            CACHE[key] = DG2_to_taylor_matrix_3D(V)
         else:
             ocellaris_error('DG Lagrange to DG Taylor converter error',
                             'Polynomial degree %d not supported' % degree)
@@ -78,6 +83,7 @@ def taylor_to_lagrange(t, u):
     V = u.function_space()
     mesh = V.mesh()
     degree = V.ufl_element().degree()
+    ndim = mesh.geometry().dim()
     
     if 'mesh_hash' not in CACHE or CACHE['mesh_hash'] != mesh.hash():
         CACHE.clear()
@@ -87,10 +93,14 @@ def taylor_to_lagrange(t, u):
     # Get cached conversion matrices
     key = ('taylor_to_lagrange_matrices', degree)
     if key not in CACHE:
-        if degree == 1:
-            CACHE[key] = taylor_to_DG1_matrix(V)
-        elif degree == 2:
-            CACHE[key] = taylor_to_DG2_matrix(V)
+        if degree == 1 and ndim == 2:
+            CACHE[key] = taylor_to_DG1_matrix_2D(V)
+        elif degree == 1 and ndim == 3:
+            CACHE[key] = taylor_to_DG1_matrix_3D(V)
+        elif degree == 2 and ndim == 2:
+            CACHE[key] = taylor_to_DG2_matrix_2D(V)
+        elif degree == 2 and ndim == 3:
+            CACHE[key] = taylor_to_DG2_matrix_3D(V)
         else:
             ocellaris_error('DG Taylor to DG Lagrange converter error',
                             'Polynomial degree %d not supported' % degree)
@@ -121,11 +131,11 @@ def taylor_to_lagrange(t, u):
 ##############################################################################
 
 
-def DG1_to_taylor_matrix(V):
+def DG1_to_taylor_matrix_2D(V):
     """
     Create the per cell matrices that when matrix multiplied with the
     Lagrange cell dofs return a vector of Taylor cell dofs.
-    This implementation handles DG1 function space V
+    This implementation handles DG1 function space V in 2D
     """
     mesh = V.mesh()
     vertices = mesh.coordinates()
@@ -167,11 +177,78 @@ def DG1_to_taylor_matrix(V):
     return A
 
 
-def DG2_to_taylor_matrix(V):
+def DG1_to_taylor_matrix_3D(V):
     """
     Create the per cell matrices that when matrix multiplied with the
     Lagrange cell dofs return a vector of Taylor cell dofs.
-    This implementation handles DG2 function space V
+    This implementation handles DG1 function space V in 3D
+    """
+    mesh = V.mesh()
+    vertices = mesh.coordinates()
+    
+    tdim = mesh.topology().dim()
+    num_cells_owned = mesh.topology().ghost_offset(tdim)
+    
+    A = numpy.zeros((num_cells_owned, 4, 4), float)
+    for cell in cells(mesh):
+        icell = cell.index()
+        
+        verts = cell.entities(0)
+        x = numpy.zeros((4, 3), float)
+        x[0] = vertices[verts[0]]
+        x[1] = vertices[verts[1]]
+        x[2] = vertices[verts[2]]
+        x[3] = vertices[verts[3]]
+                
+        ###############################
+        # From sympy code gen
+        
+        ((x1, y1, z1), (x2, y2, z2), (x3, y3, z3), (x4, y4, z4)) = x
+        
+        V = abs((-x1 + x2)*((-y1 + y3)*(-z1 + z4) - (-y1 + y4)*(-z1 + z3))/6 +
+                (-y1 + y2)*(-(-x1 + x3)*(-z1 + z4) + (-x1 + x4)*(-z1 + z3))/6 +
+                (-z1 + z2)*((-x1 + x3)*(-y1 + y4) - (-x1 + x4)*(-y1 + y3))/6)
+
+        # Value at xc (also the cell average value)
+        A[icell,0,0] = 1/4
+        A[icell,0,1] = 1/4
+        A[icell,0,2] = 1/4
+        A[icell,0,3] = 1/4
+        
+        # Value at xc (also the cell average value)
+        A[icell,0,0] = 1/4
+        A[icell,0,1] = 1/4
+        A[icell,0,2] = 1/4
+        A[icell,0,3] = 1/4
+        
+        def sign(a):
+            return 1 if a >= 0 else -1
+        
+        # d/dx
+        A[icell,1,0] = ((y2 - y3)*(z2 - z4) - (y2 - y4)*(z2 - z3))*sign(((-x2 + x3)*(-y2 + y4) - (-x2 + x4)*(-y2 + y3))*(z1 - 3*z2 + z3 + z4) - ((x2 - x3)*(z2 - z4) - (x2 - x4)*(z2 - z3))*(y1 - 3*y2 + y3 + y4) + ((-y2 + y3)*(-z2 + z4) - (-y2 + y4)*(-z2 + z3))*(x1 - 3*x2 + x3 + x4))/(6*V)
+        A[icell,1,1] = ((y1 - y3)*(z1 - z4) - (y1 - y4)*(z1 - z3))*sign(((x1 - x3)*(y1 - y4) - (x1 - x4)*(y1 - y3))*(-3*z1 + z2 + z3 + z4) - ((x1 - x3)*(z1 - z4) - (x1 - x4)*(z1 - z3))*(-3*y1 + y2 + y3 + y4) + ((y1 - y3)*(z1 - z4) - (y1 - y4)*(z1 - z3))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        A[icell,1,2] = ((y1 - y2)*(z1 - z4) - (y1 - y4)*(z1 - z2))*sign(((-x1 + x2)*(-y1 + y4) - (-x1 + x4)*(-y1 + y2))*(-3*z1 + z2 + z3 + z4) - ((x1 - x2)*(z1 - z4) - (x1 - x4)*(z1 - z2))*(-3*y1 + y2 + y3 + y4) + ((-y1 + y2)*(-z1 + z4) - (-y1 + y4)*(-z1 + z2))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        A[icell,1,3] = ((y1 - y2)*(z1 - z3) - (y1 - y3)*(z1 - z2))*sign(((x1 - x2)*(y1 - y3) - (x1 - x3)*(y1 - y2))*(-3*z1 + z2 + z3 + z4) - ((x1 - x2)*(z1 - z3) - (x1 - x3)*(z1 - z2))*(-3*y1 + y2 + y3 + y4) + ((y1 - y2)*(z1 - z3) - (y1 - y3)*(z1 - z2))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        
+        # d/dy
+        A[icell,2,0] = -((x2 - x3)*(z2 - z4) - (x2 - x4)*(z2 - z3))*sign(((x2 - x3)*(y2 - y4) - (x2 - x4)*(y2 - y3))*(z1 - 3*z2 + z3 + z4) - ((x2 - x3)*(z2 - z4) - (x2 - x4)*(z2 - z3))*(y1 - 3*y2 + y3 + y4) + ((y2 - y3)*(z2 - z4) - (y2 - y4)*(z2 - z3))*(x1 - 3*x2 + x3 + x4))/(6*V)
+        A[icell,2,1] = -((x1 - x3)*(z1 - z4) - (x1 - x4)*(z1 - z3))*sign(((x1 - x3)*(y1 - y4) - (x1 - x4)*(y1 - y3))*(-3*z1 + z2 + z3 + z4) - ((x1 - x3)*(z1 - z4) - (x1 - x4)*(z1 - z3))*(-3*y1 + y2 + y3 + y4) + ((y1 - y3)*(z1 - z4) - (y1 - y4)*(z1 - z3))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        A[icell,2,2] = -((x1 - x2)*(z1 - z4) - (x1 - x4)*(z1 - z2))*sign(((x1 - x2)*(y1 - y4) - (x1 - x4)*(y1 - y2))*(-3*z1 + z2 + z3 + z4) - ((x1 - x2)*(z1 - z4) - (x1 - x4)*(z1 - z2))*(-3*y1 + y2 + y3 + y4) + ((y1 - y2)*(z1 - z4) - (y1 - y4)*(z1 - z2))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        A[icell,2,3] = -((x1 - x2)*(z1 - z3) - (x1 - x3)*(z1 - z2))*sign(((x1 - x2)*(y1 - y3) - (x1 - x3)*(y1 - y2))*(-3*z1 + z2 + z3 + z4) - ((x1 - x2)*(z1 - z3) - (x1 - x3)*(z1 - z2))*(-3*y1 + y2 + y3 + y4) + ((y1 - y2)*(z1 - z3) - (y1 - y3)*(z1 - z2))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        
+        # d/dz
+        A[icell,3,0] = ((x2 - x3)*(y2 - y4) - (x2 - x4)*(y2 - y3))*sign(((-x2 + x3)*(-y2 + y4) - (-x2 + x4)*(-y2 + y3))*(z1 - 3*z2 + z3 + z4) - ((x2 - x3)*(z2 - z4) - (x2 - x4)*(z2 - z3))*(y1 - 3*y2 + y3 + y4) + ((-y2 + y3)*(-z2 + z4) - (-y2 + y4)*(-z2 + z3))*(x1 - 3*x2 + x3 + x4))/(6*V)
+        A[icell,3,1] = ((x1 - x3)*(y1 - y4) - (x1 - x4)*(y1 - y3))*sign(((x1 - x3)*(y1 - y4) - (x1 - x4)*(y1 - y3))*(-3*z1 + z2 + z3 + z4) - ((x1 - x3)*(z1 - z4) - (x1 - x4)*(z1 - z3))*(-3*y1 + y2 + y3 + y4) + ((y1 - y3)*(z1 - z4) - (y1 - y4)*(z1 - z3))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        A[icell,3,2] = ((x1 - x2)*(y1 - y4) - (x1 - x4)*(y1 - y2))*sign(((-x1 + x2)*(-y1 + y4) - (-x1 + x4)*(-y1 + y2))*(-3*z1 + z2 + z3 + z4) - ((x1 - x2)*(z1 - z4) - (x1 - x4)*(z1 - z2))*(-3*y1 + y2 + y3 + y4) + ((-y1 + y2)*(-z1 + z4) - (-y1 + y4)*(-z1 + z2))*(-3*x1 + x2 + x3 + x4))/(6*V)
+        A[icell,3,3] = ((x1 - x2)*(y1 - y3) - (x1 - x3)*(y1 - y2))*sign(((x1 - x2)*(y1 - y3) - (x1 - x3)*(y1 - y2))*(-3*z1 + z2 + z3 + z4) - ((x1 - x2)*(z1 - z3) - (x1 - x3)*(z1 - z2))*(-3*y1 + y2 + y3 + y4) + ((y1 - y2)*(z1 - z3) - (y1 - y3)*(z1 - z2))*(-3*x1 + x2 + x3 + x4))/(6*V)
+    
+    return A
+
+def DG2_to_taylor_matrix_2D(V):
+    """
+    Create the per cell matrices that when matrix multiplied with the
+    Lagrange cell dofs return a vector of Taylor cell dofs.
+    This implementation handles DG2 function space V in 2D
     """
     mesh = V.mesh()
     vertices = mesh.coordinates()
@@ -243,11 +320,11 @@ def DG2_to_taylor_matrix(V):
     return A
 
 
-def taylor_to_DG1_matrix(V):
+def taylor_to_DG1_matrix_2D(V):
     """
     Create the per cell matrices that when matrix multiplied with the
     Taylor cell dofs return a vector of Lagrange cell dofs.
-    This implementation handles DG1 function space V
+    This implementation handles DG1 function space V in 2D
     """
     mesh = V.mesh()
     vertices = mesh.coordinates()
@@ -268,18 +345,52 @@ def taylor_to_DG1_matrix(V):
         
         for i in range(3):
             dx, dy = x[i,0] - xc[0], x[i,1] - xc[1]
-            A[icell,i,0] = 1 
+            A[icell,i,0] = 1
             A[icell,i,1] = dx
             A[icell,i,2] = dy
     
     return A
 
 
-def taylor_to_DG2_matrix(V):
+def taylor_to_DG1_matrix_3D(V):
     """
     Create the per cell matrices that when matrix multiplied with the
     Taylor cell dofs return a vector of Lagrange cell dofs.
-    This implementation handles DG2 function space V
+    This implementation handles DG1 function space V in 3D
+    """
+    mesh = V.mesh()
+    vertices = mesh.coordinates()
+    
+    tdim = mesh.topology().dim()
+    num_cells_owned = mesh.topology().ghost_offset(tdim)
+    
+    x = numpy.zeros((4, 3), float)
+    A = numpy.zeros((num_cells_owned, 4, 4), float)
+    for cell in cells(mesh):
+        icell = cell.index()
+        
+        verts = cell.entities(0)
+        x[0] = vertices[verts[0]]
+        x[1] = vertices[verts[1]]
+        x[2] = vertices[verts[2]]
+        x[3] = vertices[verts[3]]
+        xc = (x[0] + x[1] +  x[2] +  x[3])/4
+        
+        for i in range(4):
+            dx, dy, dz = x[i,0] - xc[0], x[i,1] - xc[1], x[i,2] - xc[2]
+            A[icell,i,0] = 1
+            A[icell,i,1] = dx
+            A[icell,i,2] = dy
+            A[icell,i,3] = dz
+    
+    return A
+
+
+def taylor_to_DG2_matrix_2D(V):
+    """
+    Create the per cell matrices that when matrix multiplied with the
+    Taylor cell dofs return a vector of Lagrange cell dofs.
+    This implementation handles DG2 function space V in 2D
     """
     mesh = V.mesh()
     vertices = mesh.coordinates()
@@ -301,7 +412,7 @@ def taylor_to_DG2_matrix(V):
         x[5] = (x[0] + x[1])/2
         xc = (x[0] + x[1] +  x[2])/3
         
-        # Code generated by the sympy code included below (search this file for eg. bar_xx)
+        # Code generated by the sympy code included below
         ((x1, y1), (x2, y2), (x3, y3)) = x[:3]
         bar_xx = x1**2/36 - x1*x2/36 - x1*x3/36 + x2**2/36 - x2*x3/36 + x3**2/36
         bar_yy = y1**2/36 - y1*y2/36 - y1*y3/36 + y2**2/36 - y2*y3/36 + y3**2/36
@@ -321,58 +432,15 @@ def taylor_to_DG2_matrix(V):
 
 
 #########################################################################################
+# Code production with SymPy
+#
+#   The code below produces the coefficients and expressions used above
+#
+#   This code is not used during normal operations, it is for development
+#   only and is just kept here to help us remember that it exists and
+#   does not have to be reinvented every time
 
-def DG2_to_taylor_numpy(u, t):
-    """
-    Convert DG2 function on triangles to a Taylor basis via linear solves on each element
-    (only used for verification of the above direct code)
-    """
-    V = u.function_space()
-    mesh = V.mesh()
-    vertices = mesh.coordinates()
-    dm = V.dofmap()
-    dof_vals = u.vector().get_local()
-    dof_vals_taylor = numpy.zeros_like(dof_vals)
-    
-    A = numpy.zeros((6, 6), float)
-    
-    for cell in cells(mesh):
-        dofs = dm.cell_dofs(cell.index())
-        vals = dof_vals[dofs]
-        
-        verts = cell.entities(0)
-        x = numpy.zeros((6, 2), float)
-        x[0] = vertices[verts[0]]
-        x[1] = vertices[verts[1]]
-        x[2] = vertices[verts[2]]
-        x[3] = (x[1] + x[2])/2
-        x[4] = (x[0] + x[2])/2
-        x[5] = (x[0] + x[1])/2
-        xc = (x[0] + x[1] +  x[2])/3
-        
-        ((x1, y1), (x2, y2), (x3, y3)) = x[:3]
-        bar_xx = x1**2/36 - x1*x2/36 - x1*x3/36 + x2**2/36 - x2*x3/36 + x3**2/36
-        bar_yy = y1**2/36 - y1*y2/36 - y1*y3/36 + y2**2/36 - y2*y3/36 + y3**2/36
-        bar_xy = (x1*y1/18 - x1*y2/36 - x1*y3/36 - x2*y1/36 + x2*y2/18 - x2*y3/36
-                  - x3*y1/36 - x3*y2/36 + x3*y3/18)
-        
-        for i in range(6):
-            dx, dy = x[i,0] - xc[0], x[i,1] - xc[1]
-            A[i,0] = 1
-            A[i,1] = dx
-            A[i,2] = dy
-            A[i,3] = dx**2/2 - bar_xx
-            A[i,4] = dy**2/2 - bar_yy
-            A[i,5] = dx*dy - bar_xy
-        
-        taylor_vals = numpy.linalg.solve(A, vals)
-        dof_vals_taylor[dofs] = taylor_vals
-    
-    t.vector().set_local(dof_vals_taylor)
-    t.vector().apply('insert')
-
-
-def produce_code_with_sympy_DG1():
+def produce_code_with_sympy_DG1_2D():
     """
     Use sympy to derive the coefficients needed to convert from DG1 polynomials
     on a triangle to a Taylor basis by expressing the derivatives at the centre
@@ -417,7 +485,92 @@ def produce_code_with_sympy_DG1():
     print_code('d/dy', lambda q: q.diff(y), 2)
 
 
-def produce_code_with_sympy_DG2():
+def produce_code_with_sympy_DG1_3D(degree=1):
+    """
+    Use sympy to derive the coefficients needed to convert from DG1 polynomials
+    on a tetrahedron to a Taylor basis by expressing the derivatives at the centre
+    point of the triangle
+    (Only used for generating the code above, not used while running Ocellaris)
+    """
+    from sympy import Symbol, symbols, S
+    x1, x2, x3, x4 = symbols('x1 x2 x3 x4', real=True)
+    y1, y2, y3, y4 = symbols('y1 y2 y3 y4', real=True)
+    z1, z2, z3, z4 = symbols('z1 z2 z3 z4', real=True)
+    x, y, z, V = symbols('x y z V', real=True)
+    
+    def s3p(v1, v2, v3):
+        "Scalar triple product of three vectors = v1⋅(v2 x v3)"
+        return (v1[0] * (v2[1]*v3[2] - v2[2]*v3[1]) +
+                v1[1] * (v2[2]*v3[0] - v2[0]*v3[2]) +
+                v1[2] * (v2[0]*v3[1] - v2[1]*v3[0]))
+    
+    # Define vectors between vertices
+    v1p = [x - x1, y - y1, z - z1]
+    v2p = [x - x2, y - y2, z - z2]
+    v12 = [x2 - x1, y2 - y1, z2 - z1]
+    v13 = [x3 - x1, y3 - y1, z3 - z1]
+    v14 = [x4 - x1, y4 - y1, z4 - z1]
+    v23 = [x3 - x2, y3 - y2, z3 - z2]
+    v24 = [x4 - x2, y4 - y2, z4 - z2]
+    
+    # Volumes, see http://www.cdsimpson.net/2014/10/barycentric-coordinates.html
+    V1 = abs(s3p(v2p, v24, v23))/S(6)
+    V2 = abs(s3p(v1p, v13, v14))/S(6)
+    V3 = abs(s3p(v1p, v14, v12))/S(6)
+    V4 = abs(s3p(v1p, v12, v13))/S(6)
+    Vf = abs(s3p(v12, v13, v14))/S(6)
+    
+    # Barycentric coordinates from volumes
+    L1f, L2f, L3f, L4f = V1/V, V2/V, V3/V, V4/V
+    #L4f = 1 - L1f - L2f - L3f 
+    L1, L2, L3, L4 = Symbol('L1')(x, y, z), Symbol('L2')(x, y, z), Symbol('L3')(x, y, z), Symbol('L4')(x, y, z)
+    
+    replacements = [(L1.diff(x),  L1f.diff(x)),
+                    (L2.diff(x),  L2f.diff(x)),
+                    (L3.diff(x),  L3f.diff(x)),
+                    (L4.diff(x),  L4f.diff(x)),
+                    (L1.diff(y),  L1f.diff(y)),
+                    (L2.diff(y),  L2f.diff(y)),
+                    (L3.diff(y),  L3f.diff(y)),
+                    (L4.diff(y),  L4f.diff(y)),
+                    (L1.diff(z),  L1f.diff(z)),
+                    (L2.diff(z),  L2f.diff(z)),
+                    (L3.diff(z),  L3f.diff(z)),
+                    (L4.diff(z),  L4f.diff(z)),
+                    (L1, 1/S(4)),
+                    (L2, 1/S(4)),
+                    (L3, 1/S(4)),
+                    (L4, 1/S(4)),
+                    (x, (x1 + x2 + x3 + x4)/4),
+                    (y, (y1 + y2 + y3 + y4)/4),
+                    (z, (z1 + z2 + z3 + z4)/4)]
+    
+    if degree == 1:
+        # Barycentric linear shape functions on a triangle
+        phi = [L1, L2, L3, L4]
+        
+        print('V = %s' % Vf)
+        
+        def print_code(name, func, index):
+            code = ['# %s' % name]
+            for i in range(4):
+                v = func(phi[i])
+                v = v.subs(replacements)
+                v = v.simplify()
+                code.append('A[icell,%d,%d] = %s' % (index, i, v))
+            code.append('')
+            print('\n'.join(code))
+        
+        print_code('Value at xc (also the cell average value)', lambda q: q, 0)
+        print_code('d/dx', lambda q: q.diff(x), 1)
+        print_code('d/dy', lambda q: q.diff(y), 2)
+        print_code('d/dz', lambda q: q.diff(z), 3)
+    
+    elif degree == 2:
+        
+
+
+def produce_code_with_sympy_DG2_2D():
     """
     Use sympy to derive the coefficients needed to convert from DG2 polynomials
     on a triangle to a Taylor basis by expressing the derivatives at the centre
@@ -498,8 +651,8 @@ def produce_code_with_sympy_DG2():
              ('bar_xy', (xv-xc)*(yv-yc))]
     for i in range(6):
         exprs.append(('A[icell,0,%d]' % i, phi[i]))
-    order = 3
     
+    order = 3
     points, weights = BT_QUADRATURE_TABLE[order]
     for name, expr in exprs:
         v = 0
@@ -515,81 +668,12 @@ def produce_code_with_sympy_DG2():
 
 
 if __name__ == '__main__':
-    produce_code_with_sympy_DG1()
-    print('-------------------------------------------------------------\n')
-    produce_code_with_sympy_DG2()
-    print('-------------------------------------------------------------\n')
-    
-    from dolfin import UnitTriangleMesh, UnitSquareMesh, FunctionSpace, Function, errornorm
-    numpy.set_printoptions(linewidth=120)
-    
-    mesh = UnitTriangleMesh()
-    V = FunctionSpace(mesh, 'DG', 2)
-    print(mesh.coordinates())
-    print()
-    
-    u, u2, t, tn = Function(V), Function(V), Function(V), Function(V)
-    for vec in (numpy.array([0, 1, 2, 3, 4, 5], float),
-                numpy.random.rand(6),
-                numpy.array([0, 1, 1, 0.75, 0.5, 0.25], float)):
-        
-        # Set the initial values
-        dofs = V.dofmap().cell_dofs(0)
-        for i, dof in enumerate(dofs):
-            u.vector()[dof] = vec[i] 
-        u.vector().apply('insert')
-        
-        # Convert to Taylor basis
-        DG2_to_taylor_numpy(u, tn)
-        lagrange_to_taylor(u, t)
-        print(tn.vector().get_local()[dofs], 'numpy solve')
-        print(t.vector().get_local()[dofs], 'sympy expressions')
-        print('Error norm 1:', errornorm(tn, t, degree_rise=0))
-        
-        # Convert to back to DG basis
-        taylor_to_lagrange(t, u2)
-        print(u.vector().get_local()[dofs], 'original')
-        print(u2.vector().get_local()[dofs], 'round trip')
-        print('Error norm 2:', errornorm(u, u2, degree_rise=0))
+    funcs = (#produce_code_with_sympy_DG1_2D,
+             #produce_code_with_sympy_DG2_2D,
+             #produce_code_with_sympy_DG1_3D,
+             produce_code_with_sympy_DG2_3D,)
+    for func in funcs:
+        print('='*80)
+        print(func.__name__ + '\n' + '-'*40 + '\n')
+        func()
         print()
-    
-    ######################################
-    
-    for degree in (1, 2):
-        print('\n' + '#'*80 + '\nDegree %d' % degree)
-        mesh = UnitSquareMesh(4, 4)
-        V = FunctionSpace(mesh, 'DG', degree)
-        u, u2, t = Function(V), Function(V), Function(V)
-        u.vector().set_local(numpy.random.randn(V.dim()))
-        
-        lagrange_to_taylor(u, t)
-        taylor_to_lagrange(t, u2)
-        
-        print('L2 error roundtrip:', errornorm(u, u2, degree_rise=0))
-
-    ######################################
-    
-    for degree in (1, 2):
-        print('\n' + '#'*80 + '\nDegree %d' % degree)
-        mesh = UnitSquareMesh(1, 1)
-        V = FunctionSpace(mesh, 'DG', degree)
-        u, u2, t = Function(V), Function(V), Function(V)
-        
-        dofs_x = V.tabulate_dof_coordinates().reshape((-1, 2))
-        for i, (x, y) in enumerate(dofs_x):
-            u.vector()[i] = x + y**2 + 3 - 7*x*y
-        u.vector().apply('insert')
-        for icell in range(mesh.num_cells()): print('u', icell, u.vector().get_local()[V.dofmap().cell_dofs(icell)])
-        
-        lagrange_to_taylor(u, t)
-        for icell in range(mesh.num_cells()): print('t', icell, t.vector().get_local()[V.dofmap().cell_dofs(icell)])
-        
-        if degree == 2:
-            DG2_to_taylor_numpy(u, t)
-            for icell in range(mesh.num_cells()): print('t', icell, t.vector().get_local()[V.dofmap().cell_dofs(icell)])
-        
-        taylor_to_lagrange(t, u2)
-        for icell in range(mesh.num_cells()): print('u2', icell, u2.vector().get_local()[V.dofmap().cell_dofs(icell)])
-        
-        print('L2 error roundtrip:', errornorm(u, u2, degree_rise=0))
-    
