@@ -47,15 +47,22 @@ def test_taylor_projections_3D(degree):
     from ocellaris.utils.taylor_basis import CACHE
     A1 = CACHE[('lagrange_to_taylor_matrices', degree)]
     A2 = CACHE[('taylor_to_lagrange_matrices', degree)]
-    for A1i, A2i in zip(A1, A2):
-        Ii = numpy.dot(A1i, A2i)
-        print('IIIIIIIIIIIIIIIIIIIIII')
-        print(Ii[:3,:3])
-    print(f3.vector().get_local())
-    #print(A1[1][:3,:3], numpy.linalg.inv(A2[1])[:3,:3], sep='\n-----------------------\n')
-    print(A2[1][:3,:3], numpy.linalg.inv(A1[1])[:3,:3], sep='\n-----------------------\n')
+    
+    A1i, A2i = A1[1], A2[1]
+    print('I:')
+    print(numpy.array_repr(numpy.dot(A1i, A2i), max_line_width=120, precision=4, suppress_small=True))
+    print(set(f3.vector().get_local()))
+    print('A1i')
+    print(numpy.array_repr(A1i, max_line_width=120, precision=4, suppress_small=True))
+    print('A2i.I')
+    print(numpy.array_repr(numpy.linalg.inv(A2i), max_line_width=120, precision=4, suppress_small=True))
+    print('A2i')
+    print(numpy.array_repr(A2i, max_line_width=120, precision=4, suppress_small=True))
+    print('A1i.I')
+    print(numpy.array_repr(numpy.linalg.inv(A1i), max_line_width=120, precision=4, suppress_small=True))
     
     error = dolfin.errornorm(f1, f3, degree_rise=0)
+    print(error)
     if degree == 1:
         assert error < 1e-15
     else:
