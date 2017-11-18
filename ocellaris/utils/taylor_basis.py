@@ -343,16 +343,16 @@ def DG2_to_taylor_matrix_3D(V):
              x4*y2*z1 - x4*y2*z3 - x4*y3*z1 + x4*y3*z2)
         
         # Cell average value
-        A[icell, 0, 0] = -1/120
-        A[icell, 0, 1] = -1/120
-        A[icell, 0, 2] = -1/120
-        A[icell, 0, 3] = -1/120
-        A[icell, 0, 4] = 1/30
-        A[icell, 0, 5] = 1/30
-        A[icell, 0, 6] = 1/30
-        A[icell, 0, 7] = 1/30
-        A[icell, 0, 8] = 1/30
-        A[icell, 0, 9] = 1/30
+        A[icell, 0, 0] = -1/20
+        A[icell, 0, 1] = -1/20
+        A[icell, 0, 2] = -1/20
+        A[icell, 0, 3] = -1/20
+        A[icell, 0, 4] = 1/5
+        A[icell, 0, 5] = 1/5
+        A[icell, 0, 6] = 1/5
+        A[icell, 0, 7] = 1/5
+        A[icell, 0, 8] = 1/5
+        A[icell, 0, 9] = 1/5
         
         # d/dx
         A[icell, 1, 0] = 0
