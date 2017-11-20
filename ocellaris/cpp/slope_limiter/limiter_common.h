@@ -84,7 +84,7 @@ struct SlopeLimiterInput
       this->vertex_coords[i] = vertex_coords[i];
 
     this->limit_cell.resize(limit_cell.size());
-    for (int i = 0; i < limit_cell.size(); i++)
+    for (unsigned int i = 0; i < limit_cell.size(); i++)
       this->limit_cell[i] = static_cast<std::int8_t>(limit_cell[i]);
   }
 

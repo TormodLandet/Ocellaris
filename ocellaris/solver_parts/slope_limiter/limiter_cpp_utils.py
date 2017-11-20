@@ -16,21 +16,33 @@ class SlopeLimiterInput(object):
         flat_cell_dofs = numpy.array(cell_dofs_V, dtype=numpy.intc).flatten()
         flat_cell_dofs_dg0 = numpy.array(cell_dofs_V0, dtype=numpy.intc).flatten()
         
+        gdim = mesh.geometry().dim()
         tdim = mesh.topology().dim()
         num_cells_owned = mesh.topology().ghost_offset(tdim)
         
-        # Store coordinates for the three vertices plus the cell center for each cell
-        stride = (3 + 1) * 2
+        # Store coordinates for the vertices plus the cell center for each cell
+        stride = (tdim + 2) * gdim
         flat_vertex_coordinates = numpy.zeros(num_cells_owned * stride, float)
         for icell in range(num_cells_owned):
             cell_vertices = [vertex_coordinates[iv] for iv in vertices[icell]]
-            center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
-            center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]) / 3
             istart = icell * stride
-            flat_vertex_coordinates[istart+0:istart+2] = cell_vertices[0]
-            flat_vertex_coordinates[istart+2:istart+4] = cell_vertices[1]
-            flat_vertex_coordinates[istart+4:istart+6] = cell_vertices[2]
-            flat_vertex_coordinates[istart+6:istart+8] = (center_pos_x, center_pos_y)
+            
+            if gdim == 2:
+                center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
+                center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]) / 3
+                flat_vertex_coordinates[istart+0:istart+2] = cell_vertices[0]
+                flat_vertex_coordinates[istart+2:istart+4] = cell_vertices[1]
+                flat_vertex_coordinates[istart+4:istart+6] = cell_vertices[2]
+                flat_vertex_coordinates[istart+6:istart+8] = (center_pos_x, center_pos_y)
+            else:
+                center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0] + cell_vertices[2][0]) / 4
+                center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1] + cell_vertices[2][1]) / 4
+                center_pos_z = (cell_vertices[0][2] + cell_vertices[1][2] + cell_vertices[2][2] + cell_vertices[2][2]) / 4
+                flat_vertex_coordinates[istart+0:istart+3] = cell_vertices[0]
+                flat_vertex_coordinates[istart+3:istart+6] = cell_vertices[1]
+                flat_vertex_coordinates[istart+6:istart+9] = cell_vertices[2]
+                flat_vertex_coordinates[istart+9:istart+12] = cell_vertices[2]
+                flat_vertex_coordinates[istart+12:istart+15] = (center_pos_x, center_pos_y, center_pos_z)
 
         # Call the C++ method that makes the arrays available to the C++ limiter
         self.cpp_obj = cpp_mod.SlopeLimiterInput()
