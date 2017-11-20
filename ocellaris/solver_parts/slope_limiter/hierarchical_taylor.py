@@ -1,6 +1,6 @@
 import numpy
 import dolfin as df
-from ocellaris.utils import verify_key, get_dof_neighbours
+from ocellaris.utils import verify_key, OcellarisError, get_dof_neighbours
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
 from . import register_slope_limiter, SlopeLimiterBase
 
@@ -18,11 +18,14 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         mesh = V.mesh()
         family = V.ufl_element().family()
         degree = V.ufl_element().degree()
+        tdim = mesh.topology().dim()
+        gdim = mesh.geometry().dim()
         loc = 'HierarchalTaylor slope limiter'
         verify_key('slope limited function', family, ['Discontinuous Lagrange'], loc)
         verify_key('slope limited degree', degree, (0, 1, 2), loc)
         verify_key('function shape', phi.ufl_shape, [()], loc)
-        verify_key('topological dimension', mesh.topology().dim(), [2], loc)
+        verify_key('topological dimension', mesh.topology().dim(), [2, 3], loc)
+        assert gdim == tdim, "HierarchalTaylor slope limiter requires that topological and geometrical dimensions are identical"
         
         # Store input
         self.phi_name = phi_name
@@ -34,8 +37,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.enforce_global_bounds = enforce_bounds
         self.enforce_boundary_conditions = enforce_bcs
         self.use_weak_bcs = True
-        tdim = mesh.topology().dim()
         self.num_cells_owned = mesh.topology().ghost_offset(tdim)
+        self.ndim = gdim
         
         # No limiter needed for piecewice constant functions
         if self.degree == 0:
@@ -72,8 +75,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.limit_cell = numpy.ones(self.num_cells_owned, numpy.intc)
         
         # Find vertices for each cell
-        mesh.init(2, 0)
-        connectivity_CV = mesh.topology()(2, 0)
+        mesh.init(self.ndim, 0)
+        connectivity_CV = mesh.topology()(self.ndim, 0)
         vertices = []
         for ic in range(self.mesh.num_cells()):
             vnbs = tuple(connectivity_CV(ic))
@@ -81,7 +84,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.vertices = vertices
         self.vertex_coordinates = mesh.coordinates()
         
-        # Remove given cells from limiter 
+        # Remove given cells from limiter
         if skip_cells is not None:
             for cid in skip_cells:
                 self.limit_cell[cid] = 0
@@ -128,12 +131,15 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         if self.use_cpp:
             self._run_cpp(taylor_arr, taylor_arr_old, alpha_arrs, global_min, global_max,
                           boundary_dof_type, boundary_dof_value)
-        elif self.degree == 1:
+        elif self.degree == 1 and self.ndim == 2:
             self._run_dg1(taylor_arr, taylor_arr_old, alpha_arrs[0], global_min, global_max,
                           boundary_dof_type, boundary_dof_value)
-        elif self.degree == 2:
+        elif self.degree == 2 and self.ndim == 2:
             self._run_dg2(taylor_arr, taylor_arr_old, alpha_arrs[0], alpha_arrs[1], global_min, global_max,
                           boundary_dof_type, boundary_dof_value)
+        else:
+            raise OcellarisError('Unsupported dimension for Python version of the HierarchalTaylor limiter',
+                                 'Only 2D is supported')
         
         # Update the Lagrange function with the limited Taylor values
         self.taylor.vector().set_local(taylor_arr)
@@ -164,10 +170,14 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         The C++ versions are probably the best tested since they are fastest
         and hence most used
         """
-        if self.degree == 1:
-            limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg1
-        elif self.degree == 2:
-            limiter = self.cpp_mod.hierarchical_taylor_slope_limiter_dg2
+        funcs  = {(2, 1): self.cpp_mod.hierarchical_taylor_slope_limiter_dg1_2D,
+                  (2, 2): self.cpp_mod.hierarchical_taylor_slope_limiter_dg2_2D,
+                  (3, 1): self.cpp_mod.hierarchical_taylor_slope_limiter_dg1_3D,
+                  (3, 2): self.cpp_mod.hierarchical_taylor_slope_limiter_dg2_3D}
+        key = (self.ndim, self.degree)
+        if not key in funcs:
+            raise OcellarisError('Unsupported dimension %d with degree %d' % key,
+                                 'Not supported in C++ version of the HierarchalTaylor limiter')
         
         # Update C++ input
         inp = self.cpp_input
@@ -175,6 +185,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         inp.set_limit_cell(self.limit_cell)
         inp.set_boundary_values(boundary_dof_type, boundary_dof_value, self.enforce_boundary_conditions)
         
+        limiter = funcs[key]
         limiter(self.cpp_input.cpp_obj,
                 taylor_arr,
                 taylor_arr_old,
