@@ -49,30 +49,24 @@ class SimpleEquations(object):
         assert not self.use_stress_divergence_form
         
         # Create UFL forms
-        self.eqAs, self.eqBs, self.eqCs, self.eqDs, self.eqE = [], [], [], [], 0
+        self.eqA = self.eqB = self.eqC = self.eqD = self.eqE = None
         self.define_simple_equations()
         
         # Storage for assembled matrices
-        self.As = [None] * simulation.ndim
-        self.A_tildes = [None] * simulation.ndim
-        self.A_tilde_invs = [None] * simulation.ndim
-        self.Bs = [None] * simulation.ndim
-        self.Cs = [None] * simulation.ndim
-        self.Ds = [None] * simulation.ndim
-        self.E = None
-        self.E_star = None
-        self.L = [None] * simulation.ndim
+        self.A = self.A_tilde = self.A_tilde_inv = None
+        self.B = self.C = self.D = self.E = None
+        self.E_star = self.L = None
     
     def define_simple_equations(self):
         """
         Setup weak forms for SIMPLE form
         """
         sim = self.simulation
-        Vu = sim.data['Vu']
+        self.Vuwv = sim.data['uvw_star'].function_space()
         Vp = sim.data['Vp']
         
         # The trial and test functions in a coupled space (to be split)
-        func_spaces = [Vu] * sim.ndim + [Vp]
+        func_spaces = [self.Vuwv.sub(i) for i in range(sim.ndim)] + [Vp]
         e_mixed = dolfin.MixedElement([fs.ufl_element() for fs in func_spaces])
         Vcoupled = dolfin.FunctionSpace(sim.data['mesh'], e_mixed)
         tests = dolfin.TestFunctions(Vcoupled)
@@ -99,62 +93,55 @@ class SimpleEquations(object):
         assert mat[-1,-1] is None, 'Found p-q coupling, this is not a saddle point system!'
         
         # Store the forms
-        for i in range(sim.ndim):
-            self.eqAs.append(mat[i,i]) 
-            self.eqBs.append(mat[i,-1])
-            self.eqCs.append(mat[-1,i])
-            self.eqDs.append(vec[i])
-            self.eqE = vec[-1]
-            
-            # Check that off diagonal terms are zero
-            for j in range(sim.ndim):
-                if i == j:
-                    continue
-                assert mat[i,j] is None, 'No coupling between velocity components supported in SIMPLE solver!'
+        self.eqA = mat[0,0]
+        self.eqB = mat[0,1]
+        self.eqC = mat[1,0]
+        self.eqD = vec[0]
+        self.eqE = vec[-1]
     
     @timeit
-    def assemble_matrices(self, d, reassemble=False):
+    def assemble_matrices(self, reassemble=False):
         # Equations, matrices and flag to indicate reassembly needed
-        eqs_and_matrices = ((self.eqAs, self.As, True),
-                            (self.eqBs, self.Bs, reassemble),
-                            (self.eqCs, self.Cs, reassemble))
+        eqs_and_matrices = ((self.eqA, self.A, True),
+                            (self.eqB, self.B, reassemble),
+                            (self.eqC, self.C, reassemble))
         
         # Assemble A, B and C matrices
-        for eqs, Ms, reas in eqs_and_matrices:
-            if Ms[d] is None:
-                Ms[d] = dolfin.as_backend_type(dolfin.assemble(eqs[d]))
+        for eq, M, reas in eqs_and_matrices:
+            if M is None:
+                M = dolfin.as_backend_type(dolfin.assemble(eq))
             elif reas:
-                dolfin.assemble(eqs[d], tensor=Ms[d])
+                dolfin.assemble(eq, tensor=M)
         
         # Assemble Ã and Ã_inv matrices
         Nelem = self.num_elements_in_block
         if Nelem == 0:
-            At, Ati = self.assemble_A_tilde_diagonal(d)
+            At, Ati = self.assemble_A_tilde_diagonal()
         elif Nelem == 1:
-            At, Ati = self.assemble_A_tilde_single_element(d)
+            At, Ati = self.assemble_A_tilde_single_element()
         else:
-            At, Ati = self.assemble_A_tilde_multi_element(d, Nelem)
+            At, Ati = self.assemble_A_tilde_multi_element(Nelem)
         At.apply('insert'); Ati.apply('insert')
-        self.A_tildes[d], self.A_tilde_invs[d] = At, Ati
+        self.A_tilde, self.A_tilde_inv = At, Ati
         
-        return (self.As[d], self.A_tildes[d], self.A_tilde_invs[d],
-                self.Bs[d], self.Cs[d])
+        return self.A, self.A_tilde, self.A_tilde_inv, self.B, self.C
     
     @timeit
-    def assemble_A_tilde_diagonal(self, d):
+    def assemble_A_tilde_diagonal(self):
         """
         Assemble diagonal Ã and Ã_inv matrices
         """
-        Vu = self.simulation.data['Vu']
-        Aglobal = dolfin.as_backend_type(self.As[d])
+        uvw = self.simulation.data['uvw_star']
+        Vuvw = uvw.function_space()
+        Aglobal = dolfin.as_backend_type(self.A)
         
-        if self.A_tildes[d] is None:
-            At = create_block_matrix(Vu, 'diag')
-            Ati = create_block_matrix(Vu, 'diag')
-            self.u_diag = dolfin.Vector(self.simulation.data['u0'].vector())
+        if self.A_tildes is None:
+            At = create_block_matrix(Vuvw, 'diag')
+            Ati = create_block_matrix(Vuvw, 'diag')
+            self.u_diag = dolfin.Vector(uvw.vector())
         else:
-            At = self.A_tildes[d]
-            Ati = self.A_tilde_invs[d]
+            At = self.A_tilde
+            Ati = self.A_tilde_inv
         At.zero()
         Ati.zero()
         
@@ -165,30 +152,34 @@ class SimpleEquations(object):
         else:
             Aglobal.get_diagonal(self.u_diag)
         
+        # Setup the diagonal A matrix
         At.set_diagonal(self.u_diag)
+        
+        # Setup the inverse of the diagonal A matrix
         inv_diag = 1.0/self.u_diag.get_local()
         self.u_diag.set_local(inv_diag)
+        self.u_diag.apply('insert')
         Ati.set_diagonal(self.u_diag)
         
         return At, Ati
     
     @timeit
-    def assemble_A_tilde_single_element(self, d):
+    def assemble_A_tilde_single_element(self):
         """
         Assemble block diagonal Ã and Ã_inv matrices where the blocks
         are the dofs in a single element
         """
-        Aglobal = dolfin.as_backend_type(self.As[d])
-        if self.A_tildes[d] is None:
+        Aglobal = dolfin.as_backend_type(self.A)
+        if self.A_tilde is None:
             At = Aglobal.copy()
             Ati = Aglobal.copy()
         else:
-            At = self.A_tildes[d]
-            Ati = self.A_tilde_invs[d]
+            At = self.A_tilde
+            Ati = self.A_tilde_inv
         At.zero()
         Ati.zero()
         
-        dm = self.simulation.data['Vu'].dofmap()
+        dm = self.Vuwv.dofmap()
         N = dm.cell_dofs(0).shape[0]
         Alocal = numpy.zeros((N, N), float)
         
@@ -204,27 +195,26 @@ class SimpleEquations(object):
             At.set(Alocal, dofs, dofs)
             Ati.set(Alocal_inv, dofs, dofs)
         return At, Ati
-        
+    
     @timeit    
-    def assemble_A_tilde_multi_element(self, d, Nelem):
+    def assemble_A_tilde_multi_element(self, Nelem):
         """
         Assemble block diagonal Ã and Ã_inv matrices where the blocks
         are the dofs of N elememts a single element
         """
-        Vu = self.simulation.data['Vu']
         if self.block_partitions is None:
-            self.block_partitions = create_block_partitions(self.simulation, Vu, Nelem)
+            self.block_partitions = create_block_partitions(self.simulation, self.Vuwv, Nelem)
             self.simulation.log.info('SIMPLE solver with %d cell blocks found %d blocks in total'
                                      % (Nelem, len(self.block_partitions)))
         
-        Aglobal = dolfin.as_backend_type(self.As[d])
-        if self.A_tildes[d] is None:
+        Aglobal = dolfin.as_backend_type(self.A)
+        if self.A_tilde is None:
             block_dofs = [dofs for _, dofs, _ in self.block_partitions]
-            At = create_block_matrix(Vu, block_dofs)
+            At = create_block_matrix(self.Vuwv, block_dofs)
             Ati = At.copy()
         else:
-            At = self.A_tildes[d]
-            Ati = self.A_tilde_invs[d]
+            At = self.A_tilde
+            Ati = self.A_tilde_inv
         At.zero()
         Ati.zero()
         
@@ -242,12 +232,12 @@ class SimpleEquations(object):
         return At, Ati
     
     @timeit
-    def assemble_D(self, d):
-        if self.Ds[d] is None:
-            self.Ds[d] = dolfin.assemble(self.eqDs[d])
+    def assemble_D(self):
+        if self.D is None:
+            self.D = dolfin.assemble(self.eqD)
         else:
-            dolfin.assemble(self.eqDs[d], tensor=self.Ds[d])
-        return self.Ds[d]
+            dolfin.assemble(self.eqD, tensor=self.D)
+        return self.D
 
     @timeit
     def assemble_E(self):
@@ -265,8 +255,7 @@ class SimpleEquations(object):
         E_star.zero()
         
         # Divergence of u*, C⋅u*
-        for d in range(self.simulation.ndim):
-            E_star.axpy(1.0, self.Cs[d]*u_star[d].vector())
+        E_star.axpy(1.0, self.C*u_star.vector())
         
         # Subtract the original RHS of C⋅u = e
         E_star.axpy(-1.0, self.assemble_E())
