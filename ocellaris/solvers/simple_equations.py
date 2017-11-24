@@ -62,19 +62,19 @@ class SimpleEquations(object):
         Setup weak forms for SIMPLE form
         """
         sim = self.simulation
-        self.Vuwv = sim.data['uvw_star'].function_space()
+        self.Vuvw = sim.data['uvw_star'].function_space()
         Vp = sim.data['Vp']
         
         # The trial and test functions in a coupled space (to be split)
-        func_spaces = [self.Vuwv.sub(i) for i in range(sim.ndim)] + [Vp]
+        func_spaces = [self.Vuvw, Vp]
         e_mixed = dolfin.MixedElement([fs.ufl_element() for fs in func_spaces])
         Vcoupled = dolfin.FunctionSpace(sim.data['mesh'], e_mixed)
         tests = dolfin.TestFunctions(Vcoupled)
         trials = dolfin.TrialFunctions(Vcoupled)
         
         # Split into components
-        v = dolfin.as_vector(tests[:-1])
-        u = dolfin.as_vector(trials[:-1])
+        v = dolfin.as_vector(tests[0][:])
+        u = dolfin.as_vector(trials[0][:])
         q = tests[-1]
         p = trials[-1]
         lm_trial = lm_test = None
@@ -101,15 +101,14 @@ class SimpleEquations(object):
     
     @timeit
     def assemble_matrices(self, reassemble=False):
-        # Equations, matrices and flag to indicate reassembly needed
-        eqs_and_matrices = ((self.eqA, self.A, True),
-                            (self.eqB, self.B, reassemble),
-                            (self.eqC, self.C, reassemble))
-        
-        # Assemble A, B and C matrices
-        for eq, M, reas in eqs_and_matrices:
+        # Assemble self.A, self.B and self.C matrices from the
+        # weak forms self.eqA, self.eqB and self.eqC
+        for name, reas in [('A', True), ('B', reassemble), ('C', reassemble)]:
+            M = getattr(self, name)
+            eq = getattr(self, 'eq' + name)
             if M is None:
                 M = dolfin.as_backend_type(dolfin.assemble(eq))
+                setattr(self, name, M)
             elif reas:
                 dolfin.assemble(eq, tensor=M)
         
@@ -135,7 +134,7 @@ class SimpleEquations(object):
         Vuvw = uvw.function_space()
         Aglobal = dolfin.as_backend_type(self.A)
         
-        if self.A_tildes is None:
+        if self.A_tilde is None:
             At = create_block_matrix(Vuvw, 'diag')
             Ati = create_block_matrix(Vuvw, 'diag')
             self.u_diag = dolfin.Vector(uvw.vector())
@@ -179,7 +178,7 @@ class SimpleEquations(object):
         At.zero()
         Ati.zero()
         
-        dm = self.Vuwv.dofmap()
+        dm = self.Vuvw.dofmap()
         N = dm.cell_dofs(0).shape[0]
         Alocal = numpy.zeros((N, N), float)
         
@@ -203,14 +202,14 @@ class SimpleEquations(object):
         are the dofs of N elememts a single element
         """
         if self.block_partitions is None:
-            self.block_partitions = create_block_partitions(self.simulation, self.Vuwv, Nelem)
+            self.block_partitions = create_block_partitions(self.simulation, self.Vuvw, Nelem)
             self.simulation.log.info('SIMPLE solver with %d cell blocks found %d blocks in total'
                                      % (Nelem, len(self.block_partitions)))
         
         Aglobal = dolfin.as_backend_type(self.A)
         if self.A_tilde is None:
             block_dofs = [dofs for _, dofs, _ in self.block_partitions]
-            At = create_block_matrix(self.Vuwv, block_dofs)
+            At = create_block_matrix(self.Vuvw, block_dofs)
             Ati = At.copy()
         else:
             At = self.A_tilde

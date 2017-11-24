@@ -1,7 +1,7 @@
 import ufl
 from ufl.classes import Zero
 import dolfin
-from dolfin import UnitSquareMesh, FunctionSpace, MixedElement
+from dolfin import UnitSquareMesh, FunctionSpace, VectorFunctionSpace, MixedElement
 from dolfin import TestFunction, TestFunctions, TrialFunction, TrialFunctions
 from dolfin import as_vector, Constant, dot, grad, dx
 from ocellaris.utils import is_zero_ufl_expression, split_form_into_matrix
@@ -42,6 +42,23 @@ def test_is_zero_simple_vector_expressions():
     
     check_is_zero(dot(as_vector([Zero(), u]), as_vector([Zero(), v])), 1)
     check_is_zero(dot(as_vector([Zero(), u]), as_vector([v, Zero()])), 0)
+
+
+def test_is_zero_with_nabla():
+    mesh = UnitSquareMesh(4, 4)
+    V1 = FunctionSpace(mesh, 'CG', 1)
+    V2 = VectorFunctionSpace(mesh, 'CG', 1)
+    v1 = TestFunction(V1)
+    v2 = TrialFunction(V2)
+    n = Constant([1, 1])
+    nn = dolfin.outer(n, n)
+    vv = dolfin.outer(v2, v2)
+    
+    check_is_zero(dot(n, grad(v1)), 1)
+    check_is_zero(dolfin.div(v2), 1)
+    check_is_zero(dot(dolfin.div(nn), n), 0)
+    check_is_zero(dot(dolfin.div(vv), n), 1)
+    check_is_zero(dolfin.inner(nn, grad(v2)), 1)
 
 
 def test_form_splitter_coupled():

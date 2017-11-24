@@ -402,29 +402,7 @@ class SolverSIMPLE(Solver):
         mom_proj_rhs(rhs)
         err = mom_solve(lhs, rhs)
         
-        # Extract the segregated velocity components
-        self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
-        
         return err
-    
-    @timeit
-    def slope_limit_velocities(self):
-        """
-        Run the slope limiter
-        """
-        if not self.using_limiter:
-            return 0
-        
-        # Store unlimited velocities and then run limiter
-        shift_fields(self.simulation, ['u%d', 'u_unlim%d'])
-        self.slope_limiter.run()
-        
-        # Measure the change in the field after limiting (l2 norm)
-        change = velocity_change(u1=self.simulation.data['u'],
-                                 u2=self.simulation.data['u_unlim'],
-                                 ui_tmp=self.simulation.data['ui_tmp'])
-        
-        return change
     
     @timeit
     def pressure_correction(self):
@@ -443,17 +421,16 @@ class SolverSIMPLE(Solver):
                 #solver.parameters['maximum_iterations'] = 3
         
         # Compute the LHS = C⋅Ãinv⋅B
-        if self.inner_iteration == 1 or self.using_limiter:
+        if self.inner_iteration == 1 or self.limit_inner_iterations:
             C, Ainv, B = self.C, self.A_tilde_inv, self.B
             self.mat_AinvB = matmul(Ainv, B, self.mat_AinvB)
             self.mat_CAinvB = matmul(C, self.mat_AinvB, self.mat_CAinvB)
             self.LHS_pressure = dolfin.as_backend_type(self.mat_CAinvB.copy())
-        else:
-            LHS = self.LHS_pressure
+        LHS = self.LHS_pressure
         
         # Compute the divergence of u* and the rest of the right hand side
-        u_star = self.simulation.data['u']
-        RHS = self.matrices.assemble_E_star(u_star)
+        uvw_star = self.simulation.data['uvw_star']
+        RHS = self.matrices.assemble_E_star(uvw_star)
         
         # Inform PETSc about the null space
         if self.remove_null_space:
@@ -500,13 +477,9 @@ class SolverSIMPLE(Solver):
         field from the pressure correction equation
         """
         p_hat = self.simulation.data['p_hat']
-        u = self.simulation.data['u']
         uvw = self.simulation.data['uvw_star']
-        
-        self.assigner_merge.assign(uvw, list(u))
         uvw.vector().axpy(-1, self.mat_AinvB * p_hat.vector())
         uvw.vector().apply('insert')
-        self.assigner_split.assign(list(u), uvw)
     
     @timeit
     def postprocess_velocity(self):
@@ -515,6 +488,26 @@ class SolverSIMPLE(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
+    
+    
+    @timeit
+    def slope_limit_velocities(self):
+        """
+        Run the slope limiter
+        """
+        if not self.using_limiter:
+            return 0
+        
+        # Store unlimited velocities and then run limiter
+        shift_fields(self.simulation, ['u%d', 'u_unlim%d'])
+        self.slope_limiter.run()
+        
+        # Measure the change in the field after limiting (l2 norm)
+        change = velocity_change(u1=self.simulation.data['u'],
+                                 u2=self.simulation.data['u_unlim'],
+                                 ui_tmp=self.simulation.data['ui_tmp'])
+        
+        return change
             
     @timeit
     def calculate_divergence_error(self):
@@ -574,6 +567,9 @@ class SolverSIMPLE(Solver):
                 err_p = self.pressure_correction()
                 self.velocity_update()
                 solver_info = ' - Num Krylov iters - u %3d - p %3d' % (self.niters_u, self.niters_p)
+                
+                # Extract the segregated velocity components
+                self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
                 
                 # Set u_conv equal to u
                 #shift_fields(sim, ['u%d', 'u_conv%d'])

@@ -248,11 +248,20 @@ class EstimateZeroForms(MultiFunction):
 
     def indexed(self, o, expr, multi_index):
         assert isinstance(multi_index, MultiIndex)
-        
         indices = list(multi_index)
-        if len(indices) == 1 and isinstance(indices[0], FixedIndex):
+        
+        if len(indices) == 1:
+            assert isinstance(indices[0], FixedIndex)
             i = int(indices[0])
             return expr[i]
+        
+        elif len(indices) == 2:
+            assert isinstance(indices[0], FixedIndex)
+            assert isinstance(indices[1], FixedIndex)
+            i = int(indices[0])
+            j = int(indices[1])
+            return expr[i][j]
+        
         else:
             raise NotImplementedError()
     
@@ -261,21 +270,20 @@ class EstimateZeroForms(MultiFunction):
     
     def coefficient_derivative(self, o, f, w, v):
         raise NotImplementedError()
-
-    def grad(self, o, f):
-        op, = o.ufl_operands
+    
+    def grad(self, o, expr):
         shape = o.ufl_shape
         if len(shape) == 1:
-            return as_vector([self.visit(op)] * shape[0])
+            return as_vector([expr] * shape[0])
+        elif len(shape) == 2:
+            return as_vector([[expr[i]] * shape[1] for i in range(shape[0])])
         else:
             raise NotImplementedError()
     
-    def div(self, o, f):
-        op, = o.ufl_operands
+    def div(self, o, expr):
         shape = o.ufl_shape
-        
         if len(shape) == 0:
-            return numpy.max([self.visit(o) for o in op])
+            return numpy.max(expr)
         else:
             raise NotImplementedError()
     
