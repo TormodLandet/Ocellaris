@@ -321,7 +321,6 @@ class SolverSIMPLE(Solver):
             
             # Get coupled guess velocities
             uvw_star = sim.data['uvw_star']
-            self.assigner_merge.assign(uvw_star, list(sim.data['u']))
             
             # Assemble the LHS matrices only the first inner iteration
             if self.inner_iteration == 1:
@@ -350,7 +349,7 @@ class SolverSIMPLE(Solver):
                 rhs.axpy(-1.0, B * p_star.vector())
                 rhs.axpy(relax, A * uvw_star.vector())
                 rhs.apply('insert')
-        
+            
             return lhs, rhs
         
         def mom_proj_rhs(rhs):
@@ -389,7 +388,7 @@ class SolverSIMPLE(Solver):
             u_temp = sim.data['uvw_temp']
             u_temp.assign(u_star)
             
-            with dolfin_log_level(dolfin.LogLevel.ERROR):
+            with dolfin_log_level(dolfin.LogLevel.WARNING):
                 self.niters_u = solver.solve(lhs, u_star.vector(), rhs)
             
             # Compute change from last iteration
@@ -562,13 +561,16 @@ class SolverSIMPLE(Solver):
             # Run inner iterations
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
+                # Collect previous velocity components in coupled function
+                self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
+                
                 # Velocity and pressure inner solves
                 err_u = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
                 self.velocity_update()
                 solver_info = ' - Num Krylov iters - u %3d - p %3d' % (self.niters_u, self.niters_p)
                 
-                # Extract the segregated velocity components
+                # Extract the separate velocity component functions
                 self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
                 
                 # Set u_conv equal to u

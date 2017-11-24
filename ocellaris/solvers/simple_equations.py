@@ -89,7 +89,9 @@ class SimpleEquations(object):
                                  use_stress_divergence_form=self.use_stress_divergence_form)
         mat, vec = split_form_into_matrix(eq, Vcoupled, Vcoupled, check_zeros=True)
         
-        # There should be no p*q form, this is a saddle point system
+        # Check matrix and vector shapes and that the matrix is a saddle point matrix
+        assert mat.shape == (2, 2)
+        assert vec.shape == (2,)
         assert mat[-1,-1] is None, 'Found p-q coupling, this is not a saddle point system!'
         
         # Store the forms
@@ -97,7 +99,7 @@ class SimpleEquations(object):
         self.eqB = mat[0,1]
         self.eqC = mat[1,0]
         self.eqD = vec[0]
-        self.eqE = vec[-1]
+        self.eqE = vec[1]
     
     @timeit
     def assemble_matrices(self, reassemble=False):
