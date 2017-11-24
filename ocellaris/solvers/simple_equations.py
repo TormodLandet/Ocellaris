@@ -87,9 +87,9 @@ class SimpleEquations(object):
                                  use_grad_q_form=self.use_grad_q_form,
                                  use_grad_p_form=self.use_grad_p_form,
                                  use_stress_divergence_form=self.use_stress_divergence_form)
-        mat, vec = split_form_into_matrix(eq, Vcoupled, Vcoupled)
+        mat, vec = split_form_into_matrix(eq, Vcoupled, Vcoupled, check_zeros=True)
         
-        # There is no p*q form, this is a saddle point system
+        # There should be no p*q form, this is a saddle point system
         assert mat[-1,-1] is None, 'Found p-q coupling, this is not a saddle point system!'
         
         # Store the forms

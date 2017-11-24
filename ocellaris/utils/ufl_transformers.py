@@ -12,7 +12,7 @@ from ufl.corealg.map_dag import map_expr_dag
 # Utility functions:
 
 
-def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None):
+def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None, check_zeros=True):
     """
     Split a form into subforms which correspond to separate
     test and trial functions. Given a full form with multiple
@@ -36,7 +36,7 @@ def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None):
     
     for i in range(N):
         # Process linear form
-        f = FormPruner(i).prune(full_form)
+        f = FormPruner(i).prune(full_form, check_zeros)
         if f.integrals():
             form_vector[i] = f
         
@@ -97,7 +97,7 @@ class FormPruner(MultiFunction):
         self._index_u = index_trial
         self._cache = {}
     
-    def prune(self, form):        
+    def prune(self, form, check_zeros=True):        
         # Get the parts of the form with the correct arity
         if self._index_u is None:
             form = compute_form_rhs(form)
@@ -109,7 +109,7 @@ class FormPruner(MultiFunction):
             # Prune integrals that do not contain Arguments with
             # the chosen coupled function space indices 
             pruned = self.visit(integral.integrand())
-            if not is_zero_ufl_expression(pruned):
+            if not check_zeros or not is_zero_ufl_expression(pruned):
                 integrals.append(integral.reconstruct(pruned))
         
         return Form(integrals)
