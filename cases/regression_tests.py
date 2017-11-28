@@ -27,8 +27,8 @@ def test_taylor_green(solver_type, monkeypatch):
     tmax = 1
     polydeg_u = 2
     polydeg_p = 1
-    limits = {'Coupled': [0.015, 0.015, 0.23, 0.29, 0.29, 0.47],
-              'SIMPLE':  [0.017, 0.017, 0.23, 0.31, 0.31, 0.47]}
+    limits = {'Coupled': [0.015, 0.015, 0.05, 0.28, 0.28, 0.18],
+              'SIMPLE':  [0.017, 0.017, 0.05, 0.28, 0.28, 0.18]}
     
     def modifier(sim):
         sim.input.set_value('solver/type', solver_type)

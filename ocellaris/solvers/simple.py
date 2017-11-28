@@ -133,18 +133,18 @@ class SolverSIMPLE(Solver):
                 incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Storage for preassembled matrices
-        self.A = [None]*sim.ndim
-        self.A_tilde = [None]*sim.ndim
-        self.A_tilde_inv = [None]*sim.ndim
-        self.B = [None]*sim.ndim
-        self.C = [None]*sim.ndim
+        self.A = None
+        self.A_tilde = None
+        self.A_tilde_inv = None
+        self.B = None
+        self.C = None
         
         # Temporary matrices to store matrix matrix products
-        self.mat_AinvB = [None]*sim.ndim
-        self.mat_CAinvB = [None]*sim.ndim
+        self.mat_AinvB = None
+        self.mat_CAinvB = None
         
         # Store number of iterations
-        self.niters_u = [None] * sim.ndim
+        self.niters_u = None
         self.niters_p = None
     
     def read_input(self):
@@ -232,7 +232,18 @@ class SolverSIMPLE(Solver):
         create_vector_functions(sim, 'up_conv', 'up_conv%d', Vu)
         create_vector_functions(sim, 'upp_conv', 'upp_conv%d', Vu)
         create_vector_functions(sim, 'u_unlim', 'u_unlim%d', Vu)
-        self.u_tmp = sim.data['ui_tmp'] = dolfin.Function(Vu)
+        sim.data['ui_tmp'] = dolfin.Function(Vu)
+        
+        # Create coupled vector function
+        ue = Vu.ufl_element()
+        e_mixed = dolfin.MixedElement([ue] * sim.ndim)
+        Vcoupled = dolfin.FunctionSpace(Vu.mesh(), e_mixed)
+        sim.data['uvw_star'] = dolfin.Function(Vcoupled)
+        sim.data['uvw_temp'] = dolfin.Function(Vcoupled)
+        
+        # Create assigner to extract split function from uvw and vice versa
+        self.assigner_split = dolfin.FunctionAssigner([Vu] * sim.ndim, Vcoupled)
+        self.assigner_merge = dolfin.FunctionAssigner(Vcoupled, [Vu] * sim.ndim)
         
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
@@ -308,41 +319,36 @@ class SolverSIMPLE(Solver):
             assert 0 < alpha
             relax = (1 - alpha) / alpha
             
-            lhs, rhs = [], []
-            for d in range(sim.ndim):
-                u_star = sim.data['u%d' % d]
-                self.u_tmp.assign(u_star)
-                
-                # Assemble the LHS matrices only the first inner iteration
-                if self.inner_iteration == 1:
-                    (self.A[d], self.A_tilde[d], self.A_tilde_inv[d],
-                     self.B[d], self.C[d]) = self.matrices.assemble_matrices(d)
-                
-                A = self.A[d]
-                A_tilde = self.A_tilde[d]
-                B = self.B[d]
-                D = self.matrices.assemble_D(d)
-                
-                if True:
-                    LHS = dolfin.as_backend_type(A.copy())
-                    LHS.axpy(relax, A_tilde, False)
-                    LHS.apply('insert')
-                    RHS = D
-                    RHS.axpy(-1.0, B * p_star.vector())
-                    RHS.axpy(relax, A_tilde * u_star.vector())
-                    RHS.apply('insert')
-                
-                else:
-                    LHS = dolfin.as_backend_type(A.copy())
-                    LHS._scale(1/alpha)
-                    LHS.apply('insert')
-                    RHS = D
-                    RHS.axpy(-1.0, B * p_star.vector())
-                    RHS.axpy(relax, A * u_star.vector())
-                    RHS.apply('insert')
-                
-                lhs.append(LHS)
-                rhs.append(RHS)
+            # Get coupled guess velocities
+            uvw_star = sim.data['uvw_star']
+            
+            # Assemble the LHS matrices only the first inner iteration
+            if self.inner_iteration == 1:
+                self.A, self.A_tilde, self.A_tilde_inv, self.B, self.C = \
+                    self.matrices.assemble_matrices()
+            
+            A = self.A
+            A_tilde = self.A_tilde
+            B = self.B
+            D = self.matrices.assemble_D()
+            
+            if True:
+                lhs = dolfin.as_backend_type(A.copy())
+                lhs.axpy(relax, A_tilde, False)
+                lhs.apply('insert')
+                rhs = D
+                rhs.axpy(-1.0, B * p_star.vector())
+                rhs.axpy(relax, A_tilde * uvw_star.vector())
+                rhs.apply('insert')
+            
+            else:
+                lhs = dolfin.as_backend_type(A.copy())
+                lhs._scale(1/alpha)
+                lhs.apply('insert')
+                rhs = D
+                rhs.axpy(-1.0, B * p_star.vector())
+                rhs.axpy(relax, A * uvw_star.vector())
+                rhs.apply('insert')
             
             return lhs, rhs
         
@@ -362,14 +368,9 @@ class SolverSIMPLE(Solver):
                 self.rhs_postprocessor = VelocityBDMProjection(sim, self.rhs_tmp,
                     incompressibility_flux_type=self.incompressibility_flux_type)
             
-            ndim = self.simulation.ndim
-            for d in range(ndim):
-                self.rhs_tmp[d].vector()[:] = rhs[d]
-            
+            self.assigner_split.assign(list(self.rhs_tmp), rhs)            
             self.rhs_postprocessor.run()
-            
-            for d in range(ndim):
-                rhs[d][:] = self.rhs_tmp[d].vector()
+            self.assigner_merge.assign(rhs, list(self.rhs_tmp))
         
         def mom_solve(lhs, rhs):
             """
@@ -383,19 +384,17 @@ class SolverSIMPLE(Solver):
                     solver.set_reuse_preconditioner(True)
                     #solver.parameters['maximum_iterations'] = 3
             
-            err = 0.0
-            for d in range(sim.ndim):
-                LHS, RHS = lhs[d], rhs[d]
-                u_star = self.simulation.data['u%d' % d]
-                self.u_tmp.assign(u_star)
-                
-                with dolfin_log_level(dolfin.LogLevel.ERROR):
-                    self.niters_u[d] = solver.solve(LHS, u_star.vector(), RHS)
-                
-                self.u_tmp.vector().axpy(-1, u_star.vector())
-                self.u_tmp.vector().apply('insert')
-                err += self.u_tmp.vector().norm('l2')
-            return err
+            u_star = sim.data['uvw_star']
+            u_temp = sim.data['uvw_temp']
+            u_temp.assign(u_star)
+            
+            with dolfin_log_level(dolfin.LogLevel.WARNING):
+                self.niters_u = solver.solve(lhs, u_star.vector(), rhs)
+            
+            # Compute change from last iteration
+            u_temp.vector().axpy(-1, u_star.vector())
+            u_temp.vector().apply('insert')
+            return u_temp.vector().norm('l2')
         
         # Assemble LHS and RHS, project RHS and finally solve the linear systems
         lhs, rhs = mom_assemble()
@@ -403,25 +402,6 @@ class SolverSIMPLE(Solver):
         err = mom_solve(lhs, rhs)
         
         return err
-    
-    @timeit
-    def slope_limit_velocities(self):
-        """
-        Run the slope limiter
-        """
-        if not self.using_limiter:
-            return 0
-        
-        # Store unlimited velocities and then run limiter
-        shift_fields(self.simulation, ['u%d', 'u_unlim%d'])
-        self.slope_limiter.run()
-        
-        # Measure the change in the field after limiting (l2 norm)
-        change = velocity_change(u1=self.simulation.data['u'],
-                                 u2=self.simulation.data['u_unlim'],
-                                 ui_tmp=self.simulation.data['ui_tmp'])
-        
-        return change
     
     @timeit
     def pressure_correction(self):
@@ -440,25 +420,16 @@ class SolverSIMPLE(Solver):
                 #solver.parameters['maximum_iterations'] = 3
         
         # Compute the LHS = C⋅Ãinv⋅B
-        if self.inner_iteration == 1 or self.using_limiter:
-            LHS = 0
-            for d in range(self.simulation.ndim):
-                C, Ainv, B = self.C[d], self.A_tilde_inv[d], self.B[d]
-                self.mat_AinvB[d] = matmul(Ainv, B, self.mat_AinvB[d])
-                self.mat_CAinvB[d] = matmul(C, self.mat_AinvB[d], self.mat_CAinvB[d])
-                
-                if LHS == 0:
-                    LHS = dolfin.as_backend_type(self.mat_CAinvB[d].copy())
-                else:
-                    LHS.axpy(1.0, self.mat_CAinvB[d], True)
-                LHS.apply('insert')
-            self.LHS_pressure = LHS
-        else:
-            LHS = self.LHS_pressure
+        if self.inner_iteration == 1 or self.limit_inner_iterations:
+            C, Ainv, B = self.C, self.A_tilde_inv, self.B
+            self.mat_AinvB = matmul(Ainv, B, self.mat_AinvB)
+            self.mat_CAinvB = matmul(C, self.mat_AinvB, self.mat_CAinvB)
+            self.LHS_pressure = dolfin.as_backend_type(self.mat_CAinvB.copy())
+        LHS = self.LHS_pressure
         
         # Compute the divergence of u* and the rest of the right hand side
-        u_star = self.simulation.data['u']
-        RHS = self.matrices.assemble_E_star(u_star)
+        uvw_star = self.simulation.data['uvw_star']
+        RHS = self.matrices.assemble_E_star(uvw_star)
         
         # Inform PETSc about the null space
         if self.remove_null_space:
@@ -479,7 +450,7 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        with dolfin_log_level(dolfin.LogLevel.ERROR):
+        with dolfin_log_level(dolfin.LogLevel.WARNING):
             #print('STARTING PRESSURE KRYLOV SOLVER',
             #      'it=', self.simulation.timestep, 
             #      'iit=', self.inner_iteration)
@@ -505,10 +476,9 @@ class SolverSIMPLE(Solver):
         field from the pressure correction equation
         """
         p_hat = self.simulation.data['p_hat']
-        
-        for d in range(self.simulation.ndim):
-            u = self.simulation.data['u%d' % d]
-            u.vector().axpy(-1, self.mat_AinvB[d] * p_hat.vector())
+        uvw = self.simulation.data['uvw_star']
+        uvw.vector().axpy(-1, self.mat_AinvB * p_hat.vector())
+        uvw.vector().apply('insert')
     
     @timeit
     def postprocess_velocity(self):
@@ -517,6 +487,25 @@ class SolverSIMPLE(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
+    
+    @timeit
+    def slope_limit_velocities(self):
+        """
+        Run the slope limiter
+        """
+        if not self.using_limiter:
+            return 0
+        
+        # Store unlimited velocities and then run limiter
+        shift_fields(self.simulation, ['u%d', 'u_unlim%d'])
+        self.slope_limiter.run()
+        
+        # Measure the change in the field after limiting (l2 norm)
+        change = velocity_change(u1=self.simulation.data['u'],
+                                 u2=self.simulation.data['u_unlim'],
+                                 ui_tmp=self.simulation.data['ui_tmp'])
+        
+        return change
             
     @timeit
     def calculate_divergence_error(self):
@@ -542,11 +531,9 @@ class SolverSIMPLE(Solver):
         # Time loop
         t = sim.time
         it = sim.timestep
+        
         # Give reasonable starting guesses for the solvers
-        for d in range(sim.ndim):
-            up = self.simulation.data['up%d' % d]
-            u_new = self.simulation.data['u%d' % d]
-            u_new.assign(up)
+        shift_fields(sim, ['up%d', 'u%d']) # get the initial u star
         
         while True:
             # Get input values, these can possibly change over time
@@ -573,13 +560,17 @@ class SolverSIMPLE(Solver):
             # Run inner iterations
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
+                # Collect previous velocity components in coupled function
+                self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
+                
                 # Velocity and pressure inner solves
                 err_u = self.momentum_prediction(t, dt)
                 err_p = self.pressure_correction()
                 self.velocity_update()
-                niters = ['%3d u%d' % (ni, d) for d, ni in enumerate(self.niters_u)]
-                niters.append('%3d p' % self.niters_p)
-                solver_info = ' - iters: %s' % ' '.join(niters)
+                solver_info = ' - Num Krylov iters - u %3d - p %3d' % (self.niters_u, self.niters_p)
+                
+                # Extract the separate velocity component functions
+                self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
                 
                 # Set u_conv equal to u
                 #shift_fields(sim, ['u%d', 'u_conv%d'])
@@ -599,7 +590,7 @@ class SolverSIMPLE(Solver):
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s'
                              % (self.inner_iteration, err_u, err_p, solver_info))
                 
-                if err_u + err_p < allowable_error_inner:
+                if err_u < allowable_error_inner:
                     break
                 
                 self.inner_iteration += 1
@@ -608,7 +599,7 @@ class SolverSIMPLE(Solver):
             if not self.limit_inner_iterations:
                 self.postprocess_velocity()
                 shift_fields(sim, ['u%d', 'u_conv%d'])
-                if self.using_limiter: 
+                if self.using_limiter:
                     self.slope_limit_velocities()
             
             # Move u -> up, up -> upp and prepare for the next time step

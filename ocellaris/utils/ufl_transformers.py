@@ -12,7 +12,7 @@ from ufl.corealg.map_dag import map_expr_dag
 # Utility functions:
 
 
-def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None):
+def split_form_into_matrix(full_form, Wv, Wu, Sv=None, Su=None, empty_cell_value=None, check_zeros=True):
     """
     Split a form into subforms which correspond to separate
     test and trial functions. Given a full form with multiple
@@ -36,13 +36,13 @@ def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None):
     
     for i in range(N):
         # Process linear form
-        f = FormPruner(i).prune(full_form)
+        f = FormPruner(i).prune(full_form, check_zeros)
         if f.integrals():
             form_vector[i] = f
         
         # Process bilinear form
         for j in range(M):
-            f = FormPruner(i, j).prune(full_form)
+            f = FormPruner(i, j).prune(full_form, check_zeros)
             if f.integrals():
                 form_matrix[i, j] = f
     
@@ -97,7 +97,7 @@ class FormPruner(MultiFunction):
         self._index_u = index_trial
         self._cache = {}
     
-    def prune(self, form):        
+    def prune(self, form, check_zeros=True):        
         # Get the parts of the form with the correct arity
         if self._index_u is None:
             form = compute_form_rhs(form)
@@ -109,7 +109,7 @@ class FormPruner(MultiFunction):
             # Prune integrals that do not contain Arguments with
             # the chosen coupled function space indices 
             pruned = self.visit(integral.integrand())
-            if not is_zero_ufl_expression(pruned):
+            if not check_zeros or not is_zero_ufl_expression(pruned):
                 integrals.append(integral.reconstruct(pruned))
         
         return Form(integrals)
@@ -118,7 +118,7 @@ class FormPruner(MultiFunction):
         """
         Argument is UFL lingo for test (num=0) and trial (num=1) functions
         """
-        # Seen this argument before?
+        # Do not make several new args for the same original arg
         if arg in self._cache:
             return self._cache[arg]
         
@@ -126,8 +126,7 @@ class FormPruner(MultiFunction):
         V = arg.function_space()
         N = V.num_sub_spaces()
         num = arg.number()
-        assert num in (0, 1)
-        idx_wanted = self._index_v if num == 0 else self._index_u
+        idx_wanted = [self._index_v, self._index_u][num]
         
         new_arg = []
         for idx in range(N):
@@ -248,11 +247,20 @@ class EstimateZeroForms(MultiFunction):
 
     def indexed(self, o, expr, multi_index):
         assert isinstance(multi_index, MultiIndex)
-        
         indices = list(multi_index)
-        if len(indices) == 1 and isinstance(indices[0], FixedIndex):
+        
+        if len(indices) == 1:
+            assert isinstance(indices[0], FixedIndex)
             i = int(indices[0])
             return expr[i]
+        
+        elif len(indices) == 2:
+            assert isinstance(indices[0], FixedIndex)
+            assert isinstance(indices[1], FixedIndex)
+            i = int(indices[0])
+            j = int(indices[1])
+            return expr[i][j]
+        
         else:
             raise NotImplementedError()
     
@@ -261,21 +269,20 @@ class EstimateZeroForms(MultiFunction):
     
     def coefficient_derivative(self, o, f, w, v):
         raise NotImplementedError()
-
-    def grad(self, o, f):
-        op, = o.ufl_operands
+    
+    def grad(self, o, expr):
         shape = o.ufl_shape
         if len(shape) == 1:
-            return as_vector([self.visit(op)] * shape[0])
+            return as_vector([expr] * shape[0])
+        elif len(shape) == 2:
+            return as_vector([[expr[i]] * shape[1] for i in range(shape[0])])
         else:
             raise NotImplementedError()
     
-    def div(self, o, f):
-        op, = o.ufl_operands
+    def div(self, o, expr):
         shape = o.ufl_shape
-        
         if len(shape) == 0:
-            return numpy.max([self.visit(o) for o in op])
+            return numpy.max(expr)
         else:
             raise NotImplementedError()
     

@@ -1,5 +1,8 @@
-import sys
+import sys, os
 from ocellaris import Simulation, setup_simulation
+
+
+TEST_DIR = os.path.dirname(__file__)
 
 
 # Dummy values to make setup_simulation() run without errors
@@ -31,11 +34,10 @@ def test_user_constants():
     assert sim.input.get_value('ref') == 42.0
 
 
-# TODO: this depends on the CWD of the test runner
 INPUT_MODULE_IMPORT = """
 user_code:
     python_path:
-    -   scripts
+    -   %s/scripts
     modules:
     -   plot_reports
 """ + DUMMY
@@ -44,8 +46,11 @@ def test_import_module():
     dummy_mod = 'plot_reports'
     assert dummy_mod not in sys.modules
     
+    # Account for current working directory
+    inp = INPUT_MODULE_IMPORT % os.path.join(TEST_DIR, '..')
+    
     sim = Simulation()
-    sim.input.read_yaml(yaml_string=INPUT_MODULE_IMPORT)
+    sim.input.read_yaml(yaml_string=inp)
     success = setup_simulation(sim)
     assert success
     

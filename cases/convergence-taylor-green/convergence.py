@@ -252,10 +252,16 @@ def make_quasi_3D(sim):
 
 
 if __name__ == '__main__':
-    modifier = None
+    modifier = lambda sim: None
     
     if '--Q3D' in sys.argv:
         modifier = make_quasi_3D
+    
+    if '--verbose' in sys.argv:
+        _oldmod_verbose = modifier
+        def modifier(sim):
+            sim.input.set_value('output/stdout_enabled', True)
+            _oldmod_verbose(sim)
     
     run_convergence_space([8, 16, 24, 32, 40], modifier)
     #run_convergence_time([5e-1, 2.5e-1, 1.25e-1, 6.25e-2, 3.12e-2])

@@ -65,6 +65,7 @@ class Simulation(object):
         self.data['mesh'] = mesh
         self.data['mesh_facet_regions'] = mesh_facet_regions
         self.ndim = mesh.topology().dim()
+        assert self.ndim == mesh.geometry().dim()
         self.update_mesh_data()
         self.log.info('Loaded mesh with %d cells' % mesh.num_cells())
     
