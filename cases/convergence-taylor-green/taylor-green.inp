@@ -110,12 +110,16 @@ solver:
     use_stress_divergence_form: no
     use_lagrange_multiplicator: no
     u:
+        #solver: default
+        #lu_method: default
+        #preconditioner: default
         parameters:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
     p:
-        #solver: lu
-        #lu_method: mumps
+        #solver: default
+        #lu_method: default
+        #preconditioner: default
         parameters:
             relative_tolerance: 1.0e-10
             absolute_tolerance: 1.0e-15
