@@ -12,7 +12,7 @@ from ufl.corealg.map_dag import map_expr_dag
 # Utility functions:
 
 
-def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None, check_zeros=True):
+def split_form_into_matrix(full_form, Wv, Wu, Sv=None, Su=None, empty_cell_value=None, check_zeros=True):
     """
     Split a form into subforms which correspond to separate
     test and trial functions. Given a full form with multiple
@@ -42,7 +42,7 @@ def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None, check_zeros
         
         # Process bilinear form
         for j in range(M):
-            f = FormPruner(i, j).prune(full_form)
+            f = FormPruner(i, j).prune(full_form, check_zeros)
             if f.integrals():
                 form_matrix[i, j] = f
     
@@ -118,7 +118,7 @@ class FormPruner(MultiFunction):
         """
         Argument is UFL lingo for test (num=0) and trial (num=1) functions
         """
-        # Seen this argument before?
+        # Do not make several new args for the same original arg
         if arg in self._cache:
             return self._cache[arg]
         
@@ -126,8 +126,7 @@ class FormPruner(MultiFunction):
         V = arg.function_space()
         N = V.num_sub_spaces()
         num = arg.number()
-        assert num in (0, 1)
-        idx_wanted = self._index_v if num == 0 else self._index_u
+        idx_wanted = [self._index_v, self._index_u][num]
         
         new_arg = []
         for idx in range(N):
