@@ -55,7 +55,7 @@ class SimpleEquations(object):
         # Storage for assembled matrices
         self.A = self.A_tilde = self.A_tilde_inv = None
         self.B = self.C = self.D = self.E = None
-        self.E_star = self.L = None
+        self.L = None
     
     def define_simple_equations(self):
         """
@@ -250,13 +250,8 @@ class SimpleEquations(object):
     
     @timeit
     def assemble_E_star(self, u_star):
-        if self.E_star is None:
-            self.E_star = dolfin.Vector(self.simulation.data['p'].vector())
-        E_star = self.E_star
-        E_star.zero()
-        
         # Divergence of u*, C⋅u*
-        E_star.axpy(1.0, self.C*u_star.vector())
+        E_star = self.C*u_star.vector()
         
         # Subtract the original RHS of C⋅u = e
         E_star.axpy(-1.0, self.assemble_E())

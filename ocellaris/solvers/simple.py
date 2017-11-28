@@ -237,10 +237,10 @@ class SolverSIMPLE(Solver):
         # Create coupled vector function
         ue = Vu.ufl_element()
         e_mixed = dolfin.MixedElement([ue] * sim.ndim)
-        Vcoupled = dolfin.FunctionSpace(Vu.mesh(), e_mixed) 
+        Vcoupled = dolfin.FunctionSpace(Vu.mesh(), e_mixed)
         sim.data['uvw_star'] = dolfin.Function(Vcoupled)
         sim.data['uvw_temp'] = dolfin.Function(Vcoupled)
-                
+        
         # Create assigner to extract split function from uvw and vice versa
         self.assigner_split = dolfin.FunctionAssigner([Vu] * sim.ndim, Vcoupled)
         self.assigner_merge = dolfin.FunctionAssigner(Vcoupled, [Vu] * sim.ndim)
@@ -450,7 +450,7 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        with dolfin_log_level(dolfin.LogLevel.ERROR):
+        with dolfin_log_level(dolfin.LogLevel.WARNING):
             #print('STARTING PRESSURE KRYLOV SOLVER',
             #      'it=', self.simulation.timestep, 
             #      'iit=', self.inner_iteration)
@@ -487,7 +487,6 @@ class SolverSIMPLE(Solver):
         """
         if self.velocity_postprocessor:
             self.velocity_postprocessor.run()
-    
     
     @timeit
     def slope_limit_velocities(self):
@@ -591,7 +590,7 @@ class SolverSIMPLE(Solver):
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s'
                              % (self.inner_iteration, err_u, err_p, solver_info))
                 
-                if err_u + err_p < allowable_error_inner:
+                if err_u < allowable_error_inner:
                     break
                 
                 self.inner_iteration += 1
@@ -600,7 +599,7 @@ class SolverSIMPLE(Solver):
             if not self.limit_inner_iterations:
                 self.postprocess_velocity()
                 shift_fields(sim, ['u%d', 'u_conv%d'])
-                if self.using_limiter: 
+                if self.using_limiter:
                     self.slope_limit_velocities()
             
             # Move u -> up, up -> upp and prepare for the next time step
