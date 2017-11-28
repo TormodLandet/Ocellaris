@@ -533,7 +533,7 @@ class SolverSIMPLE(Solver):
         it = sim.timestep
         
         # Give reasonable starting guesses for the solvers
-        self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['up']))
+        shift_fields(sim, ['up%d', 'u%d']) # get the initial u star
         
         while True:
             # Get input values, these can possibly change over time
