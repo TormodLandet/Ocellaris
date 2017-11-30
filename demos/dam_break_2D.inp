@@ -7,6 +7,7 @@ user_code:
         NU: 1.0e-4
         RHO: 1000.0
         A: 0.05715  # 0.0254 * 2.25
+        N: 5
 
 physical_properties:
     rho0: py$ RHO
@@ -23,8 +24,8 @@ _physical_properties:
 
 mesh:
     type: Rectangle
-    Nx: 25
-    Ny: 15
+    Nx: py$ N * 5
+    Ny: py$ N * 3
     endx: py$ A * 5
     endy: py$ A * 3
 
@@ -71,11 +72,11 @@ initial_conditions:
         cpp_code: '(x[0] < A + 1e-5 && x[1] < 2 * A + 1e-5) ? 1.0 : 0.0'
 
 time:
-    dt: 0.0005
-    tmax: 0.05
+    dt: py$ 0.003/N
+    tmax: 0.3
 
 output:
-    prefix: py$ 'output/dam_break_64_nu%.0e_rho%d_test' % (NU, RHO)
+    prefix: output/dam_break_2D
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -89,13 +90,11 @@ multiphase_solver:
     polynomial_degree_colour: 0
     continuous_fields: no
     plot_fields: yes
-    #sky_location: 0.75
 
 _multiphase_solver:
     type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 1
-    #sky_location: 0.75
 
 solver:
     type: Coupled
@@ -150,79 +149,3 @@ probes:
         field: c
         file_name: '_free_surface.out'
         custom_hook: MultiPhaseModelUpdated
-
-hooks:
-    post_timestep:
-
-    -   name: plot p
-        enabled: no
-        code: plot(p, title='p')
-
-    -   name: plot c
-        enabled: no
-        code: plot(c, title='c')
-
-    -   name: plot div(u)
-        enabled: no
-        code: |
-          if not hasattr(simulation, 'divfunv'):
-            simulation.divfunc = Function(Vc, name='divu')
-          project(div(u), Vc, function=simulation.divfunc)
-          plot(simulation.divfunc)
-
-    -   name: plot to file
-        enabled: no
-        code: '[simulation.plotting.plot(name) for name in ("c", "div(u)|Vc", "p", "mag(u)")]'
-
-    -   name: debug on fishy values
-        enabled: no
-        code: |
-            umag = (u0.vector().get_local()**2 +  u1.vector().get_local()**2)
-            if max(umag) > 1:
-                run_debug_console(simulation, False)
-
-    -   name: print location of largest divergence
-        enabled: no
-        code: |
-            udiv = project(div(u), Vc)
-            values = udiv.compute_vertex_values()
-            coords = mesh.coordinates()
-            valmax = 0
-            for val, coord in zip(values, coords):
-                if abs(val) > valmax:
-                    valmax = abs(val)
-                    coordmax = coord
-            print('\n%10.3e   %5.2f %5.2f\n' % (valmax, coordmax[0], coordmax[1]))
-            if valmax > 1e-3:
-                print 'Valmax is above 1e-3', valmax
-                #run_debug_console(simulation, False)
-
-    -   name: save colour fields
-        enabled: no
-        code: |
-            if not 'cf' in hook_data:
-                prefix = simulation.input.get_value('output/prefix')
-                hook_data['cf'] = File(prefix + '_c.pvd')
-                c.rename('c', 'c')
-                #c_star.rename('c_star', 'c_star')
-            rho = project(rho_star, Vc)
-            rho.rename('rho', 'rho')
-            hook_data['cf'] << (rho, t)
-            hook_data['cf'] << (p, t)
-            #hook_data['cf'] << (c_star, t)
-
-    -   name: inspect fields
-        enabled: yes
-        code: |
-            if not 'fi' in hook_data:
-                from ocellaris.utils import FieldInspector
-                hook_data['fi'] = FieldInspector('output/field_inspector.xdmf', Vu)#,
-                                                 #startpos=(A - A / 4, 2 * A - A / 4),
-                                                 #endpos=(A + A / 4, 2 * A + A / 4))
-            if simulation.io.xdmf_write_interval > 0 and simulation.timestep % simulation.io.xdmf_write_interval == 0:
-                fi = hook_data['fi']
-                fi.write_function(u0, t)
-                fi.write_function(u1, t)
-                fi.write_function(u_conv0, t)
-                fi.write_function(u_conv1, t)
-

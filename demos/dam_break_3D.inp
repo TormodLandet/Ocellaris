@@ -17,11 +17,11 @@ physical_properties:
 mesh:
     type: Box
     Nx: py$ 5*N
-    Ny: py$ 3*N
-    Nz: 1
+    Ny: 1
+    Nz: py$ 3*N
     endx: py$ A * 5
-    endy: py$ A * 3
-    endz: py$ A / N 
+    endy: py$ A / N
+    endz: py$ A * 3 
 
 # BCs with wall slip
 boundary_conditions:
@@ -35,16 +35,16 @@ boundary_conditions:
 
 initial_conditions:
     cp:
-        cpp_code: '(x[0] < A + 1e-5 && x[1] < 2 * A + 1e-5) ? 1.0 : 0.0'
+        cpp_code: '(x[0] < A + 1e-5 && x[2] < 2 * A + 1e-5) ? 1.0 : 0.0'
     cpp:
-        cpp_code: '(x[0] < A + 1e-5 && x[1] < 2 * A + 1e-5) ? 1.0 : 0.0'
+        cpp_code: '(x[0] < A + 1e-5 && x[2] < 2 * A + 1e-5) ? 1.0 : 0.0'
 
 time:
     dt: py$ 0.003/N
     tmax: 0.3
 
 output:
-    prefix: output/dam_break3D
+    prefix: output/dam_break_3D
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -99,28 +99,3 @@ probes:
         field: c
         file_name: '_free_surface.out'
         custom_hook: MultiPhaseModelUpdated
-
-hooks:
-    post_timestep:
-    -   name: debug on fishy values
-        enabled: no
-        code: |
-            umag = (u0.vector().get_local()**2 +  u1.vector().get_local()**2)
-            if max(umag) > 1:
-                run_debug_console(simulation, False)
-
-    -   name: print location of largest divergence
-        enabled: no
-        code: |
-            udiv = project(div(u), Vc)
-            values = udiv.compute_vertex_values()
-            coords = mesh.coordinates()
-            valmax = 0
-            for val, coord in zip(values, coords):
-                if abs(val) > valmax:
-                    valmax = abs(val)
-                    coordmax = coord
-            print('\n%10.3e   %5.2f %5.2f\n' % (valmax, coordmax[0], coordmax[1]))
-            if valmax > 1e-3:
-                print 'Valmax is above 1e-3', valmax
-                #run_debug_console(simulation, False)
