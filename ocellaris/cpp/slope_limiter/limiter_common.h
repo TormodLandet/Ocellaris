@@ -1,6 +1,8 @@
 #ifndef __SLOPE_LIMITER_COMMON_H
 #define __SLOPE_LIMITER_COMMON_H
-
+#undef NDEBUG
+#undef EIGEN_NO_DEBUG
+#undef EIGEN_NO_STATIC_ASSERT
 #include <cstdint>
 #include <limits>
 #include <vector>
@@ -12,9 +14,15 @@
 namespace dolfin
 {
 
+// Row major matrices
+using MatIntRM = Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+using MatDoubleRM = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
+// Input reference types
 using IntVecIn = Eigen::Ref<const Eigen::VectorXi>;
+using IntMatIn = Eigen::Ref<const MatIntRM>;
 using DoubleVecIn = Eigen::Ref<const Eigen::VectorXd>;
+using DoubleMatIn = Eigen::Ref<const MatDoubleRM>;
 
 
 enum BoundaryDofType {
@@ -31,61 +39,109 @@ struct SlopeLimiterInput
   // Connectivity and dofs
   // --------------------------------------------------------------------------
 
-  // Dimensions of the arrays
+  // Number of cells owned by the local process
   int num_cells_owned;
-  int max_neighbours;
 
   // Number of neighbours for each dof (dimension Ndof)
-  std::vector<int> num_neighbours;
+  Eigen::VectorXi num_neighbours;
 
-  // Neighbours for each dof (dimension Ndof * max_neighbours)
-  std::vector<int> neighbours;
+  // Neighbours for each dof (dimension Ndof,max_neighbours)
+  MatIntRM neighbours;
 
   // Dofs for each cell (dimension num_cells_owned * ndofs per cell)
-  std::vector<int> cell_dofs;
-  std::vector<int> cell_dofs_dg0;
+  MatIntRM cell_dofs;
+  Eigen::VectorXi cell_dofs_dg0;
 
   // Coordinates of the cell vertices
-  std::vector<double> vertex_coords;
+  MatIntRM cell_vertices;
+  MatDoubleRM vertex_coords;
+
+ // Coordinate of cell midpoints
+  MatDoubleRM cell_midpoints;
 
   // We can clamp the limited values to a given range
   double global_min = std::numeric_limits<double>::lowest();
   double global_max = std::numeric_limits<double>::max();
 
   void set_arrays(const int num_cells_owned,
-                  const int max_neighbours,
                   IntVecIn num_neighbours,
-                  IntVecIn neighbours,
-                  IntVecIn cell_dofs,
+                  IntMatIn neighbours,
+                  IntMatIn cell_dofs,
                   IntVecIn cell_dofs_dg0,
-                  DoubleVecIn vertex_coords)
+                  IntMatIn cell_vertices,
+                  DoubleMatIn vertex_coords)
   {
+    const int Ndofs_DGX = num_neighbours.size();
+    const int Ncells = cell_dofs.rows();
+    const int D = vertex_coords.cols();
+    const int Nvert_cell = D + 1;
+    const int Ndofs = cell_dofs.rows() * cell_dofs.cols();
+
+    // Verify that the input data shapes are correct
+    if (num_cells_owned > Ncells)
+      throw std::length_error("ERROR: num_cells_owned > Ncells");
+    if (neighbours.rows() != Ndofs_DGX)
+      throw std::length_error("ERROR: neighbours.rows() != Ndofs_DGX");
+    if (cell_dofs_dg0.size() != Ncells)
+      throw std::length_error("ERROR: cell_dofs_dg0.size() != Ncells");
+    if (cell_vertices.rows() != Ncells)
+      throw std::length_error("ERROR: cell_vertices.rows() != Ncells");
+    if (cell_vertices.cols() != Nvert_cell)
+      throw std::length_error("ERROR: cell_vertices.cols() != Nvert_cell");
+
+    // Verify that vertex indices are correct
+    for (int i = 0; i < Ncells; i++)
+    {
+      for (int j = 0; j < Nvert_cell; j++)
+      {
+        int v = cell_vertices(i, j);
+        if (v < 0 or v >= vertex_coords.rows())
+          throw std::length_error("ERROR: v < 0 or v >= vertex_coords.rows()");
+      }
+    }
+
+    // Verify that dof indices are correct
+    for (int i = 0; i < Ncells; i++)
+    {
+      for (int j = 0; j < cell_dofs.cols(); j++)
+      {
+        int d = cell_dofs(i, j);
+        if (d < 0 or d >= Ndofs)
+          throw std::length_error("ERROR: d < 0 or d >= Ndofs");
+      }
+    }
+
+    // Verify that dof neighbour indices are correct
+    for (int i = 0; i < Ndofs_DGX; i++)
+    {
+      for (int j = 0; j < num_neighbours(i); j++)
+      {
+        int c = neighbours(i, j);
+        if (c < 0 or c >= Ncells)
+          throw std::length_error("ERROR: c < 0 or c >= Ncells_owned");
+      }
+    }
+
     this->num_cells_owned = num_cells_owned;
-    this->max_neighbours = max_neighbours;
+    this->num_neighbours = num_neighbours;
+    this->neighbours = neighbours;
+    this->cell_dofs = cell_dofs;
+    this->cell_dofs_dg0 = cell_dofs_dg0;
+    this->cell_vertices = cell_vertices;
+    this->vertex_coords = vertex_coords;
 
-    this->num_neighbours.resize(num_neighbours.size());
-    for (int i = 0; i < num_neighbours.size(); i++)
-      this->num_neighbours[i] = num_neighbours[i];
-
-    this->neighbours.resize(neighbours.size());
-    for (int i = 0; i < neighbours.size(); i++)
-      this->neighbours[i] = neighbours[i];
-
-    this->cell_dofs.resize(cell_dofs.size());
-    for (int i = 0; i < cell_dofs.size(); i++)
-      this->cell_dofs[i] = cell_dofs[i];
-
-    this->cell_dofs_dg0.resize(cell_dofs_dg0.size());
-    for (int i = 0; i < cell_dofs_dg0.size(); i++)
-      this->cell_dofs_dg0[i] = cell_dofs_dg0[i];
-
-    this->vertex_coords.resize(vertex_coords.size());
-    for (int i = 0; i < vertex_coords.size(); i++)
-      this->vertex_coords[i] = vertex_coords[i];
-
-    this->limit_cell.resize(limit_cell.size());
-    for (unsigned int i = 0; i < limit_cell.size(); i++)
-      this->limit_cell[i] = static_cast<std::int8_t>(limit_cell[i]);
+    // Compute cell midpoints
+    cell_midpoints.resize(Ncells, D);
+    cell_midpoints.setZero();
+    for (int i = 0; i < Ncells; i++)
+    {
+      for (int j = 0; j < Nvert_cell; j++)
+      {
+        int v = cell_vertices(i, j);
+        for (int k = 0; k < D; k++)
+          cell_midpoints(i, k) += vertex_coords(v, k) / (D + 1);
+      }
+    }
   }
 
   // Should we limit a given cell. Look up with cell number and get 1 or 0
@@ -103,7 +159,7 @@ struct SlopeLimiterInput
   // --------------------------------------------------------------------------
 
   std::vector<BoundaryDofType> boundary_dof_type;
-  std::vector<float> boundary_dof_value;
+  Eigen::VectorXd boundary_dof_value;
   bool enforce_boundary_conditions;
 
   void set_boundary_values(IntVecIn boundary_dof_type,
@@ -114,10 +170,7 @@ struct SlopeLimiterInput
     for (int i = 0; i < boundary_dof_type.size(); i++)
       this->boundary_dof_type[i] = static_cast<BoundaryDofType>(boundary_dof_type[i]);
 
-    this->boundary_dof_value.resize(boundary_dof_value.size());
-    for (int i = 0; i < boundary_dof_value.size(); i++)
-      this->boundary_dof_value[i] = boundary_dof_value[i];
-
+    this->boundary_dof_value = boundary_dof_value;
     this->enforce_boundary_conditions = enforce_bcs;
   }
 };

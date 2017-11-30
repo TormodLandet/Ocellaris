@@ -1,8 +1,9 @@
 import numpy
 import dolfin as df
-from ocellaris.utils import verify_key, OcellarisError, get_dof_neighbours
+from ocellaris.utils import verify_key, OcellarisError
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
 from . import register_slope_limiter, SlopeLimiterBase
+from .limiter_cpp_utils import SlopeLimiterInput
 
 
 @register_slope_limiter('HierarchicalTaylor')
@@ -62,39 +63,16 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.taylor = df.Function(V)
         self.taylor_old = df.Function(V)
         
-        # Find the neighbour cells for each dof
-        num_neighbours, neighbours = get_dof_neighbours(V)
-        self.num_neighbours = num_neighbours
-        self.neighbours = neighbours
-        
-        # Fast access to cell dofs
-        dm, dm0 = V.dofmap(), V0.dofmap()
-        indices = list(range(self.mesh.num_cells()))
-        self.cell_dofs_V = [tuple(dm.cell_dofs(i)) for i in indices]
-        self.cell_dofs_V0 = [int(dm0.cell_dofs(i)) for i in indices]
-        self.limit_cell = numpy.ones(self.num_cells_owned, numpy.intc)
-        
-        # Find vertices for each cell
-        mesh.init(self.ndim, 0)
-        connectivity_CV = mesh.topology()(self.ndim, 0)
-        vertices = []
-        for ic in range(self.mesh.num_cells()):
-            vnbs = tuple(connectivity_CV(ic))
-            vertices.append(vnbs)
-        self.vertices = vertices
-        self.vertex_coordinates = mesh.coordinates()
-        
         # Remove given cells from limiter
         if skip_cells is not None:
             for cid in skip_cells:
                 self.limit_cell[cid] = 0
         
-        if use_cpp:
-            from .limiter_cpp_utils import cpp_mod, SlopeLimiterInput
-            self.cpp_mod = cpp_mod
-            self.cpp_input = SlopeLimiterInput(mesh, vertices, self.vertex_coordinates,
-                                               self.num_neighbours, neighbours,
-                                               self.cell_dofs_V, self.cell_dofs_V0)
+        self.limit_cell = numpy.ones(self.num_cells_owned, numpy.intc)
+        self.input = SlopeLimiterInput(mesh, V, V0, use_cpp)
+        
+        if use_cpp:    
+            self.cpp_mod = self.input.get_cpp_mod()
     
     def run(self, use_weak_bcs=None):
         """
@@ -180,13 +158,13 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                                  'Not supported in C++ version of the HierarchalTaylor limiter')
         
         # Update C++ input
-        inp = self.cpp_input
+        inp = self.input
         inp.set_global_bounds(global_min, global_max)
         inp.set_limit_cell(self.limit_cell)
         inp.set_boundary_values(boundary_dof_type, boundary_dof_value, self.enforce_boundary_conditions)
         
         limiter = funcs[key]
-        limiter(self.cpp_input.cpp_obj,
+        limiter(inp.cpp_obj,
                 taylor_arr,
                 taylor_arr_old,
                 *alpha_arrs)
