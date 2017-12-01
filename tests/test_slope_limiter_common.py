@@ -1,3 +1,4 @@
+import numpy
 import dolfin
 import pytest
 
@@ -26,6 +27,45 @@ def test_cell_midpoints(D):
             if not ok:
                 print('%3d %d - %10.3e %10.3e' % (cid, d, mp[d], cpp_mp[d]), '<--- ERROR' if not ok else '')
                 all_ok = False
-    print(cid)
     
     assert all_ok
+
+
+def test_global_bounds():
+    from ocellaris.solver_parts.slope_limiter.limiter_cpp_utils import SlopeLimiterInput 
+    mesh = dolfin.UnitSquareMesh(4, 4)
+    
+    Vx = dolfin.FunctionSpace(mesh, 'DG', 2)
+    V0 = dolfin.FunctionSpace(mesh, 'DG', 0)
+    
+    py_inp = SlopeLimiterInput(mesh, Vx, V0)
+    cpp_inp = py_inp.cpp_obj 
+    
+    assert cpp_inp.global_min < -1e100
+    assert cpp_inp.global_max > +1e100
+    
+    py_inp.set_global_bounds(0, 1)
+    
+    assert cpp_inp.global_min == 0
+    assert cpp_inp.global_max == 1
+
+
+def test_limit_cell_flag():
+    from ocellaris.solver_parts.slope_limiter.limiter_cpp_utils import SlopeLimiterInput 
+    mesh = dolfin.UnitSquareMesh(4, 4)
+    Ncells = mesh.num_cells()
+    
+    Vx = dolfin.FunctionSpace(mesh, 'DG', 2)
+    V0 = dolfin.FunctionSpace(mesh, 'DG', 0)
+    
+    py_inp = SlopeLimiterInput(mesh, Vx, V0)
+    cpp_inp = py_inp.cpp_obj 
+    
+    limit_cell = numpy.zeros(Ncells, dtype=numpy.intc)
+    limit_cell[3] = 1
+    py_inp.set_limit_cell(limit_cell)
+    
+    assert cpp_inp.limit_cell.shape == (Ncells,)
+    assert cpp_inp.limit_cell[0] == 0
+    assert cpp_inp.limit_cell[3] == 1
+ 

@@ -1,8 +1,5 @@
 #ifndef __SLOPE_LIMITER_COMMON_H
 #define __SLOPE_LIMITER_COMMON_H
-#undef NDEBUG
-#undef EIGEN_NO_DEBUG
-#undef EIGEN_NO_STATIC_ASSERT
 #include <cstdint>
 #include <limits>
 #include <vector>
@@ -103,6 +100,10 @@ struct SlopeLimiterInput
     // Verify that dof indices are correct
     for (int i = 0; i < Ncells; i++)
     {
+      int d0 = cell_dofs_dg0(i);
+      if (d0 < 0 or d0 >= Ncells)
+        throw std::length_error("ERROR: d0 < 0 or d0 >= Ncells");
+
       for (int j = 0; j < cell_dofs.cols(); j++)
       {
         int d = cell_dofs(i, j);
@@ -145,13 +146,13 @@ struct SlopeLimiterInput
   }
 
   // Should we limit a given cell. Look up with cell number and get 1 or 0
-  std::vector<std::int8_t> limit_cell;
+  Eigen::VectorXi limit_cell;
 
   void set_limit_cell(IntVecIn limit_cell)
   {
-    this->limit_cell.resize(limit_cell.size());
-    for (int i = 0; i < limit_cell.size(); i++)
-      this->limit_cell[i] = static_cast<std::int8_t>(limit_cell[i]);
+    if (limit_cell.size() != this->num_cells_owned)
+      throw std::length_error("ERROR: limit_cell.size() != this->num_cells_owned");
+    this->limit_cell = limit_cell;
   }
 
   // --------------------------------------------------------------------------
@@ -166,6 +167,10 @@ struct SlopeLimiterInput
                            DoubleVecIn boundary_dof_value,
                            const bool enforce_bcs)
   {
+    const int Ndofs = cell_dofs.rows() * cell_dofs.cols();
+    if (boundary_dof_type.size() != Ndofs or boundary_dof_value.size() != Ndofs)
+      throw std::length_error("ERROR: boundary_dof_type.size() != Ndofs or boundary_dof_value.size() != Ndofs");
+
     this->boundary_dof_type.resize(boundary_dof_type.size());
     for (int i = 0; i < boundary_dof_type.size(); i++)
       this->boundary_dof_type[i] = static_cast<BoundaryDofType>(boundary_dof_type[i]);

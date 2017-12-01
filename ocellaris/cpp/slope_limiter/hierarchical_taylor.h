@@ -163,7 +163,8 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
   // Input array checks
   const int num_cells = input.cell_dofs.rows();
   const int num_dofs_tot = num_cells * dstride;
-
+  if (input.cell_dofs.cols() != dstride)
+    throw std::length_error("ERROR: input.cell_dofs.cols() != dstride");
   if (num_dofs_tot != taylor_arr.size())
     throw std::length_error("ERROR: num_dofs_tot != taylor_arr.size()");
   if (num_dofs_tot != taylor_arr_old.size())
@@ -178,6 +179,10 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
     throw std::length_error("ERROR: Ndim != input.vertex_coords.cols()");
   if (nvert != input.cell_vertices.cols())
     throw std::length_error("ERROR: nvert != input.cell_vertices.cols()");
+  if (num_dofs_tot != input.boundary_dof_type.size())
+    throw std::length_error("ERROR: num_dofs_tot != input.boundary_dof_type.size()");
+  if (num_cells != input.limit_cell.size())
+    throw std::length_error("ERROR: num_cells != input.limit_cell.size()");
 
   double cx, cy, cz=0.0, dx, dy, dz=0.0;
   double center_phi, center_phix, center_phiy, center_phiz=0.0;
@@ -187,7 +192,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
   // Loop over all cells that are owned by this process
   for (int ic = 0; ic < num_cells_owned; ic++)
   {
-    double alpha[3] = {1.0, 1.0, 1.0};
+    double alpha[4] = {1.0, 1.0, 1.0, 1.0};
 
     // The cell centre is stored as vertex 4 (2D) or 5 (3D)
     cx = input.cell_midpoints(ic, 0);
@@ -287,7 +292,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
           // Modify local bounds to incorporate the boundary conditions
           if (dof_is_dirichlet)
           {
-            // Value in the center of a mirrored cell on the other side of the boundary
+            // Value in the centre of a mirrored cell on the other side of the boundary
             double bc_value = 2*input.boundary_dof_value[dof] - center_phi;
             lo = std::min(lo, bc_value);
             hi = std::max(hi, bc_value);
@@ -301,7 +306,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
         }
         else if (itaylor == 1 && dof_is_dirichlet)
         {
-          // The derivative in the x-direction at the center of a mirrored cell
+          // The derivative in the x-direction at the centre of a mirrored cell
           double ddx = (input.boundary_dof_value[dof] - center_phi) / dx;
           double ddx2 = 4*ddx - 3*center_phix;
           lo = std::min(lo, ddx2);
@@ -309,7 +314,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
         }
         else if (itaylor == 2 && dof_is_dirichlet)
         {
-          // The derivative in the y-direction at the center of a mirrored cell
+          // The derivative in the y-direction at the centre of a mirrored cell
           double ddy = (input.boundary_dof_value[dof] - center_phi) / dy;
           double ddy2 = 4*ddy - 3*center_phiy;
           lo = std::min(lo, ddy2);
@@ -341,8 +346,9 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
     double alpha1 = 1.0, alpha2 = 1.0;
     if (!skip_this_cell)
     {
-      // Compute alphas by the hierarchical method
+      // Compute alpha values by the hierarchical method
       alpha2 = std::min(alpha[1], alpha[2]);
+      alpha2 = std::min(alpha2, alpha[3]);
       alpha1 = std::max(alpha[0], alpha2);
     }
 
@@ -385,9 +391,9 @@ PYBIND11_MODULE(SIGNATURE, m)
       .def("set_arrays", &SlopeLimiterInput::set_arrays)
       .def("set_limit_cell", &SlopeLimiterInput::set_limit_cell)
       .def("set_boundary_values", &SlopeLimiterInput::set_boundary_values)
-
-      // mostly for testing
-      .def_readonly("cell_midpoints", &SlopeLimiterInput::cell_midpoints);
+      // Read only  data properties, mostly used for testing
+      .def_readonly("cell_midpoints", &SlopeLimiterInput::cell_midpoints)
+      .def_readonly("limit_cell", &SlopeLimiterInput::limit_cell);
 
   // HT limiter functions
   m.def("hierarchical_taylor_slope_limiter_dg1_2D", &hierarchical_taylor_slope_limiter_dg1<2>);
