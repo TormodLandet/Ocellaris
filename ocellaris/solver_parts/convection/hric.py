@@ -66,12 +66,15 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         beta = self.blending_function
         gradient = self.gradient_reconstructor.gradient
         
-        return self.cpp_mod.hric(self.cpp_inp,
-                                 alpha._cpp_object,
-                                 [gi._cpp_object for gi in gradient],
-                                 [vi._cpp_object for vi in velocity],
-                                 beta._cpp_object,
-                                 dt, self.variant)
+        hric_funcs = {2: self.cpp_mod.hric_2D,
+                      3: self.cpp_mod.hric_3D}
+        hric_func = hric_funcs[self.simulation.ndim]
+        return hric_func(self.cpp_inp,
+                         alpha._cpp_object,
+                         [gi._cpp_object for gi in gradient],
+                         [vi._cpp_object for vi in velocity],
+                         beta._cpp_object,
+                         dt, self.variant)
     
     def update_python(self, dt, velocity):
         alpha_arr = self.alpha_function.vector().get_local()

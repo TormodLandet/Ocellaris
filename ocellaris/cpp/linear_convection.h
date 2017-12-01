@@ -228,7 +228,8 @@ PYBIND11_MODULE(SIGNATURE, m)
     .def("set_cell_info", &ConvectionBlendingInput::set_cell_info)
     .def_readwrite("cell_dofmap", &ConvectionBlendingInput::cell_dofmap)
     .def_readwrite("facet_dofmap", &ConvectionBlendingInput::facet_dofmap);
-  m.def("hric", &hric<2>);
+  m.def("hric_2D", &hric<2>);
+  m.def("hric_3D", &hric<3>);
   m.def("reconstruct_gradient", &reconstruct_gradient);
 }
 
