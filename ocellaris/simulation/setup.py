@@ -233,7 +233,8 @@ def mark_boundaries(simulation):
     simulation.log.info('Creating boundary regions')
     
     # Create a function to mark the external facets
-    marker = dolfin.FacetFunction("size_t", simulation.data['mesh'])
+    mesh = simulation.data['mesh']
+    marker = dolfin.MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
     mesh_facet_regions = simulation.data['mesh_facet_regions']
     
     # Create boundary regions and let them mark the part of the

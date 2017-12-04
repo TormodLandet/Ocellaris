@@ -27,7 +27,7 @@ def get_dof_region_marks(simulation, V):
     facet_marks = [int(m) for m in simulation.data['boundary_marker'].array()]
     mesh = simulation.data['mesh']
     dof_region_marks = {}
-    for cell in dolfin.cells(mesh):
+    for cell in dolfin.cells(mesh, 'all'):
         dofs = dm.cell_dofs(cell.index())
         
         for ifacet, facet in enumerate(dolfin.facets(cell)):
