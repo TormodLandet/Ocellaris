@@ -1,4 +1,4 @@
-This is an image with FEniCS master whe DOLFIN has been compiled
-with pybind11 support used for CI testing of Ocellaris
+This is an image with FEniCS master where DOLFIN has been compiled
+with pybind11 support. It is used for CI testing of Ocellaris
 
-The image should work great for normal use
+The image should also work great for normal use
