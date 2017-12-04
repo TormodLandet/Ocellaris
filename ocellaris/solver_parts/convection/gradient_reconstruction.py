@@ -55,9 +55,7 @@ class GradientReconstructor(object):
         lstsq_matrices = [None]*ncells
         self.lstsq_inv_matrices = numpy.zeros((ncells, ndim, ndim), float, order='C')
         
-        for cell in dolfin.cells(self.mesh):
-            idx = cell.index()
-            
+        for idx in range(ncells):
             # Find neighbours
             neighbours = []
             facets_or_vertices = con1(idx)

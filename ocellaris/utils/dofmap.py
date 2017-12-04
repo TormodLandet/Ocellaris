@@ -12,7 +12,7 @@ def cell_dofmap(V):
     
     # Loop through cells and get dofs for each cell
     cell_dofmap = [None] * mesh.num_cells()
-    for cell in dolfin.cells(mesh):
+    for cell in dolfin.cells(mesh, 'all'):
         dofs = dofmap.cell_dofs(cell.index())
         assert len(dofs) == 1
         cell_dofmap[cell.index()] = dofs[0]
@@ -37,7 +37,7 @@ def facet_dofmap(V):
     
     # Loop through cells and get dofs for each cell
     facet_dofmap = [None] * mesh.num_facets()
-    for cell in dolfin.cells(mesh):
+    for cell in dolfin.cells(mesh, 'all'):
         dofs = dofmap.cell_dofs(cell.index())
         facet_idxs = cell.entities(ndim - 1)        
         assert len(dofs) == len(facet_idxs)
@@ -58,9 +58,10 @@ def get_dof_neighbours(V):
     gdim = V.mesh().geometry().dim()
     num_cells_all = V.mesh().num_cells()
     dof_coordinates = V.tabulate_dof_coordinates().reshape((-1, gdim))
+    local_Vdim = dm.index_map().size(dm.index_map().MapSize.ALL)
     
     # Get "owning cell" indices for all dofs
-    cell_for_dof = [None] * V.dim()
+    cell_for_dof = [None] * local_Vdim
     for ic in range(num_cells_all):
         dofs = dm.cell_dofs(ic)
         for dof in dofs:
@@ -78,8 +79,8 @@ def get_dof_neighbours(V):
         max_neighbours = max(max_neighbours, len(dofs)-1)
     
     # Find number of neighbour cells and their indices for each dof
-    num_neighbours = numpy.zeros(V.dim(), numpy.intc)
-    neighbours = numpy.zeros((V.dim(), max_neighbours), numpy.intc) - 1
+    num_neighbours = numpy.zeros(local_Vdim, numpy.intc)
+    neighbours = numpy.zeros((local_Vdim, max_neighbours), numpy.intc) - 1
     for nbs in coord_to_dofs.values():
         # Loop through dofs at this location
         for dof in nbs:

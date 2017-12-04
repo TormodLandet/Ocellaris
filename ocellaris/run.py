@@ -59,7 +59,9 @@ def run_simulation(simulation, catch_exceptions=False):
     simulation.log.info(str(simulation.input))
     simulation.log.info('{:-^80}'.format(' configuration end '))
     simulation.log.info("\nCurrent time: %s" % time.strftime('%Y-%m-%d %H:%M:%S'))
-    simulation.log.info("Degrees of freedom: %d" % simulation.ndofs)
+    simulation.log.info("Degrees of freedom: %d" % simulation.ndofs +
+                        ('' if simulation.ncpu == 1 else ' (%d per process)' % 
+                        (simulation.ndofs/simulation.ncpu)))
     simulation.log.info("\nRunning simulation on %d CPUs...\n" % simulation.ncpu)
     simulation.t_start = time.time()
     

@@ -70,10 +70,10 @@ class InputOutputHandling():
         file_name2 = os.path.splitext(file_name)[0] + '.h5'
         
         # Remove previous files
-        if os.path.isfile(file_name):
+        if os.path.isfile(file_name) and sim.rank == 0:
             sim.log.info('    Removing existing XDMF file %s' % file_name)
             os.remove(file_name)
-        if os.path.isfile(file_name2):
+        if os.path.isfile(file_name2) and sim.rank == 0:
             sim.log.info('    Removing existing XDMF file %s' % file_name2)
             os.remove(file_name2)
         
