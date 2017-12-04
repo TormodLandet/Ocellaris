@@ -15,8 +15,9 @@ def setup_simulation(simulation):
     setup_user_code(simulation)
     
     simulation.log.info('Preparing simulation')
-    simulation.log.info('Output prefix is: %s\n' % 
+    simulation.log.info('Output prefix is: %s' % 
                         simulation.input.get_value('output/prefix', '', 'string'))
+    simulation.log.info("Current time: %s\n" % time.strftime('%Y-%m-%d %H:%M:%S'))
     t_start = time.time()
     
     # Set linear algebra backend to PETSc

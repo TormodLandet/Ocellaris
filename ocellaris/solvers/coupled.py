@@ -182,6 +182,7 @@ class SolverCoupled(Solver):
         e_mixed = dolfin.MixedElement([fs.ufl_element() for fs in func_spaces])
         Vcoupled = dolfin.FunctionSpace(sim.data['mesh'], e_mixed)
         sim.data['Vcoupled'] = Vcoupled
+        sim.ndofs += Vcoupled.dim()
         
         Nspace = len(func_spaces)
         self.subspaces = [Vcoupled.sub(i) for i in range(Nspace)]

@@ -60,6 +60,7 @@ class VariableDensityModel(MultiPhaseModel):
         Pr = simulation.input.get_value('multiphase_solver/polynomial_degree_rho', 1, 'int')
         Vrho = dolfin.FunctionSpace(mesh, Vr_name, Pr, constrained_domain=cd)
         simulation.data['Vrho'] = Vrho
+        simulation.ndofs += Vrho.dim()
     
     def on_simulation_start(self):
         """

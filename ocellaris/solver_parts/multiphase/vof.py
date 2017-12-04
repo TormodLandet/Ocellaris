@@ -22,6 +22,7 @@ class VOFMixin(object):
                                         cls.default_polynomial_degree_colour, 'int')
         Vc = FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
         simulation.data['Vc'] = Vc
+        simulation.ndofs += Vc.dim()
     
     def get_colour_function(self, k):
         """

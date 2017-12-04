@@ -240,6 +240,7 @@ class SolverSIMPLE(Solver):
         Vcoupled = dolfin.FunctionSpace(Vu.mesh(), e_mixed)
         sim.data['uvw_star'] = dolfin.Function(Vcoupled)
         sim.data['uvw_temp'] = dolfin.Function(Vcoupled)
+        sim.ndofs += Vcoupled.dim() + Vp.dim()
         
         # Create assigner to extract split function from uvw and vice versa
         self.assigner_split = dolfin.FunctionAssigner([Vu] * sim.ndim, Vcoupled)

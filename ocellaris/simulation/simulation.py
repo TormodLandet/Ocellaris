@@ -37,6 +37,7 @@ class Simulation(object):
         self.time = 0.0
         self.dt = 0.0
         self.restarted = False
+        self.ndofs = 0
         
         # These will be filled out when .setup() is configuring the Navier-Stokes
         # solver. Included here for documentation purposes only
