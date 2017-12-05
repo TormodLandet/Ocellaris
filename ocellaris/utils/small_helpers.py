@@ -1,3 +1,4 @@
+import numpy
 import dolfin
 
 
@@ -69,3 +70,29 @@ def velocity_change(u1, u2, ui_tmp):
         if n1 != 0:
             diff += nd / n1 
     return diff
+
+
+def get_local(v, V, include_ghosts=True):
+    """
+    Get local values from vector v belonging to function space V
+    """
+    if not include_ghosts:
+        return v.get_local()
+    else:
+        im = V.dofmap().index_map()
+        num_dofs_local_and_ghosts = im.size(im.MapSize.ALL)
+        indices = numpy.arange(num_dofs_local_and_ghosts, dtype=numpy.intc)
+        return v.get_local(indices)
+
+
+def set_local(v, V, arr, apply=None):
+    """
+    Set local values from arr into vector v belonging to function space V
+    """
+    im = V.dofmap().index_map()
+    Nall = im.size(im.MapSize.ALL)
+    Nown = im.size(im.MapSize.OWNED)
+    assert len(arr.shape) == 1 and arr.shape[0] in (Nall, Nown)
+    v.set_local(arr[:Nown])
+    if apply is not None:
+        v.apply(apply)

@@ -8,6 +8,7 @@ from .linear_solvers import (linear_solver_from_input, condition_number,
                              create_block_matrix, matmul)
 from .mpi import get_root_value, sync_arrays, gather_lines_on_root
 from .taylor_basis import lagrange_to_taylor, taylor_to_lagrange
-from .small_helpers import create_vector_functions, shift_fields, velocity_change
+from .small_helpers import (create_vector_functions, shift_fields, velocity_change,
+                            get_local, set_local)
 from .field_inspector import FieldInspector
 from .ufl_transformers import is_zero_ufl_expression, split_form_into_matrix
