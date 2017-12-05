@@ -192,7 +192,7 @@ class HeightFunctionLocator:
         """
         sim = self.simulation
         xpos = sim.data['height_function_x']
-        ypos = sim.data['height_function'].vector().get_local()
+        ypos = sim.data['height_function'].vector().get_local() # only needs the first elements
         line = [(x, h) for x, h in zip(xpos, ypos)]
         return [line], None
 
@@ -278,8 +278,7 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
     mesh = simulation.data['mesh']
     all_values = field.vector().get_local()
     dofmap = field.function_space().dofmap()
-    startdof = dofmap.ownership_range()[0]
-    
+        
     # Mesh connectivities
     conFC = simulation.data['connectivity_FC']
     conVF = simulation.data['connectivity_VF']
@@ -318,7 +317,7 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
             # LCCM endpoint values
             dofs = dofmap.cell_dofs(cell_id)
             assert len(dofs) == 1
-            vertex_values[i] = all_values[dofs[0] - startdof]
+            vertex_values[i] = all_values[dofs[0]]
             
         if has_ghost_cell:
             continue
