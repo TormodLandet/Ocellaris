@@ -1,6 +1,6 @@
 import dolfin
 import numpy
-from ocellaris.utils import cell_dofmap
+from ocellaris.utils import cell_dofmap, get_local, set_local
 from ocellaris.cpp import load_module
 
 
@@ -32,7 +32,7 @@ class GradientReconstructor(object):
         ncells = self.mesh.num_cells()
         
         # To be used by others accessing this class
-        self.gradient = [dolfin.Function(V) for __ in range(ndim)]
+        self.gradient = [dolfin.Function(V) for _ in range(ndim)]
         
         # Connectivity info needed in calculations
         cell_info = self.simulation.data['cell_info']
@@ -89,11 +89,9 @@ class GradientReconstructor(object):
             self.neighbours[i,:Nnb] = everyones_neighbours[i]
             self.lstsq_matrices[i,:,:Nnb] = lstsq_matrices[i] 
         
-        # Instant only allows one dimensional arrays
+        # Eigen does not support 3D arrays
         self.lstsq_matrices = self.lstsq_matrices.reshape(-1, order='C')
         self.lstsq_inv_matrices = self.lstsq_inv_matrices.reshape(-1, order='C')
-        self.neighbours = self.neighbours.reshape(-1, order='C')
-        self.max_neighbours = NBmax
         
         self.reconstruction_initialized = True
     
@@ -123,19 +121,18 @@ class GradientReconstructor(object):
         # Run the gradient reconstruction
         reconstructor(self.alpha_function._cpp_object,
                       self.num_neighbours,
-                      self.max_neighbours,
                       self.neighbours, 
                       self.lstsq_matrices,
                       self.lstsq_inv_matrices,
                       [gi._cpp_object for gi in self.gradient])
 
 
-def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighbours,
+def _reconstruct_gradient(alpha_function, num_neighbours, neighbours,
                           lstsq_matrices, lstsq_inv_matrices, gradient):
     """
     Reconstruct the gradient, Python version of the code
     
-    This function used to have a more Pythonyc implementation
+    This function used to have a more Pythonic implementation
     that was most likely also faster. See old commits for that
     code. This code is here to verify the C++ version that is
     much faster than this (and the old Pythonic version)
@@ -145,37 +142,36 @@ def _reconstruct_gradient(alpha_function, num_neighbours, max_neighbours, neighb
     
     V = alpha_function.function_space()
     assert V == gradient[0].function_space()
-    
+        
     cell_dofs = cell_dofmap(V)
-    np_gradient = [gi.vector().get_local() for gi in gradient]
+    np_gradient = [get_local(gi.vector(), V) for gi in gradient]
 
     # Reshape arrays. The C++ version needs flatt arrays
     # (limitation in Instant/Dolfin) and we have the same
     # interface for both versions of the code
     ncells = len(num_neighbours)
     ndim = mesh.topology().dim()
-    neighbours = neighbours.reshape((ncells, max_neighbours))
-    lstsq_matrices = lstsq_matrices.reshape((ncells, ndim, max_neighbours))
+    num_cells_owned, num_neighbours_max = neighbours.shape
+    assert ncells == num_cells_owned 
+    lstsq_matrices = lstsq_matrices.reshape((ncells, ndim, num_neighbours_max))
     lstsq_inv_matrices = lstsq_inv_matrices.reshape((ncells, ndim, ndim))
     
-    for i, cell in enumerate(dolfin.cells(mesh)):
-        idx = cell.index()
-        cdof = cell_dofs[idx]
-        Nnbs = num_neighbours[i]
-        nbs = neighbours[i,:Nnbs]
+    for icell in range(num_cells_owned):
+        cdof = cell_dofs[icell]
+        Nnbs = num_neighbours[icell]
+        nbs = neighbours[icell,:Nnbs]
         
         # Get the matrices
-        AT = lstsq_matrices[i,:,:Nnbs]
-        ATAI = lstsq_inv_matrices[i]
+        AT = lstsq_matrices[icell,:,:Nnbs]
+        ATAI = lstsq_inv_matrices[icell]
         a0  = a_cell_vec[cdof]
         b = [(a_cell_vec[cell_dofs[ni]] - a0) for ni in nbs]
         b = numpy.array(b, float)
         
         # Calculate the and store the gradient
         g = numpy.dot(ATAI, numpy.dot(AT, b))
-        np_gradient[0][cdof] = g[0]
-        np_gradient[1][cdof] = g[1]
+        for d in range(ndim):
+            np_gradient[d][cdof] = g[d]
     
     for i, np_grad in enumerate(np_gradient):
-        gradient[i].vector().set_local(np_grad)
-        gradient[i].vector()
+        set_local(gradient[i].vector(), V, np_grad, apply='insert')

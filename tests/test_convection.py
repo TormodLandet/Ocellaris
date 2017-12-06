@@ -1,10 +1,14 @@
-from dolfin import UnitSquareMesh, FunctionSpace, Function, Expression, as_vector
+from dolfin import UnitSquareMesh, UnitCubeMesh, FunctionSpace, Function, Expression, as_vector
 from ocellaris import Simulation
 from ocellaris.solver_parts.convection import get_convection_scheme, VelocityDGT0Projector
+import pytest
 
 
-def mk_scheme(N, Vname, Vorder, cpp_expr, expr_args, convection_inp):
-    mesh = UnitSquareMesh(N, N)
+def mk_scheme(N, Vname, Vorder, cpp_expr, expr_args, convection_inp, dim=2):
+    if dim == 2:
+        mesh = UnitSquareMesh(N, N)
+    else:
+        mesh = UnitCubeMesh(N, N, N)
     V = FunctionSpace(mesh, Vname, Vorder)
     C = Function(V)
     e = Expression(cpp_expr, element=V.ufl_element(), **expr_args)
@@ -120,31 +124,36 @@ def test_hric_cpp():
     assert diff.vector().norm('l2') == 0
 
 
-def test_gradient_cpp():
+@pytest.mark.parametrize("dim", [2, 3])
+def test_gradient_cpp(dim):
     """
     Run the gradient reconstruction with and without C++ to verify the C++
     implementation correctness
     """
-    N = 10
+    if dim == 2:
+        N = 10
+        cpp = 'A + A*sin(B*pi*x[0])*sin(B*pi*x[1])'
+    else:
+        N = 5
+        cpp = 'A + A*sin(B*pi*x[0])*sin(B*pi*x[1])*sin(B*pi*x[2])'
     
     schemes = []
     for use_cpp in (False, True):
         convection_inp = {'use_cpp_gradient': use_cpp,
                           'convection_scheme': 'HRIC'}
         scheme = mk_scheme(N, Vname='DG', Vorder=0, 
-                           cpp_expr='A + A*sin(B*pi*x[0])*sin(B*pi*x[1])',
+                           cpp_expr=cpp,
                            expr_args={'A': 0.5, 'B': 2},
-                           convection_inp=convection_inp)
+                           convection_inp=convection_inp,
+                           dim=dim)
         scheme.initialize_gradient()
         scheme.gradient_reconstructor.reconstruct()
         schemes.append(scheme)
     
-    g0_py = schemes[0].gradient_reconstructor.gradient[0].copy(deepcopy=True)
-    g1_py = schemes[0].gradient_reconstructor.gradient[1].copy(deepcopy=True)
-    g0_cpp = schemes[1].gradient_reconstructor.gradient[0].copy(deepcopy=True)
-    g1_cpp = schemes[1].gradient_reconstructor.gradient[1].copy(deepcopy=True)
+    for d in range(dim):
+        g0 = schemes[0].gradient_reconstructor.gradient[d].copy(deepcopy=True)
+        g1 = schemes[1].gradient_reconstructor.gradient[d].copy(deepcopy=True)
     
-    for g0, g1 in ((g0_py, g0_cpp), (g1_py, g1_cpp)):
         diff = g0.copy(deepcopy=True)
         diff.vector().axpy(-1, g1.vector())
         g0n = g0.vector().norm('l2')
