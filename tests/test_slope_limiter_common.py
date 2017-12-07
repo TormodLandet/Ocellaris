@@ -68,4 +68,3 @@ def test_limit_cell_flag():
     assert cpp_inp.limit_cell.shape == (Ncells,)
     assert cpp_inp.limit_cell[0] == 0
     assert cpp_inp.limit_cell[3] == 1
- 

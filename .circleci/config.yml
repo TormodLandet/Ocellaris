@@ -19,13 +19,13 @@ jobs:
           name: Install Ocellaris
           command: sudo pip3 install .
       - run:
-          name: Import Ocellaris - runs some JIT and prints version info
+          name: Import Ocellaris - compiles the C++ code and prints version info
           command: python3 -c 'import ocellaris; print(ocellaris.get_detailed_version())'
       - run:
-          name: Run pytest
+          name: Run unit tests
           command: python3 -m pytest -v tests/ --junitxml=/reports/pytest/serial.xml
       - run:
-          name: Run pytest with MPI
+          name: Run unit tests with MPI
           command: mpirun -n 3 python3 -m pytest -v tests/ --junitxml=/reports/pytest/MPI.xml
       - run:
           name: Run regression tests

@@ -163,9 +163,10 @@ def test_hric_cpp():
         Cof_max = sim.reporting.timestep_xy_reports['Cof_max'][-1]
         Cofs.append(Cof_max)
         
-        print(use_cpp, repr(bn), bn - ANS1, repr(Cof_max), Cof_max - ANS2)
-        assert abs(bn - ANS1) < 1e-15
-        assert abs(Cof_max - ANS2) < 1e-15
+        eps1, eps2 = (1e-15, 1e-15) if MPI.comm_world.size == 1 else (0.02, 1e-14)
+        print(use_cpp, repr(bn), bn - ANS1, eps1, repr(Cof_max), Cof_max - ANS2, eps2)
+        assert abs(bn - ANS1) < eps1
+        assert abs(Cof_max - ANS2) < eps2
     
     diff = betas[0].copy(deepcopy=True)
     diff.vector().axpy(-1, betas[1].vector())
@@ -200,7 +201,7 @@ def test_hric_cpp_vs_py(dim, test_mpi):
     
     # Check results
     assert 1 > Cofs[0] > 0.3 
-    assert abs(Cofs[0] - Cofs[1]) < 1e-14
+    assert abs(Cofs[0] - Cofs[1]) < 1e-12
     
     b0 = betas[0].vector()
     b1 = betas[1].vector()

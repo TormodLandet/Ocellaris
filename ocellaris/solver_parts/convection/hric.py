@@ -58,7 +58,8 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 Co_max = self.update_cpp(dt, velocity)
             else:
                 Co_max = self.update_python(dt, velocity)
-                
+        
+        Co_max = dolfin.MPI.max(self.mesh.mpi_comm(), Co_max)
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
     
     def update_cpp(self, dt, velocity):
