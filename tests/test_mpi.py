@@ -1,6 +1,6 @@
 import numpy
 import dolfin
-from ocellaris.utils import gather_lines_on_root, sync_arrays
+from ocellaris.utils import gather_lines_on_root, sync_arrays, get_local, set_local
 
 
 def test_gather_points_on_root():
@@ -61,3 +61,44 @@ def test_sync_arrays():
     for i in range(ncpu):
         ls = points[i*num_points : (i+1)*num_points]
         check_lines(ls, i)
+
+
+def test_get_set_local_with_ghosts():
+    comm = dolfin.MPI.comm_world
+    rank = dolfin.MPI.rank(comm)
+    
+    dolfin.parameters['ghost_mode'] = 'shared_vertex'
+    mesh = dolfin.UnitSquareMesh(comm, 4, 4)
+    V = dolfin.FunctionSpace(mesh, 'DG', 0)
+    u = dolfin.Function(V)
+    dm = V.dofmap()
+    im = dm.index_map()
+    
+    # Write global dof number into array for all dofs
+    start, end = u.vector().local_range()
+    arr = u.vector().get_local()
+    arr[:] = numpy.arange(start, end)
+    u.vector().set_local(arr)
+    u.vector().apply('insert')
+    
+    # Get local + ghost values
+    arr2 = get_local(u.vector(), V)
+    
+    # Get ghost global indices and some sizes
+    global_ghost_dofs = im.local_to_global_unowned()
+    Nall = im.size(im.MapSize.ALL)
+    Nghost = global_ghost_dofs.size
+    Nown = im.size(im.MapSize.OWNED)
+    assert Nown + Nghost == Nall
+    
+    # Produce the expected answer
+    dofs = numpy.arange(start, end + Nghost)
+    dofs[Nown:] = global_ghost_dofs
+    
+    # Check the results
+    assert dofs.shape == arr2.shape
+    diff = abs(dofs - arr2).max()
+    print
+    print(rank, start, end, global_ghost_dofs)
+    print(rank, numpy.array(arr2, dtype=numpy.intc), '\n ', dofs, diff)
+    assert diff == 0
