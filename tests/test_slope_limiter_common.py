@@ -53,7 +53,7 @@ def test_global_bounds():
 def test_limit_cell_flag():
     from ocellaris.solver_parts.slope_limiter.limiter_cpp_utils import SlopeLimiterInput 
     mesh = dolfin.UnitSquareMesh(4, 4)
-    Ncells = mesh.num_cells()
+    Ncells = mesh.topology().ghost_offset(2)
     
     Vx = dolfin.FunctionSpace(mesh, 'DG', 2)
     V0 = dolfin.FunctionSpace(mesh, 'DG', 0)

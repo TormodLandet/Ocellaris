@@ -29,7 +29,9 @@ class GradientReconstructor(object):
         """
         V = self.alpha_function.function_space()
         ndim = V.ufl_cell().topological_dimension()
-        ncells = self.mesh.num_cells()
+        mesh = V.mesh()
+        tdim = mesh.topology().dim()
+        ncells = mesh.topology().ghost_offset(tdim) # number of owned cells
         
         # To be used by others accessing this class
         self.gradient = [dolfin.Function(V) for _ in range(ndim)]
@@ -61,7 +63,8 @@ class GradientReconstructor(object):
             facets_or_vertices = con1(idx)
             for ifv in facets_or_vertices:
                 cell_neighbours = con2(ifv)
-                neighbours.extend([ci for ci in cell_neighbours if ci != idx and ci not in neighbours])
+                new_nbs = [ci for ci in cell_neighbours if ci != idx and ci not in neighbours]
+                neighbours.extend(new_nbs)
             
             # Get the centroid of the cell neighbours
             nneigh = len(neighbours)
@@ -79,12 +82,11 @@ class GradientReconstructor(object):
             self.lstsq_inv_matrices[idx] = numpy.linalg.inv(ATA)
         
         # Turn the lists into numpy arrays for ease of communication with C++
-        N = len(everyones_neighbours)
         self.num_neighbours = numpy.array([len(nbs) for nbs in everyones_neighbours], dtype='i', order='C')
         NBmax = self.num_neighbours.max()
-        self.neighbours = numpy.zeros((N, NBmax), dtype='i', order='C')
-        self.lstsq_matrices = numpy.zeros((N, ndim, NBmax), float, order='C')
-        for i in range(N):
+        self.neighbours = numpy.zeros((ncells, NBmax), dtype='i', order='C')
+        self.lstsq_matrices = numpy.zeros((ncells, ndim, NBmax), float, order='C')
+        for i in range(ncells):
             Nnb = self.num_neighbours[i]
             self.neighbours[i,:Nnb] = everyones_neighbours[i]
             self.lstsq_matrices[i,:,:Nnb] = lstsq_matrices[i] 
@@ -137,15 +139,15 @@ def _reconstruct_gradient(alpha_function, num_neighbours, neighbours,
     code. This code is here to verify the C++ version that is
     much faster than this (and the old Pythonic version)
     """
-    a_cell_vec = alpha_function.vector()
+    a_cell_vec = get_local(alpha_function)
     mesh = alpha_function.function_space().mesh()
     
     V = alpha_function.function_space()
     assert V == gradient[0].function_space()
-        
+    
     cell_dofs = cell_dofmap(V)
-    np_gradient = [get_local(gi.vector(), V) for gi in gradient]
-
+    np_gradient = [gi.vector().get_local() for gi in gradient]
+    
     # Reshape arrays. The C++ version needs flatt arrays
     # (limitation in Instant/Dolfin) and we have the same
     # interface for both versions of the code
@@ -174,4 +176,4 @@ def _reconstruct_gradient(alpha_function, num_neighbours, neighbours,
             np_gradient[d][cdof] = g[d]
     
     for i, np_grad in enumerate(np_gradient):
-        set_local(gradient[i].vector(), V, np_grad, apply='insert')
+        set_local(gradient[i], np_grad, apply='insert')

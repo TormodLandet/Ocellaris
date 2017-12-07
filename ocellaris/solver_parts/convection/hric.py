@@ -3,7 +3,7 @@ The HRIC upwind/downwind blending sheme
 """
 import numpy
 import dolfin
-from ocellaris.utils import ocellaris_error
+from ocellaris.utils import ocellaris_error, get_local, set_local
 from . import ConvectionScheme, register_convection_scheme
 
 
@@ -62,23 +62,26 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
     
     def update_cpp(self, dt, velocity):
-        alpha = self.alpha_function
-        beta = self.blending_function
-        gradient = self.gradient_reconstructor.gradient
+        alpha = get_local(self.alpha_function)
+        beta = get_local(self.blending_function)
+        gradient = [get_local(gi) for gi in self.gradient_reconstructor.gradient]
+        velocity = [get_local(vi) for vi in velocity]
+        g_vecs = numpy.array(gradient, dtype=float)
+        v_vecs = numpy.array(velocity, dtype=float)
+        assert g_vecs.shape[0] == g_vecs.shape[0] == self.simulation.ndim
         
         hric_funcs = {2: self.cpp_mod.hric_2D,
                       3: self.cpp_mod.hric_3D}
         hric_func = hric_funcs[self.simulation.ndim]
-        return hric_func(self.cpp_inp,
-                         alpha._cpp_object,
-                         [gi._cpp_object for gi in gradient],
-                         [vi._cpp_object for vi in velocity],
-                         beta._cpp_object,
-                         dt, self.variant)
+        Co_max = hric_func(self.cpp_inp, self.mesh, alpha,
+                           g_vecs, v_vecs, beta,
+                           dt, self.variant)
+        set_local(self.blending_function, beta, apply='insert')
+        return Co_max
     
     def update_python(self, dt, velocity):
-        alpha_arr = self.alpha_function.vector().get_local()
-        beta_arr = self.blending_function.vector().get_local()
+        alpha_arr = get_local(self.alpha_function)
+        beta_arr = get_local(self.blending_function)
         
         cell_dofs = self.cpp_inp.cell_dofmap
         facet_dofs = self.cpp_inp.facet_dofmap
@@ -90,12 +93,12 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         
         # Get the numpy arrays of the input functions
         gradient = self.gradient_reconstructor.gradient
-        gradient_arrs = [gi.vector().get_local() for gi in gradient]
-        velocity_arrs = [vi.vector().get_local() for vi in velocity]
+        gradient_arrs = [get_local(gi) for gi in gradient]
+        velocity_arrs = [get_local(vi) for vi in velocity]
         
         EPS = 1e-6
         Co_max = 0
-        for facet in dolfin.facets(self.mesh):
+        for facet in dolfin.facets(self.mesh, 'regular'):
             fidx = facet.index()
             fdof = facet_dofs[fidx] 
             finfo = facet_info[fidx]
@@ -245,6 +248,5 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             assert 0.0 <= tilde_beta <= 1.0
             beta_arr[fdof] = tilde_beta
         
-        self.blending_function.vector().set_local(beta_arr)
-        self.blending_function.vector().apply('insert')
+        set_local(self.blending_function, beta_arr, apply='insert')
         return Co_max

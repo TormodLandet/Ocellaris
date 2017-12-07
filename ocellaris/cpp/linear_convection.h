@@ -12,6 +12,7 @@ namespace dolfin
 {
 
 using RowMatrixXd = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+using DoubleVec = Eigen::Ref<Eigen::VectorXd>;
 using IntVecIn = Eigen::Ref<const Eigen::VectorXi>;
 using DoubleVecIn = Eigen::Ref<const Eigen::VectorXd>;
 using DoubleMatIn = Eigen::Ref<const RowMatrixXd>;
@@ -52,37 +53,23 @@ public:
 
 };
 
+
 template <const std::size_t ndim>
 double hric(const ConvectionBlendingInput& inp,
-            const Function& alpha,
-            std::vector<std::shared_ptr<const Function>>& agrad,
-            std::vector<std::shared_ptr<const Function>>& vel,
-            Function& beta,
+            const Mesh& mesh,
+            const DoubleVecIn& a_vec,
+            const DoubleMatIn& g_vec,
+            const DoubleMatIn& v_vec,
+            DoubleVec& b_vec,
             const double dt,
             const std::string variant)
 {
   typedef Eigen::Matrix<double, ndim, 1> Vec;
 
-  const auto V = alpha.function_space();
-  const auto mesh = V->mesh();
-  auto conFC = mesh->topology()(ndim - 1, ndim);
-
-  // Get local vectors
-  std::vector<double> a_vec;
-  std::vector<double> b_vec;
-  std::vector<std::vector<double>> g_vec(ndim);
-  std::vector<std::vector<double>> v_vec(ndim);
-  alpha.vector()->get_local(a_vec);
-  beta.vector()->get_local(b_vec);
-  for (std::size_t d = 0; d < ndim; d++)
-  {
-    agrad[d]->vector()->get_local(g_vec[d]);
-    vel[d]->vector()->get_local(v_vec[d]);
-  }
-
+  auto conFC = mesh.topology()(ndim - 1, ndim);
   const double EPS = 1.0e-6;
   double Co_max = 0.0;
-  for (FacetIterator facet(*mesh); !facet.end(); ++facet)
+  for (FacetIterator facet(mesh); !facet.end(); ++facet)
   {
     auto fidx = facet->index();
     auto fdof = inp.facet_dofmap[fidx];
@@ -106,7 +93,7 @@ double hric(const ConvectionBlendingInput& inp,
     // Velocity at the facet
     Vec ump;
     for (std::size_t d = 0; d < ndim; d++)
-      ump[d] = v_vec[d][fdof];
+      ump[d] = v_vec(d, fdof);
 
     // Normal on facet pointing out of cell 0
     Vec normal = inp.facet_normal.row(fidx);
@@ -138,7 +125,7 @@ double hric(const ConvectionBlendingInput& inp,
     // Gradient of alpha in the central cell
     Vec gC;
     for (std::size_t d = 0; d < ndim; d++)
-      gC[d] = g_vec[d][dofC];
+      gC[d] = g_vec(d, dofC);
     double gC_sq = gC.dot(gC);
 
     if (gC_sq == 0)
@@ -212,9 +199,6 @@ double hric(const ConvectionBlendingInput& inp,
     if (b_vec[fdof] < 0.0 or b_vec[fdof] > 1.0)
       throw std::domain_error("HRIC ERROR: blending factor is out of range. This should never happen!");
   }
-
-  beta.vector()->set_local(b_vec);
-  beta.vector()->apply("insert");
   return Co_max;
 }
 

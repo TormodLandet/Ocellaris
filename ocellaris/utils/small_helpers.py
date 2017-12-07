@@ -72,10 +72,18 @@ def velocity_change(u1, u2, ui_tmp):
     return diff
 
 
-def get_local(v, V, include_ghosts=True):
+def get_local(v, V=None, include_ghosts=True):
     """
     Get local values from vector v belonging to function space V
+    
+    You can pass a Function as first argument and V = None to 
+    automativally get v and V from the function
     """
+    if V is None:
+        # A Function was passed
+        V = v.function_space()
+        v = v.vector()
+    
     if not include_ghosts:
         return v.get_local()
     else:
@@ -85,14 +93,26 @@ def get_local(v, V, include_ghosts=True):
         return v.get_local(indices)
 
 
-def set_local(v, V, arr, apply=None):
+def set_local(v, arr, V=None, apply=None):
     """
     Set local values from arr into vector v belonging to function space V
+    
+    You can pass a Function as first argument and V = None to 
+    automativally get v and V from the function
     """
+    if V is None:
+        # A Function was passed
+        V = v.function_space()
+        v = v.vector()
+    
     im = V.dofmap().index_map()
     Nall = im.size(im.MapSize.ALL)
     Nown = im.size(im.MapSize.OWNED)
     assert len(arr.shape) == 1 and arr.shape[0] in (Nall, Nown)
-    v.set_local(arr[:Nown])
+    
+    if arr.shape[0] != Nown:
+        arr = arr[:Nown]
+    v.set_local(arr)
+    
     if apply is not None:
         v.apply(apply)

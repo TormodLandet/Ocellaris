@@ -162,16 +162,15 @@ class SlipFactorUpdater():
     @timeit.named('SlipFactorUpdater')
     def update(self):
         fac = self.slip_factor
-        Vfac = fac.function_space()
         D = self.slip_factor_distance
         
         intersection_points = self.intersector.get()
         
         # Initialize the factor to 0 (far away from the interface)
-        arr = get_local(fac.vector(), Vfac)
+        arr = get_local(fac)
         arr[:] = 0.0
         if not intersection_points:
-            set_local(fac.vector(), Vfac, arr, apply='insert')
+            set_local(fac, arr, apply='insert')
             return
         
         # Update the slip factor for facets close to the interface
@@ -200,7 +199,7 @@ class SlipFactorUpdater():
             else:
                 arr[dof] = 0
         
-        set_local(fac.vector(), Vfac, arr, apply='insert')
+        set_local(fac, arr, apply='insert')
         #from matplotlib import pyplot
         #from ocellaris.utils.plotting_trace import plot_matplotlib_dgt
         #c = plot_matplotlib_dgt(fac)
@@ -265,7 +264,7 @@ class BoundaryLevelSetIntersector:
         """
         Get the current boundary intersections
         """
-        phi_arr = get_local(self.scalar_field.vector(), self.scalar_field.function_space())
+        phi_arr = get_local(self.scalar_field)
         ls = self.level_set
         
         # Get the value of the colour function in the midpoint of each external facet
