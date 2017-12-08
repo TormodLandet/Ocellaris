@@ -3,6 +3,15 @@ from .files import get_result_file_name
 from .results import Results
 
 
+def get_stats(name, ts):
+    avg = ts.mean()
+    if avg != 0:
+        std = ts.std() / avg * 100
+    else:
+        std = float('NaN')
+    return (name, avg, std, ts.min(), ts.max())
+
+
 def show_logstats(filename):
     print('Result file statistics')
     print('File:', filename)
@@ -11,14 +20,12 @@ def show_logstats(filename):
     results = Results(filename)
     maxlen = 0
     stats = []
-    for rname, ts in sorted(results.reports.items()):
+    for rname, ts in results.reports.items():
         maxlen = max(maxlen, len(rname))
-        avg = ts.mean()
-        if avg != 0:
-            std = ts.std() / avg * 100
-        else:
-            std = float('NaN')
-        stats.append((rname, avg, std, ts.min(), ts.max()))
+        stats.append(get_stats(rname, ts))
+    
+    if 'tstime' in results.reports_x:
+        stats.append(get_stats('t', results.reports_x['tstime']))
     
     template = '| %%-%ds' % maxlen
     template2 = template + ' |% 11.3g |% 9.2f %% |% 11.3g |% 11.3g |'
@@ -28,7 +35,7 @@ def show_logstats(filename):
     print(template % 'Name', '|       Mean |    Std.dev |        Min |        Max |')
     print(sep.replace('-', '='))
     i = 0
-    for s in stats:
+    for s in sorted(stats):
         if i % 5 == 0 and i != 0:
             print(sep)
         print(template2 % s)
