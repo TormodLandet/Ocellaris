@@ -78,7 +78,8 @@ class InputOutputHandling():
             os.remove(file_name2)
         
         sim.log.info('    Creating XDMF file %s' % file_name)
-        self.xdmf_file = dolfin.XDMFFile(dolfin.mpi_comm_world(), file_name)
+        comm = sim.data['mesh'].mpi_comm()
+        self.xdmf_file = dolfin.XDMFFile(comm, file_name)
         self.xdmf_file.parameters['flush_output'] = xdmf_flush
         self.xdmf_file.parameters['rewrite_function_mesh'] = False
         self.xdmf_file.parameters['functions_share_mesh'] = True
@@ -235,25 +236,29 @@ class InputOutputHandling():
         
         # Write dolfin objects using dolfin.HDF5File
         sim.log.info('Creating HDF5 restart file %s' % h5_file_name)
-        with dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'w') as h5:
+        comm = sim.data['mesh'].mpi_comm()
+        with dolfin.HDF5File(comm, h5_file_name, 'w') as h5:
             # Write mesh
             h5.write(sim.data['mesh'], '/mesh')
-            if sim.data['mesh_facet_regions'] is not None:
-                h5.write(sim.data['mesh_facet_regions'], '/mesh_facet_regions')
-                
-            # Write functions
+            
+            # Write mesh facet regions (from mesh generator)
+            mfr = sim.data['mesh_facet_regions']
+            if mfr is not None:
+                h5.write(mfr, '/mesh_facet_regions')
+            
+            # Write functions, sorted to ensure deterministic output order
             funcnames = []
             skip = {'coupled', } # Skip these functions
-            for name, value in sim.data.items():
+            funcs = sorted(sim.data.items())
+            for name, value in funcs:
                 if isinstance(value, dolfin.Function) and name not in skip:
+                    assert name not in funcnames
                     h5.write(value, '/%s' % name)
-                    
-                    # Save function names in a separate HDF attribute due to inability to 
-                    # list existing HDF groups when using the dolfin HDF5Function wrapper 
-                    assert ',' not in name
                     funcnames.append(name)
         
         # Only write metadata on root process
+        # Important: no collective operations below this point!
+        comm.barrier()
         if self.simulation.rank != 0:
             return h5_file_name
         
