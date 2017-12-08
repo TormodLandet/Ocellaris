@@ -3,7 +3,7 @@ from .verify_environment import verify_env
 verify_env()
 
 
-__version__ = '2017.3.0'
+__version__ = '2018.1.0.dev0'
 
 
 def get_version():
