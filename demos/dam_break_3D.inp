@@ -44,7 +44,7 @@ time:
     tmax: 0.3
 
 output:
-    prefix: output/dam_break_3D
+    prefix: py$ 'output/dam_break_3D_%02d' % N
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -67,6 +67,10 @@ solver:
     function_space_pressure: DG
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
+    
+    coupled:
+        solver: lu
+        lu_method: mumps
 
 convection:
     c:

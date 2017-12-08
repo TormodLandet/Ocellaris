@@ -163,5 +163,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         
         self.blending_function.vector().set_local(beta_arr)
         self.blending_function.vector().apply('insert')
+        
+        Co_max = dolfin.MPI.max(self.mesh.mpi_comm(), Co_max)
         self.simulation.reporting.report_timestep_value('Cof_max', Co_max)
         timer.stop()
