@@ -1,7 +1,12 @@
+import sys
 import os
 import numpy
 import yaml
 from io import StringIO
+
+
+if sys.version[0] != '2':
+    unicode = lambda s: s
 
 
 class Results(object):
