@@ -12,6 +12,7 @@
 #include <Eigen/Core>
 #include "limiter_common.h" // remove_in_jit
 
+#define RANGE_CHECK(expr) if (expr) throw std::length_error("RANGE ERROR: " #expr);
 
 namespace dolfin
 {
@@ -35,18 +36,15 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
   // Input array checks
   const int num_cells = input.cell_dofs.rows();
   const int num_dofs_tot = num_cells * dstride;
-  if (num_dofs_tot != taylor_arr.size())
-    throw std::length_error("ERROR: num_dofs_tot != taylor_arr.size()");
-  if (num_dofs_tot != taylor_arr_old.size())
-    throw std::length_error("ERROR: num_dofs_tot != taylor_arr.size()");
-  if (num_cells != alpha_arr.size())
-    throw std::length_error("ERROR: num_cells != alpha_arr.size()");
-  if (dstride != input.cell_dofs.cols())
-    throw std::length_error("ERROR: dstride != input.cell_dofs.cols()");
-  if (Ndim != input.vertex_coords.cols())
-    throw std::length_error("ERROR: Ndim != input.vertex_coords.cols()");
-  if (nvert != input.cell_vertices.cols())
-    throw std::length_error("ERROR: nvert != input.cell_vertices.cols()");
+  const int num_dofs_owned = num_cells_owned * dstride;
+  RANGE_CHECK(num_dofs_tot != taylor_arr.size());
+  RANGE_CHECK(num_dofs_tot != taylor_arr_old.size());
+  RANGE_CHECK(num_cells_owned != alpha_arr.size());
+  RANGE_CHECK(dstride != input.cell_dofs.cols());
+  RANGE_CHECK(Ndim != input.vertex_coords.cols());
+  RANGE_CHECK(nvert != input.cell_vertices.cols());
+  RANGE_CHECK(num_dofs_owned != input.boundary_dof_type.size());
+  RANGE_CHECK(num_cells_owned != input.limit_cell.size());
 
   double cx, cy, cz=0.0, dx, dy, dz=0.0;
   double center_phi, center_phix, center_phiy, center_phiz=0.0;
@@ -163,26 +161,17 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
   // Input array checks
   const int num_cells = input.cell_dofs.rows();
   const int num_dofs_tot = num_cells * dstride;
-  if (input.cell_dofs.cols() != dstride)
-    throw std::length_error("ERROR: input.cell_dofs.cols() != dstride");
-  if (num_dofs_tot != taylor_arr.size())
-    throw std::length_error("ERROR: num_dofs_tot != taylor_arr.size()");
-  if (num_dofs_tot != taylor_arr_old.size())
-    throw std::length_error("ERROR: num_dofs_tot != taylor_arr.size()");
-  if (num_cells != alpha1_arr.size())
-    throw std::length_error("ERROR: num_cells != alpha1_arr.size()");
-  if (num_cells != alpha2_arr.size())
-    throw std::length_error("ERROR: num_cells != alpha2_arr.size()");
-  if (dstride != input.cell_dofs.cols())
-    throw std::length_error("ERROR: dstride != input.cell_dofs.cols()");
-  if (Ndim != input.vertex_coords.cols())
-    throw std::length_error("ERROR: Ndim != input.vertex_coords.cols()");
-  if (nvert != input.cell_vertices.cols())
-    throw std::length_error("ERROR: nvert != input.cell_vertices.cols()");
-  if (num_dofs_tot != input.boundary_dof_type.size())
-    throw std::length_error("ERROR: num_dofs_tot != input.boundary_dof_type.size()");
-  if (num_cells != input.limit_cell.size())
-    throw std::length_error("ERROR: num_cells != input.limit_cell.size()");
+  const int num_dofs_owned = num_cells_owned * dstride;
+  RANGE_CHECK(input.cell_dofs.cols() != dstride);
+  RANGE_CHECK(num_dofs_tot != taylor_arr.size());
+  RANGE_CHECK(num_dofs_tot != taylor_arr_old.size());
+  RANGE_CHECK(num_cells_owned != alpha1_arr.size());
+  RANGE_CHECK(num_cells_owned != alpha2_arr.size());
+  RANGE_CHECK(dstride != input.cell_dofs.cols());
+  RANGE_CHECK(Ndim != input.vertex_coords.cols());
+  RANGE_CHECK(nvert != input.cell_vertices.cols());
+  RANGE_CHECK(num_dofs_owned != input.boundary_dof_type.size());
+  RANGE_CHECK(num_cells_owned != input.limit_cell.size());
 
   double cx, cy, cz=0.0, dx, dy, dz=0.0;
   double center_phi, center_phix, center_phiy, center_phiz=0.0;

@@ -11,7 +11,7 @@ from .coupled_equations import EQUATION_SUBTYPES
 
 # Default values, can be changed in the input file
 LU_SOLVER_1CPU = 'umfpack'
-LU_SOLVER_NCPU = 'superlu_dist'
+LU_SOLVER_NCPU = 'mumps'
 LU_PARAMETERS = {}
 
 # Default values, can be changed in the input file

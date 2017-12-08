@@ -1,7 +1,7 @@
 import numpy
 import dolfin as df
 from ocellaris.utils import verify_key, OcellarisError
-from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
+from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange, get_local, set_local
 from . import register_slope_limiter, SlopeLimiterBase
 from .limiter_cpp_utils import SlopeLimiterInput
 
@@ -85,7 +85,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         
         # Update the Taylor function with the current Lagrange values
         lagrange_to_taylor(self.phi, self.taylor)
-        taylor_arr = self.taylor.vector().get_local()
+        taylor_arr = get_local(self.taylor)
         alpha_arrs = [alpha.vector().get_local() for alpha in self.alpha_funcs]
         
         # Get global bounds, see SlopeLimiterBase.set_initial_field()
@@ -94,7 +94,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         # Update previous field values Taylor functions
         if self.phi_old is not None:
             lagrange_to_taylor(self.phi_old, self.taylor_old)
-            taylor_arr_old = self.taylor_old.vector().get_local()
+            taylor_arr_old = get_local(self.taylor_old)
         else:
             taylor_arr_old = taylor_arr
         
@@ -120,8 +120,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                                  'Only 2D is supported')
         
         # Update the Lagrange function with the limited Taylor values
-        self.taylor.vector().set_local(taylor_arr)
-        self.taylor.vector().apply('insert')
+        set_local(self.taylor, taylor_arr, apply='insert')
         taylor_to_lagrange(self.taylor, self.phi)
         
         # Enforce boundary conditions
@@ -175,9 +174,10 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         """
         Perform slope limiting of a DG1 function
         """
-        lagrange_arr = self.phi.vector().get_local()
+        inp = self.input
+        lagrange_arr = get_local(self.phi)
         for icell in range(self.num_cells_owned):
-            dofs = self.cell_dofs_V[icell]
+            dofs = inp.cell_dofs_V[icell]
             center_value = taylor_arr[dofs[0]]
             skip_this_cell = (self.limit_cell[icell] == 0)
             
@@ -186,15 +186,15 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             if not skip_this_cell:
                 for i in range(3):
                     dof = dofs[i]
-                    nn = self.num_neighbours[dof]
+                    nn = inp.num_neighbours[dof]
                     if nn == 0:
                         skip_this_cell = True
                         break
                     
                     # Find vertex neighbours minimum and maximum values
                     minval = maxval = center_value
-                    for nb in self.neighbours[dof]:
-                        nb_center_val_dof = self.cell_dofs_V[nb][0]
+                    for nb in inp.neighbours[dof,:nn]:
+                        nb_center_val_dof = inp.cell_dofs_V[nb][0]
                         nb_val = taylor_arr[nb_center_val_dof]
                         minval = min(minval, nb_val)
                         maxval = max(maxval, nb_val)
@@ -218,7 +218,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             if skip_this_cell:
                 alpha = 1.0
             
-            alpha_arr[self.cell_dofs_V0[icell]] = alpha
+            alpha_arr[inp.cell_dofs_V0[icell]] = alpha
             taylor_arr[dofs[0]] = center_value
             taylor_arr[dofs[1]] *= alpha
             taylor_arr[dofs[2]] *= alpha

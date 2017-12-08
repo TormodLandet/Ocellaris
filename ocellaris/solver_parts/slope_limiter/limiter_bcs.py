@@ -20,7 +20,6 @@ class SlopeLimiterBoundaryConditions(object):
         self.simulation = simulation
         self.field_name = field_name
         self.function_space = V
-        self.dim = V.dim()
         self.active = False
         self.set_dof_region_marks(dof_region_marks)
         self._dof_to_cell = None
@@ -58,8 +57,10 @@ class SlopeLimiterBoundaryConditions(object):
         differ by a small bit)
         """
         sim = self.simulation
-        boundary_dof_type = numpy.zeros(self.dim, numpy.intc)
-        boundary_dof_value = numpy.zeros(self.dim, float)
+        im = self.function_space.dofmap().index_map()
+        num_owned_dofs = im.size(im.MapSize.OWNED)
+        boundary_dof_type = numpy.zeros(num_owned_dofs, numpy.intc)
+        boundary_dof_value = numpy.zeros(num_owned_dofs, float)
         
         if not self.active:
             return boundary_dof_type, boundary_dof_value

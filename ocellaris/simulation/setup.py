@@ -4,6 +4,7 @@ from ocellaris.solvers import get_solver
 from ocellaris.probes import setup_probes
 from ocellaris.utils import interactive_console_hook, ocellaris_error, ocellaris_interpolate, log_timings
 from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
+from ocellaris.utils import verify_key
 from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
 
 
@@ -161,6 +162,14 @@ def load_mesh(simulation):
     dolfin.parameters['ghost_mode'] = 'shared_vertex'
     mesh_facet_regions = None
     
+    # For testing COMM_SELF may be specified
+    comm_type = inp.get_value('mesh/mpi_comm', 'WORLD', required_type='string')
+    verify_key('mesh/mpi_comm', comm_type, ('SELF', 'WORLD'))
+    if comm_type == 'WORLD':
+        comm = dolfin.mpi_comm_world()
+    else:
+        comm = dolfin.mpi_comm_self()
+    
     if mesh_type == 'Rectangle':
         simulation.log.info('Creating rectangular mesh')
         
@@ -174,7 +183,7 @@ def load_mesh(simulation):
         Ny = inp.get_value('mesh/Ny', required_type='int')
         diagonal = inp.get_value('mesh/diagonal', 'right', required_type='string')
         
-        mesh = dolfin.RectangleMesh(start, end, Nx, Ny, diagonal)
+        mesh = dolfin.RectangleMesh(comm, start, end, Nx, Ny, diagonal)
     
     elif mesh_type == 'Box':
         simulation.log.info('Creating box mesh')
@@ -191,7 +200,7 @@ def load_mesh(simulation):
         Ny = inp.get_value('mesh/Ny', required_type='int')
         Nz = inp.get_value('mesh/Nz', required_type='int')
         
-        mesh = dolfin.BoxMesh(start, end, Nx, Ny, Nz)
+        mesh = dolfin.BoxMesh(comm, start, end, Nx, Ny, Nz)
     
     elif mesh_type == 'UnitDisc':
         simulation.log.info('Creating circular mesh')
@@ -200,7 +209,7 @@ def load_mesh(simulation):
         degree = inp.get_value('mesh/degree', 1, required_type='int')
         gdim = inp.get_value('mesh/gdim', 2, required_type='int')
         
-        mesh = dolfin.UnitDiscMesh(dolfin.mpi_comm_world(), N, degree, gdim)
+        mesh = dolfin.UnitDiscMesh(comm, N, degree, gdim)
         
         if degree > 1 and dolfin.parameters['form_compiler']['representation'] != 'uflacs':
             simulation.log.warning('Using isoparametric elements without uflacs!')
@@ -213,7 +222,7 @@ def load_mesh(simulation):
         
         # Load the mesh from file
         pth = inp.get_input_file_path(mesh_file)
-        mesh = dolfin.Mesh(pth)
+        mesh = dolfin.Mesh(comm, pth)
         
         # Load the facet regions if available
         if facet_region_file is not None:

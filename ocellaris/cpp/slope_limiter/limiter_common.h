@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <limits>
 #include <vector>
+#include <iostream>
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <Eigen/Core>
@@ -167,7 +168,7 @@ struct SlopeLimiterInput
                            DoubleVecIn boundary_dof_value,
                            const bool enforce_bcs)
   {
-    const int Ndofs = cell_dofs.rows() * cell_dofs.cols();
+    const int Ndofs = num_cells_owned * cell_dofs.cols();
     if (boundary_dof_type.size() != Ndofs or boundary_dof_value.size() != Ndofs)
       throw std::length_error("ERROR: boundary_dof_type.size() != Ndofs or boundary_dof_value.size() != Ndofs");
 

@@ -2,6 +2,7 @@ from dolfin import (UnitSquareMesh, UnitCubeMesh, FunctionSpace, Function, Expre
                     as_vector, MPI, parameters)
 from ocellaris import Simulation
 from ocellaris.solver_parts.convection import get_convection_scheme, VelocityDGT0Projector
+from helpers import comm_self_to_comm_world
 import pytest
 
 
@@ -72,6 +73,7 @@ def mk_blending_factor(convection_inp, dim=2, comm=None):
     Carr[Carr > 0.8] = 1
     Carr[Carr < 0.2] = 0
     C.vector().set_local(Carr)
+    C.vector().apply('insert')
     
     # Make convecting velocity
     vel = mk_vel(sim, 'DG', 2, ['1'] * dim)
@@ -104,40 +106,6 @@ def mk_blending_factor(convection_inp, dim=2, comm=None):
         pyplot.savefig('test_conv_beta.png')
     
     return beta, sim
-
-
-def comm_self_to_comm_world(s, w):
-    """
-    s is comm_self function
-    w is comm_world function
-    return w2, a comm_world function with the data from v
-    """
-    Vs = s.function_space()
-    Vw = w.function_space()
-    gdim = Vs.mesh().geometry().dim()
-    coords_s = Vs.tabulate_dof_coordinates().reshape((-1, gdim))
-    coords_w = Vw.tabulate_dof_coordinates().reshape((-1, gdim))
-    
-    def locate_in_s(coord):
-        for i, c in enumerate(coords_s):
-            if  (c == coord).all():
-                return i
-    
-    # Construct w2 and initialize to zero
-    w2 = w.copy()
-    w2.vector().zero()
-    w2.vector().apply('insert')
-    
-    # Construct a parallel version of s by finding dofs with the
-    # exact same geometrical coordinates
-    arr_s = s.vector().get_local()
-    arr_w2 = w2.vector().get_local()
-    for dof_w, coord in enumerate(coords_w):
-        dof_s = locate_in_s(coord)
-        arr_w2[dof_w] = arr_s[dof_s]
-    w2.vector().set_local(arr_w2)
-    w2.vector().apply('insert')
-    return w2
 
 
 def test_hric_cpp():
