@@ -100,6 +100,9 @@ class SimpleEquations(object):
         self.eqC = mat[1,0]
         self.eqD = vec[0]
         self.eqE = vec[1]
+        
+        if self.eqE is None:
+            self.eqE = dolfin.TrialFunction(Vp)*dolfin.Constant(0)*dolfin.dx
     
     @timeit
     def assemble_matrices(self, reassemble=False):
