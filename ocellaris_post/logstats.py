@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 from .files import get_result_file_name
 from .results import Results
