@@ -1,3 +1,15 @@
+"""
+Result file statistics
+======================
+
+Show statistics on timestep reports logged during a simulation. Give
+the name of one or more log files or restart HDF5 files. This small
+command line utility will print average values and standard deviations
+along with minimum and maximum values of all logged time series
+
+This is a part of the Ocellaris two-phase solver post-processing
+software collection 
+"""
 from __future__ import print_function
 import os
 from .files import get_result_file_name
@@ -45,9 +57,6 @@ def show_logstats(file_name):
 
 
 def main(args):
-    print('Result file statistics')
-    print('======================\n')
-    
     # Get report files to read
     file_names = []
     for fn in args[1:]:
@@ -61,10 +70,16 @@ def main(args):
             exit(1)
     
     if not file_names:
-        print('No result files given!')
+        print(__doc__[1:])
+        print()
+        print('ERROR: no result files given!')
     
-    for fn in file_names:
-        show_logstats(fn)
+    else:
+        print('Result file statistics')
+        print('======================\n')
+        
+        for fn in file_names:
+            show_logstats(fn)
 
 
 if __name__ == '__main__':
