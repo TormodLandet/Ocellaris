@@ -1,69 +1,35 @@
 ocellaris:
     type: input
     version: 1.0
-    
+
 user_code:
     constants:
-        NU: 1.0e-4
-        RHO: 1000.0
-        A: 0.05715  # 0.0254 * 2.25
-        N: 5
+        A: 0.146
+        N: 10
 
 physical_properties:
-    rho0: py$ RHO
-    nu0: py$ NU
-    rho1: 1.0
-    nu1: py$ NU
-    g: [0, -9.81]
-
-_physical_properties:
-    nu: py$ NU
-    rho_min: 1.0
-    rho_max: py$ RHO
+    rho0: 1000.0
+    nu0:     1.0e-6
+    rho1:    1.0
+    nu1:     1.5e-5
     g: [0, -9.81]
 
 mesh:
     type: Rectangle
-    Nx: py$ N * 5
-    Ny: py$ N * 3
-    endx: py$ A * 5
-    endy: py$ A * 3
-
-# BCs with no-slip
-_boundary_conditions:
--   name: walls
-    selector: code
-    inside_code: on_boundary
-    u:
-        type: ConstantValue
-        value: [0, 0]
-    p:
-        type: WallPressure
+    Nx: py$ N * 4
+    Ny: py$ int(N * 2.5)
+    endx: py$ A * 4
+    endy: py$ A * 2.5
 
 # BCs with wall slip
 boundary_conditions:
--   name: top and bottom
+-   name: all walls
     selector: code
-    inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > 3 * A - 1e-5)'
+    inside_code: 'on_boundary'
     p:
         type: WallPressure
-    u0:
-        type: ConstantGradient
-        value: 0
-    u1:
-        type: ConstantValue
-        value: 0
--   name: walls
-    selector: code
-    inside_code: 'on_boundary and (x[0] < 1e-5 or x[0] > 5 * A - 1e-5)'
-    p:
-        type: WallPressure
-    u0:
-        type: ConstantValue
-        value: 0
-    u1:
-        type: ConstantGradient
-        value: 0
+    u:
+        type: FreeSlip
 
 initial_conditions:
     cp:
@@ -72,11 +38,11 @@ initial_conditions:
         cpp_code: '(x[0] < A + 1e-5 && x[1] < 2 * A + 1e-5) ? 1.0 : 0.0'
 
 time:
-    dt: py$ 0.003/N
-    tmax: 0.3
+    dt: py$ 0.01/N
+    tmax: 1.0
 
 output:
-    prefix: output/dam_break_2D
+    prefix: py$ 'output/dam_break_2D_ijCFD_%02d' % N
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -90,11 +56,6 @@ multiphase_solver:
     polynomial_degree_colour: 0
     continuous_fields: no
     plot_fields: yes
-
-_multiphase_solver:
-    type: VariableDensity
-    function_space_rho: DG
-    polynomial_degree_rho: 1
 
 solver:
     type: Coupled
@@ -110,11 +71,6 @@ convection:
         convection_scheme: HRIC
 
 slope_limiter:
-    rho:
-        method: HierarchicalTaylor
-        plot: yes
-        skip_boundary: no
-        enforce_bounds: yes
     c:
         enforce_bounds: yes
     u:
@@ -134,14 +90,6 @@ slope_limiter:
         #surface_probe: free_surface
 
 probes:
-    -   name: free_surface
-        enabled: no
-        type: IsoSurface
-        value: py$ (RHO - 1.0) / 2
-        field: rho
-        file_name: '_free_surface.out'
-        custom_hook: MultiPhaseModelUpdated
-        
     -   name: free_surface
         enabled: yes
         type: IsoSurface

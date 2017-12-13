@@ -4,15 +4,20 @@ ocellaris:
 
 user_code:
     constants:
+        # Geometry. DO NOT CHANGE WITHOUT UPDATING gmesh geo FILE!!
         L: 200       # domain length
         H: 30        # total depth
         h: 6         # depth to pycnocline
         d: 5         # draught amidships
         l: 34        # length of hull water line
         C: 50        # distance from midships to inlet
-        V: 2         # initial speed
-        FRESH: 1000.0
-        SALT: 1028.0
+        
+        # Non-geometry parameters
+        Velocity: 2      # vessel speed
+        Tramp: 100       # startup ramp time
+        Tmax:  300       # total duration
+        FRESH: 1000.0    # Upper layer density
+        SALT: 1028.0     # Lower layer density
     code: |
         # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
         # with support for the OpenCASCADE geometry engine
@@ -36,14 +41,14 @@ metadata:
     description: |
         Flow around a semi-sumberged circle in a stratified fluid  
 
-physical_properties:
+_physical_properties:
     g: [0, -9.81]
     nu0: 1.0e-6
     rho0: py$ SALT
     nu1: 1.0e-6
     rho1: py$ FRESH
 
-_physical_properties:
+physical_properties:
     nu: 1.0e-6
     rho_min: py$ FRESH
     rho_max: py$ SALT
@@ -59,6 +64,9 @@ _initial_conditions:
     cpp:
         cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
 
+# This is not a standard Ocellaris input, but just referenced below in python code 
+bc_vel: '(t < Tramp ? 3.0*pow(t/Tramp, 2) - 2.0*pow(t/Tramp, 3) : 1.0) * Velocity'
+
 boundary_conditions:
 
 -   name: Hull
@@ -72,33 +80,35 @@ boundary_conditions:
     inside_code: 'on_boundary and x[0] < 1e-5'
     u:
         type: CppCodedValue
-        cpp_code: ['V', '0']
+        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0']
     #c:
     #    type: CppCodedValue
     #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
-    #rho:
-    #    type: CppCodedValue
-    #    cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+    rho:
+        type: CppCodedValue
+        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
 
 -   name: Outlet
     selector: code
-    inside_code: 'on_boundary and x[0] > L - 1e-5'
-    u:
-        type: CppCodedValue
-        cpp_code: ['V', '0']
+    inside_code: 'on_boundary and x[0] > C + l'
+    #u:
+    #    type: CppCodedValue
+    #    cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0']
+    u0: {type: 'ConstantGradient', value: 0}
+    u1: {type: 'ConstantValue', value: 0}
     #c:
     #    type: CppCodedValue
     #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
-    #rho:
-    #    type: CppCodedValue
-    #    cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
+    rho:
+        type: CppCodedValue
+        cpp_code: '(x[1] < -h + 1e-5) ? SALT : FRESH'
 
 -   name: Bottom
     selector: code
     inside_code: 'on_boundary and x[1] < -H + 1e-5'
     u:
         type: CppCodedValue
-        cpp_code: ['V', '0']
+        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0']
 
 -   name: Surface z=0
     selector: code
@@ -107,12 +117,11 @@ boundary_conditions:
         type: FreeSlip
 
 time:
-    #dt: 0.01
-    dt: 0.1
-    tmax: 100
+    dt: 0.2
+    tmax: py$ Tmax
 
 output:
-    prefix: output/dead_water_2D_hfunc
+    prefix: output/dead_water_2D_3.9kn
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -127,6 +136,7 @@ solver:
     function_space_pressure: DG
     function_space_velocity: DG
     steady_velocity_stopping_criterion: 1e-5
+    force_steady: no
     
     # PETSc solver selection
     #coupled:
@@ -136,27 +146,27 @@ solver:
 _multiphase_solver:
     type: BlendedAlgebraicVOF
     plot_fields: yes
-
+    
 multiphase_solver:
-    #type: VariableDensity
+    type: VariableDensity
     function_space_rho: DG
     polynomial_degree_rho: 2
     
-    type: HeightFunction
-    height_function_xmin: 0
-    height_function_xmax: 150
-    height_function_Nx: 300
-    surface_thickness: 2.0
-    height_initial_h: py$ -h
-    height_min_code: hmin = zeros_like(xpos) - H
-    height_max_code: |
-        xpos = numpy.linspace(0, 150, 300)
-        hmax = numpy.zeros_like(xpos)
-        C, d, l = 50, 5, 34
-        r = l**2/(8*d) + d/2
-        mask = (C - l/2 <= xpos) & (xpos <= C + l/2)
-        hmax[mask] = r - d - r * numpy.cos((xpos[mask] - C)/r)
-        hmax -= 0.1
+    #type: HeightFunction
+    #height_function_xmin: 0
+    #height_function_xmax: 150
+    #height_function_Nx: 300
+    #surface_thickness: 2.0
+    #height_initial_h: py$ -h
+    #height_min_code: hmin = zeros_like(xpos) - H
+    #height_max_code: |
+    #    xpos = numpy.linspace(0, 150, 300)
+    #    hmax = numpy.zeros_like(xpos)
+    #    C, d, l = 50, 5, 34
+    #    r = l**2/(8*d) + d/2
+    #    mask = (C - l/2 <= xpos) & (xpos <= C + l/2)
+    #    hmax[mask] = r - d - r * numpy.cos((xpos[mask] - C)/r)
+    #    hmax -= 0.1
 
 slope_limiter:
     rho:
@@ -164,30 +174,22 @@ slope_limiter:
         plot: yes
         skip_boundary: no
         enforce_bounds: yes
+        enforce_bcs: no
 
 probes:
     -   name: free_surface
         enabled: yes
         type: IsoSurface
         value: py$ (SALT + FRESH) / 2
-        field: height_function
+        field: rho
         file_name: '_free_surface.out'
         write_interval: 10
         custom_hook: MultiPhaseModelUpdated
 
 hooks:
     pre_simulation:
-    -   name: save mesh
-        enabled: no
-        code: |
-            print('Writing Mesh ...')
-            prefix = sim.input.get_value('output/prefix', '')
-            fn = prefix + '_mesh.xdmf'
-            with XDMFFile(mesh.mpi_comm(), fn) as f:
-                f.write(boundary_marker)
-            print('    Wrote', fn)
     -   name: Initial density field with discrete jump at z=-h
-        enabled: no
+        enabled: yes
         code: |
             # We assume that the mesh aligns with the pycnocline
             dm = Vrho.dofmap()
@@ -207,10 +209,10 @@ hooks:
             hull_id = boundary_by_name['Hull'].mark_id
             hull_ds = ds(hull_id)
             n = FacetNormal(mesh)
-            Fpx = p * dot(-n, as_vector([1, 0])) * hull_ds
-            Fpy = p * dot(-n, as_vector([0, 1])) * hull_ds
-            simulation.reporting.report_timestep_value('Fpx', assemble(Fpx))
-            simulation.reporting.report_timestep_value('Fpy', assemble(Fpy))
+            Fpx = assemble(p * dot(-n, as_vector([1, 0])) * hull_ds)
+            Fpy = assemble(p * dot(-n, as_vector([0, 1])) * hull_ds) 
+            simulation.reporting.report_timestep_value('Fpx', Fpx)
+            simulation.reporting.report_timestep_value('Fpy', Fpy)
 
 #console_at_end: true
 #console_on_error: true

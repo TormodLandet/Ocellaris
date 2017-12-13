@@ -103,6 +103,8 @@ solver:
     polynomial_degree_velocity: 2
     function_space_pressure: DG
     function_space_velocity: DG
+    force_steady: yes
+    steady_velocity_stopping_criterion: -1 #1e-4
     
     # PETSc solver selection
     coupled:
@@ -112,13 +114,13 @@ solver:
 hooks:
     pre_simulation:
     -   name: save mesh
-        enabled: yes
+        enabled: no
         code: |
             print('Writing Mesh ...')
             prefix = sim.input.get_value('output/prefix', '')
             fn = prefix + '_mesh.xdmf'
             with XDMFFile(mesh.mpi_comm(), fn) as f:
-                f.write(mesh)
+                f.write(boundary_marker)
             print('    Wrote', fn)
 
 #console_at_end: true

@@ -1,7 +1,7 @@
 ocellaris:
     type: input
     version: 1.0
-    
+
 user_code:
     constants:
         A: 0.05715  # 0.0254 * 2.25
@@ -16,12 +16,12 @@ physical_properties:
 
 mesh:
     type: Box
-    Nx: py$ 5*N
+    Nx: py$ N * 4
     Ny: 1
-    Nz: py$ 3*N
-    endx: py$ A * 5
+    Nz: py$ N * 3
+    endx: py$ A * 4
     endy: py$ A / N
-    endz: py$ A * 3 
+    endz: py$ A * 4 
 
 # BCs with wall slip
 boundary_conditions:
@@ -40,11 +40,11 @@ initial_conditions:
         cpp_code: '(x[0] < A + 1e-5 && x[2] < 2 * A + 1e-5) ? 1.0 : 0.0'
 
 time:
-    dt: py$ 0.003/N
+    dt: py$ 0.001/N
     tmax: 0.3
 
 output:
-    prefix: py$ 'output/dam_break_3D_%02d' % N
+    prefix: py$ 'output/dam_break_3D_%02d_SIMPLE_phyd' % N
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -60,8 +60,9 @@ multiphase_solver:
     plot_fields: yes
 
 solver:
-    type: Coupled
-    num_inner_iter: 10
+    type: SIMPLE
+    num_inner_iter: py$ 100 if it < 3 else (10 if it < 10 else 3)
+    hydrostatic_pressure_calculation_every_timestep: yes
     allowable_error_inner: 1e-8
     function_space_velocity: DG
     function_space_pressure: DG
