@@ -582,10 +582,10 @@ class SolverSIMPLE(Solver):
                     shift_fields(sim, ['u%d', 'u_conv%d'])
                     err_lim = self.slope_limit_velocities()
                     solver_info += ' - err lim %10.3e' % err_lim
-                
-                # Divergence error
-                err_div = self.calculate_divergence_error()
-                solver_info += ' - err div %10.3e' % err_div
+                    
+                    # Divergence error, only relevant after self.postprocess_velocity() has been run
+                    err_div = self.calculate_divergence_error()
+                    solver_info += ' - err div %10.3e' % err_div
                 
                 # Convergence estimates
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s'

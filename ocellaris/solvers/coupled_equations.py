@@ -1,5 +1,5 @@
 import dolfin
-from dolfin import dx, div, grad, dot, jump, avg, dS
+from dolfin import div, grad, dot, jump, avg
 from . import UPWIND
 from ..solver_parts import navier_stokes_stabilization_penalties
 from .coupled_equations_cg import CoupledEquationsCG
@@ -106,6 +106,8 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
     mpm = sim.multi_phase_model
     mesh = sim.data['mesh']
     u_conv = sim.data['u_conv']
+    dx = dolfin.dx(domain=mesh)
+    dS = dolfin.dS(domain=mesh)
     
     c1, c2, c3 = sim.data['time_coeffs']
     dt = sim.data['dt']

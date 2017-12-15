@@ -36,14 +36,8 @@ class SimpleEquations(object):
         self.lump_diagonal = lump_diagonal
         self.block_partitions = None
         
-        assert self.incompressibility_flux_type in ('central', 'upwind')
-        
-        # Discontinuous or continuous elements
-        Vu_family = simulation.data['Vu'].ufl_element().family()
-        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
-        
         # We do not currently support all possible options
-        assert self.vel_is_discontinuous
+        assert self.incompressibility_flux_type in ('central', 'upwind')
         assert not self.simulation.mesh_morpher.active
         assert not self.use_lagrange_multiplicator
         assert not self.use_stress_divergence_form
