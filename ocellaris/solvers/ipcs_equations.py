@@ -65,7 +65,7 @@ class MomentumPredictionEquation(BaseEquation):
         eq = define_dg_equations(u, v, p, q, lm_trial, lm_test, self.simulation,
                                  include_hydrostatic_pressure=self.include_hydrostatic_pressure,
                                  incompressibility_flux_type='central', # Only used with q
-                                 use_grad_q_form=True, # Only used with q
+                                 use_grad_q_form=False, # Only used with q
                                  use_grad_p_form=self.use_grad_p_form,
                                  use_stress_divergence_form=self.use_stress_divergence_form)
         self.form_lhs, self.form_rhs = dolfin.system(eq)

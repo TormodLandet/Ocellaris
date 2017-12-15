@@ -43,7 +43,7 @@ PROJECT_RHS = False
 
 @register_solver('SIMPLE')
 class SolverSIMPLE(Solver):
-    def __init__(self, simulation):
+    def __init__(self, simulation, embedded=False):
         """
         A Navier-Stokes solver based on the Semi-Implicit Method for Pressure-Linked Equations (SIMPLE).
         
@@ -98,9 +98,13 @@ class SolverSIMPLE(Solver):
         based on Cockburn, Kanschat 
         """
         self.simulation = sim = simulation
+        self.embedded = embedded
         self.read_input()
-        self.create_functions()
-        self.setup_hydrostatic_pressure_calculations()
+        if embedded:
+            self.ph_every_timestep = 'p_hydrostatic' in sim.data
+        else:
+            self.create_functions()
+            self.setup_hydrostatic_pressure_calculations()
         
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -588,7 +592,7 @@ class SolverSIMPLE(Solver):
                     solver_info += ' - err div %10.3e' % err_div
                 
                 # Convergence estimates
-                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s'
+                sim.log.info('  SIMPLE iteration %3d - err u* %10.3e - err p %10.3e%s'
                              % (self.inner_iteration, err_u, err_p, solver_info))
                 
                 if err_u < allowable_error_inner:

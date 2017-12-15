@@ -2,7 +2,7 @@ import dolfin
 from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
                              create_vector_functions, shift_fields,
                              velocity_change)
-from . import Solver, register_solver, BDM
+from . import Solver, register_solver, get_solver, BDM
 from ..solver_parts import (VelocityBDMProjection, HydrostaticPressure,
                             SlopeLimiterVelocity, before_simulation,
                             after_timestep)
@@ -21,6 +21,7 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
 MAX_ITER_MOMENTUM = 1000
 MAX_INNER_ITER = 10
 ALLOWABLE_ERROR_INNER = 1e-10
+NUM_SIMPLE_INNER_ITER = 0
 
 # Equations - default values, can be changed in the input file
 EQUATION_SUBTYPE = 'Default'
@@ -429,7 +430,8 @@ class SolverIPCS(Solver):
         """
         Run the simulation
         """
-        sim = self.simulation        
+        sim = self.simulation
+        simple = None
         sim.hooks.simulation_started()
         
         # Setup timestepping and initial convecting velocity
@@ -448,6 +450,8 @@ class SolverIPCS(Solver):
             tmax = sim.input.get_value('time/tmax', required_type='float')
             num_inner_iter = sim.input.get_value('solver/num_inner_iter',
                                                  MAX_INNER_ITER, 'int')
+            num_simple_steps = sim.input.get_value('solver/num_simple_inner_iter',
+                                                   NUM_SIMPLE_INNER_ITER, 'int')
             allowable_error_inner = sim.input.get_value('solver/allowable_error_inner',
                                                         ALLOWABLE_ERROR_INNER, 'float')
             
@@ -484,7 +488,7 @@ class SolverIPCS(Solver):
                 err_div = self.calculate_divergence_error()
                 
                 # Convergence estimates
-                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
+                sim.log.info('  IPCS iteration %5d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
                              % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax)
                              + ' err div %10.3e' % err_div)
                 
@@ -494,6 +498,24 @@ class SolverIPCS(Solver):
                 self.inner_iteration += 1
             
             self.velocity_update()
+            
+            if num_simple_steps > 0:
+                # Run SIMPLE iteration at end of the inner iterations to eliminate the divergence
+                if simple is None:
+                    simple = get_solver('SIMPLE')(sim, embedded=True)
+                self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
+                for simple_inner in range(num_simple_steps):
+                    simple.inner_iteration = simple_inner + 1
+                    err_u = simple.momentum_prediction(t, dt)
+                    err_p = simple.pressure_correction()
+                    simple.velocity_update()
+                    solver_info = ' - Num Krylov iters - u %3d - p %3d' % (simple.niters_u, simple.niters_p)
+                    sim.log.info('  SIMPLE iteration %3d - err u* %10.3e - err p %10.3e%s'
+                                 % (simple.inner_iteration, err_u, err_p, solver_info))
+                    if err_u_star < allowable_error_inner:
+                        break
+                self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
+            
             self.postprocess_velocity()
             shift_fields(sim, ['u%d', 'u_conv%d'])
             if self.using_limiter:
