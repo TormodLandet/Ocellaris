@@ -82,7 +82,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     
     say('Number of time steps:', sim.timestep)
     loglines = sim.log.get_full_log().split('\n')
-    say('Num inner iterations:', sum(1 if 'Inner iteration' in line else 0 for line in loglines))
+    say('Num inner iterations:', sum(1 if 'iteration' in line else 0 for line in loglines))
     int_p = dolfin.assemble(sim.data['p']*dolfin.dx)
     say('Number of mesh cells:', sim.data['mesh'].num_cells())
     say('p*dx', int_p)
