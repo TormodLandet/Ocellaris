@@ -15,7 +15,7 @@ RESNAMES = 'err_u0 err_u1 err_p err_u0_H1 err_u1_H1 err_p_H1 hmin dt duration'.s
 SPEEDFOCUS = True
 
 
-@pytest.fixture(params=['Coupled', 'SIMPLE'])
+@pytest.fixture(params=['Coupled', 'SIMPLE', 'IPCS-A'])
 def solver_type(request):
     return request.param
 
@@ -32,11 +32,12 @@ def test_taylor_green(solver_type, monkeypatch):
     
     def modifier(sim):
         sim.input.set_value('solver/type', solver_type)
+        sim.input.set_value('solver/num_inner_iter', 10)
         shared_regression_modifier(sim)
     
     # Run the Taylor-Green test case on a course mesh
     res = runner(N, dt, tmax, polydeg_u, polydeg_p, modifier)
-    assert check_results(res, limits[solver_type])
+    assert check_results(res, limits.get(solver_type, limits['Coupled']))
 
 
 def test_kovasznay(solver_type, monkeypatch):
@@ -51,12 +52,13 @@ def test_kovasznay(solver_type, monkeypatch):
     
     def modifier(sim):
         sim.input.set_value('solver/type', solver_type)
+        sim.input.set_value('solver/num_inner_iter', 4)
         sim.input.set_value('solver/steady_velocity_stopping_criterion', 1e-5)
         shared_regression_modifier(sim)
     
     # Run the Taylor-Green test case on a course mesh 
     res = runner(N, dt, tmax, polydeg_u, polydeg_p, modifier)
-    assert check_results(res, limits[solver_type])
+    assert check_results(res, limits.get(solver_type, limits['Coupled']))
 
 
 ####################################################################################
