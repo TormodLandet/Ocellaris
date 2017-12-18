@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import numpy
 import dolfin
 
@@ -116,3 +117,11 @@ def set_local(v, arr, V=None, apply=None):
     
     if apply is not None:
         v.apply(apply)
+
+
+@contextmanager
+def dolfin_log_level(level):
+    old_level = dolfin.get_log_level()
+    dolfin.set_log_level(level)
+    yield
+    dolfin.set_log_level(old_level)

@@ -1,7 +1,7 @@
 import dolfin
 from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
                              create_vector_functions, shift_fields,
-                             velocity_change, matmul)
+                             velocity_change, matmul, dolfin_log_level)
 from . import Solver, register_solver, BDM
 from ..solver_parts import (VelocityBDMProjection, HydrostaticPressure,
                             SlopeLimiterVelocity, before_simulation,
@@ -623,12 +623,3 @@ class SolverSIMPLE(Solver):
         
         # We are done
         sim.hooks.simulation_ended(success=True)
-
-
-from contextlib import contextmanager
-@contextmanager
-def dolfin_log_level(level):
-    old_level = dolfin.get_log_level()
-    dolfin.set_log_level(level)
-    yield
-    dolfin.set_log_level(old_level)
