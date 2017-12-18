@@ -80,7 +80,8 @@ hooks:
         enabled: yes
         code: |
             cpp = simulation.input.get_value('initial_conditions/rho_p/cpp_code')
-            rho_e = Expression(cpp, t=simulation.time)
+            degree = simulation.input.get_value('multiphase_solver/polynomial_degree_rho') + 3
+            rho_e = Expression(cpp, t=simulation.time, degree=degree)
             rho_h = simulation.data['rho']
             print(simulation.time)
             print('L2 ERROR:', errornorm(rho_e, rho_h))

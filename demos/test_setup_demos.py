@@ -1,4 +1,4 @@
-import os
+import os, sys, subprocess
 from ocellaris import Simulation, setup_simulation
 import pytest
 
@@ -23,7 +23,15 @@ def test_setup_demo(demo_inp_file, monkeypatch):
         return pytest.skip()
     
     monkeypatch.chdir(DEMODIR)
-    sim = Simulation()
-    sim.input.read_yaml(demo_inp_file)
-    success = setup_simulation(sim)
-    assert success
+    
+    # run python3 -m ocellaris DEMOFILE --set-inp time/tmax=0
+    interpreter = sys.executable
+    mainfile = os.path.join(DEMODIR, '..', 'ocellaris', '__main__.py')
+    cmd = [interpreter, mainfile, demo_inp_file, '--set-inp', 'time/tmax=0']
+    subprocess.check_call(cmd)
+    
+    # Run as script (can lead to inter-demo disturbances with dolfin globals etc)
+    #sim = Simulation()
+    #sim.input.read_yaml(demo_inp_file)
+    #success = setup_simulation(sim)
+    #assert success
