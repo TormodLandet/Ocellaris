@@ -3,7 +3,7 @@ import dolfin
 from dolfin import Constant
 from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input, \
     create_vector_functions, shift_fields, velocity_change
-from ocellaris.solver_parts import HydrostaticPressure, VelocityBDMProjection, \
+from ocellaris.solver_parts import setup_hydrostatic_pressure, VelocityBDMProjection, \
     SlopeLimiterVelocity, before_simulation, after_timestep
 from . import Solver, register_solver, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
@@ -23,7 +23,6 @@ USE_GRAD_P_FORM = False
 USE_GRAD_Q_FORM = True
 PRESSURE_CONTINUITY_FACTOR = 0
 VELOCITY_CONTINUITY_FACTOR_D12 = 0
-HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
 INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
 
@@ -39,7 +38,7 @@ class SolverCoupled(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
-        self.setup_hydrostatic_pressure_calculations()
+        self.hydrostatic_pressure = setup_hydrostatic_pressure(simulation, needs_initial_value=False)
         
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -62,7 +61,7 @@ class SolverCoupled(Solver):
                                     use_lagrange_multiplicator=self.use_lagrange_multiplicator,
                                     pressure_continuity_factor=self.pressure_continuity_factor,
                                     velocity_continuity_factor_D12=self.velocity_continuity_factor_D12,
-                                    include_hydrostatic_pressure=self.hydrostatic_pressure_correction,
+                                    include_hydrostatic_pressure=self.hydrostatic_pressure.every_timestep,
                                     incompressibility_flux_type=self.incompressibility_flux_type)
         
         sim.log.info('    Using velocity postprocessor: %r' % self.velocity_postprocessing_method)
@@ -154,9 +153,6 @@ class SolverCoupled(Solver):
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing_method = sim.input.get_value('solver/velocity_postprocessing',
                                                                   default_postprocessing, 'string')
-        
-        # Check if there is any gravity
-        self.has_gravity = any(gi != 0 for gi in sim.data['g'].values())
     
     def create_functions(self):
         """
@@ -199,40 +195,7 @@ class SolverCoupled(Solver):
         create_vector_functions(sim, 'u_unlim', 'u_unlim%d', Vu)
         sim.data['p'] = dolfin.Function(Vp)
         sim.data['ui_tmp'] = dolfin.Function(Vu)
-    
-    def setup_hydrostatic_pressure_calculations(self):
-        """
-        We can calculate the hydrostatic pressure as its own pressure field every
-        time step such that the we only solves for the dynamic pressure
-        """
-        sim = self.simulation
         
-        # No need for hydrostatic pressure if g is zero
-        self.hydrostatic_pressure_correction = False
-        if not self.has_gravity:
-            return
-        
-        # We only calculate the hydrostatic pressure if asked
-        ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep',
-                                                HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP, required_type='float')
-        if not ph_every_timestep:
-            return
-        
-        # We will include hydrostatic pressure for all time steps
-        self.hydrostatic_pressure_correction = True
-        
-        # Hydrostatic pressure is always CG
-        Vp = sim.data['Vp']
-        Pp = Vp.ufl_element().degree()
-        Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
-        sim.data['p_hydrostatic'] = dolfin.Function(Vph)
-        
-        # Helper class to calculate the hydrostatic pressure distribution
-        rho = sim.data['rho']
-        g = sim.data['g']
-        ph = sim.data['p_hydrostatic']
-        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph)
-    
     def coupled_boundary_conditions(self, use_strong_bcs):
         """
         Convert boundary conditions from segregated to coupled function spaces
@@ -373,8 +336,7 @@ class SolverCoupled(Solver):
             self.simulation.hooks.new_timestep(it, t, dt)
             
             # Calculate the hydrostatic pressure when the density is not constant
-            if self.hydrostatic_pressure_correction:
-                self.hydrostatic_pressure.update()
+            self.hydrostatic_pressure.update()
             
             # Solve for the new time step
             self.solve_coupled()

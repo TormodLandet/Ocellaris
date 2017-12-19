@@ -3,7 +3,7 @@ from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
                              create_vector_functions, shift_fields,
                              velocity_change)
 from . import Solver, register_solver, get_solver, BDM
-from ..solver_parts import (VelocityBDMProjection, HydrostaticPressure,
+from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
                             SlopeLimiterVelocity, before_simulation,
                             after_timestep)
 from .ipcs_equations import EQUATION_SUBTYPES
@@ -46,7 +46,7 @@ class SolverIPCS(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
-        self.setup_hydrostatic_pressure_calculations()
+        self.hydrostatic_pressure = setup_hydrostatic_pressure(simulation, needs_initial_value=True)
         
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -63,7 +63,7 @@ class SolverIPCS(Solver):
         self.eqs_mom_pred = MomentumPredictionEquation(simulation,
                                 use_stress_divergence_form=self.use_stress_divergence_form,
                                 use_grad_p_form=self.use_grad_p_form,
-                                include_hydrostatic_pressure=self.ph_every_timestep)
+                                include_hydrostatic_pressure=self.hydrostatic_pressure.every_timestep)
         
         # Define the pressure correction equation
         self.eq_pressure = PressureCorrectionEquation(simulation,
@@ -158,9 +158,6 @@ class SolverIPCS(Solver):
         self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
                                                        None, 'float')
         self.is_steady = self.steady_velocity_eps is not None
-        
-        # Check if there is any gravity
-        self.has_gravity = any(gi != 0 for gi in sim.data['g'].values())
     
     def create_functions(self):
         """
@@ -197,60 +194,6 @@ class SolverIPCS(Solver):
         # Create pressure function
         sim.data['p'] = dolfin.Function(Vp)
         sim.data['p_hat'] = dolfin.Function(Vp)
-        
-        # If gravity is nonzero we create a separate hydrostatic pressure field
-        if self.has_gravity:
-            # Hydrostatic pressure is always CG
-            Pp = Vp.ufl_element().degree()
-            Vph = dolfin.FunctionSpace(sim.data['mesh'], 'CG', Pp)
-            sim.data['p_hydrostatic'] = dolfin.Function(Vph)
-    
-    def setup_hydrostatic_pressure_calculations(self):
-        """
-        We can initialize the pressure field to be hydrostatic at the first time step,
-        or we can calculate the hydrostatic pressure as its own pressure field every
-        time step such that the PressureCorrectionEquation only solves for the dynamic
-        pressure
-        """
-        sim = self.simulation
-        
-        # No need for hydrostatic pressure if g is zero
-        self.hydrostatic_pressure_correction = True
-        if not self.has_gravity:
-            self.hydrostatic_pressure_correction = False
-            self.ph_every_timestep = False
-            return
-        
-        # Calculate p_hydrostatic every timestep or just the first time step?
-        self.ph_every_timestep = sim.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep', 
-                                                     HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP,
-                                                     required_type='bool')
-        
-        # Helper class to calculate the hydrostatic pressure distribution
-        rho = sim.data['rho']
-        g = sim.data['g']
-        ph = sim.data['p_hydrostatic']
-        self.hydrostatic_pressure = HydrostaticPressure(rho, g, ph)
-    
-    def update_hydrostatic_pressure(self):
-        """
-        Update the hydrostatic pressure field
-        (when the density is not constant)
-        """
-        if not self.hydrostatic_pressure_correction:
-            return
-        
-        self.hydrostatic_pressure.update()
-            
-        if not self.ph_every_timestep:
-            # Correct the pressure only now, at the begining
-            sim = self.simulation
-            p = sim.data['p']
-            if p.vector().max() == p.vector().min() == 0.0:
-                sim.log.info('Initial pressure field is identically zero, initializing to hydrostatic')
-                p.interpolate(sim.data['p_hydrostatic'])
-            del sim.data['p_hydrostatic']
-            self.hydrostatic_pressure_correction = False
     
     @timeit
     def momentum_prediction(self, t, dt):
@@ -470,7 +413,7 @@ class SolverIPCS(Solver):
             self.simulation.hooks.new_timestep(it, t, dt)
             
             # Calculate the hydrostatic pressure when the density is not constant
-            self.update_hydrostatic_pressure()
+            self.hydrostatic_pressure.update()
             
             # Run inner iterations
             self.inner_iteration = 1

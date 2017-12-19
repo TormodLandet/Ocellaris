@@ -1,20 +1,19 @@
-from dolfin import dot, grad, dx, assemble, Timer, TrialFunction, TestFunction
-from dolfin import PETScKrylovSolver, sqrt, VectorSpaceBasis, as_backend_type, PETScOptions
+from dolfin import dot, grad, dx, sqrt, assemble, Timer
+from dolfin import TrialFunction, TestFunction, FunctionSpace, Function
+from dolfin import PETScKrylovSolver, VectorSpaceBasis, as_backend_type, PETScOptions
 
 
-class HydrostaticPressure(object):
-    def __init__(self, rho, g, ph):
+class HydrostaticPressure:
+    def __init__(self, simulation, every_timestep):
         """
         Calculate the hydrostatic pressure
-
-        The gravity vector g *must* be parallel to one of the axes
         """
+        self.simulation = simulation
         self.active = True
-        
-        # Check if there is any gravity
-        if all(gi == 0 for gi in g.values()):
-            self.active = False
-            return
+        self.every_timestep = every_timestep
+        rho = simulation.data['rho']
+        g = simulation.data['g']
+        ph = simulation.data['p_hydrostatic']
         
         # Define the weak form
         Vp = ph.function_space()
@@ -31,7 +30,6 @@ class HydrostaticPressure(object):
     
     def update(self):
         if not self.active:
-            self.func.zero()
             return
         
         t = Timer('Ocellaris update hydrostatic pressure')
@@ -46,6 +44,56 @@ class HydrostaticPressure(object):
         self.solver.solve(A, self.func.vector(), b)
         
         t.stop()
+        
+        if not self.every_timestep:
+            # Give initial values for p, but do not continuously compute p_hydrostatic
+            sim = self.simulation
+            p = sim.data['p']
+            if p.vector().max() == p.vector().min() == 0.0:
+                sim.log.info('Initial pressure field is identically zero, initializing to hydrostatic')
+                p.interpolate(self.func)
+            
+            # Disable further hydrostatic pressure calculations
+            self.func.vector().zero()
+            del sim.data['p_hydrostatic']
+            del self.func
+            self.active = False
+
+
+class NoHydrostaticPressure:
+    every_timestep = False
+    def update(self):
+        pass
+
+
+def setup_hydrostatic_pressure(simulation, needs_initial_value, default_every_timestep=False):
+    """
+    We can calculate the hydrostatic pressure as its own pressure field every
+    time step such that the we only solves for the dynamic pressure. For 
+    segregated solvers we 
+    """
+    # No hydrostatic pressure field if there is no gravity
+    has_gravity = any(gi != 0 for gi in simulation.data['g'].values())
+    if not has_gravity:
+        return NoHydrostaticPressure()
+    
+    # We only calculate the hydrostatic pressure every time step if asked
+    ph_every_timestep = simulation.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep',
+                                                   default_every_timestep, required_type='bool')
+    
+    if not (needs_initial_value or ph_every_timestep):
+        return NoHydrostaticPressure()
+    
+    # Hydrostatic pressure is always CG
+    Vp = simulation.data['Vp']
+    Pp = Vp.ufl_element().degree()
+    Vph = FunctionSpace(simulation.data['mesh'], 'CG', Pp)
+    simulation.data['p_hydrostatic'] = Function(Vph)
+    
+    # Helper class to calculate the hydrostatic pressure distribution
+    hydrostatic_pressure = HydrostaticPressure(simulation, ph_every_timestep)
+    
+    return hydrostatic_pressure
 
 
 def setup_solver(A, b, tol=1e-15, verbose=False):
