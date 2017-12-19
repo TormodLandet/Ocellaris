@@ -1,6 +1,7 @@
 import numpy
 import dolfin
 import contextlib
+from .small_helpers import dolfin_log_level
 
 
 def linear_solver_from_input(simulation, path,
@@ -109,6 +110,9 @@ class LinearSolverWrapper(object):
         else:
             return self._solver.set_reuse_preconditioner(*argv, **kwargs)
     
+    def ksp(self):
+        return self._solver.ksp()
+    
     def __repr__(self):
         return ('<LinearSolverWrapper iterative=%r ' % self.is_iterative + 
                                      'direct=%r ' % self.is_direct +
@@ -116,6 +120,61 @@ class LinearSolverWrapper(object):
                                      'preconditioner=%r ' % self.preconditioner +
                                      'LU-method=%r ' % self.lu_method +
                                      'parameters=%r>' % self.input_parameters)
+    
+    def ksp_inner_solve(self, inp, A, x, b, in_iter, co_iter):
+        """
+        This solver routine optionally uses the PETSc KSP interface
+        to solve the given equation system. This gives more control
+        over the number of iterations and the convergence criteria
+        
+        When used in IPCS, SIMPLE etc then in_iter is the inner 
+        iteration in the splitting scheme and co_iter is the number
+        of iterations left in the time step
+        
+            in_iter + co_iter == num_inner_iter
+        """
+        use_ksp = inp.get_value('use_ksp', False, 'bool')
+        
+        if not use_ksp:
+            with dolfin_log_level(dolfin.LogLevel.ERROR): 
+                return self.velocity_solver.solve(A, x, b)
+        
+        firstN, lastN = inp.get('ksp_control', [3, 3])
+        rtol_beg, rtol_mid, rtol_end = inp.get_value('ksp_rtol', [1e-6, 1e-8, 1e-10], 'list(float)')
+        atol_beg, atol_mid, atol_end = inp.get_value('ksp_atol', [1e-8, 1e-10, 1e-15], 'list(float)')
+        nitk_beg, nitk_mid, nitk_end = inp.get_value('ksp_max_it', [10, 40, 100], 'list(int)')
+        
+        # Solver setup with petsc4py
+        ksp = self._solver.ksp()
+        pc = ksp.getPC()
+        
+        # Special treatment of first inner iteration
+        reuse_pc = True
+        if in_iter == 1:
+            reuse_pc = False
+            ksp.setOperators(A.mat())
+        
+        if co_iter < lastN:
+            # This is one of the last iterations
+            rtol = rtol_end
+            atol = atol_end
+            max_it = nitk_end
+        elif in_iter <= firstN:
+            # This is one of the first iterations
+            rtol = rtol_beg
+            atol = atol_beg
+            max_it = nitk_beg
+        else:
+            # This iteration is in the middle of the range
+            rtol = rtol_mid
+            atol = atol_mid
+            max_it = nitk_mid 
+        
+        pc.setReusePreconditioner(reuse_pc)
+        ksp.setTolerances(rtol=rtol, atol=atol, max_it=max_it)
+        ksp.solve(b.vec(), x.vec())
+        x.update_ghost_values()
+        return ksp.getIterationNumber()
 
 
 def apply_settings(solver_method, parameters, new_values):

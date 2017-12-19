@@ -42,7 +42,7 @@ time:
     tmax: 1.0
 
 output:
-    prefix: py$ 'output/dam_break_2D_ijCFD_%02d' % N
+    prefix: py$ 'output/dam_break_2D_ijCFD_IPCS-A_%02d' % N
     log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
@@ -58,13 +58,22 @@ multiphase_solver:
     plot_fields: yes
 
 solver:
-    type: Coupled
-    num_inner_iter: 10
+    type: IPCS-A
+    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    hydrostatic_pressure_calculation_every_timestep: yes
+    num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
     allowable_error_inner: 1e-8
     function_space_velocity: DG
     function_space_pressure: DG
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
+    
+    u:
+        use_ksp: yes
+        ksp_control: [5, 3]
+        ksp_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        ksp_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        ksp_max_it: [5, 20, 30]
 
 convection:
     c:

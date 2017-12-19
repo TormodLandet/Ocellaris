@@ -32,18 +32,15 @@ class HydrostaticPressure:
         if not self.active:
             return
         
-        t = Timer('Ocellaris update hydrostatic pressure')
-        
-        A = self.tensor_lhs
-        b = assemble(self.form_rhs)
-        
-        if self.solver is None:
-            self.null_space, self.solver = setup_solver(A, b)
-        
-        self.null_space.orthogonalize(b)
-        self.solver.solve(A, self.func.vector(), b)
-        
-        t.stop()
+        with Timer('Ocellaris update hydrostatic pressure'):
+            A = self.tensor_lhs
+            b = assemble(self.form_rhs)
+            
+            if self.solver is None:
+                self.null_space, self.solver = setup_solver(A, b)
+            
+            self.null_space.orthogonalize(b)
+            self.solver.solve(A, self.func.vector(), b)
         
         if not self.every_timestep:
             # Give initial values for p, but do not continuously compute p_hydrostatic

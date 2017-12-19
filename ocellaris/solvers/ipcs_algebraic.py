@@ -20,6 +20,7 @@ KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
                      'relative_tolerance': 1e-10,
                      'absolute_tolerance': 1e-15,
                      'monitor_convergence': False,
+                     'error_on_nonconvergence': True,
                      'report': False}
 MAX_INNER_ITER = 10
 ALLOWABLE_ERROR_INNER = 1e-10
@@ -220,7 +221,7 @@ class SolverIPCSA(Solver):
         self.eqD = vec[0]
         self.eqE = vec[1]
         
-        # The mass matrix. Consistent with the implementation in define_dg_equations 
+        # The mass matrix. Consistent with the implementation in define_dg_equations
         rho = sim.multi_phase_model.get_density(0)
         c1 = sim.data['time_coeffs'][0]
         dt = sim.data['dt']
@@ -244,7 +245,7 @@ class SolverIPCSA(Solver):
             self.D = dolfin.as_backend_type(dolfin.assemble(self.eqD, tensor=self.D))
         
         lhs = self.MplusA
-        rhs = self.D - self.B * p_star.vector()                
+        rhs = self.D - self.B * p_star.vector()
         
         self.project_rhs = False
         if self.project_rhs and self.velocity_postprocessor:
@@ -262,22 +263,18 @@ class SolverIPCSA(Solver):
             self.rhs_postprocessor.run()
             self.assigner_merge.assign(rhs, list(self.rhs_tmp))
         
-        # Solve the linear systems
-        solver = self.velocity_solver
-        if solver.is_iterative:
-            if self.inner_iteration == 1:
-                solver.set_reuse_preconditioner(False)
-            else:
-                solver.set_reuse_preconditioner(True)
-                #solver.parameters['maximum_iterations'] = 3
+        # Solve the linearised convection-diffusion system
         u_temp.assign(u_star)
-        with dolfin_log_level(dolfin.LogLevel.WARNING):
-            self.niters_u = solver.solve(lhs, u_star.vector(), rhs)
+        inp = sim.input.get_value('solver/u', {}, 'Input')
+        self.niters_u = self.velocity_solver.ksp_inner_solve(inp, lhs, u_star.vector(), rhs,
+                                                             in_iter=self.inner_iteration,
+                                                             co_iter=self.co_inner_iter)
         
         # Compute change from last iteration
         u_temp.vector().axpy(-1, u_star.vector())
         u_temp.vector().apply('insert')
-        return u_temp.vector().norm('l2')
+        self._last_u_err = u_temp.vector().norm('l2')
+        return self._last_u_err
 
     @timeit
     def compute_M_inverse(self):
@@ -474,6 +471,7 @@ class SolverIPCSA(Solver):
             # Run inner iterations
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
+                self.co_inner_iter = num_inner_iter - self.inner_iteration
                 err_u = self.momentum_prediction()
                 err_p = self.pressure_correction()
                 sim.log.info('  IPCS-A iteration %3d - err u* %10.3e - err p %10.3e'
