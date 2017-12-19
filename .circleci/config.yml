@@ -23,16 +23,16 @@ jobs:
           command: python3 -c 'import ocellaris; print(ocellaris.get_detailed_version())'
       - run:
           name: Run unit tests
-          command: python3 -m pytest -v tests/ --junitxml=/reports/pytest/serial.xml
+          command: python3 -m pytest -v tests/ --junitxml=/reports/pytest/serial.xml --durations=10
       - run:
           name: Run unit tests with MPI
-          command: mpirun -n 3 python3 -m pytest -v tests/ --junitxml=/reports/pytest/MPI.xml
+          command: mpirun -n 3 python3 -m pytest -v tests/ --junitxml=/reports/pytest/MPI.xml --durations=10
       - run:
           name: Run regression tests
-          command: python3 -m pytest -vs cases/regression_tests.py --junitxml=/reports/pytest/regressions_serial.xml
+          command: python3 -m pytest -vs cases/regression_tests.py --junitxml=/reports/pytest/regressions_serial.xml --durations=0
       - run:
           name: Run demo tests
-          command: python3 -m pytest -vs demos/ --junitxml=/reports/pytest/demos_serial.xml
+          command: python3 -m pytest -vs demos/ --junitxml=/reports/pytest/demos_serial.xml --durations=0
 #      - run:
 #          name: Run flake8
 #          command: python3 -m flake8 ocellaris*
