@@ -272,10 +272,9 @@ def read_log_data(results):
 
 
 def read_iteration_reports(results):
-    STARTMARKER = '  Inner iteration'
     iter_reps = {}
     for line in StringIO(unicode(results.log)):
-        if not line.startswith(STARTMARKER):
+        if not ('iteration' in line and 'Krylov' in line):
             continue
         # Parse the line
         try:
@@ -283,13 +282,13 @@ def read_iteration_reports(results):
             iter_num = int(parts[0].split()[-1])
             iter_reps.setdefault('iteration', []).append(iter_num)
             for part in parts[1:]:
+                if 'Krylov' in part:
+                    continue
                 wds = part.split()
-                if wds[0] == 'iters:':
-                    N = len(wds)//2
-                    for i in range(N):
-                        value = int(wds[1 + i*2])
-                        name = 'solver iterations %s' % wds[2 + i*2]
-                        iter_reps.setdefault(name, []).append(value)
+                if wds[0] in ('u', 'p') and len(wds) == 2:
+                    value = int(wds[1])
+                    name = 'solver iterations %s' % wds[0]
+                    iter_reps.setdefault(name, []).append(value)
                 else:
                     name = ' '.join(wds[:-1])
                     value = float(wds[-1])

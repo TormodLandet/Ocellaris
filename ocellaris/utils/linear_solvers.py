@@ -49,7 +49,7 @@ def linear_solver_from_input(simulation, path,
 
 
 class LinearSolverWrapper(object):
-    def __init__(self, solver_method, preconditioner=None, lu_method=None, parameters=None): 
+    def __init__(self, solver_method, preconditioner=None, lu_method=None, parameters=None):
         """
         Wrap a Krylov or LU solver
         
@@ -65,8 +65,8 @@ class LinearSolverWrapper(object):
         sane defaults as well as allow the user to override the defaults
         in the input file
         
-        The reason for this wrapper is to provide easy querying of 
-        iterative/direct and not crash when set_reuse_preconditioner is 
+        The reason for this wrapper is to provide easy querying of
+        iterative/direct and not crash when set_reuse_preconditioner is
         run before the first solve. This simplifies usage
         """
         self.solver_method = solver_method
@@ -114,7 +114,7 @@ class LinearSolverWrapper(object):
         return self._solver.ksp()
     
     def __repr__(self):
-        return ('<LinearSolverWrapper iterative=%r ' % self.is_iterative + 
+        return ('<LinearSolverWrapper iterative=%r ' % self.is_iterative +
                                      'direct=%r ' % self.is_direct +
                                      'method=%r ' % self.solver_method +
                                      'preconditioner=%r ' % self.preconditioner +
@@ -127,7 +127,7 @@ class LinearSolverWrapper(object):
         to solve the given equation system. This gives more control
         over the number of iterations and the convergence criteria
         
-        When used in IPCS, SIMPLE etc then in_iter is the inner 
+        When used in IPCS, SIMPLE etc then in_iter is the inner
         iteration in the splitting scheme and co_iter is the number
         of iterations left in the time step
         
@@ -136,8 +136,8 @@ class LinearSolverWrapper(object):
         use_ksp = inp.get_value('use_ksp', False, 'bool')
         
         if not use_ksp:
-            with dolfin_log_level(dolfin.LogLevel.ERROR): 
-                return self.velocity_solver.solve(A, x, b)
+            with dolfin_log_level(dolfin.LogLevel.ERROR):
+                return self.solve(A, x, b)
         
         firstN, lastN = inp.get('ksp_control', [3, 3])
         rtol_beg, rtol_mid, rtol_end = inp.get_value('ksp_rtol', [1e-6, 1e-8, 1e-10], 'list(float)')
@@ -168,7 +168,7 @@ class LinearSolverWrapper(object):
             # This iteration is in the middle of the range
             rtol = rtol_mid
             atol = atol_mid
-            max_it = nitk_mid 
+            max_it = nitk_mid
         
         pc.setReusePreconditioner(reuse_pc)
         ksp.setTolerances(rtol=rtol, atol=atol, max_it=max_it)
@@ -182,7 +182,7 @@ def apply_settings(solver_method, parameters, new_values):
     This function does almost the same as::
     
         parameters.update(new_values)
-        
+    
     The difference is that subdictionaries are handled
     recursively and not replaced outright
     """
@@ -205,7 +205,7 @@ def apply_settings(solver_method, parameters, new_values):
 def petsc_options(opts):
     """
     A context manager to set PETSc options for a limited amount of code.
-    The parameter opts is a dictionary of PETSc/SLEPc options 
+    The parameter opts is a dictionary of PETSc/SLEPc options
     """
     from petsc4py import PETSc
     orig_opts = PETSc.Options().getAll()
