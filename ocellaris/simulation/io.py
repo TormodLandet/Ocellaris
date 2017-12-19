@@ -65,7 +65,6 @@ class InputOutputHandling():
         sim = self.simulation
         xdmf_flush =  sim.input.get_value('output/xdmf_flush', XDMF_FLUSH, 'bool')
         
-        need_vec_func = True
         file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
         file_name2 = os.path.splitext(file_name)[0] + '.h5'
         
@@ -93,21 +92,16 @@ class InputOutputHandling():
             V_vec = dolfin.VectorFunctionSpace(sim.data['mesh'], family, degree,
                                                constrained_domain=cd)
             vec_func = dolfin.Function(V_vec)
-            
-            # Create function assigners for the components
-            assigners = [dolfin.FunctionAssigner(V_vec.sub(d), V) for d in range(sim.ndim)]
-            
-            return vec_func, assigners
+            assigner = dolfin.FunctionAssigner(V_vec, [V] * sim.ndim)
+            return vec_func, assigner
         
-        # Some output formats cannot save functions given as "as_vector(list)" 
-        if need_vec_func:
-            self._vel_func, self._vel_func_assigners = create_vec_func(sim.data['Vu'])
-            self._vel_func.rename('u', 'Velocity')
-        if sim.mesh_morpher.active and need_vec_func:
-            self._mesh_vel_func, self._mesh_vel_func_assigners = create_vec_func(sim.data['Vmesh'])
+        # XDMF cannot save functions given as "as_vector(list)" 
+        self._vel_func, self._vel_func_assigner = create_vec_func(sim.data['Vu'])
+        self._vel_func.rename('u', 'Velocity')
+        if sim.mesh_morpher.active:
+            self._mesh_vel_func, self._mesh_vel_func_assigner = create_vec_func(sim.data['Vmesh'])
             self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
-        
-        
+    
     def _close_files(self):
         """
         Save final restart file and close open files
@@ -199,16 +193,12 @@ class InputOutputHandling():
             self.xdmf_file.write(bm)
         
         # Write the fluid velocities
-        for d in range(self.simulation.ndim):
-            ui = self.simulation.data['up%d' % d]
-            self._vel_func_assigners[d].assign(self._vel_func.sub(d), ui)
+        self._vel_func_assigner.assign(self._vel_func, list(self.simulation.data['up']))
         self.xdmf_file.write(self._vel_func, t)
         
         # Write the mesh velocities (used in ALE calculations)
         if self.simulation.mesh_morpher.active:
-            for d in range(self.simulation.ndim):
-                ui = self.simulation.data['u_mesh%d' % d]
-                self._mesh_vel_func_assigners[d].assign(self._mesh_vel_func.sub(d), ui)
+            self._mesh_vel_func_assigner.assign(self._mesh_vel_func, list(self.simulation.data['u_mesh']))
             self.xdmf_file.write(self._mesh_vel_func, t)
         
         # Write scalar functions
