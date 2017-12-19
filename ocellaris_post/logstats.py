@@ -11,7 +11,7 @@ This is a part of the Ocellaris two-phase solver post-processing
 software collection 
 """
 from __future__ import print_function
-import os
+import os, sys
 from .files import get_result_file_name
 from .results import Results
 
@@ -56,7 +56,11 @@ def show_logstats(file_name):
     print()
 
 
-def main(args):
+def main(args=None):
+    # Use command line arguments by default
+    if args is None:
+        args = sys.argv
+    
     # Get report files to read
     file_names = []
     for fn in args[1:]:
@@ -83,5 +87,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    import sys
-    main(sys.argv)
+    main()

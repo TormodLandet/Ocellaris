@@ -19,7 +19,10 @@ for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8
 
 
 # Which packages we depend on
-dependencies = ['PyYAML', 'h5py', 'numpy'] #'fenics-dolfin']
+dependencies = ['PyYAML', 'h5py', 'numpy']
+if False: # Update when CI image is updated to newest FEniCS
+    FENICS_VERSION = ">=2018.1.0.dev0,<2018.2"
+    dependencies.append('fenics-dolfin%s' % FENICS_VERSION)
 
 
 # No need to install dependencies on ReadTheDocs
@@ -45,7 +48,7 @@ class PyTest(TestCommand):
     
     def run_tests(self):
         import pytest
-        args = ['-v']
+        args = ['-v', '--durations=10']
         if self.verbose:
             args.append('-s')
         
@@ -92,7 +95,7 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
 
         # Indicate who your project is intended for
         'Intended Audience :: Science/Research',
@@ -124,6 +127,7 @@ setup(
     package_data={
         'ocellaris': ['cpp/*.h', 'cpp/*/*.h'],
     },
+    zip_safe=False,
 
     # To provide executable scripts, use entry points in preference to the
     # "scripts" keyword. Entry points provide cross-platform support and allow
@@ -132,6 +136,7 @@ setup(
         'console_scripts': [
             'ocellaris=ocellaris.__main__:run_from_console',
             'ocellaris_inspector=ocellaris_post.inspector.__main__:main',
+            'ocellaris_logstats=ocellaris_post.logstats:main',
         ],
     },
     

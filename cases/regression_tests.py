@@ -41,6 +41,9 @@ def test_taylor_green(solver_type, monkeypatch):
 
 
 def test_kovasznay(solver_type, monkeypatch):
+    if solver_type == 'SIMPLE' and os.environ.get('OCELLARIS_RUN_SLOW_TEST') != '1':
+        raise pytest.skip('Skipping slow test')
+    
     runner = regression_setup(monkeypatch, 'convergence-kovasznay')
     N = 8
     dt = 0.01

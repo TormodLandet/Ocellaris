@@ -18,9 +18,13 @@ def pytest_generate_tests(metafunc):
 
 def test_setup_demo(demo_inp_file, monkeypatch):
     "Run setup on demo input file"
-    skip = {'linear_sloshing.inp', 'falling_sphere.inp', 'dead_water_2D.inp'}
+    skip = {'linear_sloshing.inp', 'falling_sphere.inp'}
     if demo_inp_file in skip:
         return pytest.skip()
+    
+    slow = {'internal_soliton.inp', 'dead_water_2D.inp', 'dead_water_3D.inp'}
+    if demo_inp_file in slow and os.environ.get('OCELLARIS_RUN_SLOW_TEST') != '1':
+        raise pytest.skip('Skipping slow test')
     
     monkeypatch.chdir(DEMODIR)
     
