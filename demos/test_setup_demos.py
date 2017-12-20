@@ -1,5 +1,4 @@
 import os, sys, subprocess
-from ocellaris import Simulation, setup_simulation
 import pytest
 
 
@@ -35,6 +34,7 @@ def test_setup_demo(demo_inp_file, monkeypatch):
     subprocess.check_call(cmd)
     
     # Run as script (can lead to inter-demo disturbances with dolfin globals etc)
+    #from ocellaris import Simulation, setup_simulation
     #sim = Simulation()
     #sim.input.read_yaml(demo_inp_file)
     #success = setup_simulation(sim)
