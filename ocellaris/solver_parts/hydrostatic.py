@@ -1,6 +1,30 @@
 from dolfin import dot, grad, dx, sqrt, assemble, Timer
 from dolfin import TrialFunction, TestFunction, FunctionSpace, Function
-from dolfin import PETScKrylovSolver, VectorSpaceBasis, as_backend_type, PETScOptions
+from dolfin import VectorSpaceBasis, as_backend_type
+from ocellaris.utils import linear_solver_from_input
+
+
+DEFAULT_SOLVER_CONFIGURATION = {
+    'use_ksp': True,
+    
+    # Set PETSc solve type (conjugate gradient) and preconditioner
+    # (algebraic multigrid)
+    'petsc_ksp_type': 'cg',
+    'petsc_pc_type': 'gamg',
+    
+    # Since we have a singular problem, use SVD solver on the multigrid
+    # 'coarse grid'
+    'petsc_mg_coarse_ksp_type': 'preonly',
+    'petsc_mg_coarse_pc_type': 'svd',
+    
+    # Set the solver tolerance and allow starting from previous solution
+    'petsc_ksp_rtol': 1e-10,
+    'petsc_ksp_initial_guess_nonzero': True,
+    
+    # Verbosity
+    'petsc_ksp_view': 'DISABLED',
+    'petsc_ksp_monitor': 'DISABLED',
+}
 
 
 class HydrostaticPressure:
@@ -26,7 +50,8 @@ class HydrostaticPressure:
         self.tensor_lhs = assemble(a)
         self.form_rhs = L
         self.null_space = None
-        self.solver = None
+        self.solver = linear_solver_from_input(simulation, 'solver/p_hydrostatic',
+                                               default_parameters=DEFAULT_SOLVER_CONFIGURATION)
     
     def update(self):
         if not self.active:
@@ -36,8 +61,14 @@ class HydrostaticPressure:
             A = self.tensor_lhs
             b = assemble(self.form_rhs)
             
-            if self.solver is None:
-                self.null_space, self.solver = setup_solver(A, b)
+            if self.null_space is None:
+                # Create vector that spans the null space, and normalize
+                null_space_vector = b.copy()
+                null_space_vector[:] = sqrt(1.0/null_space_vector.size())
+                
+                # Create null space basis object and attach to PETSc matrix
+                self.null_space = VectorSpaceBasis([null_space_vector])
+                as_backend_type(A).set_nullspace(self.null_space)
             
             self.null_space.orthogonalize(b)
             self.solver.solve(A, self.func.vector(), b)
@@ -91,49 +122,3 @@ def setup_hydrostatic_pressure(simulation, needs_initial_value, default_every_ti
     hydrostatic_pressure = HydrostaticPressure(simulation, ph_every_timestep)
     
     return hydrostatic_pressure
-
-
-def setup_solver(A, b, tol=1e-15, verbose=False):
-    """
-    This is taken from the Dolfin singular Poisson demo
-    with a few modifications to avoid stomping on other
-    solvers KSPOptions (by setting a unique prefix)
-    """
-    PREFIX = 'ocellaris_hydrostatic_pressure_'
-    solver = PETScKrylovSolver()
-    solver.set_options_prefix(PREFIX)
-    
-    # Create vector that spans the null space, and normalize
-    null_space_vector = b.copy()
-    null_space_vector[:] = sqrt(1.0/null_space_vector.size())
-    
-    # Create null space basis object and attach to PETSc matrix
-    null_space = VectorSpaceBasis([null_space_vector])
-    as_backend_type(A).set_nullspace(null_space)
-    
-    # Set PETSc solve type (conjugate gradient) and preconditioner
-    # (algebraic multigrid)
-    PETScOptions.set(PREFIX + "ksp_type", "cg")
-    PETScOptions.set(PREFIX + "pc_type", "gamg")
-    
-    # Since we have a singular problem, use SVD solver on the multigrid
-    # 'coarse grid'
-    PETScOptions.set(PREFIX + "mg_coarse_ksp_type", "preonly")
-    PETScOptions.set(PREFIX + "mg_coarse_pc_type", "svd")
-    
-    # Set the solver tolerance and allow starting from previous solution
-    PETScOptions.set(PREFIX + "ksp_rtol", tol)
-    PETScOptions.set(PREFIX + "ksp_initial_guess_nonzero", True)
-    
-    if verbose:
-        # Print PETSc solver configuration
-        PETScOptions.set(PREFIX + "ksp_view")
-        PETScOptions.set(PREFIX + "ksp_monitor")
-    
-    # Create Krylov solver and set operator
-    solver.set_operator(A)
-    
-    # Set PETSc options on the solver
-    solver.set_from_options()
-    
-    return null_space, solver

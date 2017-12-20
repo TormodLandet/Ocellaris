@@ -1,7 +1,6 @@
 import numpy
 import dolfin
 import contextlib
-from .small_helpers import dolfin_log_level
 
 
 def linear_solver_from_input(simulation, path,
@@ -10,12 +9,20 @@ def linear_solver_from_input(simulation, path,
                              default_lu_method='default',
                              default_parameters=None):
     """
-    From specifications in the input at the given path create a linear solver
+    Create a linear equation solver from specifications in the input at the
+    given path and the Ocellaris defaults for the given solver, passed as
+    arguments to this function.
     
     The path (e.g "solver/u") must point to a dictionary in the input file that
-    can contain optional fields specifying the solver.
+    contains fields specifying the solver an preconditioner. If no such input is
+    found the defaults are used.
     
-    Example::
+    The solver definition can either be on the simplified dolfin format (with
+    PETSc backend), or it can give the full PETSc configuration. The default 
+    depends on the Ocellaris solver, see the log file from a run without any
+    specific configuration for info.
+     
+    Dolfin solver definition example::
     
         solver:
             u:
@@ -27,31 +34,80 @@ def linear_solver_from_input(simulation, path,
                 parameters:
                     same_nonzero_pattern: True
     
-    The default values are used if the keys are not found in the input
+    The PETSc solver definition is used when `use_ksp` is specified. The PETSc
+    options are given prefixed by `petsc_`. This prefix is changed to `sol_VARNAME_`
+    automatically, so in the below example the prefix is `sol_u_`. Normally this is
+    an implementation detail, but if user code wants to change the PETSc option
+    database for the solver then the prefix must be known. An example::
+    
+        solver:
+            p:
+                use_ksp: yes
+                petsc_ksp_type: cg
+                petsc_pc_type: gamg
+    
+    The log will contain the actual entries to the PETSc options database. For PETSc
+    options that do not take a value, like ``-ksp_view`` and ``-help`` a special
+    signal value 'ENABLED' can be specified on the input file. This is automatically
+    translated to the correct syntax.
     """
-    # Get values from input dictionary
-    solver_method = simulation.input.get_value('%s/solver' % path, default_solver, 'string')
-    preconditioner = simulation.input.get_value('%s/preconditioner' % path, default_preconditioner, 'string')
-    lu_method = simulation.input.get_value('%s/lu_method' % path, default_lu_method, 'string')
-    solver_parameters = simulation.input.get_value('%s/parameters' % path, {}, 'dict(string:any)')
-    
-    if default_parameters:
-        params = [default_parameters, solver_parameters]
-    else:
-        params = [solver_parameters]
-    
     simulation.log.info('    Creating linear equation solver from input "%s"' % path)
-    simulation.log.info('        Method:         %s' % solver_method)
-    simulation.log.info('        Preconditioner: %s' % preconditioner)
-    simulation.log.info('        LU-method:      %s' % lu_method)
     
-    return LinearSolverWrapper(solver_method, preconditioner, lu_method, params)
+    # Check if we are using the simplified DOLFIN solver wrappers or full PETSc solver setup
+    use_ksp = default_parameters is not None and default_parameters.get('use_ksp', False)
+    use_ksp = simulation.input.get_value('%s/use_ksp' % path, use_ksp, 'bool')
+    simulation.log.info('        Advanced KSP configuration is %s' % ('ON' if use_ksp else 'OFF'))
+    
+    inp_data = simulation.input.get_value(path, {}, 'Input')
+    
+    if not use_ksp:
+        # Use standard simplified DOLFIN solver wrappers
+        # Get values from input dictionary
+        solver_method = inp_data.get_value('solver', default_solver, 'string')
+        preconditioner = inp_data.get_value('preconditioner', default_preconditioner, 'string')
+        lu_method = inp_data.get_value('lu_method', default_lu_method, 'string')
+        solver_parameters = inp_data.get_value('parameters', {}, 'dict(string:any)')
+        
+        if default_parameters:
+            params = [default_parameters, solver_parameters]
+        else:
+            params = [solver_parameters]
+        
+        # Prevent confusion due to the two different ways of configuring the linear solvers
+        for key in inp_data:
+            if key.startswith('petsc_') or key.startswith('inner_iter_'):
+                pth  = '%s/%s' % (path, key)
+                simulation.log.warning('Found input %s which is IGNORED since use_ksp=False' % pth)
+        
+        simulation.log.info('        Method:         %s' % solver_method)
+        simulation.log.info('        Preconditioner: %s' % preconditioner)
+        simulation.log.info('        LU-method:      %s' % lu_method)
+        
+        return LinearSolverWrapper(solver_method, preconditioner, lu_method, params)
+    
+    else:
+        # Use more powerfull petsc4py interface
+        params = default_parameters.copy()
+        params.update(inp_data)
+        
+        # Prevent confusion due to the two different ways of configuring the linear solvers
+        for unwanted in 'solver preconditioner lu_method parameters'.split():
+            if unwanted in inp_data:
+                pth  = '%s/%s' % (path, unwanted)
+                simulation.log.warning('Found input %s which is IGNORED since use_ksp=True' % pth)
+        
+        # Create the PETScKrylovSolver and show some info
+        solver = KSPLinearSolverWrapper(simulation, path, params)
+        simulation.log.info('        Method:         %s' % solver.ksp().getType())
+        simulation.log.info('        Preconditioner: %s' % solver.ksp().pc.getType())
+        simulation.log.info('        Options prefix: %s' % solver.ksp().getOptionsPrefix())
+        return solver
 
 
 class LinearSolverWrapper(object):
     def __init__(self, solver_method, preconditioner=None, lu_method=None, parameters=None):
         """
-        Wrap a Krylov or LU solver
+        Wrap a DOLFIN PETScKrylovSolver or PETScLUSolver
         
         You must either specify solver_method = 'lu' and give the name
         of the solver, e.g lu_solver='mumps' or give a valid Krylov
@@ -97,6 +153,12 @@ class LinearSolverWrapper(object):
         self.is_first_solve = False
         return ret
     
+    def inner_solve(self, inp, A, x, b, in_iter, co_iter):
+        """
+        This is not implemented for dolfin solvers, so just solve as usual
+        """
+        return self.solve(A, x, b)
+    
     @property
     def parameters(self):
         return self._solver.parameters
@@ -120,29 +182,83 @@ class LinearSolverWrapper(object):
                                      'preconditioner=%r ' % self.preconditioner +
                                      'LU-method=%r ' % self.lu_method +
                                      'parameters=%r>' % self.input_parameters)
-    
-    def ksp_inner_solve(self, inp, A, x, b, in_iter, co_iter):
+
+
+class KSPLinearSolverWrapper(object):
+    def __init__(self, simulation, input_path, params):
         """
-        This solver routine optionally uses the PETSc KSP interface
-        to solve the given equation system. This gives more control
-        over the number of iterations and the convergence criteria
+        Wrap a PETScKrylov solver that is configured through petsc4py
+        """
+        self.simulation = simulation
+        self._input_path = input_path
+        self._config_params = params
+        self.is_first_solve = True
+        self.is_iterative = True
+        self.is_direct = False
+        
+        # Create the solver
+        prefix = 'sol_%s_' % input_path.split('/')[-1]
+        self._solver = dolfin.PETScKrylovSolver()
+        
+        # Translate the petsc_* keys to the correct solver prefix
+        # and insert them into the PETSc options database
+        for param, value in sorted(params.items()):
+            if not param.startswith('petsc_'):
+                continue
+            option = prefix + param[6:]
+            simulation.log.info('        %-50s: %20r' % (option, value))
+            
+            # Some options do not have a value, but we must have one on the input
+            # file, the below translation fixes that
+            if value == 'ENABLED':
+                dolfin.PETScOptions.set(option)
+            elif value == 'DISABLED':
+                pass
+            else:
+                # Normal option with value
+                dolfin.PETScOptions.set(option, value)
+        
+        # Configure the solver
+        self._solver.set_options_prefix(prefix)
+        self._solver.ksp().setFromOptions()
+    
+    def solve(self, *argv, **kwargs):
+        self._solver.set_from_options()
+        ret = self._solver.solve(*argv, **kwargs)
+        self.is_first_solve = False
+        return ret
+    
+    def inner_solve(self, A, x, b, in_iter, co_iter):
+        """
+        This solver method uses different convergence criteria depending
+        on how far in into the inner iterations loop the solve is located
         
         When used in IPCS, SIMPLE etc then in_iter is the inner
         iteration in the splitting scheme and co_iter is the number
-        of iterations left in the time step
+        of iterations left in the time step, i.e.,
         
             in_iter + co_iter == num_inner_iter
+        
+        This can be used to have more relaxed convergence criteria for the
+        first iterations and more strict for the last iterations
+        
+        IMPORTANT: inner iteration here does NOT correspond to Krylov 
+        iterations. Outer iterations is time steps which can contain several
+        inner iterations to perform iterative pressure corrections and in 
+        each of these inner iterations there are Krylov iterations to actually
+        solve the resulting linear systems. 
         """
-        use_ksp = inp.get_value('use_ksp', False, 'bool')
+        inp = self.simulation.input.get_value(self._input_path, {}, 'Input')
         
-        if not use_ksp:
-            with dolfin_log_level(dolfin.LogLevel.ERROR):
-                return self.solve(A, x, b)
+        def get_updated(key, default, required_type):
+            "The key may be changed by user code, lets get fresh info"
+            prev = self._config_params.get(key, default)
+            return inp.get_value(key, prev, required_type)
         
-        firstN, lastN = inp.get('ksp_control', [3, 3])
-        rtol_beg, rtol_mid, rtol_end = inp.get_value('ksp_rtol', [1e-6, 1e-8, 1e-10], 'list(float)')
-        atol_beg, atol_mid, atol_end = inp.get_value('ksp_atol', [1e-8, 1e-10, 1e-15], 'list(float)')
-        nitk_beg, nitk_mid, nitk_end = inp.get_value('ksp_max_it', [10, 40, 100], 'list(int)')
+        firstN, lastN = get_updated('inner_iter_control', [3, 3], 'list(int)')
+        rtol_beg, rtol_mid, rtol_end = get_updated('inner_iter_rtol', [1e-6, 1e-8, 1e-10], 'list(float)')
+        atol_beg, atol_mid, atol_end = get_updated('inner_iter_atol', [1e-8, 1e-10, 1e-15], 'list(float)')
+        nitk_beg, nitk_mid, nitk_end = get_updated('inner_iter_max_it', [10, 40, 100], 'list(int)')
         
         # Solver setup with petsc4py
         ksp = self._solver.ksp()
@@ -175,6 +291,25 @@ class LinearSolverWrapper(object):
         ksp.solve(b.vec(), x.vec())
         x.update_ghost_values()
         return ksp.getIterationNumber()
+    
+    @property
+    def parameters(self):
+        raise ValueError('Do not use dolfin parameters to configure KSP solver')
+    
+    def set_operator(self, A):
+        self._ksp.setOperators(A.mat())
+    
+    def set_reuse_preconditioner(self, *argv, **kwargs):
+        if self.is_iterative and self.is_first_solve:
+            return  # Nov 2016: this segfaults if running before the first solve
+        else:
+            return self._solver.set_reuse_preconditioner(*argv, **kwargs)
+    
+    def ksp(self):
+        return self._solver.ksp()
+    
+    def __repr__(self):
+        return '<KSPLinearSolverWrapper prefix=%r>' % self._ksp.getOptionsPrefix()
 
 
 def apply_settings(solver_method, parameters, new_values):
