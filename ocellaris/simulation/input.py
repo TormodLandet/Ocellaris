@@ -101,6 +101,10 @@ class Input(collections.OrderedDict):
             """
             Check dict and eval any python expressions in the values
             """
+            if d is None:
+                # if every element in the dict is commented out the dict becomes None
+                d = {}
+            
             d = check_isinstance(d, dict_types)
             d_new = collections.OrderedDict()
             for key, val in d.items():
@@ -169,12 +173,14 @@ class Input(collections.OrderedDict):
         d = self
         for p in path:
             if isinstance(d, list):
+                # This is a list, assume the key "p" is an integer position
                 try:
                     p = int(p)
                 except ValueError:
                     ocellaris_error('List index not integer',
                                     'Not a valid list index:  %s' % p)
-            elif p not in d:
+            elif d is None or p not in d:
+                # This is an empty dict or a dict missing the key "p"
                 if default_value is UNDEFINED:
                     ocellaris_error('Missing parameter on input file',
                                     'Missing required input parameter:\n  %s' % pathstr)
