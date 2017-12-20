@@ -2,8 +2,7 @@ import numpy.linalg
 import dolfin
 from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
                              create_vector_functions, shift_fields,
-                             velocity_change, matmul, split_form_into_matrix,
-                             dolfin_log_level)
+                             velocity_change, matmul, split_form_into_matrix)
 from . import Solver, register_solver, BDM
 from .coupled_equations import define_dg_equations
 from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
@@ -11,17 +10,23 @@ from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
                             after_timestep)
 
 # Solvers - default values, can be changed in the input file
-SOLVER_U = 'gmres'
-PRECONDITIONER_U = 'additive_schwarz'
-SOLVER_P = 'gmres'
-PRECONDITIONER_P = 'hypre_amg'
-KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'maximum_iterations': 100,
-                     'relative_tolerance': 1e-10,
-                     'absolute_tolerance': 1e-15,
-                     'monitor_convergence': False,
-                     'error_on_nonconvergence': True,
-                     'report': False}
+SOLVER_U_OPTIONS = {'use_ksp': True,
+                    'petsc_ksp_type': 'gmres', 
+                    'petsc_pc_type': 'asm',
+                    'petsc_ksp_initial_guess_nonzero': True,
+                    'petsc_ksp_view': 'DISABLED',
+                    'inner_iter_rtol': [1e-10] * 3,
+                    'inner_iter_atol': [1e-15] * 3,
+                    'inner_iter_max_it': [100] * 3}
+SOLVER_P_OPTIONS = {'use_ksp': True,
+                    'petsc_ksp_type': 'gmres',
+                    'petsc_pc_type': 'hypre',
+                    'petsc_pc_hypre_type': 'boomeramg',
+                    'petsc_ksp_initial_guess_nonzero': True,
+                    'petsc_ksp_view': 'DISABLED',
+                    'inner_iter_rtol': [1e-10] * 3,
+                    'inner_iter_atol': [1e-15] * 3,
+                    'inner_iter_max_it': [100] * 3}
 MAX_INNER_ITER = 10
 ALLOWABLE_ERROR_INNER = 1e-10
 
@@ -104,10 +109,10 @@ class SolverIPCSA(Solver):
         sim = self.simulation
         
         # Create linear solvers
-        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u', SOLVER_U,
-                                                        PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
-        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p', SOLVER_P,
-                                                        PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
+        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u',
+                                                        default_parameters=SOLVER_U_OPTIONS)
+        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p',
+                                                        default_parameters=SOLVER_P_OPTIONS)
         
         # Lagrange multiplicator or remove null space via PETSc
         self.remove_null_space = True
@@ -265,10 +270,9 @@ class SolverIPCSA(Solver):
         
         # Solve the linearised convection-diffusion system
         u_temp.assign(u_star)
-        inp = sim.input.get_value('solver/u', {}, 'Input')
-        self.niters_u = self.velocity_solver.ksp_inner_solve(inp, lhs, u_star.vector(), rhs,
-                                                             in_iter=self.inner_iteration,
-                                                             co_iter=self.co_inner_iter)
+        self.niters_u = self.velocity_solver.inner_solve(lhs, u_star.vector(), rhs,
+                                                         in_iter=self.inner_iteration,
+                                                         co_iter=self.co_inner_iter)
         
         # Compute change from last iteration
         u_temp.vector().axpy(-1, u_star.vector())
@@ -317,7 +321,6 @@ class SolverIPCSA(Solver):
         (Semi-Implicit Method for Pressure-Linked Equations)
         """
         sim = self.simulation
-        solver = self.pressure_solver
         u_star = sim.data['uvw_star']
         p_star = sim.data['p']
         p_hat = self.simulation.data['p_hat']
@@ -340,13 +343,6 @@ class SolverIPCSA(Solver):
         if self.eqE is not None:
             rhs.axpy(-1, self.E)
         rhs.apply('insert')
-        
-        if solver.is_iterative:
-            if self.inner_iteration == 1:
-                solver.set_reuse_preconditioner(False)
-            else:
-                solver.set_reuse_preconditioner(True)
-                #solver.parameters['maximum_iterations'] = 3
         
         # Inform PETSc about the pressure null space
         if self.remove_null_space:
@@ -371,8 +367,9 @@ class SolverIPCSA(Solver):
         p_hat.vector().axpy(-1, p_star.vector())
         
         # Solve for the new pressure correction
-        with dolfin_log_level(dolfin.LogLevel.WARNING):
-            self.niters_p = solver.solve(lhs, p_star.vector(), rhs)
+        self.niters_p = self.pressure_solver.inner_solve(lhs, p_star.vector(), rhs,
+                                                         in_iter=self.inner_iteration,
+                                                         co_iter=self.co_inner_iter)
         
         # Removing the null space of the matrix system is not strictly the same as removing
         # the null space of the equation, so we correct for this here
