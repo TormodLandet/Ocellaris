@@ -158,7 +158,7 @@ class VelocityDGT0Projector(object):
         for d in range(ndim):
             L.append(avg(w[d]) * avg(v) * dS + w[d] * v * ds)
         
-        self.lhs = dolfin.Form(L) 
+        self.lhs = [dolfin.Form(Li) for Li in L]
         self.A = dolfin.assemble(a)
         self.solver = dolfin.PETScKrylovSolver('cg')
         self.velocity = simulation.data['u_conv_dgt0'] = w_new
