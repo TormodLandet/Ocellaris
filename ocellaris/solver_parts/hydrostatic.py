@@ -1,4 +1,4 @@
-from dolfin import dot, grad, dx, sqrt, assemble, Timer
+from dolfin import dot, grad, dx, sqrt, Form, assemble, Timer
 from dolfin import TrialFunction, TestFunction, FunctionSpace, Function
 from dolfin import VectorSpaceBasis, as_backend_type
 from ocellaris.utils import linear_solver_from_input
@@ -48,7 +48,7 @@ class HydrostaticPressure:
         
         self.func = ph
         self.tensor_lhs = assemble(a)
-        self.form_rhs = L
+        self.form_rhs = Form(L)
         self.null_space = None
         self.solver = linear_solver_from_input(simulation, 'solver/p_hydrostatic',
                                                default_parameters=DEFAULT_SOLVER_CONFIGURATION)

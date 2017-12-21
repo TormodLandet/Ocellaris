@@ -1,5 +1,5 @@
 import dolfin as df
-from dolfin import dot, sqrt, grad, jump, avg, dx, dS
+from dolfin import dot, sqrt, grad, jump, avg, dx, dS, Form
 from ocellaris.utils import timeit
 
 
@@ -126,14 +126,14 @@ class SolutionProperties(object):
         Calculate kinetic and potential energy
         """
         x = df.SpatialCoordinate(self.mesh)
-        self._form_E_k = 1/2*rho*dot(vel, vel)*dx(domain=self.mesh)
-        self._form_E_p = rho*dot(-gvec, x - x0)*dx(domain=self.mesh)
+        self._form_E_k = Form(1/2*rho*dot(vel, vel)*dx(domain=self.mesh))
+        self._form_E_p = Form(rho*dot(-gvec, x - x0)*dx(domain=self.mesh))
     
     def _setup_mass(self, rho):
         """
         Calculate mass
         """
-        self._form_mass = rho*dx(domain=self.mesh)
+        self._form_mass = Form(rho*dx(domain=self.mesh))
     
     @timeit
     def courant_number(self):

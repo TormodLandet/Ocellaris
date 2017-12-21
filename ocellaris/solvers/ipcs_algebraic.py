@@ -219,19 +219,20 @@ class SolverIPCSA(Solver):
         assert vec.shape == (2,)
         assert mat[-1,-1] is None, 'Found p-q coupling, this is not a saddle point system!'
         
-        # Store the forms
-        self.eqA = mat[0, 0]
-        self.eqB = mat[0, 1]
-        self.eqC = mat[1, 0]
-        self.eqD = vec[0]
-        self.eqE = vec[1]
+        # Compile and store the forms
+        self.eqA = dolfin.Form(mat[0, 0])
+        self.eqB = dolfin.Form(mat[0, 1])
+        self.eqC = dolfin.Form(mat[1, 0])
+        self.eqD = dolfin.Form(vec[0])
+        self.eqE = dolfin.Form(vec[1]) if vec[1] is not None else None
         
         # The mass matrix. Consistent with the implementation in define_dg_equations
         rho = sim.multi_phase_model.get_density(0)
         c1 = sim.data['time_coeffs'][0]
         dt = sim.data['dt']
         eqM = rho*c1/dt*dolfin.dot(u, v)*dolfin.dx
-        self.eqM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)[0][0, 0]
+        matM, _vecM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)
+        self.eqM = dolfin.Form(matM[0, 0])
     
     @timeit
     def momentum_prediction(self):
@@ -477,9 +478,11 @@ class SolverIPCSA(Solver):
                     if err_u < allowable_error_inner:
                         break
                     self.inner_iteration += 1
+                    
+                    # Better initial guess for next solve
+                    self.velocity_update()
                 
-                # Update and extract the separate velocity component functions
-                self.velocity_update()
+                # Extract the separate velocity component functions
                 self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
                 
                 # Postprocess and limit velocity outside the inner iteration

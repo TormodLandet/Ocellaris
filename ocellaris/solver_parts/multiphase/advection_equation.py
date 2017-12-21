@@ -130,8 +130,8 @@ class AdvectionEquation(object):
                 eq += w_nD*dbc.func()*d*dbc.ds()
         
         a, L = dolfin.system(eq)
-        self.form_lhs = a
-        self.form_rhs = L
+        self.form_lhs = dolfin.Form(a)
+        self.form_rhs = dolfin.Form(L)
         self.tensor_lhs = None
         self.tensor_rhs = None
     
