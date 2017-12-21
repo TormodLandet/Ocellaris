@@ -18,10 +18,10 @@ mesh:
     type: Box
     Nx: py$ N * 4
     Ny: 1
-    Nz: py$ N * 3
+    Nz: py$ int(N * 2.5)
     endx: py$ A * 4
     endy: py$ A / N
-    endz: py$ A * 4 
+    endz: py$ A * 2.5
 
 # BCs with wall slip
 boundary_conditions:
@@ -55,8 +55,6 @@ multiphase_solver:
     type: BlendedAlgebraicVOF
     function_space_colour: DG
     polynomial_degree_colour: 0
-    continuous_fields: no
-    plot_fields: yes
 
 solver:
     type: IPCS-A

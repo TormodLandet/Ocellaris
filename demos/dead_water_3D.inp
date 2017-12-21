@@ -1,0 +1,205 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+metadata:
+    author: Tormod Landet
+    date: 2017-12-13
+    description: |
+        Flow around a parabolic hull in a stratified fluid  
+
+user_code:
+    constants:
+        # Geometry. DO NOT CHANGE WITHOUT UPDATING gmesh geo FILE!!
+        L: 200       # domain length
+        H: 30        # domain depth
+        B: 30        # domain breadth
+        h: 6         # depth to pycnocline
+        d: 5         # draught amidships
+        l: 30        # length of hull water line
+        C: 50        # distance from midships to inlet
+        
+        # Non-geometry parameters
+        Velocity: 2      # vessel speed (divide by 0.514444 to get knots)
+        Tramp: 100       # startup ramp time
+        Tmax:  300       # total duration
+        FRESH: 1000.0    # Upper layer density
+        SALT: 1028.0     # Lower layer density
+    code: |
+        # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
+        # with support for the OpenCASCADE geometry engine
+        import os, subprocess, dolfin
+        if dolfin.MPI.comm_world.rank == 0:
+            mydir = os.path.dirname(os.path.abspath(__file__))
+            geo = os.path.join(mydir, 'datafiles', 'dead_water_3D.geo')
+            msh = os.path.join(mydir, 'datafiles', 'dead_water_3D.msh')
+            xml = os.path.join(mydir, 'datafiles', 'dead_water_3D.xml')
+            assert os.path.isfile(geo)
+            if not os.path.isfile(msh):
+                print('Running gmsh on', geo)
+                subprocess.call(['gmsh', '-2', '-optimize', geo, '-o', msh])
+            if not os.path.isfile(xml):
+                print('Running meshio-convert on', msh)
+                subprocess.call(['meshio-convert', '--input-format', 'gmsh-ascii',
+                                 '--output-format', 'dolfin-xml', msh, xml])
+        dolfin.MPI.comm_world.barrier()
+
+_physical_properties:
+    g: [0, 0, -9.81]
+    nu0: 1.0e-6
+    rho0: py$ SALT
+    nu1: 1.0e-6
+    rho1: py$ FRESH
+
+physical_properties:
+    nu: 1.0e-6
+    rho_min: py$ FRESH
+    rho_max: py$ SALT
+    g: [0, 0, -9.81]
+
+mesh:
+    type: XML
+    mesh_file: datafiles/dead_water_3D.xml
+
+# This is not a standard Ocellaris input, but just referenced below in python code 
+bc_vel: '(t < Tramp ? 3.0*pow(t/Tramp, 2) - 2.0*pow(t/Tramp, 3) : 1.0) * Velocity'
+
+boundary_conditions:
+
+-   name: Hull
+    selector: code
+    inside_code: 'on_boundary'
+    u:
+        type: FreeSlip
+
+-   name: Inlet
+    selector: code
+    inside_code: 'on_boundary and x[0] < 1e-5'
+    u:
+        type: CppCodedValue
+        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0', '0']
+    #c:
+    #    type: CppCodedValue
+    #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+    rho:
+        type: CppCodedValue
+        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
+
+-   name: Outlet
+    selector: code
+    inside_code: 'on_boundary and x[0] > C + l'
+    u:
+        type: CppCodedValue
+        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0', '0']
+    #u0: {type: 'ConstantGradient', value: 0}
+    #u1: {type: 'ConstantValue', value: 0}
+    #u2: {type: 'ConstantValue', value: 0}
+    #c:
+    #    type: CppCodedValue
+    #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+    rho:
+        type: CppCodedValue
+        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
+
+-   name: Bottom
+    selector: code
+    inside_code: 'on_boundary and x[2] < -H + 1e-5'
+    u:
+        type: CppCodedValue
+        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0', '0']
+
+-   name: Surface z=0
+    selector: code
+    inside_code: 'on_boundary and x[2] > -1e-5'
+    u:
+        type: FreeSlip
+
+-   name: Sides
+    selector: code
+    inside_code: 'on_boundary and (x[1] > B/2 - 1e-5 or x[1] < 1e-5)'
+    u:
+        type: FreeSlip
+
+
+time:
+    dt: 0.2
+    tmax: py$ Tmax
+
+output:
+    prefix: output/dead_water_3D_3.9kn
+    log_name: .log
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    xdmf_write_interval: 5
+
+solver:
+    type: IPCS-A
+    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    allowable_error_inner: 1.0e-4
+    polynomial_degree_pressure: 1
+    polynomial_degree_velocity: 2
+    function_space_pressure: DG
+    function_space_velocity: DG
+    steady_velocity_stopping_criterion: 1e-5
+    force_steady: no
+
+_multiphase_solver:
+    type: BlendedAlgebraicVOF
+
+multiphase_solver:
+    type: VariableDensity
+    function_space_rho: DG
+    polynomial_degree_rho: 2
+
+slope_limiter:
+    rho:
+        method: HierarchicalTaylor
+        skip_boundary: no
+        enforce_bounds: yes
+        enforce_bcs: no
+
+probes:
+    -   name: free_surface
+        enabled: no
+        type: IsoSurface
+        value: py$ (SALT + FRESH) / 2
+        field: rho
+        file_name: '_free_surface.out'
+        write_interval: 10
+        custom_hook: MultiPhaseModelUpdated
+
+hooks:
+    pre_simulation:
+    -   name: Initial density field with discrete jump at z=-h
+        enabled: yes
+        code: |
+            # We assume that the mesh aligns with the pycnocline
+            dm = Vrho.dofmap()
+            arr = rho.vector().get_local()
+            for cell in cells(mesh):
+                rho_cell = SALT if cell.midpoint().z() < -h else FRESH
+                for dof in dm.cell_dofs(cell.index()):
+                    arr[dof] = rho_cell
+            rho.vector().set_local(arr)
+            rho.vector().apply('insert')
+            rho_p.assign(rho)
+            rho_pp.assign(rho)
+    post_timestep:
+    -   name: Forces on the hull
+        enabled: yes
+        code: |
+            if not hasattr(simulation, '_forceforms'):
+                hull_id = boundary_by_name['Hull'].mark_id
+                hull_ds = ds(hull_id)
+                n = FacetNormal(mesh)
+                Fpx = Form(p * dot(n, as_vector([1, 0, 0])) * hull_ds)
+                Fpy = Form(p * dot(n, as_vector([0, 1, 0])) * hull_ds)
+                Fpz = Form(p * dot(n, as_vector([0, 0, 1])) * hull_ds)
+                simulation._forceforms = (Fpx, Fpy, Fpz)
+            Fpx, Fpy, Fpz = simulation._forceforms
+            simulation.reporting.report_timestep_value('Fpx', assemble(Fpx))
+            simulation.reporting.report_timestep_value('Fpy', assemble(Fpy))
+            simulation.reporting.report_timestep_value('Fpz', assemble(Fpz))
+
+#console_at_end: true
+#console_on_error: true
