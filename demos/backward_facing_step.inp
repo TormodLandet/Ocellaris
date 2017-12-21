@@ -77,7 +77,6 @@ time:
 
 output:
     prefix: py$ 'output/bfs_lc010_newRe_Re%.3g' % Re 
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
     hdf5_write_interval: 200

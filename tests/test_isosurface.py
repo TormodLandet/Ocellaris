@@ -27,6 +27,7 @@ solver: {type: AnalyticalSolution}
 boundary_conditions: [{'name': 'all', 'selector': 'code', 'inside_code': 'on_boundary'}]
 time: {dt: 1.0}
 physical_properties: {nu0: 1.0, nu1: 1, rho0: 1, rho1: 1}
+output: {log_enabled: no}
 """
 
 @pytest.mark.parametrize("degree", [0, 1, 2])

@@ -42,8 +42,7 @@ time:
     tmax: 1.0
 
 output:
-    prefix: py$ 'output/dam_break_2D_ijCFD_IPCS-A_%02d' % N
-    log_name: .log
+    prefix: py$ 'output/dam_break_2D_ijCFD_TEST_%02d' % N
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10
@@ -69,11 +68,15 @@ solver:
     polynomial_degree_pressure: 1
     
     u:
-        use_ksp: yes
-        ksp_control: [5, 3]
-        ksp_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
-        ksp_atol: [1.0e-6, 1.0e-8, 1.0e-10]
-        ksp_max_it: [5, 20, 30]
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+    p:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
 
 convection:
     c:

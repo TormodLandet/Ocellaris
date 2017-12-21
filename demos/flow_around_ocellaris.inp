@@ -71,7 +71,6 @@ time:
 
 output:
     prefix: output/flow_around_ocellaris_py2
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
 

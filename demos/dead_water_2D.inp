@@ -122,7 +122,6 @@ time:
 
 output:
     prefix: output/dead_water_2D_3.9kn
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10

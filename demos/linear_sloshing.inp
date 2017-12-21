@@ -57,7 +57,6 @@ time:
 
 output:
     prefix: output/linear_sloshing
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 1

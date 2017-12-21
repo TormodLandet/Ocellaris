@@ -54,7 +54,6 @@ time:
 
 output:
     prefix: output/diagonal_advection_of_square_DG1_upwind
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10

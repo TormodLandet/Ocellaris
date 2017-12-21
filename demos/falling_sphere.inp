@@ -90,7 +90,6 @@ time:
 
 output:
     prefix: output/falling_sphere
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10

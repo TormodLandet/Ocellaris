@@ -44,8 +44,7 @@ time:
     tmax: 0.3
 
 output:
-    prefix: py$ 'output/dam_break_3D_%02d_SIMPLE_phyd' % N
-    log_name: .log
+    prefix: py$ 'output/dam_break_3D_%02d' % N
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10
@@ -60,8 +59,8 @@ multiphase_solver:
     plot_fields: yes
 
 solver:
-    type: SIMPLE
-    num_inner_iter: py$ 100 if it < 3 else (10 if it < 10 else 3)
+    type: IPCS-A
+    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
     hydrostatic_pressure_calculation_every_timestep: yes
     allowable_error_inner: 1e-8
     function_space_velocity: DG
@@ -69,9 +68,29 @@ solver:
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     
-    coupled:
-        solver: lu
-        lu_method: mumps
+    u:
+        #petsc_pc_type: bjacobi
+        #petsc_sub_ksp_type: preonly
+        #petsc_sub_pc_type: ilu
+        #petsc_sub_pc_factor_levels: 0
+        
+        #petsc_help: ENABLED
+        
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+    
+    p:
+        petsc_ksp_type: cg
+        petsc_pc_type: gamg
+        petsc_mg_coarse_ksp_type: preonly
+        petsc_mg_coarse_pc_type: svd
+        
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
 
 convection:
     c:

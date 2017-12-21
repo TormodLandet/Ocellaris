@@ -477,7 +477,9 @@ class SolverIPCSA(Solver):
                                      err_u, err_p, self.niters_u, self.niters_p))
                     if err_u < allowable_error_inner:
                         break
+                    
                     self.inner_iteration += 1
+                    sim.flush()
                     
                     # Better initial guess for next solve
                     self.velocity_update()

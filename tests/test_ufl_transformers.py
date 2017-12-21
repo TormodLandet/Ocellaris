@@ -79,24 +79,24 @@ def test_form_splitter_matrices(shape):
         return eq
     
     if shape == (2, 2):
-      eu = MixedElement([Vu.ufl_element(), Vu.ufl_element()])
-      ew = MixedElement([eu, Vp.ufl_element()])
-      W = FunctionSpace(mesh, ew)
-      
-      u, p = TrialFunctions(W)
-      v, q = TestFunctions(W)
-      u = as_vector([u[0], u[1]])
-      v = as_vector([v[0], v[1]])
+        eu = MixedElement([Vu.ufl_element(), Vu.ufl_element()])
+        ew = MixedElement([eu, Vp.ufl_element()])
+        W = FunctionSpace(mesh, ew)
+        
+        u, p = TrialFunctions(W)
+        v, q = TestFunctions(W)
+        u = as_vector([u[0], u[1]])
+        v = as_vector([v[0], v[1]])
     
     elif shape == (3, 3):
-      ew = MixedElement([Vu.ufl_element(), Vu.ufl_element(), Vp.ufl_element()])
-      W = FunctionSpace(mesh, ew)
-      
-      u0, u1, p = TrialFunctions(W)
-      v0, v1, q = TestFunctions(W)
-      u = as_vector([u0, u1])
-      v = as_vector([v0, v1])
-      eq = define_eq(u, v, p, q)
+        ew = MixedElement([Vu.ufl_element(), Vu.ufl_element(), Vp.ufl_element()])
+        W = FunctionSpace(mesh, ew)
+        
+        u0, u1, p = TrialFunctions(W)
+        v0, v1, q = TestFunctions(W)
+        u = as_vector([u0, u1])
+        v = as_vector([v0, v1])
+        eq = define_eq(u, v, p, q)
     
     # Define coupled problem
     eq = define_eq(u, v, p, q)
@@ -171,15 +171,3 @@ def compare_split_matrices(eq, mat, vec, Wv, Wu, eps=1e-14):
     # Check that the original and rebuilt systems are identical
     assert compute_diff(M, M2) < eps
     assert compute_diff(v, v2) < eps
-
-
-if __name__ == '__main__':
-    import logging
-    ffc_logger = logging.getLogger('FFC')
-    ffc_logger.setLevel(logging.WARNING)
-    
-    test_is_zero_simple_scalar_expressions()
-    test_is_zero_simple_vector_expressions()
-    
-    test_form_splitter_coupled()
-

@@ -60,7 +60,6 @@ time:
 
 output:
     prefix: output/hydrostatic
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: info
 

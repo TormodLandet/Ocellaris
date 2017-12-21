@@ -150,9 +150,17 @@ class Simulation(object):
         
         # Write timestep report
         self.reporting.log_timestep_reports()
-        
-        # Flush log at regular intervals
+        self.flush()
+    
+    def flush(self):
+        """
+        Flush output files if an appropriate amount of time has passed. This
+        ensures that flush can be called after important output without slowing
+        down the solver too much with disk IO in case of many calls to flush in
+        quick succession
+        """
+        now = time.time()
         flush_interval = self.input.get_value('output/flush_interval', FLUSH_INTERVAL, 'float')
-        if newtime - self.prevflush > flush_interval:
+        if now - self.prevflush > flush_interval:
             self.hooks.run_custom_hook('flush')
-            self.prevflush = newtime
+            self.prevflush = now

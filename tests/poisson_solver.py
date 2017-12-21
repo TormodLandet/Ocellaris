@@ -36,6 +36,7 @@ boundary_conditions:
         value: 1.0
 
 output:
+    log_enabled: no
     solution_properties: off
     xdmf_write_interval: 0
     save_restart_file_at_end: off

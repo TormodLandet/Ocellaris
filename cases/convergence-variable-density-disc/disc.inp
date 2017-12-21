@@ -85,7 +85,6 @@ time:
 
 output:
     prefix: variable_density_convergence
-    log_name: .log
     dolfin_log_level: warning
     ocellaris_log_level: debug
     stdout_enabled: overridden in script
