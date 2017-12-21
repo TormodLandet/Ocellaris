@@ -1,7 +1,7 @@
 import time
 import numpy
 import dolfin
-from ocellaris.utils import ocellaris_error, velocity_change
+from ocellaris.utils import ocellaris_error, velocity_change, timeit
 from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
@@ -10,6 +10,11 @@ from .log import Log
 from .io import InputOutputHandling
 from .solution_properties import SolutionProperties
 from .setup import setup_simulation
+
+
+# Flush log and other output files at regular intervals, but not every
+# timestep in case there are a lot of them per second
+FLUSH_INTERVAL = 5 # seconds
 
 
 class Simulation(object):
@@ -48,9 +53,10 @@ class Simulation(object):
         self.t_start = None
         self.probes = None
         
-        # For timing the analysis
+        # For timing the analysis and flushing the log at intervals
         self.prevtime = self.starttime = time.time()
-        
+        self.prevflush = 0
+    
     def setup(self):
         """
         Setup the simulation. This creates the .solver object as well as the mesh,
@@ -97,6 +103,7 @@ class Simulation(object):
         self.time = t
         self.dt = dt
     
+    @timeit.named('simulation at_end_of_timestep')
     def _at_end_of_timestep(self):
         # Report the time spent in this time step
         newtime = time.time()
@@ -106,33 +113,34 @@ class Simulation(object):
         
         # Report the solution properties
         if self.solution_properties.active:
-            Co_max = self.solution_properties.courant_number().vector().max()
-            Pe_max = self.solution_properties.peclet_number().vector().max()
-            div_dS_f, div_dx_f = self.solution_properties.divergences()
-            div_dS = div_dS_f.vector().max()
-            div_dx = div_dx_f.vector().max()
-            mass = self.solution_properties.total_mass()
-            Ek, Ep = self.solution_properties.total_energy()
-            self.reporting.report_timestep_value('Co', Co_max)
-            self.reporting.report_timestep_value('Pe', Pe_max)
-            self.reporting.report_timestep_value('div', div_dx + div_dS)
-            self.reporting.report_timestep_value('mass', mass)
-            self.reporting.report_timestep_value('Ek', Ek)
-            self.reporting.report_timestep_value('Ep', Ep)
-            
-            if self.solution_properties.has_div_conv:
-                # Convecting and convected velocities are separate
-                div_conv_dS_f, div_conv_dx_f = self.solution_properties.divergences('u_conv')
-                div_conv_dS = div_conv_dS_f.vector().max()
-                div_conv_dx = div_conv_dx_f.vector().max()
-                self.reporting.report_timestep_value('div_conv', div_conv_dx + div_conv_dS)
+            with dolfin.Timer('Ocellaris solution_properties'):
+                Co_max = self.solution_properties.courant_number().vector().max()
+                Pe_max = self.solution_properties.peclet_number().vector().max()
+                div_dS_f, div_dx_f = self.solution_properties.divergences()
+                div_dS = div_dS_f.vector().max()
+                div_dx = div_dx_f.vector().max()
+                mass = self.solution_properties.total_mass()
+                Ek, Ep = self.solution_properties.total_energy()
+                self.reporting.report_timestep_value('Co', Co_max)
+                self.reporting.report_timestep_value('Pe', Pe_max)
+                self.reporting.report_timestep_value('div', div_dx + div_dS)
+                self.reporting.report_timestep_value('mass', mass)
+                self.reporting.report_timestep_value('Ek', Ek)
+                self.reporting.report_timestep_value('Ep', Ep)
                 
-                # Difference between the convective and the convected velocity
-                ucdiff = velocity_change(u1=self.data['up'],
-                                         u2=self.data['up_conv'],
-                                         ui_tmp=self.data['ui_tmp'])
-                self.reporting.report_timestep_value('uconv_diff', ucdiff)
-            
+                if self.solution_properties.has_div_conv:
+                    # Convecting and convected velocities are separate
+                    div_conv_dS_f, div_conv_dx_f = self.solution_properties.divergences('u_conv')
+                    div_conv_dS = div_conv_dS_f.vector().max()
+                    div_conv_dx = div_conv_dx_f.vector().max()
+                    self.reporting.report_timestep_value('div_conv', div_conv_dx + div_conv_dS)
+                    
+                    # Difference between the convective and the convected velocity
+                    ucdiff = velocity_change(u1=self.data['up'],
+                                             u2=self.data['up_conv'],
+                                             ui_tmp=self.data['ui_tmp'])
+                    self.reporting.report_timestep_value('uconv_diff', ucdiff)
+                
             if not numpy.isfinite(Co_max):
                 ocellaris_error('Non finite Courant number',
                                 'Found Co = %g' % Co_max)
@@ -142,3 +150,9 @@ class Simulation(object):
         
         # Write timestep report
         self.reporting.log_timestep_reports()
+        
+        # Flush log at regular intervals
+        flush_interval = self.input.get_value('output/flush_interval', FLUSH_INTERVAL, 'float')
+        if newtime - self.prevflush > flush_interval:
+            self.hooks.run_custom_hook('flush')
+            self.prevflush = newtime

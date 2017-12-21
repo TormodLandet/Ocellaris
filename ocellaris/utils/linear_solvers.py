@@ -200,11 +200,17 @@ class KSPLinearSolverWrapper(object):
         prefix = 'sol_%s_' % input_path.split('/')[-1]
         self._solver = dolfin.PETScKrylovSolver()
         
+        # Help is treated specially, this is used to enquire about PETSc capabilities
+        request_petsc_help = 'petsc_help' in params
+        if request_petsc_help:
+            params.pop('petsc_help')
+        
         # Translate the petsc_* keys to the correct solver prefix
         # and insert them into the PETSc options database
         for param, value in sorted(params.items()):
             if not param.startswith('petsc_'):
                 continue
+            
             option = prefix + param[6:]
             simulation.log.info('        %-50s: %20r' % (option, value))
             
@@ -218,9 +224,19 @@ class KSPLinearSolverWrapper(object):
                 # Normal option with value
                 dolfin.PETScOptions.set(option, value)
         
+        if request_petsc_help:
+            simulation.log.warning('PETSc help coming up')
+            simulation.log.warning('-' * 80)
+            dolfin.PETScOptions.set('help')
+        
         # Configure the solver
         self._solver.set_options_prefix(prefix)
         self._solver.ksp().setFromOptions()
+        
+        if request_petsc_help:
+            simulation.log.warning('-' * 80)
+            simulation.log.warning('Showing PETSc help done, exiting')
+            exit()
     
     def solve(self, *argv, **kwargs):
         self._solver.set_from_options()

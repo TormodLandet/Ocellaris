@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from matplotlib import pyplot
-from ocellaris.utils import ocellaris_error
+from ocellaris.utils import ocellaris_error, timeit
 
 
 class Reporting(object):
@@ -52,6 +52,7 @@ class Reporting(object):
         rep = self.timestep_xy_reports[report_name]
         return t[:len(rep)], rep
     
+    @timeit.named('reporting log_timestep_reports')
     def log_timestep_reports(self):
         """
         Write all reports for the finished time step to the log

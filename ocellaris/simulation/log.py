@@ -1,4 +1,4 @@
-import os
+import os, sys
 import dolfin
 
 
@@ -113,6 +113,8 @@ class Log(object):
         """
         if self.write_log:
             self.log_file.flush()
+        if self.write_stdout:
+            sys.stdout.flush()
     
     def get_full_log(self):
         """

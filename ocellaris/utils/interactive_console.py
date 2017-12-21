@@ -1,4 +1,4 @@
-import sys
+import os, sys
 import code
 import readline
 import rlcompleter
@@ -26,15 +26,18 @@ def interactive_console_hook(simulation):
     Interactive console commands are not available on Windows
     or during non-interactive (queue system/batch) use
     """
+    # Command file - used in addition to stdin if it exits
+    command_file = simulation.input.get_output_file_path('command_control_file', '.COMMANDS')
+    
     # Check if the user has written something on stdin for us
     if simulation.rank == 0:
-        commands = get_input_from_terminal()
+        commands = read_stdin_and_cmdfile(command_file)
     else:
         commands = []
     
     # Make sure all processes get the same commands
     if simulation.ncpu > 1:
-        from mpi4py.MPI import COMM_WORLD as comm
+        comm = simulation.data['mesh'].mpi_comm()
         commands = comm.bcast(commands)
     
     for command in commands:
@@ -44,6 +47,7 @@ def interactive_console_hook(simulation):
         
         if command == 'f':
             # f == "flush" -> flush open files
+            simulation.log.info('\nCommand line action:\n  Flushing open files')
             simulation.hooks.run_custom_hook('flush')
         
         elif command == 'p':
@@ -96,21 +100,38 @@ def interactive_console_hook(simulation):
             del simulation._profile_object
 
 
-def get_input_from_terminal():
+def read_stdin_and_cmdfile(command_file):
     """
-    Read stdin to see if there are some commands for us to execute
+    Read stdin to see if there are some commands for us to execute. 
+    We also check the file output_prefix.COMMANDS and read this
+    if it exists for cases where stdin is not easily accessible
+    for the user. The command file is DELETED after reading
     """
+    # Read commands from the control command file if it exists
+    # and then delete it after reading to avoid re-running the
+    # commands every time step
+    commands = []
+    if os.path.isfile(command_file):
+        try:
+            with open(command_file) as inp:
+                lines = inp.readlines()
+            os.remove(command_file)
+            commands.extend(cmd.strip() for cmd in lines)
+        except Exception:
+            pass
+    
+    # We need the select() system call to check if is possible
+    # to read from stdin without blocking (waiting for input).
     # The select() system call does not work on windows
     if 'win' in sys.platform:
-        return []
+        return commands
     
     # If we are not running interactively there will be no commands
     if not sys.__stdin__.isatty():
-        return []
+        return commands
     
+    # Check if we can read from stdin without blocking 
     import select
-    
-    commands = []
     has_input = lambda: sys.stdin in select.select([sys.stdin], [], [], 0)[0]
     
     # Check if there is input on stdin and read it if it exists
@@ -171,6 +192,7 @@ def define_convenience_functions(simulation):
     Some functions that are nice to have for debugging purposes
     """
     import dolfin
+    from matplotlib import pyplot
     
     info = []
     funcs = {}
@@ -181,8 +203,9 @@ def define_convenience_functions(simulation):
     def plot_all():
         for name in fields:
             field = simulation.data[name]
-            dolfin.plot(field, title=name, tag=name)
-        dolfin.interactive()
+            dolfin.plot(field, title=name, tag=name)    
+        pyplot.show()
     funcs['plot_all'] = plot_all
+    funcs['pyplot'] = pyplot
     
     return funcs, info

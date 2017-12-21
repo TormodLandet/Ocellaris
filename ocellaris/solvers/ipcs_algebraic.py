@@ -422,7 +422,6 @@ class SolverIPCSA(Solver):
         
         return change
     
-    @timeit.named('run IPCS-A solver')
     def run(self):
         """
         Run the simulation
@@ -439,68 +438,69 @@ class SolverIPCSA(Solver):
         
         # Give reasonable starting guesses for the solvers
         shift_fields(sim, ['up%d', 'u%d']) # get the initial u star
-        
-        while True:
-            # Get input values, these can possibly change over time
-            dt = sim.input.get_value('time/dt', required_type='float')
-            tmax = sim.input.get_value('time/tmax', required_type='float')
-            num_inner_iter = sim.input.get_value('solver/num_inner_iter',
-                                                 MAX_INNER_ITER, 'int')
-            allowable_error_inner = sim.input.get_value('solver/allowable_error_inner',
-                                                        ALLOWABLE_ERROR_INNER, 'float')
-            
-            # Check if the simulation is done
-            if t+dt > tmax + 1e-6:
-                break
-            
-            # Advance one time step
-            it += 1
-            t += dt
-            self.simulation.data['dt'].assign(dt)
-            self.simulation.hooks.new_timestep(it, t, dt)
-            
-            # Calculate the hydrostatic pressure when the density is not constant
-            self.hydrostatic_pressure.update()
-            
-            # Collect previous velocity components in coupled function
-            self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
-            
-            # Run inner iterations
-            self.inner_iteration = 1
-            while self.inner_iteration <= num_inner_iter:
-                self.co_inner_iter = num_inner_iter - self.inner_iteration
-                err_u = self.momentum_prediction()
-                err_p = self.pressure_correction()
-                sim.log.info('  IPCS-A iteration %3d - err u* %10.3e - err p %10.3e'
-                             ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
-                                 err_u, err_p, self.niters_u, self.niters_p))
-                if err_u < allowable_error_inner:
+    
+        with dolfin.Timer('Ocellaris run IPCS-A solver'):    
+            while True:
+                # Get input values, these can possibly change over time
+                dt = sim.input.get_value('time/dt', required_type='float')
+                tmax = sim.input.get_value('time/tmax', required_type='float')
+                num_inner_iter = sim.input.get_value('solver/num_inner_iter',
+                                                     MAX_INNER_ITER, 'int')
+                allowable_error_inner = sim.input.get_value('solver/allowable_error_inner',
+                                                            ALLOWABLE_ERROR_INNER, 'float')
+                
+                # Check if the simulation is done
+                if t+dt > tmax + 1e-6:
                     break
-                self.inner_iteration += 1
-            
-            # Update and extract the separate velocity component functions
-            self.velocity_update()
-            self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
-            
-            # Postprocess and limit velocity outside the inner iteration
-            self.postprocess_velocity()
-            shift_fields(sim, ['u%d', 'u_conv%d'])
-            if self.using_limiter:
-                self.slope_limit_velocities()
-            
-            # Move u -> up, up -> upp and prepare for the next time step
-            vel_diff = after_timestep(sim, self.is_steady)
-            
-            # Stop steady state simulation if convergence has been reached
-            if self.is_steady:
-                vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
-                sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)                
-                if vel_diff < self.steady_velocity_eps:
-                    sim.log.info('Stopping simulation, steady state achieved')
-                    sim.input.set_value('time/tmax', t)
-            
-            # Postprocess this time step
-            sim.hooks.end_timestep()
+                
+                # Advance one time step
+                it += 1
+                t += dt
+                self.simulation.data['dt'].assign(dt)
+                self.simulation.hooks.new_timestep(it, t, dt)
+                
+                # Calculate the hydrostatic pressure when the density is not constant
+                self.hydrostatic_pressure.update()
+                
+                # Collect previous velocity components in coupled function
+                self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
+                
+                # Run inner iterations
+                self.inner_iteration = 1
+                while self.inner_iteration <= num_inner_iter:
+                    self.co_inner_iter = num_inner_iter - self.inner_iteration
+                    err_u = self.momentum_prediction()
+                    err_p = self.pressure_correction()
+                    sim.log.info('  IPCS-A iteration %3d - err u* %10.3e - err p %10.3e'
+                                 ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
+                                     err_u, err_p, self.niters_u, self.niters_p))
+                    if err_u < allowable_error_inner:
+                        break
+                    self.inner_iteration += 1
+                
+                # Update and extract the separate velocity component functions
+                self.velocity_update()
+                self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
+                
+                # Postprocess and limit velocity outside the inner iteration
+                self.postprocess_velocity()
+                shift_fields(sim, ['u%d', 'u_conv%d'])
+                if self.using_limiter:
+                    self.slope_limit_velocities()
+                
+                # Move u -> up, up -> upp and prepare for the next time step
+                vel_diff = after_timestep(sim, self.is_steady)
+                
+                # Stop steady state simulation if convergence has been reached
+                if self.is_steady:
+                    vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
+                    sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)                
+                    if vel_diff < self.steady_velocity_eps:
+                        sim.log.info('Stopping simulation, steady state achieved')
+                        sim.input.set_value('time/tmax', t)
+                
+                # Postprocess this time step
+                sim.hooks.end_timestep()
         
         # We are done
         sim.hooks.simulation_ended(success=True)

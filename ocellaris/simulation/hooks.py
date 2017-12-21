@@ -97,7 +97,7 @@ class Hooks(object):
         # Flush open files
         self.simulation.hooks.run_custom_hook('flush')
     
-    @timeit
+    @timeit.named('all hooks: new_timestep')
     def new_timestep(self, timestep_number, t, dt):
         """
         Called by the solver at the beginning of a new time step
@@ -115,7 +115,7 @@ class Hooks(object):
                     self.simulation.log.error(traceback.format_exc())
                     raise
     
-    @timeit
+    @timeit.named('all hooks: end_timestep')
     def end_timestep(self):
         """
         Called by the solver at the end of a time step
@@ -155,7 +155,7 @@ class Hooks(object):
         # Flush open files
         self.simulation.hooks.run_custom_hook('flush')
     
-    @timeit
+    @timeit.named('all hooks: matrix_ready')
     def matrix_ready(self, Aname, A, b=None):
         """
         Called by the solver after assembly and before a linear
@@ -173,7 +173,7 @@ class Hooks(object):
             finally:
                 t.stop()
                 
-    @timeit
+    @timeit.named('all hooks: custom_hook')
     def run_custom_hook(self, hook_point, *args, **kwargs):
         """
         Called by the solver at a custom point

@@ -2,7 +2,7 @@ import os
 import numpy
 import h5py
 import dolfin
-from ocellaris.utils import ocellaris_error
+from ocellaris.utils import ocellaris_error, timeit
 
 
 # Default values, can be changed in the input file
@@ -118,6 +118,7 @@ class InputOutputHandling():
         
         self.xdmf_file = None
     
+    @timeit.named('IO write_fields')
     def write_fields(self):
         """
         Write fields to file after end of time step
