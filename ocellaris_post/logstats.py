@@ -15,6 +15,11 @@ import os, sys
 from .files import get_result_file_name
 from .results import Results
 
+try:
+    import hipsterplot
+except ImportError:
+    hipsterplot = None
+
 
 def get_stats(name, ts):
     avg = ts.mean()
@@ -25,7 +30,7 @@ def get_stats(name, ts):
     return (name, avg, std, ts.min(), ts.max())
 
 
-def show_logstats(file_name, skip_first=0):
+def show_logstats(file_name, skip_first=0, plot_ts=None):
     results = Results(file_name)
     maxlen = 0
     stats = []
@@ -57,6 +62,17 @@ def show_logstats(file_name, skip_first=0):
         print('    Running on %d CPUs with a total of %d DOFs (%d per CPU)'
               % (results.ncpus, results.ncpus, results.ndofs / results.ncpus))
     
+    if plot_ts:
+        if not plot_ts in results.reports:
+            print('\nERROR: the time series %r is not present in the data' % plot_ts)
+            sys.exit(1)
+        if hipsterplot is None:
+            print('\nERROR: missing hipsterplot, "pip install hipsterplot" to show plots')
+            sys.exit(1)
+        print('\n%s:' % plot_ts)
+        x = results.reports_x[plot_ts][skip_first:]
+        y = results.reports[plot_ts][skip_first:]
+        hipsterplot.plot(y, x, num_x_chars=len(sep)-11, num_y_chars=15)
     print()
 
 
@@ -71,6 +87,7 @@ def main(args=None):
     parser.add_argument('resfile', help='Name of log or restartfile', nargs='+')
     parser.add_argument('--skip-first', '-s', type=int, metavar='N', default=0,
                         help='Skip the first N data points')
+    parser.add_argument('--plot', help='Plot the given time series (command line output only)')
     args = parser.parse_args(args[1:])
     
     # Get report files to read
@@ -95,7 +112,7 @@ def main(args=None):
         print('======================\n')
         
         for fn in file_names:
-            show_logstats(fn, args.skip_first)
+            show_logstats(fn, args.skip_first, plot_ts=args.plot)
 
 
 if __name__ == '__main__':
