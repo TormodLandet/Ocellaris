@@ -25,13 +25,13 @@ def get_stats(name, ts):
     return (name, avg, std, ts.min(), ts.max())
 
 
-def show_logstats(file_name):
+def show_logstats(file_name, skip_first=0):
     results = Results(file_name)
     maxlen = 0
     stats = []
     for rname, ts in results.reports.items():
         maxlen = max(maxlen, len(rname))
-        stats.append(get_stats(rname, ts))
+        stats.append(get_stats(rname, ts[skip_first:]))
     
     if 'tstime' in results.reports_x:
         stats.append(get_stats('t', results.reports_x['tstime']))
@@ -65,9 +65,17 @@ def main(args=None):
     if args is None:
         args = sys.argv
     
+    import argparse
+    parser = argparse.ArgumentParser(prog='ocellaris_logstats',
+                                     description='Ocellaris log statistics post processor')
+    parser.add_argument('resfile', help='Name of log or restartfile', nargs='+')
+    parser.add_argument('--skip-first', '-s', type=int, metavar='N', default=0,
+                        help='Skip the first N data points')
+    args = parser.parse_args(args[1:])
+    
     # Get report files to read
     file_names = []
-    for fn in args[1:]:
+    for fn in args.resfile:
         if os.path.isdir(fn):
             fn = get_result_file_name(fn)
         
@@ -87,7 +95,7 @@ def main(args=None):
         print('======================\n')
         
         for fn in file_names:
-            show_logstats(fn)
+            show_logstats(fn, args.skip_first)
 
 
 if __name__ == '__main__':
