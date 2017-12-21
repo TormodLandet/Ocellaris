@@ -22,12 +22,18 @@ class Results(object):
         The file name given can be either a simulation log file
         (for ongoing simulations) or an Ocellaris restart file 
         """
+        # Main info
         self.input = None
         self.log = None
         self.reports = None
         self.reports_x = None
         self.surfaces = None
         self.input = None
+        
+        # Auxillary info
+        self.ndofs = None
+        self.ncpus = None
+        
         self.reload(file_name, derived, inner_iterations)
     
     def reload(self, file_name=None, derived=True, inner_iterations=True):
@@ -272,11 +278,22 @@ def read_log_data(results):
 
 
 def read_iteration_reports(results):
+    """
+    Read less inportant reports that are on the log file, but not
+    saved specifically to the h5 file format. This is mainly inner
+    iteration data, but also some other tibits like number of
+    degrees of freedom, number of CPUs, ...
+    """
     iter_reps = {}
     for line in StringIO(unicode(results.log)):
-        if not ('iteration' in line and 'Krylov' in line):
+        if line.startswith('Running simulation on'):
+            results.ncpus = int(line.split()[3])
+        elif line.startswith('Degrees of freedom'):
+            results.ndofs = int(line.split()[3])
+        elif not ('iteration' in line and 'Krylov' in line):
             continue
-        # Parse the line
+        
+        # Parse the inner iteration line
         try:
             parts = line.split(' - ')
             iter_num = int(parts[0].split()[-1])

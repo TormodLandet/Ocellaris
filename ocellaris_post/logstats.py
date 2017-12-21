@@ -51,8 +51,12 @@ def show_logstats(file_name):
             print(sep)
         print(template2 % s)
         i += 1
-    if i % L != 0:
-        print(sep)
+    print(sep)
+    
+    if None not in (results.ndofs, results.ncpus):
+        print('    Running on %d CPUs with a total of %d DOFs (%d per CPU)'
+              % (results.ncpus, results.ncpus, results.ndofs / results.ncpus))
+    
     print()
 
 
