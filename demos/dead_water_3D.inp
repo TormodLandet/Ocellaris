@@ -20,7 +20,7 @@ user_code:
         C: 50        # distance from midships to inlet
         
         # Non-geometry parameters
-        Velocity: 2      # vessel speed (divide by 0.514444 to get knots)
+        Velocity: 5.0    # vessel speed (divide by 0.514444 to get knots)
         Tramp: 100       # startup ramp time
         Tmax:  300       # total duration
         FRESH: 1000.0    # Upper layer density
@@ -126,11 +126,10 @@ time:
     tmax: py$ Tmax
 
 output:
-    prefix: output/dead_water_3D_3.9kn
-    log_name: .log
+    prefix: py$ 'output/dead_water_3D_%.1fkn' % (Velocity / 0.514444)
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 5
+    xdmf_write_interval: 15
 
 solver:
     type: IPCS-A
