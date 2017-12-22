@@ -14,11 +14,7 @@ from __future__ import print_function
 import os, sys, argparse
 from .files import get_result_file_name
 from .results import Results
-
-try:
-    import hipsterplot
-except ImportError:
-    hipsterplot = None
+from . import textplot
 
 
 # See https://en.wikipedia.org/wiki/ANSI_escape_code
@@ -91,7 +87,10 @@ def show_logstats(results, skip_first=0):
 
 def show_comparison(all_results, ts_name, skip_first=0):
     # Find common file name prefix
-    prefix = os.path.commonpath([res.file_name for res in all_results])
+    if len(all_results) > 1:
+        prefix = os.path.commonpath([res.file_name for res in all_results])
+    else:
+        prefix, _ = os.path.split(all_results[0].file_name)
     
     maxlen = 1
     stats = []
@@ -119,23 +118,22 @@ def show_comparison(all_results, ts_name, skip_first=0):
 
 
 def plot_ts(results, ts_names, skip_first=0, title=None):
-    if hipsterplot is None:
-        error('\nERROR: missing hipsterplot, "pip install hipsterplot" to show plots')
-        sys.exit(1)
-    
     if title is not None:
         header(title)
     
-    for ts_name in ts_names:    
-        if not ts_name in results.reports:
-            error('\nERROR: the time series %r is not present in the data' % plot_ts)
+    for ts_name in ts_names:
+        if ts_name in results.reports:
+            x = results.reports_x[ts_name]
+            y = results.reports[ts_name]
+        elif ts_name == 't' and 'tstime' in results.reports_x:
+            x = results.reports_x['tstime']
+            y = results.reports_x['tstime']
+        else:
+            error('\nERROR: the time series %r is not present %s' %
+                  (plot_ts, results.file_name))
             sys.exit(1)
-        
-        print('\n%s:' % ts_name)
-        x = results.reports_x[ts_name][skip_first:]
-        y = results.reports[ts_name][skip_first:]
-        hipsterplot.plot(y, x, num_x_chars=100, num_y_chars=15)
-        print('                x axis range from %g to %g' % (x[0], x[-1]))
+        header('\nPlot of time series %r:' % ts_name)
+        textplot.plot(x[skip_first:], y[skip_first:], figsize=(100, 15))
     print()
 
 
@@ -149,9 +147,9 @@ def parse_args(argv):
                         help='Name of log or restartfile')
     parser.add_argument('--skip-first', '-s', type=int, metavar='N', default=0,
                         help='Skip the first N data points')
-    parser.add_argument('--plot', '-p', metavar='TSNAME', action='append',
+    parser.add_argument('--plot', '-p', metavar='TSNAME', action='append', default=[],
                         help='Plot the given time series (command line output only)')
-    parser.add_argument('--restrict', '-r', metavar='TSNAME', action='append',
+    parser.add_argument('--restrict', '-r', metavar='TSNAME', action='append', default=[],
                         help='Only show info about the selected time series')
     return parser.parse_args(argv)
 
