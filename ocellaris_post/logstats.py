@@ -100,9 +100,9 @@ def show_comparison(all_results, ts_name, skip_first=0):
         elif ts_name == 't' and 'tstime' in res.reports_x:
             ts = res.reports_x['tstime']
         else:
-            error('\nERROR: the time series %r is not present %s' %
-                  (plot_ts, res.file_name))
-            sys.exit(1)
+            warn('\nWARNING: the time series %r is not present %s' %
+                 (ts_name, res.file_name))
+            continue
         
         # Get a short name with CPU number (for comparing timings)
         name = res.file_name[len(prefix):]
@@ -130,7 +130,7 @@ def plot_ts(results, ts_names, skip_first=0, title=None):
             y = results.reports_x['tstime']
         else:
             error('\nERROR: the time series %r is not present %s' %
-                  (plot_ts, results.file_name))
+                  (ts_name, results.file_name))
             sys.exit(1)
         header('\nPlot of time series %r:' % ts_name)
         textplot.plot(x[skip_first:], y[skip_first:], figsize=(100, 15))

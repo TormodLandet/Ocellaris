@@ -88,5 +88,6 @@ def plot(*args, figsize=(80, 15)):
         else:
             ylabel = (yedges[i] + yedges[i+1])/2
         print('% 9.3g' % ylabel, translate_line(hist[:,i]))
-    xticks = 'x axis range from %g to %g' % (xedges[0], xedges[-1])
+    xticks = 'x axis range from %g to %g (%d values)' % (xedges[0], xedges[-1], len(x))
     print(' ' * 9, xticks.center(W))
+
