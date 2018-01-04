@@ -1,4 +1,5 @@
 import sys, os
+import dolfin
 from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation
 
 
@@ -13,6 +14,9 @@ def main(inputfile, input_override):
     Run Ocellaris
     """
     sim = Simulation()
+    
+    # We require mesh ghosting 
+    dolfin.parameters['ghost_mode'] = 'shared_vertex'
     
     # Read input
     if sim.io.is_restart_file(inputfile):

@@ -1,4 +1,5 @@
 import os
+import yaml
 import numpy
 import h5py
 import dolfin
@@ -25,7 +26,8 @@ class InputOutputHandling():
         close = lambda success: self._close_files()
         sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
         self.extra_xdmf_functions = []
-        
+        self.persisted_python_data = {} 
+    
     def add_extra_output_function(self, function):
         """
         The output files (XDMF) normally only contain u, p and potentially rho or c. Other
@@ -33,6 +35,20 @@ class InputOutputHandling():
         """
         self.simulation.log.info('    Adding extra output function %s' % function.name())
         self.extra_xdmf_functions.append(function)
+    
+    def get_persisted_dict(self, name):
+        """
+        Get dictionary that is persisted across program restarts by
+        pickling the data when saving HDF5 restart files.
+        
+        Only basic data types in the dictionary are persisted. Such
+        data types are ints, floats, strings, booleans and containers 
+        such as lists, dictionaries, tuples and sets of these basic
+        data types. All other data can be stored in the returned 
+        dictionary, but will not be persisted  
+        """
+        assert isinstance(name, str)
+        return self.persisted_python_data.setdefault(name, {})
     
     def _setup_io(self):
         sim = self.simulation
@@ -285,6 +301,29 @@ class InputOutputHandling():
             reps['timesteps'] = numpy.array(sim.reporting.timesteps, dtype=float)
             for rep_name, values in sim.reporting.timestep_xy_reports.items():
                 reps[rep_name] = numpy.array(values, dtype=float)
+            
+            
+            # Save persistent data dictionaries
+            pdd = hdf.create_group('ocellaris_data')
+            i = 0
+            for name, data in self.persisted_python_data.items():
+                # Get stripped down data with only basic data types
+                data2 = {}
+                for k, v in data.items():
+                    if is_basic_datatype(k) and is_basic_datatype(v):
+                        data2[k] = v
+                
+                if not data2:
+                    # no basic data to store, skip this dict
+                    continue
+                
+                # Convert basic data type data to YAML format
+                data3 = yaml.dump(data2)
+                
+                pdi = pdd.create_group('data_%02d' % i)
+                np_string(pdi, 'name', name)
+                np_string(pdi, 'data', data3)
+                i += 1
         
         return h5_file_name
     
@@ -343,6 +382,20 @@ class InputOutputHandling():
             for name in funcnames:
                 sim.log.info('    Function %s' % name)
                 h5.read(sim.data[name], '/%s' % name)
+            
+            h5.close() # Close dolfin.HDF5File
+            
+            # Read persisted data dictionaries with h5py
+            with h5py.File(h5_file_name, 'r') as hdf:
+                pdd = hdf.get('ocellaris_data', {})
+                for pdi in pdd.values():
+                    name = pdi['name'].value
+                    data = pdi['data'].value
+                    
+                    # Parse YAML data and update the persistent data store
+                    data2 = yaml.load(data)
+                    data3 = self.get_persisted_dict(name)
+                    data3.update(data2)
 
     ###########################################################
     # Debugging routines
@@ -417,3 +470,20 @@ class InputOutputHandling():
 
         self.simulation.log.info('Loaded LA objects from %r (%r)' % (file_name, data.keys()))
         return ret
+
+
+def is_basic_datatype(value):
+    """
+    We only save "basic" datatypes like ints, floats, strings and 
+    lists, dictionaries or sets of these as pickles in restart files
+    
+    This function returns True if the datatype is such a basic data
+    type  
+    """
+    if isinstance(value, (int, float, str, bytes, bool)):
+        return True
+    elif isinstance(value, (list, tuple, set)):
+        return all(is_basic_datatype(v) for v in value)
+    elif isinstance(value, dict):
+        return all(is_basic_datatype(k) and is_basic_datatype(v) for k, v in value.items())
+    return False

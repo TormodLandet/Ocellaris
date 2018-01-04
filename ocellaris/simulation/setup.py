@@ -159,7 +159,6 @@ def load_mesh(simulation):
     """
     inp = simulation.input
     mesh_type = inp.get_value('mesh/type', required_type='string')
-    dolfin.parameters['ghost_mode'] = 'shared_vertex'
     mesh_facet_regions = None
     
     # For testing COMM_SELF may be specified
@@ -422,9 +421,9 @@ def setup_hooks(simulation):
     
     hooks = simulation.input.get_value('hooks', {}, 'dict(string:list)')
     
-    def make_hook_from_code_string(code_string, description):
+    def make_hook_from_code_string(name, code_string, description):
         runnable = RunnablePythonString(simulation, code_string, description)
-        hook_data = {}
+        hook_data = simulation.io.get_persisted_dict('hook %r' % name)
         def hook(*args, **kwargs):
             runnable.run(hook_data=hook_data, **kwargs)
         return hook
@@ -434,10 +433,20 @@ def setup_hooks(simulation):
                   ('pre_timestep', simulation.hooks.add_pre_timestep_hook),
                   ('post_timestep', simulation.hooks.add_post_timestep_hook),
                   ('matrix_ready', simulation.hooks.add_matrix_ready_hook)]
+    names = set()
     
     for hook_name, register_hook in hook_types:
         for hook_info in hooks.get(hook_name, []):
             name = hook_info.get('name', 'unnamed')
+            
+            # Ensure that the hook name is unique among all hooks
+            i, name2 = 0, name
+            while name2 in names:
+                i += 1
+                name2 = name + str(i)
+            name =  name2
+            names.add(name)
+                
             enabled = hook_info.get('enabled', True)
             description = '%s hook "%s"' % (hook_name, name)
             
@@ -447,7 +456,7 @@ def setup_hooks(simulation):
             
             simulation.log.info('    Adding %s' % description)
             code_string = hook_info['code']
-            hook = make_hook_from_code_string(code_string, description)
+            hook = make_hook_from_code_string(name, code_string, description)
             register_hook(hook, 'User defined hook "%s"' % name)
             simulation.log.info('        ' + description)
 
