@@ -285,6 +285,12 @@ class Input(collections.OrderedDict):
         yaml.add_representer(collections.OrderedDict, dict_representer)
         yaml.add_constructor(_mapping_tag, dict_constructor)
         
+        # PyYAML bugfix to be able to read, e.g., 𝜏𝜀𝜁𝜃
+        # See https://stackoverflow.com/a/44875714
+        import re
+        yaml.reader.Reader.NON_PRINTABLE = re.compile(
+            '[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]')
+    
     def __str__(self):
         inp = collections.OrderedDict(self.items())
         return yaml.dump(inp, indent=4)
