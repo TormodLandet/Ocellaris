@@ -366,8 +366,13 @@ def setup_initial_conditions(simulation):
     simulation.log.info('Creating initial conditions')
     
     ic = simulation.input.get_value('initial_conditions', {}, 'dict(string:dict)')
+    has_file = False
     for name, info in ic.items():
         name = str(name)
+        
+        if name == 'file':
+            has_file = True
+            continue
         
         if not 'p' in name:
             ocellaris_error('Invalid initial condition',
@@ -406,11 +411,44 @@ def setup_initial_conditions(simulation):
                 simulation.log.info('    Leaving %s as set by initial condition' % cname)
                 continue
             
-            if cname not in simulation.data:
+            if cname not in simulation.data or cname_main not in ic:
                 continue
             
             simulation.data[cname].assign(simulation.data[cname_main])
             simulation.log.info('    Assigning initial value %s = %s' % (cname, cname_main))
+    
+    if has_file:
+        setup_initial_conditions_from_restart_file(simulation)
+
+
+def setup_initial_conditions_from_restart_file(simulation):
+    """
+    Read initial function values from a restart file
+    
+    This is not (necessarily) used when starting from a restart file.
+    It is normally used when starting from an input file, with a new
+    mesh or some other input change, using initial conditions only
+    from the restart file.
+    """
+    h5_file_name = simulation.input.get_value('initial_conditions/file/h5_file',
+                                              required_type='string')
+    simulation.log.info('    Loading data from h5 file %r' % h5_file_name)
+    funcs = simulation.io.load_restart_file_functions(h5_file_name)
+    simulation.log.info('    Found %d functions' % len(funcs))
+    
+    for name, f0 in sorted(funcs.items()):
+        if f0 is None:
+            simulation.log.warning('    Skipping unsupported function %s' % name)
+            continue
+        elif name not in simulation.data:
+            simulation.log.warning('    Found initial condition for %r in h5 file, but '
+                                   'this function is not present in the simulation' % name)
+            continue
+        
+        # FIXME: this is probably not very robust with regards to slightly non-matching meshes
+        f = simulation.data[name]
+        f0.set_allow_extrapolation(True)
+        dolfin.project(f0, f.function_space(), function=f)
 
 
 def setup_hooks(simulation):

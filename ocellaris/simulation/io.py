@@ -1,4 +1,4 @@
-import os
+import os, re
 import yaml
 import numpy
 import h5py
@@ -187,17 +187,24 @@ class InputOutputHandling():
         """
         Load the input used in the given restart file
         """
-        t = dolfin.Timer('Ocellaris load hdf5')
-        self._read_hdf5(h5_file_name, read_input=True, read_results=False)
-        t.stop()
-        
+        with dolfin.Timer('Ocellaris load hdf5'):
+            self._read_hdf5(h5_file_name, read_input=True, read_results=False)
+    
     def load_restart_file_results(self, h5_file_name):
         """
         Load the results stored on the given restart file
         """
-        t = dolfin.Timer('Ocellaris load hdf5')
-        self._read_hdf5(h5_file_name, read_input=False, read_results=True)
-        t.stop()
+        with dolfin.Timer('Ocellaris load hdf5'):
+            self._read_hdf5(h5_file_name, read_input=False, read_results=True)
+    
+    def load_restart_file_functions(self, h5_file_name):
+        """
+        Load only the Functions stored on the given restart file
+        Returns a dictionary of functions, does not affect the
+        Simulation object itself (for switching meshes etc.)
+        """
+        with dolfin.Timer('Ocellaris load hdf5'):
+            return self._read_hdf5_functions(h5_file_name)
     
     def _write_xdmf(self):
         """
@@ -302,7 +309,6 @@ class InputOutputHandling():
             for rep_name, values in sim.reporting.timestep_xy_reports.items():
                 reps[rep_name] = numpy.array(values, dtype=float)
             
-            
             # Save persistent data dictionaries
             pdd = hdf.create_group('ocellaris_data')
             i = 0
@@ -327,9 +333,9 @@ class InputOutputHandling():
         
         return h5_file_name
     
-    def _read_hdf5(self, h5_file_name, read_input=True, read_results=True):
+    def _read_hdf5_metadata(self, h5_file_name, function_details=False):
         """
-        Read an HDF5 restart file on the format written by _write_hdf5()
+        Read HDF5 restart file metadata
         """
         # Check file format and read metadata
         with h5py.File(h5_file_name, 'r') as hdf:
@@ -350,6 +356,24 @@ class InputOutputHandling():
             dt = float(meta.attrs['dt'])
             inpdata = meta['input_file'].value
             funcnames = list(meta['function_names'])
+            
+            # Read function signatures
+            if function_details:
+                signatures = {}
+                for fname in funcnames:
+                    signatures[fname] = hdf[fname].attrs['signature']
+        
+        if function_details:
+            return funcnames, signatures
+        else:
+            return t, it, dt, inpdata, funcnames
+    
+    def _read_hdf5(self, h5_file_name, read_input=True, read_results=True):
+        """
+        Read an HDF5 restart file on the format written by _write_hdf5()
+        """
+        # Check file format and read metadata
+        t, it, dt, inpdata, funcnames = self._read_hdf5_metadata(h5_file_name)
         
         sim = self.simulation
         h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'r')
@@ -396,7 +420,48 @@ class InputOutputHandling():
                     data2 = yaml.load(data)
                     data3 = self.get_persisted_dict(name)
                     data3.update(data2)
-
+    
+    def _read_hdf5_functions(self, h5_file_name):
+        """
+        Return a dictionary of Functions read from the HDF5 file
+        Mixed or vector function spaces are not supported and
+        None will be returned for these 
+        """
+        # Check file format and read metadata
+        funcnames, signatures = self._read_hdf5_metadata(h5_file_name, function_details=True)
+        
+        # Read mesh data
+        h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'r')
+        mesh = dolfin.Mesh()
+        h5.read(mesh, '/mesh', False)
+        
+        def mk_func(name):
+            signature = signatures[name].decode('utf8')
+            
+            # Parse strings like "FiniteElement('Discontinuous Lagrange', tetrahedron, 2)"
+            pattern = r"FiniteElement\('(?P<family>[^']+)', \w+, (?P<degree>\d+)\)"
+            m = re.match(pattern, signature)
+            if not m:
+                return None
+            
+            family = m.group('family')
+            degree = int(m.group('degree'))
+            
+            self.simulation.log.info('        Found function %s of family %r '
+                                     'and degree %d' % (name, family, degree))
+            V = dolfin.FunctionSpace(mesh, family, degree)
+            return dolfin.Function(V)
+        
+        # Read result field functions
+        funcs = {}
+        for name in funcnames:
+            f = mk_func(name)
+            if f is not None:
+                h5.read(f, '/%s' % name)
+            funcs[name] = f
+        h5.close()
+        return funcs
+    
     ###########################################################
     # Debugging routines
     # These routines are not used during normal runs
