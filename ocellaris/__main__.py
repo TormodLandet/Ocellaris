@@ -15,9 +15,6 @@ def main(inputfile, input_override):
     """
     sim = Simulation()
     
-    # We require mesh ghosting 
-    dolfin.parameters['ghost_mode'] = 'shared_vertex'
-    
     # Read input
     if sim.io.is_restart_file(inputfile):
         sim.io.load_restart_file_input(inputfile)

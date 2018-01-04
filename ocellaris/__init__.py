@@ -6,6 +6,12 @@ verify_env()
 __version__ = '2018.1.0.dev0'
 
 
+# This should potentially be made local to the mesh creation routines
+import dolfin
+dolfin.parameters['ghost_mode'] = 'shared_vertex'
+del dolfin
+
+
 def get_version():
     """
     Return the version number of Ocellaris
