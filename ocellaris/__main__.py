@@ -1,5 +1,4 @@
 import sys, os
-import dolfin
 from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation
 
 

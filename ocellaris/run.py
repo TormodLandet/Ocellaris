@@ -67,6 +67,7 @@ def run_simulation(simulation, catch_exceptions=False):
     
     try:
         success = False
+        simulation.flush()
         simulation.solver.run()
         success = True
     except OcellarisError as e:
@@ -93,6 +94,7 @@ def run_simulation(simulation, catch_exceptions=False):
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         e_type = type(e).__name__
         simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
+    simulation.flush()
     
     # Check if the solver ran without problems
     if not success and not catch_exceptions:

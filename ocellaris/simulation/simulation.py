@@ -75,7 +75,10 @@ class Simulation(object):
         self.ndim = mesh.topology().dim()
         assert self.ndim == mesh.geometry().dim()
         self.update_mesh_data()
-        self.log.info('Loaded mesh with %d cells' % mesh.num_cells())
+        
+        num_cells_local = mesh.topology().ghost_offset(self.ndim)
+        num_cells = dolfin.MPI.sum(mesh.mpi_comm(), float(num_cells_local))
+        self.log.info('Loaded mesh with %d cells' % num_cells)
     
     def update_mesh_data(self, connectivity_changed=True):
         """

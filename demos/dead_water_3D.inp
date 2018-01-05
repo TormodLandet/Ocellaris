@@ -19,17 +19,16 @@ user_code:
         l: 30        # length of hull water line
         C: 50        # distance from midships to inlet
         
-        # Non-geometry parameters
-        Velocity: 5.0    # vessel speed (divide by 0.514444 to get knots)
-        Tramp: 100       # startup ramp time
-        Tmax:  300       # total duration
+        # Non-geometry parameters (these are controlled by a post_timestep hook below)
+        Velocity: 2.0    # vessel speed (divide by 0.514444 to get knots)
+        Tmax:  1.0e+6    # maximum duration
         FRESH: 1000.0    # Upper layer density
         SALT: 1028.0     # Lower layer density
     code: |
         # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
         # with support for the OpenCASCADE geometry engine
         import os, subprocess, dolfin
-        if dolfin.MPI.comm_world.rank == 0:
+        if dolfin.MPI.comm_world.rank == 0 and not simulation.restarted:
             mydir = os.path.dirname(os.path.abspath(__file__))
             geo = os.path.join(mydir, 'datafiles', 'dead_water_3D.geo')
             msh = os.path.join(mydir, 'datafiles', 'dead_water_3D.msh')
@@ -58,11 +57,11 @@ physical_properties:
     g: [0, 0, -9.81]
 
 mesh:
-    type: XML
-    mesh_file: datafiles/dead_water_3D.xml
-
-# This is not a standard Ocellaris input, but just referenced below in python code 
-bc_vel: '(t < Tramp ? 3.0*pow(t/Tramp, 2) - 2.0*pow(t/Tramp, 3) : 1.0) * Velocity'
+    #type: XML
+    #mesh_file: datafiles/dead_water_3D.xml
+    
+    type: HDF5
+    mesh_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
 
 boundary_conditions:
 
@@ -77,7 +76,7 @@ boundary_conditions:
     inside_code: 'on_boundary and x[0] < 1e-5'
     u:
         type: CppCodedValue
-        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0', '0']
+        cpp_code: ['Velocity', '0', '0']
     #c:
     #    type: CppCodedValue
     #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
@@ -90,7 +89,7 @@ boundary_conditions:
     inside_code: 'on_boundary and x[0] > C + l'
     u:
         type: CppCodedValue
-        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0', '0']
+        cpp_code: ['Velocity', '0', '0']
     #u0: {type: 'ConstantGradient', value: 0}
     #u1: {type: 'ConstantValue', value: 0}
     #u2: {type: 'ConstantValue', value: 0}
@@ -106,7 +105,7 @@ boundary_conditions:
     inside_code: 'on_boundary and x[2] < -H + 1e-5'
     u:
         type: CppCodedValue
-        cpp_code: ['py$ simulation.input.get_value("bc_vel")', '0', '0']
+        cpp_code: ['Velocity', '0', '0']
 
 -   name: Surface z=0
     selector: code
@@ -120,16 +119,20 @@ boundary_conditions:
     u:
         type: FreeSlip
 
+initial_conditions:
+    file:
+        h5_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
+        same_mesh: yes
 
 time:
     dt: 0.2
     tmax: py$ Tmax
 
 output:
-    prefix: py$ 'output/dead_water_3D_%.1fkn' % (Velocity / 0.514444)
+    prefix: output/dead_water_3D_rstairs06
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 15
+    xdmf_write_interval: 100
 
 solver:
     type: IPCS-A
@@ -169,36 +172,88 @@ probes:
 
 hooks:
     pre_simulation:
+
     -   name: Initial density field with discrete jump at z=-h
         enabled: yes
         code: |
-            # We assume that the mesh aligns with the pycnocline
-            dm = Vrho.dofmap()
-            arr = rho.vector().get_local()
-            for cell in cells(mesh):
-                rho_cell = SALT if cell.midpoint().z() < -h else FRESH
-                for dof in dm.cell_dofs(cell.index()):
-                    arr[dof] = rho_cell
-            rho.vector().set_local(arr)
-            rho.vector().apply('insert')
-            rho_p.assign(rho)
-            rho_pp.assign(rho)
+            if t < 1:
+                # We assume that the mesh aligns with the pycnocline
+                dm = Vrho.dofmap()
+                arr = rho.vector().get_local()
+                for cell in cells(mesh):
+                    rho_cell = SALT if cell.midpoint().z() < -h else FRESH
+                    for dof in dm.cell_dofs(cell.index()):
+                        arr[dof] = rho_cell
+                rho.vector().set_local(arr)
+                rho.vector().apply('insert')
+                rho_p.assign(rho)
+                rho_pp.assign(rho)
+
     post_timestep:
+
     -   name: Forces on the hull
         enabled: yes
         code: |
-            if not hasattr(simulation, '_forceforms'):
+            if not hook_data:
                 hull_id = boundary_by_name['Hull'].mark_id
                 hull_ds = ds(hull_id)
                 n = FacetNormal(mesh)
                 Fpx = Form(p * dot(n, as_vector([1, 0, 0])) * hull_ds)
                 Fpy = Form(p * dot(n, as_vector([0, 1, 0])) * hull_ds)
                 Fpz = Form(p * dot(n, as_vector([0, 0, 1])) * hull_ds)
-                simulation._forceforms = (Fpx, Fpy, Fpz)
-            Fpx, Fpy, Fpz = simulation._forceforms
+                hook_data['forceforms'] = (Fpx, Fpy, Fpz)
+            Fpx, Fpy, Fpz = hook_data['forceforms']
             simulation.reporting.report_timestep_value('Fpx', assemble(Fpx))
             simulation.reporting.report_timestep_value('Fpy', assemble(Fpy))
             simulation.reporting.report_timestep_value('Fpz', assemble(Fpz))
 
-#console_at_end: true
-#console_on_error: true
+            N = 300
+            all_Fpx = simulation.reporting.timestep_xy_reports['Fpx']
+            simulation.reporting.report_timestep_value('Fpx_avg', numpy.mean(all_Fpx[-N:]))
+            simulation.reporting.report_timestep_value('Fpx_std', numpy.std(all_Fpx[-N:]))
+
+    -   name: Update velocity
+        enabled: yes
+        code: |
+            #U_vals = [0.00, 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.0, 2.25]
+            U_vals = [0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00][::-1]
+            Nramp = 500
+            Ntot = 1500
+            
+            if not hook_data:
+                simulation.log.warning('Creating initial update velocity hook data')
+                hook_data['iU'] = 0
+                hook_data['t_start'] = -1
+                hook_data['t_ramp'] = -1
+                hook_data['t_end'] = -1
+            
+            i = hook_data['iU']
+            U = U_vals[i]
+            
+            t1, t2, t3 = hook_data['t_start'], hook_data['t_ramp'], hook_data['t_end']
+            if t > t3 and i == len(U_vals) - 1:
+                simulation.log.info('End of velocity vector, stopping')
+                simulation.input.set_value('time/tmax', t)
+            elif t > t3:
+                prefix = simulation.input.get_value('output/prefix', '')
+                fn = prefix + '_savepoint_U_%.3f.h5' % U
+                simulation.io.write_restart_file(fn)
+                simulation.log.info('Saving restart file at end of velocity %.2f' % U)
+                
+                hook_data['iU'] += 1
+                dt = 0.1 / U_vals[hook_data['iU']]
+                simulation.input.set_value('time/dt', dt)
+                simulation.data['time_coeffs'].assign(dolfin.Constant([1, -1, 0]))
+                simulation.log.info('Changing timestep to %r' % dt)
+                hook_data['Uprev'] = U
+                hook_data['t_start'] = t
+                hook_data['t_ramp'] = t + dt * Nramp
+                hook_data['t_end'] = t + dt * Ntot
+            elif t < t2:
+                f = (t - t1) / (t2 - t1)
+                F = (3 * f**2 - 2 * f**3)
+                U = (1 - F) * hook_data['Uprev'] +  F * U
+            
+            Vel = simulation.input.get_value('user_code/constants/Velocity')
+            simulation.reporting.report_timestep_value('Vel', Vel)
+            simulation.input.set_value('user_code/constants/Velocity', U)

@@ -31,6 +31,7 @@ def setup_simulation(simulation):
     assert simulation.dt > 0
     
     # Preliminaries, before setup begins
+    simulation.flush()
     
     # Get the multi phase model class
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
@@ -51,39 +52,48 @@ def setup_simulation(simulation):
     # Mark the boundaries of the domain with separate marks
     # for each regions Creates a new "ds" measure
     mark_boundaries(simulation)
+    simulation.flush()
     
     # Load the periodic boundary conditions. This must 
     # be done before creating the function spaces as
     # they depend on the periodic constrained domain
     setup_periodic_domain(simulation)
+    simulation.flush()
     
     # Create function spaces. This must be done before
     # creating Dirichlet boundary conditions
     setup_function_spaces(simulation, solver_class, multiphase_class)
+    simulation.flush()
     
     # Load the mesh morpher used for prescribed mesh velocities and ALE multiphase solvers
     simulation.mesh_morpher = MeshMorpher(simulation)
+    simulation.flush()
     
     # Setup physical constants and multi-phase model (g, rho, nu, mu)
     setup_physical_properties(simulation, multiphase_class)
+    simulation.flush()
     
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs
     # the Neumann conditions to define weak forms
     setup_boundary_conditions(simulation)
+    simulation.flush()
             
     # Create momentum sources (usefull for MMS tests etc)
     setup_sources(simulation)
+    simulation.flush()
     
     # Create the solver
     simulation.solver = solver_class(simulation)
     
     # Setup postprocessing probes
     setup_probes(simulation)
+    simulation.flush()
     
     # Initialise the fields
     if not simulation.restarted:
         setup_initial_conditions(simulation)
+        simulation.flush()
         
     # Setup the solution properties
     simulation.solution_properties.setup()
@@ -104,7 +114,8 @@ def setup_simulation(simulation):
     
     # Show all registered hooks
     simulation.hooks.show_hook_info()
-    
+    simulation.flush()
+
 
 def setup_user_code(simulation):
     """
@@ -229,6 +240,22 @@ def load_mesh(simulation):
             mesh_facet_regions = dolfin.MeshFunction('size_t', mesh, pth)
         else:
             mesh_facet_regions = None
+    
+    elif mesh_type == 'HDF5':
+        simulation.log.info('Creating mesh from DOLFIN HDF5 file')
+        h5_file_name = inp.get_value('mesh/mesh_file', required_type='string')
+        
+        with dolfin.HDF5File(comm, h5_file_name, 'r') as h5:
+            # Read mesh
+            mesh = dolfin.Mesh()
+            h5.read(mesh, '/mesh', False)
+            
+            # Read facet regions
+            if h5.has_dataset('/mesh_facet_regions'):
+                mesh_facet_regions = dolfin.FacetFunction('size_t', mesh)
+                h5.read(mesh_facet_regions, '/mesh_facet_regions')
+            else:
+                mesh_facet_regions = None
     
     simulation.set_mesh(mesh, mesh_facet_regions)
 
@@ -362,6 +389,8 @@ def setup_sources(simulation):
 def setup_initial_conditions(simulation):
     """
     Setup the initial values for the fields
+    
+    NOTE: this is never run on simulation restarts!
     """
     simulation.log.info('Creating initial conditions')
     
@@ -425,16 +454,23 @@ def setup_initial_conditions_from_restart_file(simulation):
     """
     Read initial function values from a restart file
     
-    This is not (necessarily) used when starting from a restart file.
-    It is normally used when starting from an input file, with a new
-    mesh or some other input change, using initial conditions only
-    from the restart file.
+    This code is used when starting from an input file using
+    initial conditions (but nothing else) from a restart file
+    
+    NOTE: this is never run on simulation restarts!
     """
-    h5_file_name = simulation.input.get_value('initial_conditions/file/h5_file',
-                                              required_type='string')
+    inp = simulation.input.get_value('initial_conditions/file', required_type='Input')
+    h5_file_name = inp.get_value('h5_file', required_type='string')
+    same_mesh = inp.get_value('same_mesh', False, required_type='bool')
     simulation.log.info('    Loading data from h5 file %r' % h5_file_name)
+    simulation.log.info('    Forcing same mesh: %r' % same_mesh)
     funcs = simulation.io.load_restart_file_functions(h5_file_name)
     simulation.log.info('    Found %d functions' % len(funcs))
+    
+    tmp = [f for f in funcs.values() if f is not None]
+    if not tmp:
+        simulation.log.warning('    Found no supported functions!')
+        return
     
     for name, f0 in sorted(funcs.items()):
         if f0 is None:
@@ -445,10 +481,15 @@ def setup_initial_conditions_from_restart_file(simulation):
                                    'this function is not present in the simulation' % name)
             continue
         
-        # FIXME: this is probably not very robust with regards to slightly non-matching meshes
         f = simulation.data[name]
-        f0.set_allow_extrapolation(True)
-        dolfin.project(f0, f.function_space(), function=f)
+        if same_mesh:
+            arr = f0.vector().get_local()
+            f.vector().set_local(arr)
+            f.vector().apply('insert')
+        else:
+            # FIXME: this is probably not very robust with regards to slightly non-matching meshes
+            f0.set_allow_extrapolation(True)
+            dolfin.project(f0, f.function_space(), function=f)
 
 
 def setup_hooks(simulation):

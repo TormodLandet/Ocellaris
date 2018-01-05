@@ -378,6 +378,10 @@ class InputOutputHandling():
         sim = self.simulation
         h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'r')
         
+        # This flag is used in sim.setup() to to skip mesh creation
+        # and may be used by user code etc
+        sim.restarted = True
+        
         if read_input:
             # Read the input file
             sim.input.read_yaml(yaml_string=inpdata)
@@ -394,9 +398,6 @@ class InputOutputHandling():
             else:
                 mesh_facet_regions = None
             sim.set_mesh(mesh, mesh_facet_regions)
-            
-            # This flag is used in sim.setup() to to skip mesh creation
-            sim.restarted = True
         
         if read_results:
             sim.log.info('Reading fields from restart file %r' % h5_file_name)
