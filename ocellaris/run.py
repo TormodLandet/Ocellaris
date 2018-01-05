@@ -120,7 +120,7 @@ def run_simulation(simulation, catch_exceptions=False):
 def plot_at_end(simulation):
     """
     Open dolfin plotting windows with results at the end of
-    the simulation
+    the simulation. Only usefull for simple 2D cases
     """
     # Plot velocity components
     for d in range(simulation.ndim):
@@ -137,7 +137,8 @@ def plot_at_end(simulation):
     # Plot colour function
     if 'c' in simulation.data:
         dolfin.plot(simulation.data['c'], title='c')
-        
+    
     dolfin.plot(simulation.data['boundary_marker'], title='boundary_marker')
     
-    dolfin.interactive()
+    from matplotlib import pyplot
+    pyplot.show()
