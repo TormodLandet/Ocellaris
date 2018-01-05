@@ -44,7 +44,7 @@ def translate_line(vals):
     return ''.join(count_2_char(v) for v in vals)
 
 
-def plot(*args, figsize=(80, 15)):
+def plot(*args, figsize=(80, 15), xmin=None, xmax=None, ymin=None, ymax=None):
     """
     Plot a line or scatter plot
     
@@ -72,6 +72,13 @@ def plot(*args, figsize=(80, 15)):
         # Fixme: we could support multiple lines with different ANSI colours
         raise NotImplementedError('You must give one or two positional arguments')
     
+    # Filter out unwanted points (axes limits)
+    if xmin is None: xmin = numpy.min(x)
+    if xmax is None: xmax = numpy.max(x)
+    if ymin is None: ymin = numpy.min(y)
+    if ymax is None: ymax = numpy.max(y)
+    x, y = filter_data_points(x, y, xmin, xmax, ymin, ymax)
+    
     # Create 2D histogram of point density in each char "pixel"
     assert len(x) == len(y)
     W = width - 12
@@ -91,3 +98,16 @@ def plot(*args, figsize=(80, 15)):
     xticks = 'x axis range from %g to %g (%d values)' % (xedges[0], xedges[-1], len(x))
     print(' ' * 9, xticks.center(W))
 
+
+def filter_data_points(x, y, xmin, xmax, ymin, ymax):
+    """
+    Remove points outside the axes limits
+    """
+    xnew, ynew = [], []
+    for xi, yi in zip(x, y):
+        if xi is None or yi is None:
+            continue
+        elif xmin <= xi <= xmax and ymin <= yi <= ymax:
+            xnew.append(xi)
+            ynew.append(yi)
+    return xnew, ynew

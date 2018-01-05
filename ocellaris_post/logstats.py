@@ -117,9 +117,9 @@ def show_comparison(all_results, ts_name, skip_first=0):
     print()
 
 
-def plot_ts(results, ts_names, skip_first=0, title=None):
-    if title is not None:
-        header(title)
+def plot_ts(results, ts_names, skip_first=0, plotargs=None):
+    if plotargs is None:
+        plotargs = {}
     
     for ts_name in ts_names:
         if ts_name in results.reports:
@@ -133,7 +133,7 @@ def plot_ts(results, ts_names, skip_first=0, title=None):
                   (ts_name, results.file_name))
             sys.exit(1)
         header('\nPlot of time series %r:' % ts_name)
-        textplot.plot(x[skip_first:], y[skip_first:], figsize=(100, 15))
+        textplot.plot(x[skip_first:], y[skip_first:], **plotargs)
     print()
 
 
@@ -151,6 +151,14 @@ def parse_args(argv):
                         help='Plot the given time series (command line output only)')
     parser.add_argument('--restrict', '-r', metavar='TSNAME', action='append', default=[],
                         help='Only show info about the selected time series')
+    
+    # Plot axes limits
+    axargs = parser.add_argument_group('Plot controls', 'Control text plot visuals')
+    axargs.add_argument('--xmin', metavar='XMIN', type=float, default=None)
+    axargs.add_argument('--xmax', metavar='XMAX', type=float, default=None)
+    axargs.add_argument('--ymin', metavar='YMIN', type=float, default=None)
+    axargs.add_argument('--ymax', metavar='YMAX', type=float, default=None)
+    
     return parser.parse_args(argv)
 
 
@@ -178,9 +186,12 @@ def main(args=None):
         error('\nERROR: no result files given!')
         exit(1)
     
-    
     print('Ocellaris result file statistics')
     print('================================')
+    
+    plotargs = {'xmin': args.xmin, 'xmax': args.xmax,
+                'ymin': args.ymin, 'ymax': args.ymax,
+                'figsize': (100, 15)}
 
     allres = []
     for fn in file_names:
@@ -196,7 +207,9 @@ def main(args=None):
         
         # Plot time series
         if args.plot:
-            plot_ts(res, args.plot, args.skip_first, title)
+            if title:
+                header(title)
+            plot_ts(res, args.plot, args.skip_first, plotargs)
         
     for ts_name in args.restrict:
         show_comparison(allres, ts_name, args.skip_first)
