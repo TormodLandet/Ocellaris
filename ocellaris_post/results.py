@@ -3,7 +3,7 @@ import os
 import numpy
 import yaml
 from io import StringIO
-
+from .files import get_result_file_type
 
 if sys.version[0] != '2':
     unicode = lambda s: s
@@ -41,10 +41,13 @@ class Results(object):
             file_name = self.file_name
         
         self.file_name = os.path.abspath(file_name)
-        if file_name.endswith('.h5'):
+        self.file_type = get_result_file_type(file_name)
+        if self.file_type == 'h5':
             read_h5_data(self)
-        elif file_name.endswith('.log'):
+        elif self.file_type == 'log':
             read_log_data(self)
+        else:
+            raise IOError('Unknown result file type of file %r' % file_name)
         
         # Add derived reports
         reps = self.reports
