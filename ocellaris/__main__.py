@@ -1,6 +1,6 @@
 import sys, os
 from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation
-
+import platform
 
 # Restore signals in non-interactive background shells
 import signal
@@ -34,6 +34,7 @@ def main(inputfile, input_override):
     sim.log.info('='*80)
     sim.log.info('Installed at:')
     sim.log.info('    %s' % location)
+    sim.log.info('    host: %s' % platform.node())
     sim.log.info()
     
     # Setup the Ocellaris simulation
