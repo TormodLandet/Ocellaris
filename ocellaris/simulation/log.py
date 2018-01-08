@@ -78,6 +78,7 @@ class Log(object):
         log_name = self.simulation.input.get_output_file_path('output/log_name', '.log')
         log_on_all_ranks = self.simulation.input.get_value('output/log_on_all_ranks', False, 'bool')
         log_enabled = self.simulation.input.get_value('output/log_enabled', True, 'bool')
+        log_append_existing = self.simulation.input.get_value('output/log_append_to_existing_file', True, 'bool')
         stdout_on_all_ranks = self.simulation.input.get_value('output/stdout_on_all_ranks', False, 'bool')
         stdout_enabled = self.simulation.input.get_value('output/stdout_enabled', True, 'bool')
         rank = self.simulation.rank
@@ -91,7 +92,11 @@ class Log(object):
             if rank == 0 or log_on_all_ranks:
                 self.write_log = True
                 self.log_file_name = log_name
-                self.log_file = open(self.log_file_name, 'wt')
+                if log_append_existing:
+                    self.log_file = open(self.log_file_name, 'at')
+                    self.log_file.write('\n\n')
+                else:
+                    self.log_file = open(self.log_file_name, 'wt')
         
         # Set the Ocellaris log level
         log_level = self.simulation.input.get_value('output/ocellaris_log_level', 'info')
