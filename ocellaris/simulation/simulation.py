@@ -40,6 +40,7 @@ class Simulation(object):
         # so we keep them in a central place
         self.ndim = 0
         self.timestep = 0
+        self.timestep_restart = 0
         self.time = 0.0
         self.dt = 0.0
         self.restarted = False
@@ -103,6 +104,7 @@ class Simulation(object):
     
     def _at_start_of_timestep(self, timestep_number, t, dt):
         self.timestep = timestep_number
+        self.timestep_restart += 1
         self.time = t
         self.dt = dt
     
