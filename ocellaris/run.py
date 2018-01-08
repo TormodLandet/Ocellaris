@@ -71,29 +71,29 @@ def run_simulation(simulation, catch_exceptions=False):
         simulation.solver.run()
         success = True
     except OcellarisError as e:
-        simulation.hooks.simulation_ended(success)
         simulation.log.error('ERROR === '*8)
         simulation.log.error('\n%s\n\n%s\n' % (e.header, e.description))
+        simulation.hooks.simulation_ended(success)
         tb, err = sys.exc_info()[2], e
     except KeyboardInterrupt as e:
-        simulation.hooks.simulation_ended(success)
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
         tb, err = sys.exc_info()[2], e
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         simulation.log.error('You pressed Ctrl+C / got the SIGINT interrupt signal')
+        simulation.hooks.simulation_ended(success)
     except SystemExit as e:
         simulation.success = False  # this is just used for debugging, no fancy summary needed
         simulation.log.error('========== SystemExit - exit() was called ==========')
         tb, err = sys.exc_info()[2], e
     except BaseException as e:
-        simulation.hooks.simulation_ended(success)
         simulation.log.error('=== EXCEPTION =='*5)
         tb, err = sys.exc_info()[2], e
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         e_type = type(e).__name__
         simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
+        simulation.hooks.simulation_ended(success)
     simulation.flush()
     
     # Check if the solver ran without problems
@@ -103,7 +103,7 @@ def run_simulation(simulation, catch_exceptions=False):
     ##############################################################################################
     # Limited support for postprocessing implemented below. It is generally better to use Paraview
     # or similar tools on the result files instead of using the dolfin plot commands here 
-        
+    
     # Show dolfin plots?
     if simulation.input.get_value('output/plot_at_end', False, 'bool'):
         plot_at_end(simulation)
@@ -113,7 +113,7 @@ def run_simulation(simulation, catch_exceptions=False):
     console_on_error = simulation.input.get_value('console_on_error', False, 'bool')
     if console_at_end  or (not success and console_on_error):
         run_debug_console(simulation)
-        
+    
     return success
 
 

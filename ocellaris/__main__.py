@@ -2,9 +2,11 @@ import sys, os
 from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation
 import platform
 
+
 # Restore signals in non-interactive background shells
 import signal
 signal.signal(signal.SIGINT, signal.default_int_handler)
+signal.signal(signal.SIGTERM, signal.default_int_handler)
 signal.signal(signal.SIGQUIT, signal.default_int_handler)
 
 
