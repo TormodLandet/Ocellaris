@@ -1,5 +1,4 @@
 from functools import wraps
-from collections import defaultdict
 import time
 import dolfin
 

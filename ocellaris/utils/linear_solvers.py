@@ -1,7 +1,7 @@
 import numpy
 import dolfin
 import contextlib
-
+from .timer import timeit
 
 def linear_solver_from_input(simulation, path,
                              default_solver='default',
@@ -238,12 +238,14 @@ class KSPLinearSolverWrapper(object):
             simulation.log.warning('Showing PETSc help done, exiting')
             exit()
     
+    @timeit.named('petsc4py solve')
     def solve(self, *argv, **kwargs):
         self._solver.set_from_options()
         ret = self._solver.solve(*argv, **kwargs)
         self.is_first_solve = False
         return ret
     
+    @timeit.named('petsc4py inner_solve')
     def inner_solve(self, A, x, b, in_iter, co_iter):
         """
         This solver method uses different convergence criteria depending
