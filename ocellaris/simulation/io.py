@@ -25,8 +25,15 @@ class InputOutputHandling():
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
         close = lambda success: self._close_files()
         sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
+        
         self.extra_xdmf_functions = []
-        self.persisted_python_data = {} 
+        self.persisted_python_data = {}
+        
+        # When exiting due to a signal kill/shutdown a savepoint file will be
+        # written instead of an endpoint file, which is the default. This helps
+        # with automatic restarts from checkpointing jobs. The only difference
+        # is the name of the file
+        self.last_savepoint_is_checkpoint = False
     
     def add_extra_output_function(self, function):
         """
@@ -126,9 +133,12 @@ class InputOutputHandling():
             return
         
         sim = self.simulation
-        if sim.input.get_value('output/save_restart_file_at_end',
-                               SAVE_RESTART_AT_END, 'bool'):
-            h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_endpoint_%08d.h5') 
+        if self.last_savepoint_is_checkpoint:
+            # Shutting down, but ready to restart from checkpoint
+            self.write_restart_file()
+        elif sim.input.get_value('output/save_restart_file_at_end', SAVE_RESTART_AT_END, 'bool'):
+            # Shutting down for good
+            h5_file_name = sim.input.get_output_file_path('output/hdf5_file_name', '_endpoint_%08d.h5')
             h5_file_name = h5_file_name % sim.timestep
             self.write_restart_file(h5_file_name)
         

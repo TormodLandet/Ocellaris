@@ -76,11 +76,14 @@ def run_simulation(simulation, catch_exceptions=False):
         simulation.hooks.simulation_ended(success)
         tb, err = sys.exc_info()[2], e
     except KeyboardInterrupt as e:
+        # This will also handle signals such as SIGTERM and SIGQUIT in addition to SIGINT
+        # due to the signal handler setup in __main___.py 
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
         tb, err = sys.exc_info()[2], e
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
-        simulation.log.error('You pressed Ctrl+C / got the SIGINT interrupt signal')
+        simulation.log.error('You pressed Ctrl+C or the solver got a SIGINT/SIGTERM∕SIGQUIT signal')
+        simulation.io.last_savepoint_is_checkpoint = True
         simulation.hooks.simulation_ended(success)
     except SystemExit as e:
         simulation.success = False  # this is just used for debugging, no fancy summary needed

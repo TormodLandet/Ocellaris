@@ -25,8 +25,9 @@ import glob
 import re
 from subprocess import Popen, PIPE
 from time import sleep, time
+import signal
 from fcntl import fcntl, F_GETFL, F_SETFL
-from os import O_NONBLOCK, read
+from os import O_NONBLOCK, read, environ
 import yaml
 
 
@@ -36,6 +37,7 @@ DEFAULT_INTERVAL = 10
 DEFAULT_MAX_RESTARTS = 2
 DEFAULT_KILL_TRIES = 10
 DEFAULT_KILL_WAIT = 10
+DEFAULT_SIGINT_WAIT = 60
 
 
 # ANSI escape sequence to invert foreground and background
@@ -62,10 +64,12 @@ def info(text):
     say(BLUE % text)
 
 
-def terminate_simulation(p):
-    p.terminate()
-    for _ in range(DEFAULT_KILL_TRIES):
-        sleep(DEFAULT_KILL_WAIT)
+def terminate_simulation(p, signal=signal.SIGTERM,
+                         wait=DEFAULT_KILL_WAIT,
+                         retries=DEFAULT_KILL_TRIES):
+    p.send_signal(signal)
+    for _ in range(retries):
+        sleep(wait)
         if p.poll() is not None:
             break
         p.kill()
@@ -89,7 +93,10 @@ def run_simulation(inp_file, ncpus, interval, timeout):
     instance of the simulation at any time.
     """
     runner = []
-    if ncpus > 1:
+    in_queue = environ.get('SLURM_NTASKS', False)
+    if in_queue:
+        runner = ['mpirun']
+    elif ncpus > 1:
         runner = ['mpirun', '-np',  str(ncpus)]
     
     cmd = runner + ['python3', '-m', 'ocellaris', inp_file]
@@ -99,29 +106,36 @@ def run_simulation(inp_file, ncpus, interval, timeout):
     flags = fcntl(p.stdout, F_GETFL)
     fcntl(p.stdout, F_SETFL, flags | O_NONBLOCK)
     
-    last_io = time()
-    while True:
-        exit_code = p.poll()
-        if exit_code is not None:
-            return ('exited', exit_code)
-        
-        now = time()
-        try:
-            data = read(p.stdout.fileno(), 10000)
-            data = data.decode('utf8', 'replace')
-            sys.stdout.write(data)
-            sys.stdout.flush()
-            last_io = now
-        except OSError:
-            # No data to read
-            time_since_last_io = now - last_io 
-            if time_since_last_io > timeout:
-                warn('\nStdout timeout exceeded, %d seconds since last output\n'
-                     % time_since_last_io)
-                info('Killing child process with PID %d\n' % p.pid)
-                term_ok = terminate_simulation(p)
-                return ('timeout', term_ok)
-        sleep(interval)
+    try:
+        last_io = time()
+        while True:
+            exit_code = p.poll()
+            if exit_code is not None:
+                return ('exited', exit_code)
+            
+            now = time()
+            try:
+                data = read(p.stdout.fileno(), 10000)
+                data = data.decode('utf8', 'replace')
+                sys.stdout.write(data)
+                sys.stdout.flush()
+                last_io = now
+            except OSError:
+                # No data to read
+                time_since_last_io = now - last_io 
+                if time_since_last_io > timeout:
+                    warn('\nStdout timeout exceeded, %d seconds since last output\n'
+                         % time_since_last_io)
+                    info('Killing child process with PID %d\n' % p.pid)
+                    term_ok = terminate_simulation(p)
+                    return ('timeout', term_ok)
+            sleep(interval)
+    except KeyboardInterrupt:
+        # We got SIGINT, tell Ocellaris to stop
+        warn('\nGot SIGINT, letting Ocellaris save restart file\n')
+        info('Stopping child process with PID %d\n' % p.pid)
+        term_ok = terminate_simulation(p, signal=signal.SIGINT, wait=DEFAULT_SIGINT_WAIT)
+        return ('exited', -2)
 
 
 def get_restart_files(inp_file):
@@ -168,9 +182,10 @@ def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts):
              % (restarts, fn))
         
         res, status = run_simulation(fn, ncpus, interval, timeout)
-        if res == 'exited':
+        if res in 'exited':
             sys.exit(status)
         elif not status:
+            error('\nERROR: Giving up!\n')
             sys.exit(31)
 
 
@@ -178,7 +193,7 @@ def parse_args(argv):
     parser = argparse.ArgumentParser(prog='orun',
                                      description=DESCRIPTION)
     parser.add_argument('input_file', help='Name of inputfile on YAML format')
-    parser.add_argument('--ncpus', '-n', metavar='NCPU', type=int,
+    parser.add_argument('--ncpus', '-n', metavar='NCPU', default=1, type=int,
                         help='Number of MPI processes')
     parser.add_argument('--interval', '-i', metavar='INTERVAL', type=float, default=DEFAULT_INTERVAL,
                         help='Output interval in seconds')
