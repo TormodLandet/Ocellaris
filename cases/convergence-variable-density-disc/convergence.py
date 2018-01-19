@@ -14,7 +14,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, nu, last=False):
     say(N, dt, tmax, polydeg_u, polydeg_p)
     
     # Setup and run simulation
-    timingtypes = [dolfin.TimingType_user, dolfin.TimingType_system, dolfin.TimingType_wall]
+    timingtypes = [dolfin.TimingType.user, dolfin.TimingType.system, dolfin.TimingType.wall]
     dolfin.timings(dolfin.TimingClear_clear, timingtypes)
     sim = Simulation()
     sim.input.read_yaml('disc.inp')

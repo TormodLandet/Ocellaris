@@ -54,7 +54,7 @@ def log_timings(simulation, clear=False):
     
     # Get timings from FEniCS and sort by total time spent
     tclear = dolfin.TimingClear.clear if clear else dolfin.TimingClear.keep
-    timingtypes = [dolfin.TimingType_user, dolfin.TimingType_system, dolfin.TimingType_wall]
+    timingtypes = [dolfin.TimingType.user, dolfin.TimingType.system, dolfin.TimingType.wall]
     table = dolfin.timings(tclear, timingtypes)
     table_lines = table.str(True).split('\n')
     simulation.log.info('\nFEniCS timings:   %s  wall pst' % table_lines[0][18:])
