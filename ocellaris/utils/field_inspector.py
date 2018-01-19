@@ -25,7 +25,7 @@ class FieldInspector(object):
         self.degree = V.ufl_element().degree()
         
         # This will not work in parallel
-        assert dolfin.MPI.size(dolfin.mpi_comm_world()) == 1 
+        assert dolfin.MPI.size(dolfin.MPI.comm_world) == 1 
         
         # Only tested for DG2 for now
         assert self.mesh.geometry().dim() == 2
@@ -38,7 +38,7 @@ class FieldInspector(object):
         self.subdivided_function_space = dolfin.FunctionSpace(self.subdivided_mesh, 'CG', 1)
         self.subdivided_function = dolfin.Function(self.subdivided_function_space)
         
-        self.xdmf = dolfin.XDMFFile(dolfin.mpi_comm_world(), xdmf_file_name)
+        self.xdmf = dolfin.XDMFFile(dolfin.MPI.comm_world, xdmf_file_name)
     
     def write_function(self, func, t):
         """

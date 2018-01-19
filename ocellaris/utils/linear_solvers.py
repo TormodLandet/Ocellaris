@@ -452,8 +452,8 @@ def condition_number(A, method='simplified'):
             amax = max(amax, aa.max())
             aa[aa==0] = amax
             amin = min(amin, aa.min())
-        amin = dolfin.MPI.min(dolfin.mpi_comm_world(), float(amin))
-        amax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(amax))
+        amin = dolfin.MPI.min(dolfin.MPI.comm_world, float(amin))
+        amax = dolfin.MPI.max(dolfin.MPI.comm_world, float(amax))
         return amax/amin
     
     elif method == 'numpy':
@@ -508,7 +508,7 @@ def mat_to_scipy_csr(dolfin_matrix):
     Convert any dolfin.Matrix to csr matrix in scipy.
     Based on code by Miroslav Kuchta
     """
-    assert dolfin.MPI.size(dolfin.mpi_comm_world()) == 1, 'mat_to_csr assumes single process'
+    assert dolfin.MPI.size(dolfin.MPI.comm_world) == 1, 'mat_to_csr assumes single process'
     import scipy.sparse
     
     rows = [0]

@@ -498,7 +498,7 @@ class SolverIPCSA(Solver):
                 
                 # Stop steady state simulation if convergence has been reached
                 if self.is_steady:
-                    vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
+                    vel_diff = dolfin.MPI.max(dolfin.MPI.comm_world, float(vel_diff))
                     sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)                
                     if vel_diff < self.steady_velocity_eps:
                         sim.log.info('Stopping simulation, steady state achieved')

@@ -176,9 +176,9 @@ def load_mesh(simulation):
     comm_type = inp.get_value('mesh/mpi_comm', 'WORLD', required_type='string')
     verify_key('mesh/mpi_comm', comm_type, ('SELF', 'WORLD'))
     if comm_type == 'WORLD':
-        comm = dolfin.mpi_comm_world()
+        comm = dolfin.MPI.comm_world
     else:
-        comm = dolfin.mpi_comm_self()
+        comm = dolfin.MPI.comm_self
     
     if mesh_type == 'Rectangle':
         simulation.log.info('Creating rectangular mesh')

@@ -7,7 +7,7 @@ import dolfin
 from ocellaris import Simulation, setup_simulation, run_simulation
 
 
-ISROOT = dolfin.MPI.rank(dolfin.mpi_comm_world()) == 0
+ISROOT = dolfin.MPI.rank(dolfin.MPI.comm_world) == 0
 
 
 def run_and_calculate_error(N, dt, tmax, polydeg_rho, last=False):
@@ -100,7 +100,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_rho, last=False):
             fh = sim.data[name]
             if isoparam:
                 # Bug in matplotlib plotting for isoparametric elements
-                mesh2 = dolfin.UnitDiscMesh(dolfin.mpi_comm_world(), N//2, 1, 2)
+                mesh2 = dolfin.UnitDiscMesh(dolfin.MPI.comm_world, N//2, 1, 2)
                 ue = fa.function_space().ufl_element()
                 V2 = dolfin.FunctionSpace(mesh2, ue.family(), ue.degree())
                 fa2, fh2 = dolfin.Function(V2), dolfin.Function(V2)

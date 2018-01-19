@@ -17,7 +17,7 @@ def before_simulation(simulation, force_steady=False):
     for d in range(simulation.ndim):
         this_maxabs = abs(simulation.data['upp%d' % d].vector().get_local()).max()
         maxabs = max(maxabs, this_maxabs)
-    maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
+    maxabs = dolfin.MPI.max(dolfin.MPI.comm_world, float(maxabs))
     if maxabs > 0:
         starting_order = 2
     

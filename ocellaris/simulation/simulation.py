@@ -25,8 +25,8 @@ class Simulation(object):
         solver, results IO and reporting tools     
         """
         # COMM_WORLD rank and size (may not match the mesh.mpi_comm())
-        self.ncpu = dolfin.MPI.size(dolfin.mpi_comm_world())
-        self.rank = dolfin.MPI.rank(dolfin.mpi_comm_world())
+        self.ncpu = dolfin.MPI.size(dolfin.MPI.comm_world)
+        self.rank = dolfin.MPI.rank(dolfin.MPI.comm_world)
         
         self.hooks = Hooks(self)
         self.input = Input(self)

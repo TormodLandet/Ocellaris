@@ -389,7 +389,7 @@ class InputOutputHandling():
         t, it, dt, inpdata, funcnames = self._read_hdf5_metadata(h5_file_name)
         
         sim = self.simulation
-        h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'r')
+        h5 = dolfin.HDF5File(dolfin.MPI.comm_world, h5_file_name, 'r')
         
         # This flag is used in sim.setup() to to skip mesh creation
         # and may be used by user code etc
@@ -445,7 +445,7 @@ class InputOutputHandling():
         funcnames, signatures = self._read_hdf5_metadata(h5_file_name, function_details=True)
         
         # Read mesh data
-        h5 = dolfin.HDF5File(dolfin.mpi_comm_world(), h5_file_name, 'r')
+        h5 = dolfin.HDF5File(dolfin.MPI.comm_world, h5_file_name, 'r')
         mesh = dolfin.Mesh()
         h5.read(mesh, '/mesh', False)
         
@@ -531,7 +531,7 @@ class InputOutputHandling():
             # Vectors
             if value_type == 'dolfin.PETScVector':
                 arr = value[1]
-                dolf_vec = dolfin.PETScVector(dolfin.mpi_comm_world(), arr.size)
+                dolf_vec = dolfin.PETScVector(dolfin.MPI.comm_world, arr.size)
                 dolf_vec.set_local(arr)
                 dolf_vec.apply('insert')
                 ret[key] = dolf_vec

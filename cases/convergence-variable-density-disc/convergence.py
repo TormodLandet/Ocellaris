@@ -118,7 +118,7 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, nu, last=False):
             fh = sim.data[name]
             if isoparam:
                 # Bug in matplotlib plotting for isoparametric elements
-                mesh2 = dolfin.UnitDiscMesh(dolfin.mpi_comm_world(), N//2, 1, 2)
+                mesh2 = dolfin.UnitDiscMesh(dolfin.MPI.comm_world, N//2, 1, 2)
                 ue = fa.function_space().ufl_element()
                 V2 = dolfin.FunctionSpace(mesh2, ue.family(), ue.degree())
                 fa2, fh2 = dolfin.Function(V2), dolfin.Function(V2)
@@ -203,7 +203,7 @@ def seconds_as_string(seconds):
     
 
 def say(*args, **kwargs):
-    if dolfin.MPI.rank(dolfin.mpi_comm_world()) == 0:
+    if dolfin.MPI.rank(dolfin.MPI.comm_world) == 0:
         print(*args, **kwargs)
 
 

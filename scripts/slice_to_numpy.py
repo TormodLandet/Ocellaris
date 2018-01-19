@@ -19,7 +19,7 @@ def load_data(h5_file_name):
     pressure fields from the h5 file along with the
     mesh
     """
-    h5 = df.HDF5File(df.mpi_comm_world(), h5_file_name, 'r')
+    h5 = df.HDF5File(df.MPI.comm_world, h5_file_name, 'r')
     
     mesh = df.Mesh()
     h5.read(mesh, '/mesh', False)

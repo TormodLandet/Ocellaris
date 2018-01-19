@@ -429,7 +429,7 @@ class SolverIPCS(Solver):
                 for d in range(sim.ndim):
                     thismax = abs(sim.data['u%d' % d].vector().get_local()).max()
                     ustarmax = max(thismax, ustarmax)
-                ustarmax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(ustarmax))
+                ustarmax = dolfin.MPI.max(dolfin.MPI.comm_world, float(ustarmax))
                 
                 # Get the divergence error
                 err_div = self.calculate_divergence_error()
@@ -473,7 +473,7 @@ class SolverIPCS(Solver):
             
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
-                vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
+                vel_diff = dolfin.MPI.max(dolfin.MPI.comm_world, float(vel_diff))
                 sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)                
                 if vel_diff < self.steady_velocity_eps:
                     sim.log.info('Stopping simulation, steady state achieved')

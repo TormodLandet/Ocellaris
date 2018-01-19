@@ -269,7 +269,7 @@ class SolverFSVD(Solver):
         for d in range(sim.ndim):
             this_maxabs = abs(sim.data['upp%d' % d].vector().get_local()).max()
             maxabs = max(maxabs, this_maxabs)
-        maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
+        maxabs = dolfin.MPI.max(dolfin.MPI.comm_world, float(maxabs))
         has_upp_start_values = maxabs > 0
         
         # Previous-previous values are provided so we can start up with second order time stepping 
@@ -323,7 +323,7 @@ class SolverFSVD(Solver):
                 for d in range(sim.ndim):
                     thismax = abs(sim.data['u%d' % d].vector().get_local()).max()
                     umax = max(thismax, umax)
-                umax = dolfin.MPI.max(dolfin.mpi_comm_world(), float(umax))
+                umax = dolfin.MPI.max(dolfin.MPI.comm_world, float(umax))
                 
                 # Convergence estimates
                 sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'

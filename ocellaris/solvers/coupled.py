@@ -357,7 +357,7 @@ class SolverCoupled(Solver):
             
             # Stop steady state simulation if convergence has been reached
             if steady_eps >= 0:
-                vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
+                vel_diff = dolfin.MPI.max(dolfin.MPI.comm_world, float(vel_diff))
                 sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)
                 if vel_diff < steady_eps:
                     sim.log.info('Stopping simulation, steady state achieved')
@@ -380,5 +380,5 @@ def get_global_row_number(V):
     dm = V.dofmap()
     dof = dm.cell_dofs(0).min()
     gdof = dm.local_to_global_index(dof)
-    return dolfin.MPI.min(dolfin.mpi_comm_world(), int(gdof))
+    return dolfin.MPI.min(dolfin.MPI.comm_world, int(gdof))
 

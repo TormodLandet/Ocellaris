@@ -6,7 +6,7 @@ def get_root_value(value, comm=None):
     """
     Return the value that is given on the root process
     """
-    ncpu = dolfin.MPI.size(dolfin.mpi_comm_world())
+    ncpu = dolfin.MPI.size(dolfin.MPI.comm_world)
     
     if ncpu == 1:
         # Not running in parallel

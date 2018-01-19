@@ -195,7 +195,7 @@ def seconds_as_string(seconds):
 
 
 def say(*args, **kwargs):
-    if dolfin.MPI.rank(dolfin.mpi_comm_world()) == 0:
+    if dolfin.MPI.rank(dolfin.MPI.comm_world) == 0:
         print(*args, **kwargs)
 
 

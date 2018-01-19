@@ -252,7 +252,7 @@ class SolverCoupledLDG(Solver):
         for d in range(sim.ndim):
             this_maxabs = abs(sim.data['upp%d' % d].vector().get_local()).max()
             maxabs = max(maxabs, this_maxabs)
-        maxabs = dolfin.MPI.max(dolfin.mpi_comm_world(), float(maxabs))
+        maxabs = dolfin.MPI.max(dolfin.MPI.comm_world, float(maxabs))
         has_upp_start_values = maxabs > 0
         
         # Previous-previous values are provided so we can start up with second order time stepping
@@ -304,7 +304,7 @@ class SolverCoupledLDG(Solver):
                 
             # Stop steady state simulation if convergence has been reached
             if self.is_steady:
-                vel_diff = dolfin.MPI.max(dolfin.mpi_comm_world(), float(vel_diff))
+                vel_diff = dolfin.MPI.max(dolfin.MPI.comm_world, float(vel_diff))
                 sim.reporting.report_timestep_value('max(ui_new-ui_prev)', vel_diff)
                 if vel_diff < self.steady_velocity_eps:
                     sim.log.info('Stopping simulation, steady state achieved')

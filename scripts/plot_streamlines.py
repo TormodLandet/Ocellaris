@@ -104,7 +104,7 @@ class StreamFunction(object):
 
 def load_simulation(h5_file_name):
     assert os.path.isfile(h5_file_name)
-    h5 = df.HDF5File(df.mpi_comm_world(), h5_file_name, 'r')
+    h5 = df.HDF5File(df.MPI.comm_world, h5_file_name, 'r')
     assert h5.has_dataset('ocellaris')
     
     mesh = df.Mesh()
