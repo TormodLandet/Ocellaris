@@ -78,8 +78,14 @@ class Simulation(object):
         self.update_mesh_data()
         
         num_cells_local = mesh.topology().ghost_offset(self.ndim)
-        num_cells = dolfin.MPI.sum(mesh.mpi_comm(), float(num_cells_local))
-        self.log.info('Loaded mesh with %d cells' % num_cells)
+        num_cells_tot = dolfin.MPI.sum(mesh.mpi_comm(), float(num_cells_local))
+        num_cells_min = dolfin.MPI.min(mesh.mpi_comm(), float(num_cells_local))
+        num_cells_max = dolfin.MPI.max(mesh.mpi_comm(), float(num_cells_local))
+        n_proc_mesh = dolfin.MPI.size(mesh.mpi_comm())
+        self.log.info('Loaded mesh with %d cells' % num_cells_tot)
+        self.log.info('    Distributed over %d MPI processes' % n_proc_mesh)
+        self.log.info('    Least loaded process has %d cells' % num_cells_min)
+        self.log.info('    Most loaded process has %d cells' % num_cells_max)
     
     def update_mesh_data(self, connectivity_changed=True):
         """
