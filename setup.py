@@ -18,11 +18,10 @@ for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8
         version = line.split('=')[1].strip()[1:-1]
 
 
-# Which packages we depend on
+# List packages we depend on
+FENICS_VERSION = ">=2018.1.0.dev0,<2018.2"
 dependencies = ['PyYAML', 'h5py', 'numpy']
-if False: # Update when CI image is updated to newest FEniCS
-    FENICS_VERSION = ">=2018.1.0.dev0,<2018.2"
-    dependencies.append('fenics-dolfin%s' % FENICS_VERSION)
+dependencies.append('fenics-dolfin%s' % FENICS_VERSION)
 
 
 # No need to install dependencies on ReadTheDocs
