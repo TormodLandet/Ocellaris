@@ -44,7 +44,10 @@ class OcellarisInspector(wx.Frame):
         nb.AddPage(self.files_panel, 'Files')
         self.files_panel.SetBackgroundColour(p.GetBackgroundColour())
         
-        nb.SetSelection(1)
+        if self.istate.results:
+            nb.SetSelection(1)
+        else:
+            nb.SetSelection(0)
         s = wx.BoxSizer()
         s.Add(nb, 1, wx.EXPAND)
         p.SetSizer(s)
