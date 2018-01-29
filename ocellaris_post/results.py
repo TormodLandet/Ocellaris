@@ -288,7 +288,9 @@ def read_iteration_reports(results):
     degrees of freedom, number of CPUs, ...
     """
     iter_reps = {}
-    for line in StringIO(unicode(results.log)):
+    log = results.log.decode('utf8', 'replace')
+    #log = unicode(results.log
+    for line in StringIO(log):
         if line.startswith('Running simulation on'):
             results.ncpus = int(line.split()[3])
         elif line.startswith('Degrees of freedom'):
