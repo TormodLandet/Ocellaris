@@ -51,43 +51,41 @@ class OcellarisReportsPanel(wx.Panel):
         v.Add(h, flag=wx.EXPAND)
         
         # Choose report to plot
-        h1 = wx.BoxSizer(wx.HORIZONTAL)
-        v.Add(h1, flag=wx.ALL|wx.EXPAND, border=4)
-        h1.Add(wx.StaticText(self, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL)
-        h1.AddSpacer(5)
+        gbs = wx.GridBagSizer(vgap=3, hgap=10)
+        v.Add(gbs, flag=wx.ALL|wx.EXPAND, border=6)
+        
+        L = 0
+        gbs.Add(wx.StaticText(self, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 0), span=(1, 1))
         self.report_selector = wx.Choice(self)
         self.report_selector.Bind(wx.EVT_CHOICE, self.report_selected)
-        h1.Add(self.report_selector, proportion=1)
-        
-        # Customize the plot text
-        fgs = wx.FlexGridSizer(rows=3, cols=3, vgap=3, hgap=10)
-        fgs.AddGrowableCol(1, proportion=1)
-        v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
-        
+        gbs.Add(self.report_selector, flag=wx.EXPAND|wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2))
+                
         # Plot title
-        fgs.Add(wx.StaticText(self, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        L += 1
+        gbs.Add(wx.StaticText(self, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 0), span=(1, 1))
         self.title = wx.TextCtrl(self)
         self.title.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        fgs.Add(self.title, flag=wx.EXPAND)
-        fgs.AddSpacer(0)
+        gbs.Add(self.title, flag=wx.EXPAND|wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2))
         
         # Plot xlabel / log x axis
-        fgs.Add(wx.StaticText(self, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        L += 1
+        gbs.Add(wx.StaticText(self, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 0), span=(1, 1))
         self.xlabel = wx.TextCtrl(self)
         self.xlabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        fgs.Add(self.xlabel, flag=wx.EXPAND)
+        gbs.Add(self.xlabel, flag=wx.EXPAND|wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 1))
         self.xlog = wx.CheckBox(self, label='X as log axis')
         self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
-        fgs.Add(self.xlog)
+        gbs.Add(self.xlog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))
         
         # Plot ylabel
-        fgs.Add(wx.StaticText(self, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        L += 1
+        gbs.Add(wx.StaticText(self, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 0), span=(1, 1))
         self.ylabel = wx.TextCtrl(self)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        fgs.Add(self.ylabel, flag=wx.EXPAND)
+        gbs.Add(self.ylabel, flag=wx.EXPAND|wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 1))
         self.ylog = wx.CheckBox(self, label='Y as log axis')
         self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
-        fgs.Add(self.ylog)
+        gbs.Add(self.ylog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))
         
         self.plot_limits = PlotLimSelectors(self, self.update_plot_soon)
         v.Add(self.plot_limits, flag=wx.ALL|wx.EXPAND, border=4)
@@ -95,6 +93,7 @@ class OcellarisReportsPanel(wx.Panel):
         self.custom_line = PlotCustomLine(self, self.update_plot_soon)
         v.Add(self.custom_line, flag=wx.ALL|wx.EXPAND, border=4)
         
+        gbs.AddGrowableCol(1, proportion=1)
         v.Fit(self)
         
     def reload_report_names(self, evt=None):

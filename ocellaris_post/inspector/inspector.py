@@ -36,13 +36,13 @@ class OcellarisInspector(wx.Frame):
         nb.AddPage(self.reports_panel, 'Timestep reports')
         self.reports_panel.SetBackgroundColour(p.GetBackgroundColour())
         
-        self.surfaces_panel = OcellarisSurfacesPanel(nb, self.istate)
-        nb.AddPage(self.surfaces_panel, 'Surfaces')
-        self.surfaces_panel.SetBackgroundColour(p.GetBackgroundColour())
-        
         self.files_panel = OcellarisFilesPanel(nb, self.istate)
         nb.AddPage(self.files_panel, 'Files')
         self.files_panel.SetBackgroundColour(p.GetBackgroundColour())
+        
+        self.surfaces_panel = OcellarisSurfacesPanel(nb, self.istate)
+        nb.AddPage(self.surfaces_panel, 'Surfaces')
+        self.surfaces_panel.SetBackgroundColour(p.GetBackgroundColour())
         
         if self.istate.results:
             nb.SetSelection(1)
