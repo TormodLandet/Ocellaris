@@ -87,15 +87,23 @@ class OcellarisReportsPanel(wx.Panel):
         self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         gbs.Add(self.ylog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))
         
-        self.plot_limits = PlotLimSelectors(self, self.update_plot_soon)
-        v.Add(self.plot_limits, flag=wx.ALL|wx.EXPAND, border=4)
+        # Collapsible settings pane
+        coll = wx.CollapsiblePane(self, label='Details')
+        collp = coll.GetPane()
+        coll.Bind(wx.EVT_COLLAPSIBLEPANE_CHANGED, lambda _: self.Layout())
+        collv = wx.BoxSizer(wx.VERTICAL)
+        collp.SetSizer(collv)
+        v.Add(coll, flag=wx.EXPAND, proportion=0)
         
-        self.custom_line = PlotCustomLine(self, self.update_plot_soon)
-        v.Add(self.custom_line, flag=wx.ALL|wx.EXPAND, border=4)
+        self.plot_limits = PlotLimSelectors(collp, self.update_plot_soon)
+        collv.Add(self.plot_limits, flag=wx.ALL|wx.EXPAND, border=4)
+        
+        self.custom_line = PlotCustomLine(collp, self.update_plot_soon)
+        collv.Add(self.custom_line, flag=wx.ALL|wx.EXPAND, border=4)
         
         gbs.AddGrowableCol(1, proportion=1)
         v.Fit(self)
-        
+    
     def reload_report_names(self, evt=None):
         # Store previous selection if found
         selected = self.report_selector.GetSelection()
