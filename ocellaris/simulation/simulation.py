@@ -156,11 +156,12 @@ class Simulation(object):
                 ocellaris_error('Non finite Courant number',
                                 'Found Co = %g' % Co_max)
         
+        # Write timestep report
+        self.reporting.log_timestep_reports()
+        
         # Write fields to output file
         self.io.write_fields()
         
-        # Write timestep report
-        self.reporting.log_timestep_reports()
         self.flush()
     
     def flush(self):
