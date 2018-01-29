@@ -19,6 +19,9 @@ from ocellaris_post import Results
 from wx.lib.pubsub import pub
 
 
+SAVE_WAIT_TIME = 5000 # wait 5 seconds before saving cached state again
+
+
 # PubSub topics
 TOPIC_METADATA = 'updated_metadata'
 TOPIC_RELOAD = 'reloaded_data'
@@ -49,6 +52,7 @@ class InspectorState(object):
         self.persistence.set_label(r, label)
         self.results.append(r)
         r.active_in_gui = True
+        self.persistence.register_opened_file(file_name)
     
     def reload(self, only_active=True):
         """
@@ -86,6 +90,19 @@ class InspectorPersistence(object):
         
         self.load()
     
+    def get_prev_files(self, N=10):
+        fns = self._cached_data.setdefault('file_open_history', [])
+        return fns[-N:]
+    
+    def register_opened_file(self, file_name):
+        # Make file go to end of list of opened files
+        fns = self._cached_data.setdefault('file_open_history', [])
+        fn = os.path.abspath(file_name)
+        if fn in fns:
+            fns.remove(fn)
+        fns.append(fn)
+        self.save_soon()
+    
     def save_soon(self, evt=None):
         if self.timer is not None:
             # Allready going to save
@@ -93,7 +110,7 @@ class InspectorPersistence(object):
         
         # Save after 5 second of inactivity (to avoid slowdowns in case 
         # there are multiple updates in a row, which is likely)
-        self.timer = wx.CallLater(5000, self.save)
+        self.timer = wx.CallLater(SAVE_WAIT_TIME, self.save)
     
     def load(self):
         if not os.path.isfile(self.cache_file_name):
@@ -110,7 +127,7 @@ class InspectorPersistence(object):
             return
         
         # Get persisent label if it exists or default to file name as label
-        lables = self._cached_data.setdefault('result_file_lables', {})        
+        lables = self._cached_data.setdefault('result_file_lables', {})
         if res.file_name in lables:
             res.label = lables[res.file_name]
         else:
@@ -152,13 +169,14 @@ def show_inspector(file_names, lables):
     """
     setup_yaml()
     
+    app = wx.App()
+    
     istate = InspectorState()
     for file_name, label in zip(file_names, lables):
         if not os.path.isfile(file_name):
             raise IOError('The results file %r does not exist' % file_name)
         istate.open(file_name, label)
     
-    app = wx.App()
     frame = OcellarisInspector(istate)
     frame.Show()
     app.MainLoop()
