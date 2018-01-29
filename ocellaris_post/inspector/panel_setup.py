@@ -110,6 +110,9 @@ class OcellarisSetupPanel(wx.Panel):
                 fn = '...' + fn[3-N:]
             return fn
         self.prevfiles.Set([shorten(fn) for fn in self.prev_file_names])
+        i = len(self.prev_file_names) - 1 - len(self.istate.results)
+        if i >= 0:
+            self.prevfiles.Select(i)
     
     def select_file_to_open(self, _evt=None):
         wildcard = "H5 checkpoint and LOG files (*.h5;*.log)|*.h5;*.log"
