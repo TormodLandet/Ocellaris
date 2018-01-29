@@ -1,4 +1,5 @@
 import wx
+import os
 from . import pub, TOPIC_METADATA, TOPIC_RELOAD, TOPIC_NEW_ACCEL
 
 
@@ -115,8 +116,15 @@ class OcellarisSetupPanel(wx.Panel):
             self.prevfiles.Select(i)
     
     def select_file_to_open(self, _evt=None):
+        defdir = ''
+        deffile = ''
+        prev = self.istate.persistence.get_prev_files()
+        if prev:
+            defdir = os.path.split(prev[-1])[0] 
+        
         wildcard = "H5 checkpoint and LOG files (*.h5;*.log)|*.h5;*.log"
-        dlg = wx.FileDialog(self, "Open Occelaris results file", "", "", wildcard, wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        dlg = wx.FileDialog(self, "Open Occelaris results file", defdir, deffile,
+                            wildcard, wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         if dlg.ShowModal() != wx.ID_CANCEL:
             self.open_file(dlg.GetPath())
     
