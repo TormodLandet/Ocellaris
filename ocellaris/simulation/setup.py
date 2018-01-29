@@ -241,13 +241,24 @@ def load_mesh(simulation):
         else:
             mesh_facet_regions = None
     
+    elif mesh_type == 'XDMF':
+        simulation.log.info('Creating mesh from XDMF file')
+        
+        mesh_file = inp.get_value('mesh/mesh_file', required_type='string')
+        
+        # Load the mesh from file
+        pth = inp.get_input_file_path(mesh_file)
+        mesh = dolfin.Mesh(comm)
+        with dolfin.XDMFFile(comm, pth) as xdmf:
+            xdmf.read(mesh, False)
+    
     elif mesh_type == 'HDF5':
         simulation.log.info('Creating mesh from DOLFIN HDF5 file')
         h5_file_name = inp.get_value('mesh/mesh_file', required_type='string')
         
         with dolfin.HDF5File(comm, h5_file_name, 'r') as h5:
             # Read mesh
-            mesh = dolfin.Mesh()
+            mesh = dolfin.Mesh(comm)
             h5.read(mesh, '/mesh', False)
             
             # Read facet regions
@@ -256,6 +267,10 @@ def load_mesh(simulation):
                 h5.read(mesh_facet_regions, '/mesh_facet_regions')
             else:
                 mesh_facet_regions = None
+    
+    else:
+        ocellaris_error('Unknown mesh type',
+                        'Mesh type %r is not supported' % mesh_type)
     
     simulation.set_mesh(mesh, mesh_facet_regions)
 
