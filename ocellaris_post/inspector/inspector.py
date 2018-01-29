@@ -4,10 +4,11 @@ Inspect timestep reports from one or more Ocellaris restart files
 import wx
 from . import pub, TOPIC_NEW_ACCEL
 from .icons import OCELLARIS_ICON
-from .panel_results import OcellarisReportsPanel
 from .panel_setup import OcellarisSetupPanel
-from .panel_surfaces import OcellarisSurfacesPanel
+from .panel_results import OcellarisReportsPanel
 from .panel_files import OcellarisFilesPanel
+from .panel_stairs import OcellarisStairsPanel
+from .panel_surfaces import OcellarisSurfacesPanel
 
 
 class OcellarisInspector(wx.Frame):
@@ -39,6 +40,10 @@ class OcellarisInspector(wx.Frame):
         self.files_panel = OcellarisFilesPanel(nb, self.istate)
         nb.AddPage(self.files_panel, 'Files')
         self.files_panel.SetBackgroundColour(p.GetBackgroundColour())
+        
+        self.stairs_panel = OcellarisStairsPanel(nb, self.istate)
+        nb.AddPage(self.stairs_panel, 'Stairs')
+        self.stairs_panel.SetBackgroundColour(p.GetBackgroundColour())
         
         self.surfaces_panel = OcellarisSurfacesPanel(nb, self.istate)
         nb.AddPage(self.surfaces_panel, 'Surfaces')
