@@ -1,4 +1,4 @@
-def get_stairs(all_results, report_name):
+def get_stairs(all_results, report_name, min_length=50):
     """
     Given a list of Result objects and the name of a control variable
     time series, return two lists
@@ -30,12 +30,13 @@ def get_stairs(all_results, report_name):
         N = len(ts)
         
         start = True
-        for i in range(2, N-2):
-            if start and ts[i] == ts[i+1] == ts[i+2]:
+        for i in range(N):
+            if start and i < N-2 and ts[i] == ts[i+1] == ts[i+2]:
                 start = False 
                 this_res.append([ts[i], i, None])
                 all_vals.add(ts[i])
-            elif not start and ts[i-2] == ts[i-1] == ts[i] != ts[i+1]:
+                continue
+            elif not start and N - 1 > i > 1 and ts[i-2] == ts[i-1] == ts[i] != ts[i+1]:
                 start = True
                 this_res[-1][-1] = i
         
@@ -51,11 +52,22 @@ def get_stairs(all_results, report_name):
         for lims in all_res:
             prevend = 0
             for v, istart, iend in lims:
-                if v == val:
+                if v == val and iend - istart > min_length:
                     all_lims[-1].append((prevend, istart, iend))
                     break
                 prevend = iend
             else:
                 all_lims[-1].append((0, 0, 0))
     
-    return all_vals, all_lims
+    # Remove values that ended up with no data due to min_length
+    all_vals2, all_lims2 = [], []
+    for val, lims in zip(all_vals, all_lims):
+        all_zero = True
+        for i0, i1, i2 in lims:
+            if not (i0 == i1 == i2 == 0):
+                all_zero = False
+        if not all_zero:
+            all_vals2.append(val)
+            all_lims2.append(lims) 
+    
+    return all_vals2, all_lims2

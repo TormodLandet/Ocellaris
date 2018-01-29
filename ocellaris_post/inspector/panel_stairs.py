@@ -211,7 +211,6 @@ class OcellarisStairsPanel(wx.Panel):
             self.control_value.SetSelection(0)
         
         self.control_value_selected()
-        self.update_plot()
     
     def control_value_selected(self, evt=None):
         ival = self.control_value.GetSelection()
@@ -219,7 +218,7 @@ class OcellarisStairsPanel(wx.Panel):
             self.startstop_indices = None
         else:
             self.startstop_indices = self.stair_lims[ival]
-        self.update_plot() 
+        self.update_plot()
     
     def report_selected(self, evt=None):
         irep = self.report_selector.GetSelection()
@@ -247,12 +246,19 @@ class OcellarisStairsPanel(wx.Panel):
         """
         Update the plot at once
         """
+        self.axes.clear()
+        
         if not self.startstop_indices:
+            self.canvas.draw()
+            self.need_update = False
             return
         
         irep = self.report_selector.GetSelection()
         if irep == wx.NOT_FOUND:
+            self.canvas.draw()
+            self.need_update = False
             return
+        
         report_name = self.report_names[irep]
         
         # How to plot
@@ -266,10 +272,6 @@ class OcellarisStairsPanel(wx.Panel):
             plot = self.axes.semilogy
         else:
             plot = self.axes.plot
-        
-        self.axes.clear()
-        
-        assert len(self.startstop_indices) == len(self.istate.active_results)
         
         xs, ys = [], []
         for results, startstop in zip(self.istate.active_results,
