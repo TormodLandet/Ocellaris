@@ -56,6 +56,6 @@ def get_stairs(all_results, report_name):
                     break
                 prevend = iend
             else:
-                all_lims[-1].append((None, None, None))
+                all_lims[-1].append((0, 0, 0))
     
     return all_vals, all_lims
