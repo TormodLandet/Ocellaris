@@ -311,6 +311,7 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
         
         sim.input.set_value('physical_properties/rho0', 1.0)
         sim.input.set_value('physical_properties/rho1', 1.0)
+        sim.input.set_value('physical_properties/nu0', 1.0)
         sim.input.set_value('physical_properties/nu1', 1.0)
         
         sim.input.set_value('multiphase_solver/project_uconv_dgt0', False)
@@ -362,6 +363,7 @@ def test_slip_length_boundary_level_set_intersector(N):
     sim.input.set_value('initial_conditions/cp/cpp_code', 'x[1] < 0.5 ? 1.0 : 0.0')
     sim.input.set_value('physical_properties/rho0', 1.0)
     sim.input.set_value('physical_properties/rho1', 1.0)
+    sim.input.set_value('physical_properties/nu0', 1.0)
     sim.input.set_value('physical_properties/nu1', 1.0)
     setup_simulation(sim)
     
