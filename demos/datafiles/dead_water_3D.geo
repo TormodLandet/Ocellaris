@@ -8,7 +8,7 @@ SetFactory("OpenCASCADE");
 
 // Parameters of the geometry
 DefineConstant[ H = {  30.0, Name "Parameters/Total depth" } ];
-DefineConstant[ h = {   6.0, Name "Parameters/Upper layer depth" } ];
+DefineConstant[ h = {   4.0, Name "Parameters/Upper layer depth" } ];
 DefineConstant[ L = { 200.0, Name "Parameters/Domain length" } ];
 DefineConstant[ B = {  30.0, Name "Parameters/Domain breadth" } ];
 DefineConstant[ C = {  50.0, Name "Parameters/Hull inlet offset amidships" } ];
@@ -102,9 +102,25 @@ ocean = ocean_new;
 // Make mesh conform to initial free surface. The free surface mesh conforming
 // line is inset 1 mesh cell from the boundary to avoid mesh degeneration there
 Q = lc_fine * 0.8;
-s = news;
-Rectangle(s) = {Q, Q, -h,     L - 2 * Q,  B / 2 - 2 * Q};
-Surface {s} In Volume {ocean}; // Conform to this plane surface
+s1 = news;
+Rectangle(s1) = {Q, Q, -h,     L - 2 * Q,  B / 2 - 2 * Q};
+If ( h < d )
+    // Remove ellipse around the hull to avoid surfce/hull intersection
+    radius_x = l / 2 * Sqrt(1 - h / d) + Q;
+    radius_y = w / 2 * Sqrt(1 - h / d) + Q;
+    e1 = newl;
+    Ellipse(e1) = {C, 0, -h, radius_x, radius_y};
+    e2 = newl;
+    Line Loop(e2) = {e1};
+    s2 = news;
+    Plane Surface(s2) = {e2};
+    s3 = news;
+    BooleanDifference(s3) = { Surface{s1}; Delete; }{ Surface{s2}; Delete; };
+Else
+    radius_x = Q / 2;
+    s3 = s1;
+EndIf
+Surface {s3} In Volume {ocean}; // Conform to this plane surface
 
 // Mesh conforming line in the inlet plane
 p1 = newp; Point(p1) = {0,   0 + Q, -h};
@@ -118,11 +134,15 @@ p2 = newp; Point(p2) = {L, B/2 - Q, -h};
 l1 = newl; Line(l1) = {p1, p2};
 Line{l1} In Surface{6}; // FIXME: surface number extracted from GUI
 
-// Mesh conforming line in the center plane
+// Mesh conforming lines in the center plane
 p1 = newp; Point(p1) = {0 + Q, 0, -h};
-p2 = newp; Point(p2) = {L - Q, 0, -h};
+p2 = newp; Point(p2) = {C - radius_x, 0, -h};
+p3 = newp; Point(p3) = {C + radius_x, 0, -h};
+p4 = newp; Point(p4) = {L - Q, 0, -h};
 l1 = newl; Line(l1) = {p1, p2};
+l2 = newl; Line(l2) = {p3, p4};
 Line{l1} In Surface{2}; // FIXME: surface number extracted from GUI
+Line{l2} In Surface{2}; // FIXME: surface number extracted from GUI
 
 // Mesh conforming line in the off-center plane
 p1 = newp; Point(p1) = {0 + Q, B/2, -h};
