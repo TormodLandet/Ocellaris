@@ -12,8 +12,8 @@ metadata:
 
 physical_properties:
     g: [0, 0]
-    nu0: 0.005
-    rho0: 1.0
+    nu: 0.005
+    rho: 1.0
 
 mesh:
     #type: XML

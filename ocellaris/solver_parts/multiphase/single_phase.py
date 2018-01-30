@@ -8,8 +8,9 @@ class SinglePhaseScheme(MultiPhaseModel):
     def __init__(self, simulation):
         self.simulation = simulation
         simulation.log.info('Creating single phase model')
-        self.rho0 = self.simulation.input.get_value('physical_properties/rho0', 1.0, 'float')
-        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
+        props = self.simulation.input.get_value('physical_properties', required_type='Input')
+        self.rho0 = props.get_value('rho', 1.0, 'float')
+        self.nu0 = props.get_value('nu', required_type='float')
         simulation.log.info('    rho = %r' % self.rho0)
         simulation.log.info('    nu = %r' % self.nu0)
     

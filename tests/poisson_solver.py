@@ -47,7 +47,7 @@ output:
 time:
     dt: 1.0
 physical_properties:
-    nu0: 1.0
+    nu: 1.0
 """
  
 

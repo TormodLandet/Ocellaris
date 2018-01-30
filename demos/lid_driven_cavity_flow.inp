@@ -17,8 +17,8 @@ metadata:
 
 physical_properties:
     g: [0, 0]
-    nu0: 0.001
-    rho0: 1.0
+    nu: 0.001
+    rho: 1.0
 
 mesh:
     type: Rectangle

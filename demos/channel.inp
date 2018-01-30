@@ -15,8 +15,8 @@ user_code:
 
 physical_properties:
     g: [0, 0]
-    nu0: 1e-4
-    rho0: 1.0
+    nu: 1e-4
+    rho: 1.0
 
 mesh:
     type: Rectangle

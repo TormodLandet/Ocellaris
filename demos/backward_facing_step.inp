@@ -19,8 +19,8 @@ user_code:
 
 physical_properties:
     g: [0, 0]
-    nu0: py$ 2*H1*Uavg/Re
-    rho0: 1.0
+    nu: py$ 2*H1*Uavg/Re
+    rho: 1.0
 
 mesh:
     type: XML

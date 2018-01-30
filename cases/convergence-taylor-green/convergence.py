@@ -58,8 +58,8 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     Vp = sim.data['Vp']
     vals = dict(t=sim.time,
                 dt=sim.dt,
-                nu=sim.input['physical_properties']['nu0'],
-                rho=sim.input['physical_properties']['rho0'])
+                nu=sim.input['physical_properties']['nu'],
+                rho=sim.input['physical_properties']['rho'])
     u0e = dolfin.Expression(sim.input.get_value('initial_conditions/up0/cpp_code'), degree=polydeg_u+3, **vals)
     u1e = dolfin.Expression(sim.input.get_value('initial_conditions/up1/cpp_code'), degree=polydeg_u+3, **vals)
     if sim.input.get_value('solver/timestepping_method', 'BDF') == 'CN':

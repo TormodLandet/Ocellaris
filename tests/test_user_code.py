@@ -14,7 +14,7 @@ solver: {type: AnalyticalSolution}
 mesh: {type: Rectangle, Nx: 4, Ny: 4}
 boundary_conditions: []
 time: {dt: 1.0}
-physical_properties: {nu0: 1.0}
+physical_properties: {nu: 1.0}
 output: {log_enabled: no}
 """
 
