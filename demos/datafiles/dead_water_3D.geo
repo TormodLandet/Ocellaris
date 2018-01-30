@@ -18,78 +18,51 @@ DefineConstant[ w = {  11.0, Name "Parameters/Hull width" } ];
 DefineConstant[ d = {   5.0, Name "Parameters/Draught amidships" } ];
 
 // Mesh params
-DefineConstant[ lc_fine   = { 2.0, Name "Parameters/LC fine" } ];
-DefineConstant[ lc_course = { 5.0, Name "Parameters/LC course" } ];
+DefineConstant[ lc_fine   = { 1.5, Name "Parameters/LC fine" } ];
+DefineConstant[ lc_course = { 3.0, Name "Parameters/LC course" } ];
 
 
 ////////////////////////////////////////////
 // Geometry
 
-Macro ComputePosition
-	// Compute oordinates of position (ip, jp) 
-	x = l*ip/(N - 1) - l/2;
-	y = w*jp/(M - 1) - w/2;
-	z = -d*(1 - (2*x/l)^2 - (2*y/w)^2);
-Return
+// Mesh control parameter for geometry construction
+Q = lc_fine * 0.8;
 
-Macro MakePointIfNotExists
-	// This macro takes parameters ip and jp
-	// and creates a point in x_ip, y_jp
-	If ( ! Exists( mypoint~{ip}~{jp} ) ) 
-		Call ComputePosition;
-		mypoint~{ip}~{jp} = newp;
-		Point(mypoint~{ip}~{jp}) = {C + x, y, z};
+// Create hull out of ellipses
+N = Ceil(d / Q);
+dz = d / (N - 0.95);
+For i In {0:N+1}
+    // Make ellipses
+	z = dz - i * dz;
+	If (i > 1)
+	   z = z + dz * (i / (N + 1))^3;
 	EndIf
-Return
-
-Macro MakeLineIfNotExists 
-   // This macro takes parameters i0, i1, j0, j1
-   // and defines a line from (i0, j0) to (i1, j1)
-	If ( ! Exists( myline~{i0}~{j0}~{i1}~{j1} ) ) 
-		myline~{i0}~{j0}~{i1}~{j1} = newl;
-		Line(myline~{i0}~{j0}~{i1}~{j1}) = {mypoint~{i0}~{j0}, mypoint~{i1}~{j1}};
-	EndIf
-Return
-
-// Create hull out of multiple pieces
-N = 21;
-M = 11;
-ipiece = 0;
-For i In {0:N-2}
-	For j In {0:M-2}
-		// Make points
-		ip = i + 0; jp = j + 0; Call MakePointIfNotExists;
-		ip = i + 1; jp = j + 0; Call MakePointIfNotExists;
-		ip = i + 1; jp = j + 1; Call MakePointIfNotExists;
-		ip = i + 0; jp = j + 1; Call MakePointIfNotExists;
-		// Make lines
-		i0 = i + 0; j0 = j + 0; i1 = i + 1; j1 = j + 0; Call MakeLineIfNotExists;
-		i0 = i + 1; j0 = j + 0; i1 = i + 1; j1 = j + 1; Call MakeLineIfNotExists;
-		i0 = i + 1; j0 = j + 1; i1 = i + 0; j1 = j + 1; Call MakeLineIfNotExists;
-		i0 = i + 0; j0 = j + 1; i1 = i + 0; j1 = j + 0; Call MakeLineIfNotExists;
-		// Make line loop
-		myloop~{i}~{j} = newl;
-		Line Loop(myloop~{i}~{j}) = { myline~{i + 0}~{j + 0}~{i + 1}~{j + 0},
-                                      myline~{i + 1}~{j + 0}~{i + 1}~{j + 1},
-                                      myline~{i + 1}~{j + 1}~{i + 0}~{j + 1},
-                                      myline~{i + 0}~{j + 1}~{i + 0}~{j + 0} };
-		mysurf~{i}~{j} = news;
-		Plane Surface ( mysurf~{i}~{j} ) = { myloop~{i}~{j} };
-		
-		// Extrude the surface piece upwards
-		out[] = Extrude{0, 0, 2*d }{ Surface{mysurf~{i}~{j}}; };
-		ipiece = ipiece + 1;
-		hull_pieces[ipiece] = out[1];
-	EndFor
+    radius_x = l / 2 * Sqrt(1 + z / d);
+    radius_y = w / 2 * Sqrt(1 + z / d);
+    e1 = newl;
+    Ellipse(e1) = {C, 0, z, radius_x, radius_y};
+    e2 = newl;
+    Line Loop(e2) = {e1};
+    ellipses[i] = e2;
+EndFor
+For i In {0:N}
+    // Make hull pieces
+    surfs = ThruSections{ellipses[i], ellipses[i + 1]};
+    top = news; Plane Surface(top) = {ellipses[i]};
+    bot = news; Plane Surface(bot) = {ellipses[i + 1]};
+    pshell = news;
+    Surface Loop(pshell) = {top, surfs[0], bot};
+    hull_pieces[i] = newv;
+    Volume(hull_pieces[i]) = {pshell};
 EndFor
 
 // Create water domain
 ocean = newv; Box(ocean) = {0, -B/2, -H,   L, B, H};
 
-For k In {1:ipiece}
+For i In {0:N}
 	// Delete hull shape from water domain
 	ocean_new = newv;
-	BooleanDifference(ocean_new) = { Volume{ocean}; Delete; }{ Volume{hull_pieces[k]}; Delete; };
+	BooleanDifference(ocean_new) = { Volume{ocean}; Delete; }{ Volume{hull_pieces[i]}; Delete; };
 	ocean = ocean_new;
 EndFor
 
@@ -101,13 +74,12 @@ ocean = ocean_new;
 
 // Make mesh conform to initial free surface. The free surface mesh conforming
 // line is inset 1 mesh cell from the boundary to avoid mesh degeneration there
-Q = lc_fine * 0.8;
 s1 = news;
 Rectangle(s1) = {Q, Q, -h,     L - 2 * Q,  B / 2 - 2 * Q};
-If ( h < d )
+If (h < d)
     // Remove ellipse around the hull to avoid surfce/hull intersection
-    radius_x = l / 2 * Sqrt(1 - h / d) + Q;
-    radius_y = w / 2 * Sqrt(1 - h / d) + Q;
+    radius_x = l / 2 * Sqrt(1 - h / (d + 2 * Q));
+    radius_y = w / 2 * Sqrt(1 - h / (d + 2 * Q));
     e1 = newl;
     Ellipse(e1) = {C, 0, -h, radius_x, radius_y};
     e2 = newl;
