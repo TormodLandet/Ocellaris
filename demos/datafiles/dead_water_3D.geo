@@ -52,7 +52,7 @@ Macro MakeLineIfNotExists
 Return
 
 // Create hull out of multiple pieces
-N = 11;
+N = 21;
 M = 11;
 ipiece = 0;
 For i In {0:N-2}
@@ -101,31 +101,32 @@ ocean = ocean_new;
 
 // Make mesh conform to initial free surface. The free surface mesh conforming
 // line is inset 1 mesh cell from the boundary to avoid mesh degeneration there
+Q = lc_fine * 0.8;
 s = news;
-Rectangle(s) = {lc_fine, lc_fine, -h,     L - 2 * lc_fine,  B / 2 - 2 * lc_fine};
+Rectangle(s) = {Q, Q, -h,     L - 2 * Q,  B / 2 - 2 * Q};
 Surface {s} In Volume {ocean}; // Conform to this plane surface
 
 // Mesh conforming line in the inlet plane
-p1 = newp; Point(p1) = {0,   0 + lc_fine, -h};
-p2 = newp; Point(p2) = {0, B/2 - lc_fine, -h};
+p1 = newp; Point(p1) = {0,   0 + Q, -h};
+p2 = newp; Point(p2) = {0, B/2 - Q, -h};
 l1 = newl; Line(l1) = {p1, p2};
 Line{l1} In Surface{1}; // FIXME: surface number extracted from GUI
 
 // Mesh conforming line in the outlet plane
-p1 = newp; Point(p1) = {L,   0 + lc_fine, -h};
-p2 = newp; Point(p2) = {L, B/2 - lc_fine, -h};
+p1 = newp; Point(p1) = {L,   0 + Q, -h};
+p2 = newp; Point(p2) = {L, B/2 - Q, -h};
 l1 = newl; Line(l1) = {p1, p2};
 Line{l1} In Surface{6}; // FIXME: surface number extracted from GUI
 
 // Mesh conforming line in the center plane
-p1 = newp; Point(p1) = {0 + lc_fine, 0, -h};
-p2 = newp; Point(p2) = {L - lc_fine, 0, -h};
+p1 = newp; Point(p1) = {0 + Q, 0, -h};
+p2 = newp; Point(p2) = {L - Q, 0, -h};
 l1 = newl; Line(l1) = {p1, p2};
 Line{l1} In Surface{2}; // FIXME: surface number extracted from GUI
 
 // Mesh conforming line in the off-center plane
-p1 = newp; Point(p1) = {0 + lc_fine, B/2, -h};
-p2 = newp; Point(p2) = {L - lc_fine, B/2, -h};
+p1 = newp; Point(p1) = {0 + Q, B/2, -h};
+p2 = newp; Point(p2) = {L - Q, B/2, -h};
 l1 = newl; Line(l1) = {p1, p2};
 Line{l1} In Surface{4}; // FIXME: surface number extracted from GUI
 

@@ -20,7 +20,7 @@ user_code:
         C: 50        # distance from midships to inlet
         
         # Non-geometry parameters (these are controlled by a post_timestep hook below)
-        Velocity: 2.0    # vessel speed (divide by 0.514444 to get knots)
+        Velocity: 0.0    # vessel speed (divide by 0.514444 to get knots)
         Tmax:  1.0e+6    # maximum duration
         FRESH: 1000.0    # Upper layer density
         SALT: 1028.0     # Lower layer density
@@ -57,11 +57,11 @@ physical_properties:
     g: [0, 0, -9.81]
 
 mesh:
-    #type: XML
-    #mesh_file: datafiles/dead_water_3D.xml
+    type: XML
+    mesh_file: datafiles/dead_water_3D.xml
     
-    type: HDF5
-    mesh_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
+    #type: HDF5
+    #mesh_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
 
 boundary_conditions:
 
@@ -119,20 +119,21 @@ boundary_conditions:
     u:
         type: FreeSlip
 
-initial_conditions:
+_initial_conditions:
     file:
         h5_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
         same_mesh: yes
 
 time:
-    dt: 0.2
+    dt: 0.1
     tmax: py$ Tmax
 
 output:
-    prefix: output/dead_water_3D_rstairs06
+    prefix: output/dead_water_3D_stairs_finer_08
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 100
+    xdmf_write_interval: 200
+    hdf5_write_interval: 200
 
 solver:
     type: IPCS-A
@@ -142,8 +143,8 @@ solver:
     polynomial_degree_velocity: 2
     function_space_pressure: DG
     function_space_velocity: DG
-    steady_velocity_stopping_criterion: 1e-5
-    force_steady: no
+    #steady_velocity_stopping_criterion: 1e-5
+    #force_steady: no
 
 _multiphase_solver:
     type: BlendedAlgebraicVOF
@@ -215,10 +216,11 @@ hooks:
     -   name: Update velocity
         enabled: yes
         code: |
-            #U_vals = [0.00, 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.0, 2.25]
-            U_vals = [0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00][::-1]
-            Nramp = 500
-            Ntot = 1500
+            U_vals = [0.00, 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.0, 2.25]
+            U_vals = [0.00, 1.00, 1.25, 1.50, 1.75, 2.0]
+            Nramp = 200
+            Ntot = 2800
+            prefix = simulation.input.get_value('output/prefix', '')
             
             if not hook_data:
                 simulation.log.warning('Creating initial update velocity hook data')
@@ -231,24 +233,26 @@ hooks:
             U = U_vals[i]
             
             t1, t2, t3 = hook_data['t_start'], hook_data['t_ramp'], hook_data['t_end']
-            if t > t3 and i == len(U_vals) - 1:
-                simulation.log.info('End of velocity vector, stopping')
-                simulation.input.set_value('time/tmax', t)
-            elif t > t3:
-                prefix = simulation.input.get_value('output/prefix', '')
-                fn = prefix + '_savepoint_U_%.3f.h5' % U
-                simulation.io.write_restart_file(fn)
-                simulation.log.info('Saving restart file at end of velocity %.2f' % U)
+            if t > t3:
+                if simulation.timestep_restart > 5:
+                    fn = prefix + '_savepoint_U_%.3f.h5' % U
+                    simulation.io.write_restart_file(fn)
+                    simulation.log.info('Saving restart file at end of velocity %.2f' % U)
                 
-                hook_data['iU'] += 1
-                dt = 0.1 / U_vals[hook_data['iU']]
-                simulation.input.set_value('time/dt', dt)
-                simulation.data['time_coeffs'].assign(dolfin.Constant([1, -1, 0]))
-                simulation.log.info('Changing timestep to %r' % dt)
-                hook_data['Uprev'] = U
-                hook_data['t_start'] = t
-                hook_data['t_ramp'] = t + dt * Nramp
-                hook_data['t_end'] = t + dt * Ntot
+                if i == len(U_vals) - 1:
+                    simulation.log.info('End of velocity vector, stopping')
+                    simulation.input.set_value('time/tmax', t)
+                else:
+                    # Go to next velocity
+                    hook_data['iU'] += 1
+                    dt = 0.1 / U_vals[hook_data['iU']]
+                    simulation.input.set_value('time/dt', dt)
+                    simulation.data['time_coeffs'].assign(dolfin.Constant([1, -1, 0]))
+                    simulation.log.info('Changing timestep to %r' % dt)
+                    hook_data['Uprev'] = U
+                    hook_data['t_start'] = t
+                    hook_data['t_ramp'] = t + dt * Nramp
+                    hook_data['t_end'] = t + dt * Ntot
             elif t < t2:
                 f = (t - t1) / (t2 - t1)
                 F = (3 * f**2 - 2 * f**3)
@@ -257,3 +261,8 @@ hooks:
             Vel = simulation.input.get_value('user_code/constants/Velocity')
             simulation.reporting.report_timestep_value('Vel', Vel)
             simulation.input.set_value('user_code/constants/Velocity', U)
+
+            #if simulation.timestep % 100:
+            #    fn = prefix + '_restart.h5'
+            #    simulation.io.write_restart_file(fn)
+            #    simulation.log.info('Saving restart file at timestep %d' % simulation.timestep)
