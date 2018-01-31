@@ -118,7 +118,8 @@ class InspectorPersistence(object):
             return
         
         with open(self.cache_file_name, 'rb') as f:
-            self._cached_data = yaml.safe_load(f)
+            data = yaml.safe_load(f)
+        self._cached_data = data if isinstance(data, dict) else {}
     
     def set_label(self, res, label):
         # Use label if provided
@@ -140,8 +141,9 @@ class InspectorPersistence(object):
             assert res.label is not None
             lables[res.file_name] = res.label
         
-        with open(self.cache_file_name, 'wb') as f:
-            yaml.safe_dump(self._cached_data, f)
+        with open(self.cache_file_name, 'wt') as f:
+            yaml.safe_dump(self._cached_data, f,
+                           allow_unicode=True)
         
         self.timer = None
 

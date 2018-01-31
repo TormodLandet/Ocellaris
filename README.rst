@@ -6,17 +6,18 @@ multiphase free surface flows. The current goal of the project is to simulate wa
 exit of objects in ocean waves with accurate capturing of the force on the object and the 
 behaviour of the free surface.
 
-Ocellaris is implemented in Python and C++ with FEniCS_ as the backend for numerics, mesh and 
-finite element calculations.
+Ocellaris is implemented in Python and C++ with FEniCS_ as the backend for the mesh and 
+finite element assembly. PETSc_ is used for solving the resulting linear systems.
 
 .. contents:: Quick start
 
 .. _FEniCS: https://fenicsproject.org/
+.. _PETSc: https://www.mcs.anl.gov/petsc/
 
 Ocellaris is named after the `Amphiprion Ocellaris <https://en.wikipedia.org/wiki/Ocellaris_clownfish>`_
 clownfish and is written as part of a PhD project at the University of Oslo.
 
-.. figure:: https://trlandet.bitbucket.io/ocellaris/_static/ocellaris_mesh_521.png
+.. figure:: https://trlandet.bitbucket.io/figures/ocellaris_mesh_521.png
     :align: center
     :alt: Picture of Ocellaris
     

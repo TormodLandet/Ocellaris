@@ -41,8 +41,8 @@ the plot of the triangulated mesh to align. If you look closely you will see
 that the mesh does not follow the PNG image perfectly. I think it is good enough
 for an evening hack.
 
-.. image:: _static/ocellaris_mesh_521.png
-    :alt: Mesh with Ocellaris fish logo image superinposed 
+.. image:: https://trlandet.bitbucket.io/figures/ocellaris_mesh_521.png
+    :alt: Mesh with Ocellaris fish logo image superimposed 
 
 Why?
 ----

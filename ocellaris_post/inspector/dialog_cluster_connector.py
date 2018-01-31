@@ -7,7 +7,7 @@ import wx
 class OcellarisClusterConnectorDialog(wx.Dialog):
     def __init__(self, parent, inspector_state, file_opener):
         super(OcellarisClusterConnectorDialog, self).__init__(parent, title='Cluster Connector',
-                                                              size=(500,520),
+                                                              size=(550,550),
                                                               style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER)
         self.istate = inspector_state
         self.file_opener = file_opener
@@ -37,9 +37,8 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
         self.host_name = wx.TextCtrl(p)
         fg.Add(self.host_name, flag=wx.EXPAND|wx.ALIGN_CENTER_VERTICAL)
         
-        host_help = ['Give "user@host" or just "host"',
-                     'depending on your SSH setup.',
-                     'You MUST have passwordless login!']
+        host_help = ['Either "user@host" or "host" depending on your setup.',
+                     'You MUST have password-less SSH login working!']
         fg.AddSpacer(5)
         fg.Add(wx.StaticText(p, label='\n'.join(host_help)))
         
@@ -66,9 +65,9 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
         fg.Add(self.local_dir, flag=wx.EXPAND|wx.ALIGN_CENTER_VERTICAL)
         self.widgets1.append(self.local_dir)
         
-        mount_help = ['The local directory where you have mounted',
-                      'the cluster home directory.',
-                      'Example: "sshfs CLUSTER_HOST: ~/LOCAL_DIR"']
+        mount_help = ['The local directory where you have mounted the cluster',
+                      'home directory. E.g., "~/mymount".',
+                      'You can mount using "sshfs CLUSTER_HOST: ~/LOCAL_DIR"']
         fg.AddSpacer(5)
         fg.Add(wx.StaticText(p, label='\n'.join(mount_help)))
         
