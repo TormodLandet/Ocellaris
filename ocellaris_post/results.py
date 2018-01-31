@@ -297,16 +297,30 @@ def read_iteration_reports(results):
     """
     iter_reps = {}
     log = safe_decode(results.log)
+    final_vals = {}
+    line_vals = None
     for line in StringIO(log):
         if line.startswith('Running simulation on'):
             results.ncpus = int(line.split()[3])
         elif line.startswith('Degrees of freedom'):
             results.ndofs = int(line.split()[3])
+        elif line.startswith('Reports for timestep') and line_vals:
+            # Store the final inner iteration values which were printed on
+            # the previous lines
+            try:
+                time = line.split(' time = ')[1].split(',')[0]
+                time = float(time)
+            except:
+                continue
+            for k, v in line_vals.items():
+                final_vals.setdefault(k, []).append(v)
+            final_vals.setdefault('__time__', []).append(time)
         elif not ('iteration' in line and 'Krylov' in line):
             continue
         
         # Parse the inner iteration line
         try:
+            line_vals = {}
             parts = line.split(' - ')
             iter_num = int(parts[0].split()[-1])
             iter_reps.setdefault('iteration', []).append(iter_num)
@@ -322,6 +336,7 @@ def read_iteration_reports(results):
                     name = ' '.join(wds[:-1])
                     value = float(wds[-1])
                     iter_reps.setdefault(name, []).append(value)
+                line_vals[name] = value
         
         except:
             pass
@@ -338,6 +353,18 @@ def read_iteration_reports(results):
     xaxis = numpy.arange(Nmin)
     for name, value in iter_reps.items():
         name2 = 'Inner iteration: %s' % name
+        results.reports[name2] = numpy.array(value[:Nmin])
+        results.reports_x[name2] = xaxis
+    
+    # Get minimum length of the last inner iters
+    Nmin = 1e100
+    for name, value in final_vals.items():
+        Nmin = min(Nmin, len(value))
+    
+    # Store final iter reports
+    xaxis = numpy.array(final_vals.pop('__time__'), dtype=float)
+    for name, value in final_vals.items():
+        name2 = '%s (last iter)' % name
         results.reports[name2] = numpy.array(value[:Nmin])
         results.reports_x[name2] = xaxis
 
