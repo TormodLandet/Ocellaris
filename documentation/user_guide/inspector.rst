@@ -15,6 +15,12 @@ for a finished simulation (log/restart file) or running simulation (log file)
 the inspector can be quite handy. Using :kbd:`Control+R` to reload the results
 gives near instant monitoring of a running Ocellaris simulation.
 
+.. contents:: Contents
+    :local:
+
+Getting started
+---------------
+
 To run the Inspector you need to have a working installation of wxPython_
 version 4.0 or later (tested with 4.0.0 beta 2). When this is installed you
 can start the Ocellaris Inspector by running::
@@ -31,6 +37,13 @@ both Python 2 and Python 3 so you only need to install wxPython, numpy, h5py,
 PyYAML and matplotlib in your favourite Python install (or venv) to use the 
 Ocellaris Inspector. Most of these are probably installed allready in a
 standard scientific Python installation.
+
+
+.. figure:: https://trlandet.bitbucket.io/figures/inspector_courant.png
+    :align: center
+    :alt: The Ocellaris Inspector GUI - plotting Co = Courant number
+    
+    The Ocellaris Inspector showing the Courant number of a running simulation 
 
 
 Opening files
