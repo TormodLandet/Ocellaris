@@ -5,8 +5,16 @@ import yaml
 from io import StringIO
 from .files import get_result_file_type
 
+
 if sys.version[0] != '2':
-    unicode = lambda s: s
+    unicode = str
+
+
+def safe_decode(text):
+    if isinstance(text, unicode):
+        return text
+    else:
+        return text.decode('utf8', 'replace')
 
 
 class Results(object):
@@ -288,8 +296,7 @@ def read_iteration_reports(results):
     degrees of freedom, number of CPUs, ...
     """
     iter_reps = {}
-    log = results.log.decode('utf8', 'replace')
-    #log = unicode(results.log
+    log = safe_decode(results.log)
     for line in StringIO(log):
         if line.startswith('Running simulation on'):
             results.ncpus = int(line.split()[3])

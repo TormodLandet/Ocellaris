@@ -1,7 +1,7 @@
 import wx
 import os
 from . import pub, TOPIC_METADATA, TOPIC_RELOAD, TOPIC_NEW_ACCEL
-
+from .dialog_cluster_connector import OcellarisClusterConnectorDialog
 
 class OcellarisSetupPanel(wx.Panel):
     def __init__(self, parent, inspector_state):
@@ -17,10 +17,17 @@ class OcellarisSetupPanel(wx.Panel):
         st = wx.StaticText(self, label='Open files:')
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
+        h = wx.BoxSizer(wx.HORIZONTAL)
+        v.Add(h, flag=wx.EXPAND|wx.ALL, border=10)
+        
         b = wx.Button(self, label='Open new file (Ctrl+O)')
         b.Bind(wx.EVT_BUTTON, self.select_file_to_open)
-        v.Add(b, flag=wx.ALL, border=10)
         pub.sendMessage(TOPIC_NEW_ACCEL, callback=self.select_file_to_open, key='O')
+        h.Add(b)
+        h.AddSpacer(5)
+        b = wx.Button(self, label='Open running simulations')
+        b.Bind(wx.EVT_BUTTON, self.show_cluster_connector)
+        h.Add(b)
         
         h = wx.BoxSizer(wx.HORIZONTAL)
         v.Add(h, flag=wx.EXPAND|wx.ALL, border=10)
@@ -79,7 +86,7 @@ class OcellarisSetupPanel(wx.Panel):
             b.SetToolTip('Close the results file %r' % results.file_name)
             
             def make_closer(il):
-                def close(evt=None):
+                def close(_evt=None):
                     with wx.BusyCursor():
                         self.istate.close(il)
                         pub.sendMessage(TOPIC_METADATA)
@@ -142,12 +149,16 @@ class OcellarisSetupPanel(wx.Panel):
             pub.sendMessage(TOPIC_RELOAD)
             self.update_open_files()
     
-    def update_lables(self, event=None):
+    def show_cluster_connector(self, _evt=None):
+        with OcellarisClusterConnectorDialog(self, self.istate, self.open_file) as dlg:
+            dlg.ShowModal()
+    
+    def update_lables(self, _evt=None):
         for label_control, results in zip(self.label_controls, self.istate.results):
             results.label = label_control.GetValue()
         pub.sendMessage(TOPIC_METADATA)
     
-    def reload_data(self, evt=None):
+    def reload_data(self, _evt=None):
         with wx.BusyCursor():
             self.istate.reload()
             pub.sendMessage(TOPIC_METADATA)
