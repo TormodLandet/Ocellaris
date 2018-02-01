@@ -64,7 +64,7 @@ class Simulation(object):
         boundary conditions, initial condition, function spaces, runtime
         post-processing probes, program and user defined hooks ... 
         """
-        # The implementation is rather long, so it is in a separate file
+        self.flush_interval = self.input.get_value('output/flush_interval', FLUSH_INTERVAL, 'float')
         setup_simulation(self)
     
     def set_mesh(self, mesh, mesh_facet_regions=None):
@@ -164,7 +164,7 @@ class Simulation(object):
         
         self.flush()
     
-    def flush(self):
+    def flush(self, force=False):
         """
         Flush output files if an appropriate amount of time has passed. This
         ensures that flush can be called after important output without slowing
@@ -172,7 +172,6 @@ class Simulation(object):
         quick succession
         """
         now = time.time()
-        flush_interval = self.input.get_value('output/flush_interval', FLUSH_INTERVAL, 'float')
-        if now - self.prevflush > flush_interval:
+        if force or now - self.prevflush > self.flush_interval:
             self.hooks.run_custom_hook('flush')
             self.prevflush = now
