@@ -79,7 +79,7 @@ def terminate_simulation(p, signal=signal.SIGTERM,
     return True
 
 
-def run_simulation(inp_file, ncpus, interval, timeout):
+def run_simulation(inp_file, ncpus, interval, timeout, silent):
     """
     Run the simulation while watching the stdout for output every ``interval``
     seconds and terminating after ``timeout`` seconds without any output.
@@ -116,9 +116,10 @@ def run_simulation(inp_file, ncpus, interval, timeout):
             now = time()
             try:
                 data = read(p.stdout.fileno(), 10000)
-                data = data.decode('utf8', 'replace')
-                sys.stdout.write(data)
-                sys.stdout.flush()
+                if not silent:
+                    data = data.decode('utf8', 'replace')
+                    sys.stdout.write(data)
+                    sys.stdout.flush()
                 last_io = now
             except OSError:
                 # No data to read
@@ -156,7 +157,7 @@ def get_restart_files(inp_file):
     return [inp_file] + sorted(restart_files)
 
 
-def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts):
+def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts, silent):
     """
     Run the simulation, possibly restarting from savepoint files in case of a
     stuck simulation. Only ``max_restarts`` of the same file are tried before
@@ -181,7 +182,7 @@ def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts):
         info('Running Ocellaris simulation number %d with input file %r\n'
              % (restarts, fn))
         
-        res, status = run_simulation(fn, ncpus, interval, timeout)
+        res, status = run_simulation(fn, ncpus, interval, timeout, silent)
         if res in 'exited':
             sys.exit(status)
         elif not status:
@@ -203,6 +204,8 @@ def parse_args(argv):
     parser.add_argument('--restarts', '-r', metavar='RESTARTS', type=int, default=DEFAULT_MAX_RESTARTS,
                         help='Number of restarts of the same file (input or restart file). '
                         'Every time the simulation writes a new savepoint the counter is reset')
+    parser.add_argument('--silent', '-s', action='store_true', default=False,
+                        help='Do not relay stdout from Ocellaris')
     return parser.parse_args(argv)
 
 
@@ -214,7 +217,8 @@ def main(args=None):
                        ncpus=args.ncpus,
                        interval=args.interval,
                        timeout=args.timeout,
-                       max_restarts=args.restarts)
+                       max_restarts=args.restarts,
+                       silent=args.silent)
 
 
 if __name__ == '__main__':
