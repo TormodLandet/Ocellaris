@@ -12,6 +12,10 @@ def setup_simulation(simulation):
     """
     Prepare an Ocellaris simulation for running
     """
+    # Force all log output to be flushed straight away (for better debugging)
+    force_flush_old = simulation.log.force_flush_all
+    simulation.log.force_flush_all = True
+    
     # Setup user code (custom sys.path, custom module imports)
     setup_user_code(simulation)
     
@@ -31,7 +35,6 @@ def setup_simulation(simulation):
     assert simulation.dt > 0
     
     # Preliminaries, before setup begins
-    simulation.flush()
     
     # Get the multi phase model class
     multiphase_model_name = simulation.input.get_value('multiphase_solver/type', 'SinglePhase', 'string')
@@ -52,48 +55,39 @@ def setup_simulation(simulation):
     # Mark the boundaries of the domain with separate marks
     # for each regions Creates a new "ds" measure
     mark_boundaries(simulation)
-    simulation.flush()
     
     # Load the periodic boundary conditions. This must 
     # be done before creating the function spaces as
     # they depend on the periodic constrained domain
     setup_periodic_domain(simulation)
-    simulation.flush()
     
     # Create function spaces. This must be done before
     # creating Dirichlet boundary conditions
     setup_function_spaces(simulation, solver_class, multiphase_class)
-    simulation.flush()
     
     # Load the mesh morpher used for prescribed mesh velocities and ALE multiphase solvers
     simulation.mesh_morpher = MeshMorpher(simulation)
-    simulation.flush()
     
     # Setup physical constants and multi-phase model (g, rho, nu, mu)
     setup_physical_properties(simulation, multiphase_class)
-    simulation.flush()
     
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs
     # the Neumann conditions to define weak forms
     setup_boundary_conditions(simulation)
-    simulation.flush()
             
     # Create momentum sources (usefull for MMS tests etc)
     setup_sources(simulation)
-    simulation.flush()
     
     # Create the solver
     simulation.solver = solver_class(simulation)
     
     # Setup postprocessing probes
     setup_probes(simulation)
-    simulation.flush()
     
     # Initialise the fields
     if not simulation.restarted:
         setup_initial_conditions(simulation)
-        simulation.flush()
         
     # Setup the solution properties
     simulation.solution_properties.setup()
@@ -114,7 +108,7 @@ def setup_simulation(simulation):
     
     # Show all registered hooks
     simulation.hooks.show_hook_info()
-    simulation.flush()
+    simulation.log.force_flush_all = force_flush_old
 
 
 def setup_user_code(simulation):

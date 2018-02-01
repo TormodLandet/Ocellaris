@@ -25,9 +25,10 @@ class Log(object):
         self.simulation.hooks.add_custom_hook('flush', self.flush, 'Flush log file')
         self.write_log = False
         self.write_stdout = False
+        self.force_flush_all = False
         self._the_log = []
     
-    def write(self, message, msg_log_level=ALWAYS_WRITE, color=NO_COLOR):
+    def write(self, message, msg_log_level=ALWAYS_WRITE, color=NO_COLOR, flush=None):
         """
         Write a message to the log without checking the log level
         """
@@ -41,6 +42,12 @@ class Log(object):
         
         # Store all messages irrespective of the log level
         self._the_log.append(message)
+        
+        # Optionally, flush the log
+        if self.force_flush_all:
+            self.simulation.flush(True)
+        elif flush:
+            self.simulation.flush(flush == 'force')
     
     def set_log_level(self, log_level):
         """
@@ -49,21 +56,21 @@ class Log(object):
         """
         self.log_level = log_level
     
-    def error(self, message):
+    def error(self, message, flush=None):
         "Log an error message"
-        self.write(message, dolfin.LogLevel.ERROR, RED)
+        self.write(message, dolfin.LogLevel.ERROR, RED, flush)
     
-    def warning(self, message=''):
+    def warning(self, message='', flush=None):
         "Log a warning message"
-        self.write(message, dolfin.LogLevel.WARNING, YELLOW)
+        self.write(message, dolfin.LogLevel.WARNING, YELLOW, flush)
     
-    def info(self, message=''):
+    def info(self, message='', flush=None):
         "Log an info message"
-        self.write(message, dolfin.LogLevel.INFO)
+        self.write(message, dolfin.LogLevel.INFO, flush=flush)
     
-    def debug(self, message=''):
+    def debug(self, message='', flush=None):
         "Log a debug message"
-        self.write(message, dolfin.LogLevel.DEBUG)
+        self.write(message, dolfin.LogLevel.DEBUG, flush=flush)
     
     def setup(self):
         """
