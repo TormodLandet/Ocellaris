@@ -14,6 +14,11 @@ def main(inputfile, input_override):
     """
     Run Ocellaris
     """
+    if os.environ.get('OCELLARIS_SUPER_DEBUG', False):
+        print('FOUND OCELLARIS_SUPER_DEBUG in environment')
+        from ocellaris.utils.debug import enable_super_debug
+        enable_super_debug()
+    
     sim = Simulation()
     
     # Read input

@@ -42,7 +42,7 @@ signal.signal(signal.SIGQUIT, signal.default_int_handler)
 DEFAULT_TIMEOUT = 60 * 10
 DEFAULT_INTERVAL = 10
 DEFAULT_MAX_RESTARTS = 2
-DEFAULT_KILL_TRIES = 10
+DEFAULT_KILL_RETRIES = 10
 DEFAULT_KILL_WAIT = 10
 DEFAULT_SIGINT_WAIT = 60
 
@@ -73,13 +73,18 @@ def info(text):
 
 def terminate_simulation(p, signum=signal.SIGTERM,
                          wait=DEFAULT_KILL_WAIT,
-                         retries=DEFAULT_KILL_TRIES,
+                         retries=DEFAULT_KILL_RETRIES,
                          silent=False):
-    nsig = min(1, max(3, retries/2))
+    # How long to try the signal before going into TERM / KILL mode
+    # Currently hardcoded to minimum 1 and maximum 3 times
+    nsig = max(1, min(3, retries/2))
+    
+    # Try to stop the process
     for i in range(retries):
-        read_process_output(p, silent)
+        # This gives the return code if the process has stopped, othewise None
         if p.poll() is not None:
             break
+        
         # First we try to send the signal, after some tries we just term/kill
         if i < nsig:
             info('Sending signal %d to PID %d\n' % (signum, p.pid))
@@ -91,7 +96,15 @@ def terminate_simulation(p, signum=signal.SIGTERM,
         else:
             warn('Killing PID %d\n' % p.pid)
             p.kill()
-        sleep(wait)
+        
+        # Wait for process to handle signal
+        t = 0
+        while t < wait:
+            t += 1
+            sleep(1)
+            read_process_output(p, silent)
+            if p.poll() is not None:
+                break
     else:
         error('\nERROR: could not terminate simulation!\n\n')
         return False
@@ -175,7 +188,7 @@ def run_simulation(inp_file, ncpus, interval, timeout, silent, mpirun):
     except KeyboardInterrupt:
         # We got SIGINT, tell Ocellaris to stop
         warn('\nGot SIGINT, letting Ocellaris save restart file\n')
-        term_ok = terminate_simulation(p, signum=signal.SIGINT,
+        term_ok = terminate_simulation(p, signum=signal.SIGSTOP,
                                        wait=DEFAULT_SIGINT_WAIT,
                                        silent=silent)
         read_process_output(p, silent)
@@ -237,7 +250,8 @@ def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts,
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(prog='orun',
-                                     description=DESCRIPTION)
+                                     description=DESCRIPTION,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('input_file', help='Name of inputfile on YAML format')
     parser.add_argument('--ncpus', '-n', metavar='NCPU', default=1, type=int,
                         help='Number of MPI processes')
