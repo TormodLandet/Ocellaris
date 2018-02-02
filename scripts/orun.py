@@ -90,9 +90,8 @@ def terminate_simulation(p, signum=signal.SIGTERM,
             info('Sending signal %d to PID %d\n' % (signum, p.pid))
             p.send_signal(signum)
         elif i == nsig:
-            signum = signal.SIGTERM
-            info('Sending signal %d to PID %d\n' % (signum, p.pid))
-            p.send_signal(signum)
+            info('Terminating PID %d\n' % p.pid)
+            p.terminate()
         else:
             warn('Killing PID %d\n' % p.pid)
             p.kill()

@@ -48,7 +48,6 @@ def get_dof_region_marks(simulation, V):
             if dof2 not in dof_region_marks:
                 dof_region_marks[dof2] = regions
     
-    assert len(dof_region_marks) > 4
     return dof_region_marks
 
 
