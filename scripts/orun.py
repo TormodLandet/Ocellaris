@@ -31,6 +31,12 @@ from os import O_NONBLOCK, read, environ
 import yaml
 
 
+# Restore signals in non-interactive background shells
+signal.signal(signal.SIGINT, signal.default_int_handler)
+signal.signal(signal.SIGTERM, signal.default_int_handler)
+signal.signal(signal.SIGQUIT, signal.default_int_handler)
+
+
 # Defaults
 DEFAULT_TIMEOUT = 60 * 10
 DEFAULT_INTERVAL = 10

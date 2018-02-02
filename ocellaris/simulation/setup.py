@@ -80,6 +80,7 @@ def setup_simulation(simulation):
     setup_sources(simulation)
     
     # Create the solver
+    simulation.log.info('Initialising %s solver' % solver_name)
     simulation.solver = solver_class(simulation)
     
     # Setup postprocessing probes
