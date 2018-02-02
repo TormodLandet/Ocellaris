@@ -28,6 +28,9 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
     except KeyboardInterrupt as e:
         simulation.log.error('========== You pressed Ctrl+C -- STOPPING ==========')
         tb, err = sys.exc_info()[2], e
+        tb_msg = traceback.format_tb(tb)
+        simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
+        simulation.log.error('You pressed Ctrl+C or setup got a SIGINT/SIGTERM∕SIGQUIT signal')
     except BaseException as e:
         simulation.log.error('=== EXCEPTION =='*5)
         tb, err = sys.exc_info()[2], e

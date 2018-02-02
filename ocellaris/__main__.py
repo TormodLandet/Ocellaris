@@ -42,7 +42,8 @@ def main(inputfile, input_override):
     # Setup the Ocellaris simulation
     ok = setup_simulation(sim, setup_logging=False, catch_exceptions=True)
     if not ok:
-        sys.exit(-1)
+        sim.log.error('Setup did not suceed, exiting')
+        sys.exit(1)
     
     if sim.restarted:
         # Load previous results

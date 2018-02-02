@@ -72,17 +72,47 @@ def info(text):
 
 def terminate_simulation(p, signal=signal.SIGTERM,
                          wait=DEFAULT_KILL_WAIT,
-                         retries=DEFAULT_KILL_TRIES):
+                         retries=DEFAULT_KILL_TRIES,
+                         silent=False):
+    info('Sending signal %d to PID %d\n' % (signal, p.pid))
     p.send_signal(signal)
-    for _ in range(retries):
+    for i in range(retries):
         sleep(wait)
+        read_process_output(p, silent)
         if p.poll() is not None:
             break
-        p.kill()
+        if i < retries / 2:
+            info('Sending signal %d to PID %d\n' % (signal, p.pid))
+            p.send_signal(signal)
+        else:
+            warn('Killing PID %d\n' % p.pid)
+            p.kill()
     else:
         error('\nERROR: could not terminate simulation!\n\n')
         return False
     return True
+
+
+def read_process_output(p, silent):
+    """
+    Return a boolean indicating if the process has output on stdout or not
+    IMPORTANT: this requires that O_NONBLOCK has been set on p.stdout!
+    """
+    got_data = False
+    while 1:
+        try:
+            data = read(p.stdout.fileno(), 10000)
+        except OSError:
+            data = None
+        if not data:
+            break
+        got_data = True
+        if not silent:
+            data = data.decode('utf8', 'replace')
+            sys.stdout.write(data)
+            sys.stdout.flush()
+    
+    return got_data
 
 
 def run_simulation(inp_file, ncpus, interval, timeout, silent):
@@ -117,31 +147,31 @@ def run_simulation(inp_file, ncpus, interval, timeout, silent):
         while True:
             exit_code = p.poll()
             if exit_code is not None:
+                read_process_output(p, silent)
                 return ('exited', exit_code)
             
             now = time()
-            try:
-                data = read(p.stdout.fileno(), 10000)
-                if not silent:
-                    data = data.decode('utf8', 'replace')
-                    sys.stdout.write(data)
-                    sys.stdout.flush()
+            has_output = read_process_output(p, silent)
+            if has_output:
                 last_io = now
-            except OSError:
+            else:
                 # No data to read
                 time_since_last_io = now - last_io 
                 if time_since_last_io > timeout:
                     warn('\nStdout timeout exceeded, %d seconds since last output\n'
                          % time_since_last_io)
                     info('Killing child process with PID %d\n' % p.pid)
-                    term_ok = terminate_simulation(p)
+                    term_ok = terminate_simulation(p, silent=silent)
+                    read_process_output(p, silent)
                     return ('timeout', term_ok)
             sleep(interval)
     except KeyboardInterrupt:
         # We got SIGINT, tell Ocellaris to stop
         warn('\nGot SIGINT, letting Ocellaris save restart file\n')
-        info('Stopping child process with PID %d\n' % p.pid)
-        term_ok = terminate_simulation(p, signal=signal.SIGINT, wait=DEFAULT_SIGINT_WAIT)
+        term_ok = terminate_simulation(p, signal=signal.SIGINT,
+                                       wait=DEFAULT_SIGINT_WAIT,
+                                       silent=silent)
+        read_process_output(p, silent)
         return ('exited', -2)
 
 
