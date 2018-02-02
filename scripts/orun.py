@@ -23,6 +23,7 @@ import sys
 import argparse
 import glob
 import re
+import shlex
 from subprocess import Popen, PIPE
 from time import sleep, time
 import signal
@@ -70,26 +71,32 @@ def info(text):
     say(BLUE % text)
 
 
-def terminate_simulation(p, signal=signal.SIGTERM,
+def terminate_simulation(p, signum=signal.SIGTERM,
                          wait=DEFAULT_KILL_WAIT,
                          retries=DEFAULT_KILL_TRIES,
                          silent=False):
-    info('Sending signal %d to PID %d\n' % (signal, p.pid))
-    p.send_signal(signal)
+    nsig = min(1, max(3, retries/2))
     for i in range(retries):
-        sleep(wait)
         read_process_output(p, silent)
         if p.poll() is not None:
             break
-        if i < retries / 2:
-            info('Sending signal %d to PID %d\n' % (signal, p.pid))
-            p.send_signal(signal)
+        # First we try to send the signal, after some tries we just term/kill
+        if i < nsig:
+            info('Sending signal %d to PID %d\n' % (signum, p.pid))
+            p.send_signal(signum)
+        elif i == nsig:
+            signum = signal.SIGTERM
+            info('Sending signal %d to PID %d\n' % (signum, p.pid))
+            p.send_signal(signum)
         else:
             warn('Killing PID %d\n' % p.pid)
             p.kill()
+        sleep(wait)
     else:
         error('\nERROR: could not terminate simulation!\n\n')
         return False
+    
+    info('\nProcess %r exited with status %r\n\n' % (p.pid, p.poll()))
     return True
 
 
@@ -115,7 +122,7 @@ def read_process_output(p, silent):
     return got_data
 
 
-def run_simulation(inp_file, ncpus, interval, timeout, silent):
+def run_simulation(inp_file, ncpus, interval, timeout, silent, mpirun):
     """
     Run the simulation while watching the stdout for output every ``interval``
     seconds and terminating after ``timeout`` seconds without any output.
@@ -131,9 +138,9 @@ def run_simulation(inp_file, ncpus, interval, timeout, silent):
     runner = []
     in_queue = environ.get('SLURM_NTASKS', False)
     if in_queue:
-        runner = ['mpirun']
+        runner = mpirun
     elif ncpus > 1:
-        runner = ['mpirun', '-np',  str(ncpus)]
+        runner = mpirun + ['-np',  str(ncpus)]
     
     cmd = runner + ['python3', '-m', 'ocellaris', inp_file]
     p = Popen(cmd, stdout=PIPE)
@@ -168,7 +175,7 @@ def run_simulation(inp_file, ncpus, interval, timeout, silent):
     except KeyboardInterrupt:
         # We got SIGINT, tell Ocellaris to stop
         warn('\nGot SIGINT, letting Ocellaris save restart file\n')
-        term_ok = terminate_simulation(p, signal=signal.SIGINT,
+        term_ok = terminate_simulation(p, signum=signal.SIGINT,
                                        wait=DEFAULT_SIGINT_WAIT,
                                        silent=silent)
         read_process_output(p, silent)
@@ -193,7 +200,8 @@ def get_restart_files(inp_file):
     return [inp_file] + sorted(restart_files)
 
 
-def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts, silent):
+def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts,
+                       silent, mpirun):
     """
     Run the simulation, possibly restarting from savepoint files in case of a
     stuck simulation. Only ``max_restarts`` of the same file are tried before
@@ -218,7 +226,8 @@ def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts, silent)
         info('Running Ocellaris simulation number %d with input file %r\n'
              % (restarts, fn))
         
-        res, status = run_simulation(fn, ncpus, interval, timeout, silent)
+        res, status = run_simulation(fn, ncpus, interval, timeout,
+                                     silent, mpirun)
         if res in 'exited':
             sys.exit(status)
         elif not status:
@@ -242,6 +251,8 @@ def parse_args(argv):
                         'Every time the simulation writes a new savepoint the counter is reset')
     parser.add_argument('--silent', '-s', action='store_true', default=False,
                         help='Do not relay stdout from Ocellaris')
+    parser.add_argument('--mpirun', metavar='MPIRUN', default='mpirun',
+                        help='The mpirun executable')
     return parser.parse_args(argv)
 
 
@@ -254,7 +265,8 @@ def main(args=None):
                        interval=args.interval,
                        timeout=args.timeout,
                        max_restarts=args.restarts,
-                       silent=args.silent)
+                       silent=args.silent,
+                       mpirun=shlex.split(args.mpirun))
 
 
 if __name__ == '__main__':
