@@ -1,7 +1,4 @@
 import os, sys
-import time
-import threading
-import numpy
 import dolfin
 
 
@@ -30,14 +27,6 @@ class Log(object):
         self.write_stdout = False
         self.force_flush_all = False
         self._the_log = []
-        
-        # MPI side channel comm for errors
-        self._has_logged_error = False
-        self._log_comm = dolfin.MPI.comm_world.Dup()
-        if self._log_comm.rank == 0 and self._log_comm.size > 1:
-            self._waiter = threading.Thread(target=self._wait_for_errors)
-            self._waiter.daemon = True
-            self._waiter.start()
     
     def write(self, message, msg_log_level=ALWAYS_WRITE, color=NO_COLOR, flush=None):
         """
@@ -70,7 +59,6 @@ class Log(object):
     def error(self, message, flush=None):
         "Log an error message"
         self.write(message, dolfin.LogLevel.ERROR, RED, flush)
-        self._mark_error()
     
     def warning(self, message='', flush=None):
         "Log a warning message"
@@ -124,41 +112,6 @@ class Log(object):
         # Set the Dolfin log level
         df_log_level = self.simulation.input.get_value('output/dolfin_log_level', 'warning')
         dolfin.set_log_level(self.AVAILABLE_LOG_LEVELS[df_log_level])
-    
-    def _mark_error(self):
-        """
-        Send a message to rank 0 that something bad has happened
-        """
-        if self._has_logged_error or self._log_comm.rank == 0:
-            self._has_logged_error = True
-            return
-        self.info('Marking for error, sending MPI message', flush='force')
-        self._has_logged_error = True
-        buf = numpy.zeros(1, dtype=numpy.intc)
-        buf[0] = self._log_comm.rank 
-        self._log_comm.Isend(buf, dest=0)
-        # We do not want to wait on successfull delivery in case rank 0 has
-        # quit, so we just wait a bit to increase chances of MPI success before
-        # continuing. Very soon the code on this rank will probably call exit() 
-        time.sleep(1)
-    
-    def _wait_for_errors(self):
-        """
-        This runs async in a thread waiting for incomming
-        errors from MPI 
-        """
-        buf = numpy.zeros(1, dtype=numpy.intc)
-        req = self._log_comm.Irecv(buf)
-        while 1:
-            self.info('Waiting for MPI messages ...')
-            if req.Test():
-                rank = buf[0]
-                req.Free()
-                # FIXME: Consider adding a logging lock in self.write()
-                self.error('Got error from MPI process with rank %d' % rank, flush='force')
-                req = self._log_comm.Irecv(buf)
-            else:
-                time.sleep(1)
     
     def flush(self):
         """
