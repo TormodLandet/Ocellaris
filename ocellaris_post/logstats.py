@@ -50,7 +50,7 @@ def get_filtered_ts(results, ts_name, sieve=slice(None, None, None), plotargs=No
         y = results.reports_x['tstime']
     else:
         warn('\nWARNING: the time series %r is not present %s' %
-             (ts_name, res.file_name))
+             (ts_name, results.file_name))
         return None, None
     
     if plotargs is None:
