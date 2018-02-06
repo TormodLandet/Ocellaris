@@ -77,7 +77,7 @@ class RunnablePythonString(object):
         code_locals.update(kwargs)
         
         # Make sure the user constants are accessible
-        user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:float)')
+        user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:basic)')
         constants = {}
         for name, value in user_constants.items():
             constants[name] = value

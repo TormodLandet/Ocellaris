@@ -123,7 +123,8 @@ class Input(collections.OrderedDict):
             return d_new
         
         # Get validation function according to required data type
-        number = (int, int, float)
+        number = (int, float)
+        basic = (int, float, bool, str)
         dict_types = (dict, collections.OrderedDict)
         anytype = (int, float, str, list, tuple, dict, collections.OrderedDict, bool)
         if required_type == 'bool':
@@ -150,6 +151,8 @@ class Input(collections.OrderedDict):
                 return Input(self.simulation, d, basepath=pathstr)
         elif required_type == 'dict(string:any)':
             def validate_and_convert(d): return check_dict(d, str, anytype)
+        elif required_type == 'dict(string:basic)':
+            def validate_and_convert(d): return check_dict(d, str, basic)
         elif required_type == 'dict(string:dict)':
             def validate_and_convert(d): return check_dict(d, str, dict_types)
         elif required_type == 'dict(string:list)':
@@ -172,6 +175,10 @@ class Input(collections.OrderedDict):
         # Look for the requested key
         d = self
         for p in path:
+            if isinstance(d, str):
+                assert d.strip().startswith('py$')
+                d = eval_python_expression(self.simulation, d, pathstr, safe_mode)
+            
             if isinstance(d, list):
                 # This is a list, assume the key "p" is an integer position
                 try:
@@ -321,7 +328,7 @@ def eval_python_expression(simulation, value, pathstr, safe_mode=False):
             eval_locals[name] = getattr(math, name)
     
     global_inp = simulation.input
-    user_constants = global_inp.get_value('user_code/constants', {}, 'dict(string:float)',
+    user_constants = global_inp.get_value('user_code/constants', {}, 'dict(string:basic)',
                                           safe_mode=True)
     for name, const_value in user_constants.items():
         eval_locals[name] = const_value

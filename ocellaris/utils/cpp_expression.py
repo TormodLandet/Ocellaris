@@ -47,9 +47,10 @@ def get_vars(simulation):
             available_vars[name] = value
     
     # User constants
-    user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:float)')
+    user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:basic)')
     for name, value in user_constants.items():
-        available_vars[name] = value
+        if isinstance(value, (int, float)):
+            available_vars[name] = value
     
     # Sanity check of variable names
     for name in available_vars:

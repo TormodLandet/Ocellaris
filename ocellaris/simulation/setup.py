@@ -404,9 +404,9 @@ def setup_initial_conditions(simulation):
     """
     simulation.log.info('Creating initial conditions')
     
-    ic = simulation.input.get_value('initial_conditions', {}, 'dict(string:dict)')
+    ic = simulation.input.get_value('initial_conditions', {}, 'Input')
     has_file = False
-    for name, info in ic.items():
+    for name in ic:
         name = str(name)
         
         if name == 'file':
@@ -419,11 +419,10 @@ def setup_initial_conditions(simulation):
                             'not seem to be a previous or pressure field.\n\n'
                             'Valid names: up0, up1, ... , p, cp, rho_p, ...' % name)
         
-        if not 'cpp_code' in info:
+        if 'cpp_code' not in ic[name]:
             ocellaris_error('Invalid initial condition',
                             'You have not given "cpp_code" for %r' % name)
-        
-        cpp_code = str(info['cpp_code'])
+        cpp_code = ic.get_value('%s/cpp_code' % name, required_type='string')
         
         if not name in simulation.data:
             ocellaris_error('Invalid initial condition',
