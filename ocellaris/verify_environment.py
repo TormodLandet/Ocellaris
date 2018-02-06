@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, warnings
 
 def verify_env():
     """
@@ -118,7 +118,9 @@ def has_h5py():
         sys.stderr.flush()
     
     try:
-        import h5py #@UnusedImport
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
+            import h5py #@UnusedImport
         return True
     except:
         return False
