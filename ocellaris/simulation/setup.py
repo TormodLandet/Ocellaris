@@ -422,7 +422,7 @@ def setup_initial_conditions(simulation):
         if 'cpp_code' not in ic[name]:
             ocellaris_error('Invalid initial condition',
                             'You have not given "cpp_code" for %r' % name)
-        cpp_code = ic.get_value('%s/cpp_code' % name, required_type='string')
+        cpp_code = ic.get_value('%s/cpp_code' % name, required_type='string!')
         
         if not name in simulation.data:
             ocellaris_error('Invalid initial condition',

@@ -145,6 +145,10 @@ class Input(collections.OrderedDict):
                 d = check_isinstance(d, str)
                 # SWIG does not like Python 2 Unicode objects
                 return str(d)
+        elif required_type == 'string!':
+            def validate_and_convert(d):
+                d = check_isinstance(d, (str, int, float))
+                return str(d)
         elif required_type == 'Input':
             def validate_and_convert(d):
                 d = check_isinstance(d, dict_types)
