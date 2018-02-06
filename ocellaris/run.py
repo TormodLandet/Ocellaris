@@ -86,8 +86,9 @@ def run_simulation(simulation, catch_exceptions=False):
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         simulation.log.error('You pressed Ctrl+C or the solver got a SIGINT/SIGTERM∕SIGQUIT signal')
-        simulation.io.last_savepoint_is_checkpoint = True
-        simulation.hooks.simulation_ended(success)
+        if simulation.input.get_value('output/save_restart_file_at_end', True, 'bool'):
+            simulation.io.last_savepoint_is_checkpoint = True
+            simulation.hooks.simulation_ended(success)
     except SystemExit as e:
         simulation.success = False  # this is just used for debugging, no fancy summary needed
         simulation.log.error('========== SystemExit - exit() was called ==========')
