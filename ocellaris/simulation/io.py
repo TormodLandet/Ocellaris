@@ -1,11 +1,12 @@
 import dolfin
 from ocellaris.utils import timeit
-from .io_impl import RestartFileIO, XDMFFileIO, DebugIO
+from .io_impl import RestartFileIO, XDMFFileIO, LegacyVTKIO, DebugIO
 
 
 # Default values, can be changed in the input file
 XDMF_WRITE_INTERVAL = 0
 HDF5_WRITE_INTERVAL = 0
+LVTK_WRITE_INTERVAL = 0
 SAVE_RESTART_AT_END = True
 
 
@@ -22,6 +23,7 @@ class InputOutputHandling():
         
         self.restart = RestartFileIO(simulation, self.persisted_python_data)
         self.xdmf = XDMFFileIO(simulation)
+        self.lvtk = LegacyVTKIO(simulation)
         self.debug = DebugIO(simulation)
         
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
@@ -108,12 +110,16 @@ class InputOutputHandling():
         # Allow these to change over time
         hdf5_write_interval = sim.input.get_value('output/hdf5_write_interval', HDF5_WRITE_INTERVAL, 'int')
         xdmf_write_interval = sim.input.get_value('output/xdmf_write_interval', XDMF_WRITE_INTERVAL, 'int')
+        lvtk_write_interval = sim.input.get_value('output/vtk_write_interval', LVTK_WRITE_INTERVAL, 'int')
         
         # No need to output just after restarting, this will overwrite the output from the previous simulation
         just_restarted = sim.restarted and sim.timestep_restart == 0
         
         if xdmf_write_interval > 0 and sim.timestep % xdmf_write_interval == 0 and not just_restarted:
             self.xdmf.write()
+        
+        if lvtk_write_interval > 0 and sim.timestep % lvtk_write_interval == 0 and not just_restarted:
+            self.lvtk.write()
         
         if hdf5_write_interval > 0 and sim.timestep % hdf5_write_interval == 0 and not just_restarted:
             self.write_restart_file()

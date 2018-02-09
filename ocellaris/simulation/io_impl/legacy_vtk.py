@@ -1,0 +1,206 @@
+"""
+Write legacy VTK format files (ASCII and BINARY format
+See, e.g., http://www.earthmodels.org/software/vtk-and-paraview/vtk-file-formats
+
+The binary file format writer may be buggy
+"""
+import numpy
+import dolfin
+
+
+WRITE_BINARY = False
+VTK_QUADRATIC_TETRA = 24
+UFC2VTK_TET10 = [0, 1, 2, 3, 9, 6, 8, 7, 5, 4]
+
+
+class LegacyVTKIO():
+    def __init__(self, simulation):
+        """
+        Output to legacy VTK format - Python implementation, 
+        supports discontinuous quadratic fields
+        """
+        self.simulation = simulation
+    
+    def close(self):
+        """
+        Save final restart file and close open files
+        """
+        pass
+    
+    def write(self, file_name=None):
+        """
+        Write a file that can be used for visualization in Paraview
+        """
+        sim = self.simulation
+        binary_format =  sim.input.get_value('output/vtk_binary_format', WRITE_BINARY, 'bool')
+        if file_name is None:
+            file_name = sim.input.get_output_file_path('output/vtk_file_name', '_%08d.vtk') 
+            file_name = file_name % sim.timestep
+        
+        with dolfin.Timer('Ocellaris write legacy VTK file'):
+            self._write_vtk(file_name, binary_format)
+    
+    def _write_vtk(self, file_name, binary_format=WRITE_BINARY):
+        """
+        Write plot file in legacy VTK format
+        """
+        sim = self.simulation
+        t = numpy.array([sim.time], dtype=float)
+        mesh = sim.data['mesh']
+        
+        # The functions to output
+        funcs = []
+        for fn in 'u0 u1 u2 rho p p_hydrostatic c'.split():
+            func = sim.data.get(fn, None)
+            if isinstance(func, dolfin.Function):
+                funcs.append(func)
+        
+        # Get the data from all processes (returns None when not on rank 0)
+        results = gather_vtk_info(mesh, funcs)
+        if results is not None:
+            coords, connectivity, cell_types, func_vals = results
+            write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, func_vals, t)
+
+
+def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, func_vals, t):
+    # VTK writer functions
+    write_ascii = lambda text: out.write(text.encode('ASCII'))
+    if binary_format:
+        def write_array(data):
+            out.write(data.tobytes())
+            write_ascii('\n\n')
+    else:
+        def write_array(data):
+            fmt = '%d' if data.dtype == numpy.intc else '%.5E'
+            if len(data.shape) == 1:
+                write_ascii(' '.join(fmt % v for v in data))
+            else:
+                write_ascii('\n'.join(' '.join(fmt % v for v in row) for row in data))
+            write_ascii('\n\n')
+    
+    # Separate scalars from vectors
+    scalars, vectors = {}, {}
+    if 'u2' in func_vals:
+        vectors['u'] = (func_vals.pop('u0'), func_vals.pop('u1'), func_vals.pop('u0'))
+    elif 'u1' in func_vals:
+        u2 =  numpy.zeros_like(func_vals['u0'])
+        vectors['u'] = (func_vals.pop('u0'), func_vals.pop('u1'), u2)
+    scalars.update(func_vals)
+    
+    # Write the VTK file
+    with open(file_name, 'wt') as out:
+        # Write geometry
+        write_ascii('# vtk DataFile Version 3.0\n')
+        write_ascii('Ocellaris simulation output\n')
+        if binary_format:
+            write_ascii('BINARY\n')
+        else:
+            write_ascii('ASCII\n')
+            
+        Nverts = len(coords)
+        Ncells = len(connectivity)
+        
+        write_ascii('DATASET UNSTRUCTURED_GRID\n')
+        write_ascii('FIELD FieldData 1\n')
+        write_ascii('TIME 1 1 double\n')  # Supported in VisIt, not Paraview
+        write_array(t)
+        
+        write_ascii('POINTS %d float\n' % Nverts)
+        write_array(coords)
+        
+        write_ascii('CELLS %d %d\n' % (Ncells, Ncells*11))
+        write_array(connectivity)
+        
+        write_ascii('CELL_TYPES %d\n' % Ncells)
+        write_array(cell_types)
+        
+        # Write scalar functions
+        for function_name in sorted(scalars):
+            write_ascii('SCALARS %s float 1\n' % function_name)
+            write_ascii('LOOKUP_TABLE default\n')
+            write_array(func_vals[function_name])
+        
+        # Write function values
+        for function_name in sorted(scalars):
+            write_ascii('SCALARS %s float 1\n' % function_name)
+            write_ascii('LOOKUP_TABLE default\n')
+            write_array(func_vals[function_name])
+
+
+def gather_vtk_info(mesh, funcs):
+    """
+    Gather the necessary information to write a legacy VTK output file
+    on the root process
+    """
+    # Verify that all function have the same function space
+    V = funcs[0].function_space()
+    func_names = []
+    all_vals = []
+    for u in funcs:
+        func_names.append(u.name())
+        all_vals.append(u.vector().get_local())
+        fam = u.function_space().ufl_element().family()
+        deg = u.function_space().ufl_element().degree()
+        assert fam == V.ufl_element().family()
+        assert deg == V.ufl_element().degree()
+    
+    gdim = mesh.geometry().dim()
+    assert gdim == 3, 'VTK output currently only supported for 3D meshes'
+    dofs_x = V.tabulate_dof_coordinates().reshape((-1, gdim))
+    dm  = V.dofmap()
+    
+    coords = []
+    connectivity = []
+    cell_types = []
+    func_vals = {n: [] for n in func_names}
+    for i, cell in enumerate(dolfin.cells(mesh)):
+        if i % 1000 == 0 and i > 0:
+            print(i)
+        
+        dofs = dm.cell_dofs(cell.index())
+        M = len(dofs)
+        cell_types.append(VTK_QUADRATIC_TETRA)
+        j = len(coords)
+        
+        connectivity.append([M])
+        for k in range(M):
+            d = dofs[k]
+            coords.append(tuple(dofs_x[d]))
+            connectivity[-1].append(j + UFC2VTK_TET10[k])
+            for name, vals in zip(func_names, all_vals):
+                func_vals[name].append(vals[d])
+    
+    # MPI communication
+    comm = mesh.comm
+    results = (coords, connectivity, cell_types, func_vals)
+    all_results = comm.gather(results) 
+    
+    # Insert information from non-root processes
+    if all_results is not None:
+        for coords_i, connectivity_i, cell_types_i, func_vals_i in all_results[1:]:
+            coords.extend(coords_i)
+            connectivity.extend(connectivity_i)
+            cell_types.extend(cell_types_i)
+            for n in func_names:
+                func_vals[n].extend(func_vals_i[n])
+    
+    # Convert to numpy arrays
+    coords = numpy.array(coords, dtype=numpy.float32)
+    connectivity = numpy.array(connectivity, dtype=numpy.intc)
+    cell_types = numpy.array(cell_types, dtype=numpy.intc)
+    for n in func_names:
+        func_vals[n] = numpy.array(func_vals[n], dtype=numpy.float32)
+    
+    # Check that the data is appropriate for output
+    Nverts = len(coords)
+    Ncells = len(connectivity)
+    assert coords.shape == (Nverts, 3)
+    assert connectivity.shape == (Ncells, 11)
+    assert cell_types.shape == (Ncells,)
+    for n in func_names:
+        assert func_vals[n].shape == (Nverts,)
+    
+    if comm.rank == 0:
+        return coords, connectivity, cell_types, func_vals
+    else:
+        return None
