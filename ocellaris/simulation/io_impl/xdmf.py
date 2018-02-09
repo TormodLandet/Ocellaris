@@ -17,9 +17,10 @@ class XDMFFileIO():
     
     def close(self):
         """
-        Save final restart file and close open files
+        Close any open xdmf file
         """
-        self.xdmf_file.close()
+        if self.xdmf_file is not None:
+            self.xdmf_file.close()
         self.xdmf_file = None
     
     def write(self):

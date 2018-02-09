@@ -25,7 +25,7 @@ class InputOutputHandling():
         self.debug = DebugIO(simulation)
         
         sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
-        close = lambda _success: self._close_files()
+        close = lambda success: self._close_files() #@UnusedVariable - must be named success
         sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
         
         # When exiting due to a signal kill/shutdown a savepoint file will be

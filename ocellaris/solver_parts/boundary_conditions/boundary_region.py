@@ -95,7 +95,7 @@ class BoundaryRegion(object):
         
         # Get boundary conditions on this boundary
         for key, value in self.input.items():
-            if not isinstance(value, dict) or 'type' not in value:
+            if key.startswith('_') or not isinstance(value, dict) or 'type' not in value:
                 continue
             
             inp = self.input.get_value(key, required_type='Input')
