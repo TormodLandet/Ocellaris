@@ -5,6 +5,8 @@ export it as a true DG field to a *.vtk file
 Currently only implemented for scalar DG2 fields, should
 be easy to extend to other element types. The binary file
 implementation may be buggy
+
+See, e.g., http://www.earthmodels.org/software/vtk-and-paraview/vtk-file-formats
 """
 import sys
 import re
