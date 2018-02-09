@@ -6,6 +6,7 @@ The binary file format writer may be buggy
 """
 import numpy
 import dolfin
+from ocellaris.utils import get_local, ocellaris_error
 
 
 WRITE_BINARY = False
@@ -37,6 +38,7 @@ class LegacyVTKIO():
             file_name = sim.input.get_output_file_path('output/vtk_file_name', '_%08d.vtk') 
             file_name = file_name % sim.timestep
         
+        sim.log.info('    Writing legacy VTK file %s' % file_name)
         with dolfin.Timer('Ocellaris write legacy VTK file'):
             self._write_vtk(file_name, binary_format)
     
@@ -80,15 +82,21 @@ def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, f
     
     # Separate scalars from vectors
     scalars, vectors = {}, {}
-    if 'u2' in func_vals:
-        vectors['u'] = (func_vals.pop('u0'), func_vals.pop('u1'), func_vals.pop('u0'))
-    elif 'u1' in func_vals:
-        u2 =  numpy.zeros_like(func_vals['u0'])
-        vectors['u'] = (func_vals.pop('u0'), func_vals.pop('u1'), u2)
+    if 'u0' in func_vals:
+        u0 = func_vals.pop('u0')
+        u1 = func_vals.pop('u1')
+        if 'u2' in func_vals:
+            u2 = func_vals.pop('u2')
+        else:
+            u2 =  numpy.zeros_like(func_vals['u0'])
+        vectors['u'] = numpy.zeros((len(u0), 3), dtype=float)
+        vectors['u'][:,0] = u0
+        vectors['u'][:,1] = u1
+        vectors['u'][:,2] = u2
     scalars.update(func_vals)
     
     # Write the VTK file
-    with open(file_name, 'wt') as out:
+    with open(file_name, 'wb') as out:
         # Write geometry
         write_ascii('# vtk DataFile Version 3.0\n')
         write_ascii('Ocellaris simulation output\n')
@@ -97,8 +105,8 @@ def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, f
         else:
             write_ascii('ASCII\n')
             
-        Nverts = len(coords)
-        Ncells = len(connectivity)
+        Nverts = coords.shape[0]
+        Ncells = connectivity.shape[0]
         
         write_ascii('DATASET UNSTRUCTURED_GRID\n')
         write_ascii('FIELD FieldData 1\n')
@@ -114,17 +122,18 @@ def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, f
         write_ascii('CELL_TYPES %d\n' % Ncells)
         write_array(cell_types)
         
+        write_ascii('POINT_DATA %d\n' % Nverts)
+        
         # Write scalar functions
         for function_name in sorted(scalars):
             write_ascii('SCALARS %s float 1\n' % function_name)
             write_ascii('LOOKUP_TABLE default\n')
-            write_array(func_vals[function_name])
+            write_array(scalars[function_name])
         
-        # Write function values
-        for function_name in sorted(scalars):
-            write_ascii('SCALARS %s float 1\n' % function_name)
-            write_ascii('LOOKUP_TABLE default\n')
-            write_array(func_vals[function_name])
+        # Write vector functions
+        for function_name in sorted(vectors):
+            write_ascii('VECTORS %s float\n' % function_name)
+            write_array(vectors[function_name])
 
 
 def gather_vtk_info(mesh, funcs):
@@ -132,57 +141,42 @@ def gather_vtk_info(mesh, funcs):
     Gather the necessary information to write a legacy VTK output file
     on the root process
     """
-    # Verify that all function have the same function space
-    V = funcs[0].function_space()
+    # The code below assumes that the first function is DG2 (u0)
+    assert funcs[0].function_space().ufl_element().family() == 'Discontinuous Lagrange'
+    assert funcs[0].function_space().ufl_element().degree() == 2
+    
+    # The code is currently 3D only
+    gdim = mesh.geometry().dim()
+    dofs_x = funcs[0].function_space().tabulate_dof_coordinates().reshape((-1, gdim))
+    assert gdim == 3, 'VTK output currently only supported for 3D meshes'
+    
+    # Collect information about the functions
     func_names = []
     all_vals = []
+    dofmaps = []
     for u in funcs:
         func_names.append(u.name())
-        all_vals.append(u.vector().get_local())
-        fam = u.function_space().ufl_element().family()
-        deg = u.function_space().ufl_element().degree()
-        assert fam == V.ufl_element().family()
-        assert deg == V.ufl_element().degree()
+        all_vals.append(get_local(u))
+        dofmaps.append(u.function_space().dofmap())
     
-    gdim = mesh.geometry().dim()
-    assert gdim == 3, 'VTK output currently only supported for 3D meshes'
-    dofs_x = V.tabulate_dof_coordinates().reshape((-1, gdim))
-    dm  = V.dofmap()
+    # Collect local data
+    local_res = _collect_3D(mesh, gdim, dofs_x, func_names, all_vals, dofmaps)
     
-    coords = []
-    connectivity = []
-    cell_types = []
+    # MPI communication to get all data on root process
+    comm = mesh.mpi_comm()
+    all_results = comm.gather(local_res)
+    if all_results is None:
+        return None
+    
+    # Assemble information from all processes
+    coords, connectivity, cell_types = [], [], []
     func_vals = {n: [] for n in func_names}
-    for i, cell in enumerate(dolfin.cells(mesh)):
-        if i % 1000 == 0 and i > 0:
-            print(i)
-        
-        dofs = dm.cell_dofs(cell.index())
-        M = len(dofs)
-        cell_types.append(VTK_QUADRATIC_TETRA)
-        j = len(coords)
-        
-        connectivity.append([M])
-        for k in range(M):
-            d = dofs[k]
-            coords.append(tuple(dofs_x[d]))
-            connectivity[-1].append(j + UFC2VTK_TET10[k])
-            for name, vals in zip(func_names, all_vals):
-                func_vals[name].append(vals[d])
-    
-    # MPI communication
-    comm = mesh.comm
-    results = (coords, connectivity, cell_types, func_vals)
-    all_results = comm.gather(results) 
-    
-    # Insert information from non-root processes
-    if all_results is not None:
-        for coords_i, connectivity_i, cell_types_i, func_vals_i in all_results[1:]:
-            coords.extend(coords_i)
-            connectivity.extend(connectivity_i)
-            cell_types.extend(cell_types_i)
-            for n in func_names:
-                func_vals[n].extend(func_vals_i[n])
+    for coords_i, connectivity_i, cell_types_i, func_vals_i in all_results:
+        coords.extend(coords_i)
+        connectivity.extend(connectivity_i)
+        cell_types.extend(cell_types_i)
+        for n in func_names:
+            func_vals[n].extend(func_vals_i[n])
     
     # Convert to numpy arrays
     coords = numpy.array(coords, dtype=numpy.float32)
@@ -200,7 +194,52 @@ def gather_vtk_info(mesh, funcs):
     for n in func_names:
         assert func_vals[n].shape == (Nverts,)
     
-    if comm.rank == 0:
-        return coords, connectivity, cell_types, func_vals
-    else:
-        return None
+    return coords, connectivity, cell_types, func_vals
+
+
+def _collect_3D(mesh, gdim, dofs_x, func_names, all_vals, dofmaps):
+    """
+    Collect geometry and function values on local process
+    """
+    coords, connectivity, cell_types = [], [], []
+    func_vals = {n: [] for n in func_names}
+    for cell in dolfin.cells(mesh, 'regular'):
+        cidx = cell.index()
+        
+        # Get the cell geometry and connectivity
+        # (assumes that the max degree is 2 and that we are in 3D)
+        M = 10
+        cell_types.append(VTK_QUADRATIC_TETRA)
+        connectivity.append([M])
+        dofs = dofmaps[0].cell_dofs(cidx)
+        Lc = len(coords)
+        for k in range(M):
+            d = dofs[k]
+            coords.append(tuple(dofs_x[d]))
+            connectivity[-1].append(Lc + UFC2VTK_TET10[k])
+        
+        for name, vals, dm in zip(func_names, all_vals, dofmaps):
+            dofs = dm.cell_dofs(cidx)
+            m = len(dofs)
+            
+            if gdim == 3 and m == 10:
+                cvals = vals[dofs]
+            
+            elif gdim == 3 and m == 4:
+                cvals = list(vals[dofs])
+                cvals.append((vals[2] + vals[3]) / 2)
+                cvals.append((vals[1] + vals[3]) / 2)
+                cvals.append((vals[1] + vals[2]) / 2)
+                cvals.append((vals[0] + vals[3]) / 2)
+                cvals.append((vals[0] + vals[2]) / 2)
+                cvals.append((vals[0] + vals[1]) / 2)
+            
+            elif gdim == 3 and m == 1:
+                cvals = [vals[dofs[0]]] * 10
+            
+            else:
+                ocellaris_error('VTK write error', 'Unsupported geometry dimension / '
+                                'element type for %s' % name) 
+            func_vals[name].extend(cvals)
+    
+    return coords, connectivity, cell_types, func_vals

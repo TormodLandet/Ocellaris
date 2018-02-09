@@ -2,6 +2,13 @@ ocellaris:
     type: input
     version: 1.0
 
+metadata:
+    author: Tormod Landet
+    date: 2017-11-01
+    description: |
+        Flow around a free falling 3D sphere
+        Made to test/develop 3D support in Ocellaris  
+
 user_code:
     constants:
         R: 1
@@ -9,7 +16,7 @@ user_code:
         H: 10
         h: 3
         M: 1
-        VZ: 10
+        VZ: 1
     code: |
         # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
         # with support for the OpenCASCADE geometry engine
@@ -18,7 +25,7 @@ user_code:
         geo = os.path.join(mydir, 'datafiles', 'falling_sphere.geo')
         msh = os.path.join(mydir, 'datafiles', 'falling_sphere.msh')
         xml = os.path.join(mydir, 'datafiles', 'falling_sphere.xml')
-        assert os.path.isfile(geo)
+        assert os.path.isfile(geo), 'Geometry file not found!'
         if not os.path.isfile(msh):
             print('Running gmsh on', geo)
             subprocess.call(['gmsh', '-3', '-optimize', geo, '-o', msh])
@@ -26,13 +33,6 @@ user_code:
             print('Running meshio-convert on', msh)
             subprocess.call(['meshio-convert', '--input-format', 'gmsh-ascii',
                              '--output-format', 'dolfin-xml', msh, xml])
-
-metadata:
-    author: Tormod Landet
-    date: 2017-11-01
-    description: |
-        Flow around a free falling 3D sphere
-        Made to test/develop 3D support in Ocellaris  
 
 physical_properties:
     g: [0, 0, -9.81]
@@ -50,7 +50,7 @@ boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code: ['0', '0', 'VZ']
-    p:
+    _p:
         type: WallPressure
 -   name: Inlet
     selector: code
@@ -58,7 +58,7 @@ boundary_conditions:
     u:
         type: CppCodedValue
         cpp_code: ['0', '0', 'VZ']
-    p:
+    _p:
         type: WallPressure
 -   name: Outlet
     selector: code
@@ -72,7 +72,7 @@ boundary_conditions:
     u2:
         type: ConstantGradient
         value: 0
-    p:
+    _p:
         type: ConstantValue
         value: 0
 -   name: Sphere
@@ -81,28 +81,38 @@ boundary_conditions:
     u:
         type: ConstantValue
         value: [0, 0, 0]
-    p:
+    _p:
         type: WallPressure
+
+initial_conditions:
+    up0:
+        cpp_code: '0'
+    up1:
+        cpp_code: '0'
+    up2:
+        cpp_code: 'VZ'
 
 time:
     dt: 0.01
-    tmax: 2
+    tmax: 0.05
 
 output:
     prefix: output/falling_sphere
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 10
+    xdmf_write_interval: 0
+    vtk_write_interval: 1
+    hdf5_write_interval: 0
 
 solver:
-    type: Coupled
-    num_inner_iter: 20
-    allowable_error_inner: 5.0e-3
+    type: IPCS-A
+    num_inner_iter: 6
+    allowable_error_inner: 1.0e-4
     polynomial_degree_pressure: 1
     polynomial_degree_velocity: 2
     function_space_pressure: DG
     function_space_velocity: DG
-    force_steady: yes
+    force_steady: no
     steady_velocity_stopping_criterion: -1 #1e-4
     
     # PETSc solver selection
