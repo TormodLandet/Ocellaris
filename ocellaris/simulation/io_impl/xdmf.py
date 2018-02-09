@@ -20,7 +20,7 @@ class XDMFFileIO():
         Close any open xdmf file
         """
         if self.xdmf_file is not None:
-            self.xdmf_file.close()
+            self.xdmf_file.__exit__() # .close() is missing from the Python wrapper
         self.xdmf_file = None
     
     def write(self):
