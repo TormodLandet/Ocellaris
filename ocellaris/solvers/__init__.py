@@ -2,6 +2,11 @@ import dolfin
 from ocellaris.utils import ocellaris_error
 
 
+DEFAULT_FAMILY_U = 'DG'
+DEFAULT_FAMILY_P = 'DG'
+DEFAULT_DEGREE_U = 2
+DEFAULT_DEGREE_P = 1
+
 _SOLVERS = {}
 
 
@@ -45,12 +50,16 @@ class Solver(object):
         Function space setup for standard flow solvers
         """
         # Get function space names
-        Vu_name = simulation.input.get_value('solver/function_space_velocity', 'Lagrange', 'string')
-        Vp_name = simulation.input.get_value('solver/function_space_pressure', 'Lagrange', 'string')
+        Vu_name = simulation.input.get_value('solver/function_space_velocity',
+                                             DEFAULT_FAMILY_U, 'string')
+        Vp_name = simulation.input.get_value('solver/function_space_pressure',
+                                             DEFAULT_FAMILY_P, 'string')
         
         # Get function space polynomial degrees
-        Pu = simulation.input.get_value('solver/polynomial_degree_velocity', 1, 'int')
-        Pp = simulation.input.get_value('solver/polynomial_degree_pressure', 1, 'int')
+        Pu = simulation.input.get_value('solver/polynomial_degree_velocity',
+                                        DEFAULT_DEGREE_U, 'int')
+        Pp = simulation.input.get_value('solver/polynomial_degree_pressure',
+                                        DEFAULT_DEGREE_P, 'int')
         
         # Get the constrained domain
         cd = simulation.data['constrained_domain']
