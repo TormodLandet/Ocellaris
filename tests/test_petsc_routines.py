@@ -1,11 +1,8 @@
 import numpy
 import dolfin
-from dolfin_utils.test import skip_in_parallel, true_false_fixture
 from ocellaris.utils import matmul, create_block_matrix
-
-
-# Generate empty matrix using the block matrix routine 
-use_block_matrix = true_false_fixture
+from helpers import skip_in_parallel
+import pytest
 
 
 def mk_mat(mesh_size=1, order=2, block=False):
@@ -24,6 +21,7 @@ def mk_mat(mesh_size=1, order=2, block=False):
 
 
 @skip_in_parallel
+@pytest.mark.parametrize("use_block_matrix", [True, False])
 def test_matmul(use_block_matrix):
     indices = numpy.array([1, 2, 4], numpy.intc)
     blockA = numpy.array([[1, 2, 3],

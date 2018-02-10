@@ -67,6 +67,7 @@ class RestartFileIO():
         # Important: no collective operations below this point!
         comm.barrier()
         if self.simulation.rank != 0:
+            comm.barrier()
             return h5_file_name
         
         # Write numpy objects and metadata using h5py.File
@@ -124,6 +125,7 @@ class RestartFileIO():
                 np_string(pdi, 'data', data3)
                 i += 1
         
+        comm.barrier()
         return h5_file_name
     
     def read_metadata(self, h5_file_name, function_details=False):

@@ -32,7 +32,8 @@ class XDMFFileIO():
         with dolfin.Timer('Ocellaris save xdmf'):
             if self.xdmf_file is None:
                 self._setup_xdmf()
-            self._write_xdmf()
+            self._write_xdmf()    
+        return self.file_name
     
     def _setup_xdmf(self):
         """
@@ -54,6 +55,7 @@ class XDMFFileIO():
         
         sim.log.info('    Creating XDMF file %s' % file_name)
         comm = sim.data['mesh'].mpi_comm()
+        self.file_name = file_name
         self.xdmf_file = dolfin.XDMFFile(comm, file_name)
         self.xdmf_file.parameters['flush_output'] = xdmf_flush
         self.xdmf_file.parameters['rewrite_function_mesh'] = False

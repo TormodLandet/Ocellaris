@@ -1,3 +1,24 @@
+import dolfin
+import pytest
+
+
+skip_in_parallel = pytest.mark.skipif(dolfin.MPI.size(dolfin.MPI.comm_world) > 1,
+                                      reason="This test should only be run in serial.")
+
+
+def mpi_tmpdir(tmpdir_factory, dir_name):
+    """
+    Returns the same directory name on all MPI processes
+    """
+    comm = dolfin.MPI.comm_world
+    if comm.rank == 0:
+        x = tmpdir_factory.mktemp(dir_name, numbered=True)
+        x = str(x)
+    else:
+        x = None
+    return comm.bcast(x)
+
+
 def comm_self_to_comm_world(s, w):
     """
     Convert a function defined on a mesh with a MPI_COMM_SELF to

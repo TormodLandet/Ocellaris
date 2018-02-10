@@ -12,6 +12,7 @@ syntax: glob
 *.xdmf
 *.pvd
 *.vtu
+*.vtk
 *.msh
 *.xml
 *.img
