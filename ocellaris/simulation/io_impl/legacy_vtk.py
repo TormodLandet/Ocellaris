@@ -41,6 +41,8 @@ class LegacyVTKIO():
         sim.log.info('    Writing legacy VTK file %s' % file_name)
         with dolfin.Timer('Ocellaris write legacy VTK file'):
             self._write_vtk(file_name, binary_format)
+        
+        return file_name
     
     def _write_vtk(self, file_name, binary_format=WRITE_BINARY):
         """
@@ -62,6 +64,8 @@ class LegacyVTKIO():
         if results is not None:
             coords, connectivity, cell_types, func_vals = results
             write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, func_vals, t)
+        
+        mesh.mpi_comm().barrier()
 
 
 def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, func_vals, t):
@@ -172,8 +176,10 @@ def gather_vtk_info(mesh, funcs):
     coords, connectivity, cell_types = [], [], []
     func_vals = {n: [] for n in func_names}
     for coords_i, connectivity_i, cell_types_i, func_vals_i in all_results:
+        K = len(coords)
         coords.extend(coords_i)
-        connectivity.extend(connectivity_i)
+        for conn in connectivity_i:
+            connectivity.append(conn[:1] + [c+K for c in conn[1:]])
         cell_types.extend(cell_types_i)
         for n in func_names:
             func_vals[n].extend(func_vals_i[n])
