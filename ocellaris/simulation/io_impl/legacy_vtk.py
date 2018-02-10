@@ -233,12 +233,12 @@ def _collect_3D(mesh, gdim, dofs_x, func_names, all_vals, dofmaps):
             
             elif gdim == 3 and m == 4:
                 cvals = list(vals[dofs])
-                cvals.append((vals[2] + vals[3]) / 2)
-                cvals.append((vals[1] + vals[3]) / 2)
-                cvals.append((vals[1] + vals[2]) / 2)
-                cvals.append((vals[0] + vals[3]) / 2)
-                cvals.append((vals[0] + vals[2]) / 2)
-                cvals.append((vals[0] + vals[1]) / 2)
+                cvals.append((cvals[2] + cvals[3]) / 2)
+                cvals.append((cvals[1] + cvals[3]) / 2)
+                cvals.append((cvals[1] + cvals[2]) / 2)
+                cvals.append((cvals[0] + cvals[3]) / 2)
+                cvals.append((cvals[0] + cvals[2]) / 2)
+                cvals.append((cvals[0] + cvals[1]) / 2)
             
             elif gdim == 3 and m == 1:
                 cvals = [vals[dofs[0]]] * 10

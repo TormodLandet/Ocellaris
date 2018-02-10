@@ -22,14 +22,13 @@ user_code:
         u0a: '-a * (exp(a * x[0]) * sin(a * x[1] + d * x[2]) + exp(a * x[2]) * cos(a * x[0] + d * x[1])) * exp(-d * d * t)'
         u1a: '-a * (exp(a * x[1]) * sin(a * x[2] + d * x[0]) + exp(a * x[0]) * cos(a * x[1] + d * x[2])) * exp(-d * d * t)'
         u2a: '-a * (exp(a * x[2]) * sin(a * x[0] + d * x[1]) + exp(a * x[1]) * cos(a * x[2] + d * x[0])) * exp(-d * d * t)'
-        pa2:  |
+        pa:  |
           -a * a / 2 * (
               exp(2 * a * x[0]) + exp(2 * a * x[1]) + exp(2 * a * x[2]) +
               2 * sin(a * x[0] + d * x[1]) * cos(a * x[2] + d * x[0]) * exp(a * (x[1] + x[2])) + 
               2 * sin(a * x[1] + d * x[2]) * cos(a * x[0] + d * x[1]) * exp(a * (x[2] + x[0])) + 
               2 * sin(a * x[2] + d * x[0]) * cos(a * x[1] + d * x[2]) * exp(a * (x[0] + x[1]))
           ) * exp(-2 * d * d * t)
-        pa: x[0] + x[1] + x[2]
 
 mesh:
     type: Box
@@ -109,7 +108,7 @@ def test_restart_file_io(tmpdir_factory):
 def test_plot_io_3D(iotype, tmpdir_factory):
     dir_name = mpi_tmpdir(tmpdir_factory, 'test_plot_io_3D')
     prefix = os.path.join(dir_name, 'ocellaris')
-    N = 2
+    N = 4
     
     sim = Simulation()
     sim.input.read_yaml(yaml_string=BASE_INPUT_VELPRES)
