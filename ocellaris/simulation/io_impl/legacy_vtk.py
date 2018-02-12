@@ -28,7 +28,7 @@ class LegacyVTKIO():
         """
         pass
     
-    def write(self, file_name=None):
+    def write(self, file_name=None, extra_funcs=()):
         """
         Write a file that can be used for visualization in Paraview
         """
@@ -40,11 +40,11 @@ class LegacyVTKIO():
         
         sim.log.info('    Writing legacy VTK file %s' % file_name)
         with dolfin.Timer('Ocellaris write legacy VTK file'):
-            self._write_vtk(file_name, binary_format)
+            self._write_vtk(file_name, binary_format, extra_funcs)
         
         return file_name
     
-    def _write_vtk(self, file_name, binary_format=WRITE_BINARY):
+    def _write_vtk(self, file_name, binary_format=WRITE_BINARY, extra_funcs=()):
         """
         Write plot file in legacy VTK format
         """
@@ -58,6 +58,7 @@ class LegacyVTKIO():
             func = sim.data.get(fn, None)
             if isinstance(func, dolfin.Function):
                 funcs.append(func)
+        funcs.extend(extra_funcs)
         
         # Get the data from all processes (returns None when not on rank 0)
         results = gather_vtk_info(mesh, funcs)
@@ -86,17 +87,24 @@ def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, f
     
     # Separate scalars from vectors
     scalars, vectors = {}, {}
-    if 'u0' in func_vals:
-        u0 = func_vals.pop('u0')
-        u1 = func_vals.pop('u1')
-        if 'u2' in func_vals:
-            u2 = func_vals.pop('u2')
+    for function_name in list(func_vals.keys()):
+        # Vectors are expected to have scalar components named xx0, xx1 and
+        # possibly xx2. The xx prefix can be u, up, u_conv, u_star etc
+        if not function_name.endswith('0'):
+            continue
+        prefix = function_name[:-1]
+        names = ['%s0' % prefix, '%s1' % prefix, '%s2' % prefix]
+        
+        u0 = func_vals.pop(names[0])
+        u1 = func_vals.pop(names[1])
+        if names[2] in func_vals:
+            u2 = func_vals.pop(names[2])
         else:
             u2 =  numpy.zeros_like(func_vals['u0'])
-        vectors['u'] = numpy.zeros((len(u0), 3), dtype=float)
-        vectors['u'][:,0] = u0
-        vectors['u'][:,1] = u1
-        vectors['u'][:,2] = u2
+        vectors[prefix] = numpy.zeros((len(u0), 3), dtype=float)
+        vectors[prefix][:,0] = u0
+        vectors[prefix][:,1] = u1
+        vectors[prefix][:,2] = u2
     scalars.update(func_vals)
     
     # Write the VTK file
