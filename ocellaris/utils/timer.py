@@ -61,5 +61,5 @@ def log_timings(simulation, clear=False):
     tmp = [(float(line.split()[-5]), line) for line in table_lines[2:]]
     tmp.sort(reverse=True)
     for wctime, line in tmp:
-        simulation.log.info('%s     %4.1f%%' % (line, wctime/tottime*100))
+        simulation.log.info('%s    %5.1f%%' % (line, wctime/tottime*100))
 

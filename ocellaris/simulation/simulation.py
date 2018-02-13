@@ -58,6 +58,7 @@ class Simulation(object):
         self.prevtime = self.starttime = time.time()
         self.prevflush = 0
     
+    @timeit.named('setup simulation')
     def setup(self):
         """
         Setup the simulation. This creates the .solver object as well as the mesh,

@@ -1,6 +1,6 @@
 import traceback
 import dolfin
-from . import ocellaris_error
+from . import ocellaris_error, timeit
 
 def make_expression(simulation, cpp_code, description, element):
     """
@@ -59,6 +59,7 @@ def get_vars(simulation):
     return available_vars
 
 
+@timeit
 def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
     """
     Create a C++ expression with parameters like time and all scalars in 
@@ -68,20 +69,19 @@ def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
     returned in a provided function, or a new function will be returned 
     """
     # Compile the C++ code
-    expr = make_expression(simulation, cpp_code, description, element=V.ufl_element())
-    
-    # Interpolate
-    res  = dolfin.interpolate(expr, V)
+    with dolfin.Timer('Ocellaris make expression'):
+        expr = make_expression(simulation, cpp_code, description, element=V.ufl_element())
     
     if function is None:
-        return res
+        function = dolfin.Function(V)
     else:
         Vf = function.function_space()
         if not Vf.ufl_element().family() == V.ufl_element().family() and Vf.dim() == V.dim():
             ocellaris_error('Error in ocellaris_interpolate',
-                            'Provided function is not in the specified function space V')  
-        function.assign(res)
-        return function
+                            'Provided function is not in the specified function space V')
+    
+    with dolfin.Timer('Ocellaris interpolate expression'):
+        return function.interpolate(expr)
 
 
 def OcellarisCppExpression(simulation, cpp_code, description, degree, update=True, return_updater=False):
