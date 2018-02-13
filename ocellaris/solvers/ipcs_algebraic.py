@@ -475,14 +475,15 @@ class SolverIPCSA(Solver):
                     sim.log.info('  IPCS-A iteration %3d - err u* %10.3e - err p %10.3e'
                                  ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
                                      err_u, err_p, self.niters_u, self.niters_p))
-                    if err_u < allowable_error_inner:
-                        break
                     
                     self.inner_iteration += 1
                     sim.flush()
                     
                     # Better initial guess for next solve
                     self.velocity_update()
+                    
+                    if err_u < allowable_error_inner:
+                        break
                 
                 # Extract the separate velocity component functions
                 self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
