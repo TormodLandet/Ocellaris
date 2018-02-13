@@ -3,6 +3,14 @@ import dolfin
 import contextlib
 from .timer import timeit
 
+
+# Default parameters when use_ksp is True
+DEFAULT_ITR_CTRL = [3, 3]
+DEFAULT_RTOL = [1e-6, 1e-8, 1e-10]
+DEFAULT_ATOL = [1e-8, 1e-10, 1e-15]
+DEFAULT_NITK = [10, 40, 100]
+
+
 def linear_solver_from_input(simulation, path,
                              default_solver='default',
                              default_preconditioner='default',
@@ -237,10 +245,32 @@ class KSPLinearSolverWrapper(object):
             simulation.log.warning('-' * 80)
             simulation.log.warning('Showing PETSc help done, exiting')
             exit()
+        
+        # Only used when calling the basic .solve() method
+        self.reuse_precon = False
     
     @timeit.named('petsc4py solve')
     def solve(self, *argv, **kwargs):
         self._solver.set_from_options()
+        
+        inp = self.simulation.input.get_value(self._input_path, {}, 'Input')
+        def get_updated(key, default, required_type):
+            "The key may be changed by user code, lets get fresh info"
+            prev = self._config_params.get(key, default)
+            return inp.get_value(key, prev, required_type)
+        
+        # Use the setup for the final inner iterations (assumed to be strictest)
+        rtol = get_updated('inner_iter_rtol', DEFAULT_RTOL, 'list(float)')[-1]
+        atol = get_updated('inner_iter_atol', DEFAULT_ATOL, 'list(float)')[-1]
+        nitk = get_updated('inner_iter_max_it', DEFAULT_NITK, 'list(int)')[-1]
+        
+        # Solver setup with petsc4py
+        ksp = self._solver.ksp()
+        pc = ksp.getPC()
+        pc.setReusePreconditioner(self.reuse_precon)
+        ksp.setTolerances(rtol=rtol, atol=atol, max_it=nitk)
+        
+        # Solve using the standard dolfin interface
         ret = self._solver.solve(*argv, **kwargs)
         self.is_first_solve = False
         return ret
@@ -273,10 +303,10 @@ class KSPLinearSolverWrapper(object):
             prev = self._config_params.get(key, default)
             return inp.get_value(key, prev, required_type)
         
-        firstN, lastN = get_updated('inner_iter_control', [3, 3], 'list(int)')
-        rtol_beg, rtol_mid, rtol_end = get_updated('inner_iter_rtol', [1e-6, 1e-8, 1e-10], 'list(float)')
-        atol_beg, atol_mid, atol_end = get_updated('inner_iter_atol', [1e-8, 1e-10, 1e-15], 'list(float)')
-        nitk_beg, nitk_mid, nitk_end = get_updated('inner_iter_max_it', [10, 40, 100], 'list(int)')
+        firstN, lastN = get_updated('inner_iter_control', DEFAULT_ITR_CTRL, 'list(int)')
+        rtol_beg, rtol_mid, rtol_end = get_updated('inner_iter_rtol', DEFAULT_RTOL, 'list(float)')
+        atol_beg, atol_mid, atol_end = get_updated('inner_iter_atol', DEFAULT_ATOL, 'list(float)')
+        nitk_beg, nitk_mid, nitk_end = get_updated('inner_iter_max_it', DEFAULT_NITK, 'list(int)')
         
         # Solver setup with petsc4py
         ksp = self._solver.ksp()
@@ -317,11 +347,9 @@ class KSPLinearSolverWrapper(object):
     def set_operator(self, A):
         self._ksp.setOperators(A.mat())
     
-    def set_reuse_preconditioner(self, *argv, **kwargs):
-        if self.is_iterative and self.is_first_solve:
-            return  # Nov 2016: this segfaults if running before the first solve
-        else:
-            return self._solver.set_reuse_preconditioner(*argv, **kwargs)
+    def set_reuse_preconditioner(self, reuse_preconditioner):
+        # Only used when calling the basic .solve() method
+        self.reuse_precon = reuse_preconditioner
     
     def ksp(self):
         return self._solver.ksp()
