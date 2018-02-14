@@ -425,7 +425,7 @@ corrected velocity field is less than a given value ``allowable_error_inner``.
 .. code-block:: yaml
     
     solver:
-        type: IPCS
+        type: IPCS-A
         num_inner_iter: 20
         allowable_error_inner: 5.0e-3
         polynomial_degree_pressure: 1

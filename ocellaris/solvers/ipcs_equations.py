@@ -80,43 +80,6 @@ class PressureCorrectionEquation(BaseEquation):
         self.use_lagrange_multiplicator = use_lagrange_multiplicator
         self.incompressibility_flux_type = incompressibility_flux_type
         self.define_pressure_equation()
-        self.matrix = None
-        self.pressure_null_space = None
-    
-    def solve(self, solver, assemble_A, remove_null_space):
-        """
-        Solve the pressure equation
-        """
-        p = self.simulation.data['p']
-        if assemble_A:
-            self.matrix = dolfin.as_backend_type(self.assemble_lhs())
-        
-        # The equation system to solve
-        A = self.matrix
-        b = self.assemble_rhs()
-        
-        # Inform PETSc about the null space
-        if remove_null_space:
-            if self.pressure_null_space is None:
-                # Create vector that spans the null space
-                null_vec = dolfin.Vector(p.vector())
-                null_vec[:] = 1
-                null_vec *= 1/null_vec.norm("l2")
-                
-                # Create null space basis object
-                self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
-            
-            # Make sure the null space is set on the matrix
-            if assemble_A:
-                A.set_nullspace(self.pressure_null_space)
-            
-            # Orthogonalize b with respect to the null space
-            self.pressure_null_space.orthogonalize(b)
-        
-        # Solve for the new pressure
-        niters_p = solver.solve(A, p.vector(), b)
-        
-        return niters_p
     
     def calculate_penalties(self):
         """

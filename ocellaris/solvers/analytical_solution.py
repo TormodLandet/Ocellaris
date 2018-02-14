@@ -8,8 +8,7 @@ from . import Solver, register_solver
 class AnalyticalSolution(Solver):
     def __init__(self, simulation):
         """
-        A Navier-Stokes solver based on the pressure-velocity splitting
-        scheme IPCS (Incremental Pressure Correction Scheme)
+        A Navier-Stokes "solver" using only analytical expressions to compute u and p
         """
         self.simulation = sim = simulation
         self.create_functions()

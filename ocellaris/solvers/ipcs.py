@@ -2,26 +2,33 @@ import dolfin
 from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
                              create_vector_functions, shift_fields,
                              velocity_change)
-from . import Solver, register_solver, get_solver, BDM
+from . import Solver, register_solver, BDM
 from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
                             SlopeLimiterVelocity, before_simulation,
                             after_timestep)
 from .ipcs_equations import EQUATION_SUBTYPES
-from .simple import dolfin_log_level
 
 
 # Solvers - default values, can be changed in the input file
-SOLVER_U = 'gmres'
-PRECONDITIONER_U = 'additive_schwarz'
-SOLVER_P = 'gmres'
-PRECONDITIONER_P = 'hypre_amg'
-KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'relative_tolerance': 1e-10,
-                     'absolute_tolerance': 1e-15}
-MAX_ITER_MOMENTUM = 1000
+SOLVER_U_OPTIONS = {'use_ksp': True,
+                    'petsc_ksp_type': 'gmres', 
+                    'petsc_pc_type': 'asm',
+                    'petsc_ksp_initial_guess_nonzero': True,
+                    'petsc_ksp_view': 'DISABLED',
+                    'inner_iter_rtol': [1e-10] * 3,
+                    'inner_iter_atol': [1e-15] * 3,
+                    'inner_iter_max_it': [100] * 3}
+SOLVER_P_OPTIONS = {'use_ksp': True,
+                    'petsc_ksp_type': 'gmres',
+                    'petsc_pc_type': 'hypre',
+                    'petsc_pc_hypre_type': 'boomeramg',
+                    'petsc_ksp_initial_guess_nonzero': True,
+                    'petsc_ksp_view': 'DISABLED',
+                    'inner_iter_rtol': [1e-10] * 3,
+                    'inner_iter_atol': [1e-15] * 3,
+                    'inner_iter_max_it': [100] * 3}
 MAX_INNER_ITER = 10
 ALLOWABLE_ERROR_INNER = 1e-10
-NUM_SIMPLE_INNER_ITER = 0
 
 # Equations - default values, can be changed in the input file
 EQUATION_SUBTYPE = 'Default'
@@ -32,7 +39,7 @@ HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
 INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
 
-@register_solver('IPCS')
+@register_solver('IPCS-D')
 class SolverIPCS(Solver):
     description = 'Incremental Pressure Correction Scheme (differential form)'
     
@@ -87,11 +94,12 @@ class SolverIPCS(Solver):
                 incompressibility_flux_type=self.incompressibility_flux_type)
         
         # Storage for preassembled matrices
-        self.Au = [None]*sim.ndim
+        self.Au = None
+        self.Ap = None
         self.Au_upd = None
         
         # Store number of iterations
-        self.niters_u = [None] * sim.ndim
+        self.niters_u = None
         self.niters_p = None
         self.niters_u_upd = [None] * sim.ndim
         
@@ -109,11 +117,10 @@ class SolverIPCS(Solver):
         self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
         
         # Create linear solvers
-        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u', SOLVER_U,
-                                                        PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
-        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p', SOLVER_P,
-                                                        PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
-        #self.pressure_solver.parameters['preconditioner']['structure'] = 'same'
+        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u',
+                                                        default_parameters=SOLVER_U_OPTIONS)
+        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p',
+                                                        default_parameters=SOLVER_P_OPTIONS)
         
         # Velocity update can be performed with local solver for DG velocities
         self.use_local_solver_for_update = sim.input.get_value('solver/u_upd_local',
@@ -121,8 +128,8 @@ class SolverIPCS(Solver):
         if self.use_local_solver_for_update:
             self.u_upd_solver = None # Will be set when LHS is ready
         else:
-            self.u_upd_solver = linear_solver_from_input(self.simulation, 'solver/u_upd', SOLVER_U,
-                                                         PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
+            self.u_upd_solver = linear_solver_from_input(self.simulation, 'solver/u_upd',
+                                                         default_parameters=SOLVER_U_OPTIONS)
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
@@ -196,33 +203,29 @@ class SolverIPCS(Solver):
         sim.data['p_hat'] = dolfin.Function(Vp)
     
     @timeit
-    def momentum_prediction(self, t, dt):
+    def momentum_prediction(self):
         """
         Solve the momentum prediction equation
         """
         sim = self.simulation
-        solver = self.velocity_solver
+        eq = self.eqs_mom_pred
         
         # Collect previous velocity components in coupled function
         uvw_star = sim.data['uvw_star']
-        self.assigner_merge.assign(uvw_star, list(sim.data['u']))
         uvw_temp = sim.data['uvw_temp']
         uvw_temp.assign(uvw_star)
         
-        eq = self.eqs_mom_pred
-        
         if self.inner_iteration == 1:
             # Assemble the A matrix only the first inner iteration
-            self.Au = eq.assemble_lhs()
+            self.Au = dolfin.as_backend_type(eq.assemble_lhs())
         
         A = self.Au
-        b = eq.assemble_rhs()
-        #solver.parameters['maximum_iterations'] = MAX_ITER_MOMENTUM
-        with dolfin_log_level(dolfin.LogLevel.WARNING):
-            self.niters_u = solver.solve(A, uvw_star.vector(), b)
-        
-        # Extract the separate velocity component functions
-        self.assigner_split.assign(list(sim.data['u']), uvw_star)
+        b = dolfin.as_backend_type(eq.assemble_rhs())
+        self.assigner_merge.assign(uvw_star, list(sim.data['u']))
+        self.niters_u = self.velocity_solver.inner_solve(A, uvw_star.vector(), b,
+                                                         in_iter=self.inner_iteration,
+                                                         co_iter=self.co_inner_iter)
+        self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
         
         # Compute change from last iteration
         uvw_temp.vector().axpy(-1, uvw_star.vector())
@@ -246,13 +249,34 @@ class SolverIPCS(Solver):
         p_hat.vector().axpy(-1, p.vector())
         
         # Assemble the A matrix only the first inner iteration
-        assemble_A = self.inner_iteration == 1
+        if self.inner_iteration == 1:
+            self.Ap = dolfin.as_backend_type(self.eq_pressure.assemble_lhs())
+        A = self.Ap
+        b = dolfin.as_backend_type(self.eq_pressure.assemble_rhs())
         
-        # Solve the pressure equation    
-        self.niters_p = self.eq_pressure.solve(self.pressure_solver, 
-                                               assemble_A,
-                                               self.remove_null_space)
-    
+        # Inform PETSc about the null space
+        if self.remove_null_space:
+            if self.pressure_null_space is None:
+                # Create vector that spans the null space
+                null_vec = dolfin.Vector(p.vector())
+                null_vec[:] = 1
+                null_vec *= 1/null_vec.norm("l2")
+                
+                # Create null space basis object
+                self.pressure_null_space = dolfin.VectorSpaceBasis([null_vec])
+            
+            # Make sure the null space is set on the matrix
+            if self.inner_iteration == 1:
+                A.set_nullspace(self.pressure_null_space)
+            
+            # Orthogonalize b with respect to the null space
+            self.pressure_null_space.orthogonalize(b)
+        
+        # Solve for the new pressure correction
+        self.niters_p = self.pressure_solver.inner_solve(A, p.vector(), b,
+                                                         in_iter=self.inner_iteration,
+                                                         co_iter=self.co_inner_iter)
+        
         # Removing the null space of the matrix system is not strictly the same as removing
         # the null space of the equation, so we correct for this here 
         if self.remove_null_space:
@@ -327,58 +351,11 @@ class SolverIPCS(Solver):
         
         return change
     
-    @timeit
-    def calculate_divergence_error(self):
-        """
-        Check the convergence towards zero divergence. This is just for user output
-        """
-        sim = self.simulation
-        
-        if self._error_cache is None:
-            dot, grad, jump, avg = dolfin.dot, dolfin.grad, dolfin.jump, dolfin.avg
-            dx, dS, ds = dolfin.dx, dolfin.dS, dolfin.ds
-            
-            u_star = sim.data['u']
-            mesh = u_star[0].function_space().mesh()
-            V = dolfin.FunctionSpace(mesh, 'DG', 1)
-            n = dolfin.FacetNormal(mesh)
-            u = dolfin.TrialFunction(V)
-            v = dolfin.TestFunction(V)
-            
-            a = u*v*dx
-            L = dot(avg(u_star), n('+'))*jump(v)*dS \
-                + dot(u_star, n)*v*ds \
-                - dot(u_star, grad(v))*dx
-            
-            local_solver = dolfin.LocalSolver(a, L)
-            error_func = dolfin.Function(V)
-            
-            self._error_cache = (local_solver, error_func)
-        
-        local_solver, error_func = self._error_cache
-        local_solver.solve_local_rhs(error_func)
-        err_div = max(abs(error_func.vector().min()),
-                      abs(error_func.vector().max()))
-        
-        # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK 
-        if self.inner_iteration == 20:
-            print('HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK')
-            from matplotlib import pyplot
-            
-            fig = pyplot.figure(figsize=(10, 8))
-            a = dolfin.plot(error_func, cmap='viridis', backend='matplotlib')
-            pyplot.colorbar(a)
-            fig.savefig('test_%f.png' % sim.time)
-        # HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK HACK
-                
-        return err_div
-    
     def run(self):
         """
         Run the simulation
         """
         sim = self.simulation
-        simple = None
         sim.hooks.simulation_started()
         
         # Setup timestepping and initial convecting velocity
@@ -397,8 +374,6 @@ class SolverIPCS(Solver):
             tmax = sim.input.get_value('time/tmax', required_type='float')
             num_inner_iter = sim.input.get_value('solver/num_inner_iter',
                                                  MAX_INNER_ITER, 'int')
-            num_simple_steps = sim.input.get_value('solver/num_simple_inner_iter',
-                                                   NUM_SIMPLE_INNER_ITER, 'int')
             allowable_error_inner = sim.input.get_value('solver/allowable_error_inner',
                                                         ALLOWABLE_ERROR_INNER, 'float')
             
@@ -418,51 +393,19 @@ class SolverIPCS(Solver):
             # Run inner iterations
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
-                err_u_star = self.momentum_prediction(t, dt)
+                self.co_inner_iter = num_inner_iter - self.inner_iteration
+                err_u = self.momentum_prediction()
                 err_p = self.pressure_correction()
-                
-                # Information from solvers regarding number of iterations needed to solve linear system
-                solver_info = ' - Num Krylov iters - u %3d - p %3d' % (self.niters_u, self.niters_p)
-                
-                # Get max u_star
-                ustarmax = 0
-                for d in range(sim.ndim):
-                    thismax = abs(sim.data['u%d' % d].vector().get_local()).max()
-                    ustarmax = max(thismax, ustarmax)
-                ustarmax = dolfin.MPI.max(dolfin.MPI.comm_world, float(ustarmax))
-                
-                # Get the divergence error
-                err_div = self.calculate_divergence_error()
-                
-                # Convergence estimates
-                sim.log.info('  IPCS iteration %5d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
-                             % (self.inner_iteration, err_u_star, err_p, solver_info,  ustarmax)
-                             + ' err div %10.3e' % err_div)
-                
-                if err_u_star < allowable_error_inner:
-                    break
-                
+                self.velocity_update()
+                sim.log.info('  IPCS-D iteration %3d - err u* %10.3e - err p %10.3e'
+                             ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
+                             err_u, err_p, self.niters_u, self.niters_p))
                 self.inner_iteration += 1
+                
+                if err_u < allowable_error_inner:
+                    break
             
-            self.velocity_update()
-            
-            if num_simple_steps > 0:
-                # Run SIMPLE iteration at end of the inner iterations to eliminate the divergence
-                if simple is None:
-                    simple = get_solver('SIMPLE')(sim, embedded=True)
-                self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
-                for simple_inner in range(num_simple_steps):
-                    simple.inner_iteration = simple_inner + 1
-                    err_u = simple.momentum_prediction(t, dt)
-                    err_p = simple.pressure_correction()
-                    simple.velocity_update()
-                    solver_info = ' - Num Krylov iters - u %3d - p %3d' % (simple.niters_u, simple.niters_p)
-                    sim.log.info('  SIMPLE iteration %3d - err u* %10.3e - err p %10.3e%s'
-                                 % (simple.inner_iteration, err_u, err_p, solver_info))
-                    if err_u_star < allowable_error_inner:
-                        break
-                self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
-            
+            # Postprocess and limit velocity outside the inner iteration
             self.postprocess_velocity()
             shift_fields(sim, ['u%d', 'u_conv%d'])
             if self.using_limiter:

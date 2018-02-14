@@ -44,7 +44,8 @@ def run_and_calculate_error(N, dt, tmax, polydeg_u, polydeg_p, modifier=None):
     if modifier:
         modifier(sim) # Running regression tests, modify some input params
     
-    say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'), sim.input.get_value('solver/function_space_velocity')))
+    say('Running with %s %s solver ...' % (sim.input.get_value('solver/type'),
+                                           sim.input.get_value('solver/function_space_velocity', 'DG')))
     t1 = time.time()
     setup_simulation(sim)
     if 'Vcoupled' in sim.data:

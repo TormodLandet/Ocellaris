@@ -30,8 +30,7 @@ INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 class SolverCoupled(Solver):
     def __init__(self, simulation):
         """
-        A Navier-Stokes solver based on the pressure-velocity splitting
-        scheme IPCS (Incremental Pressure Correction Scheme)
+        A Navier-Stokes coupled solver based on DG-SIP
         
         :type simulation: ocellaris.Simulation
         """

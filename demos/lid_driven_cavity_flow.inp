@@ -56,7 +56,7 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: IPCS
+    type: IPCS-D
     num_inner_iter: 20
     allowable_error_inner: 1e-3
     polynomial_degree_velocity: 2

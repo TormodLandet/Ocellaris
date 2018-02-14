@@ -99,35 +99,11 @@ output:
     save_restart_file_at_end: no
 
 solver:
-    type: IPCS-A
+    type: IPCS-D
     num_inner_iter: 10
-    #num_simple_inner_iter: 5
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
-    function_space_velocity: DG
-    function_space_pressure: DG
-    use_stress_divergence_form: no
-    use_lagrange_multiplicator: no
-    u:
-        #solver: default
-        #lu_method: default
-        #preconditioner: default
-        parameters:
-            relative_tolerance: 1.0e-10
-            absolute_tolerance: 1.0e-15
-    p:
-        #solver: default
-        #lu_method: default
-        #preconditioner: default
-        parameters:
-            relative_tolerance: 1.0e-10
-            absolute_tolerance: 1.0e-15
-            #maximum_iterations: 1000
-            #nonzero_initial_guess: no
-    _coupled:
-        solver: gmres
-        preconditioner: petsc_amg
 
 _slope_limiter:
     u:

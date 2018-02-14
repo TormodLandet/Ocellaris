@@ -472,15 +472,11 @@ class SolverIPCSA(Solver):
                     self.co_inner_iter = num_inner_iter - self.inner_iteration
                     err_u = self.momentum_prediction()
                     err_p = self.pressure_correction()
+                    self.velocity_update()
                     sim.log.info('  IPCS-A iteration %3d - err u* %10.3e - err p %10.3e'
                                  ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
                                      err_u, err_p, self.niters_u, self.niters_p))
-                    
                     self.inner_iteration += 1
-                    sim.flush()
-                    
-                    # Better initial guess for next solve
-                    self.velocity_update()
                     
                     if err_u < allowable_error_inner:
                         break

@@ -20,8 +20,7 @@ FIX_PRESSURE_DOF = True
 class SolverCoupledLDG(Solver):
     def __init__(self, simulation):
         """
-        A Navier-Stokes solver based on the pressure-velocity splitting
-        scheme IPCS (Incremental Pressure Correction Scheme)
+        A Navier-Stokes coupled solver based on the LDG scheme 
         
         :type simulation: ocellaris.Simulation
         """

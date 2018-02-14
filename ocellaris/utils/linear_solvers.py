@@ -161,7 +161,7 @@ class LinearSolverWrapper(object):
         self.is_first_solve = False
         return ret
     
-    def inner_solve(self, inp, A, x, b, in_iter, co_iter):
+    def inner_solve(self, A, x, b, in_iter, co_iter):
         """
         This is not implemented for dolfin solvers, so just solve as usual
         """
