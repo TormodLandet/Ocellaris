@@ -225,7 +225,7 @@ class SolverIPCS(Solver):
         self.niters_u = self.velocity_solver.inner_solve(A, uvw_star.vector(), b,
                                                          in_iter=self.inner_iteration,
                                                          co_iter=self.co_inner_iter)
-        self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
+        self.assigner_split.assign(list(sim.data['u']), uvw_star)
         
         # Compute change from last iteration
         uvw_temp.vector().axpy(-1, uvw_star.vector())

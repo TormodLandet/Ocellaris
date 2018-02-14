@@ -41,7 +41,6 @@ INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
 ALPHA_U = 0.5
 ALPHA_P = 0.5
-LIMIT_INNER = False
 
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
@@ -492,6 +491,9 @@ class SolverSIMPLE(Solver):
             
             # Calculate the hydrostatic pressure when the density is not constant
             self.hydrostatic_pressure.update()
+            
+            # Update the coupled version of the velocity field
+            self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
             
             # Run inner iterations
             self.inner_iteration = 1
