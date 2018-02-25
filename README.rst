@@ -17,11 +17,9 @@ finite element assembly. PETSc_ is used for solving the resulting linear systems
 Ocellaris is named after the `Amphiprion Ocellaris <https://en.wikipedia.org/wiki/Ocellaris_clownfish>`_
 clownfish and is written as part of a PhD project at the University of Oslo.
 
-.. figure:: https://trlandet.bitbucket.io/figures/ocellaris_mesh_521.png
+.. figure:: https://trlandet.bitbucket.io/figures/ocellaris_outlined_500.png
     :align: center
-    :alt: Picture of Ocellaris
-    
-    `About this image <https://trlandet.bitbucket.io/ocellaris/logo.html>`_
+    :alt: Picture of an Ocellaris clownfish in a triangulated style
 
 Installation and running
 ------------------------
