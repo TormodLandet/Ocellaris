@@ -17,11 +17,6 @@
    programmers_guide/programmers_guide
    license
    
-.. toctree::
-   :hidden:
-
-   logo
-
 .. not used currently ...
 
     Indices and tables
