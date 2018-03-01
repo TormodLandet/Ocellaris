@@ -3,6 +3,7 @@ from .slope_limiter import SlopeLimiter, LocalMaximaMeasurer
 from .slope_limiter_velocity import SlopeLimiterVelocity
 from .runge_kutta import RungeKuttaDGTimestepping
 from .multiphase import get_multi_phase_model
+from .fields import get_known_field
 from .hydrostatic import setup_hydrostatic_pressure
 from .penalty import define_penalty, navier_stokes_stabilization_penalties
 from .bdm import VelocityBDMProjection
