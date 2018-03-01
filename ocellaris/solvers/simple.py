@@ -39,8 +39,8 @@ USE_GRAD_Q_FORM = True
 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
 INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
-ALPHA_U = 0.5
-ALPHA_P = 0.5
+ALPHA_U = 0.7
+ALPHA_P = 0.9
 
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
@@ -167,10 +167,6 @@ class SolverSIMPLE(Solver):
         self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p',
                                                         default_parameters=SOLVER_P_OPTIONS)
         
-        # Get under relaxation factors
-        self.alpha_u = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
-        self.alpha_p = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
-        
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
         verify_key('equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'SIMPLE solver')
@@ -264,7 +260,7 @@ class SolverSIMPLE(Solver):
             Assemble the linear systems
             """
             p_star = sim.data['p']
-            alpha = self.alpha_u
+            alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
             assert 0 < alpha
             relax = (1 - alpha) / alpha
             
@@ -354,7 +350,9 @@ class SolverSIMPLE(Solver):
         Solve the Navier-Stokes equations on SIMPLE form
         (Semi-Implicit Method for Pressure-Linked Equations)
         """
-        p_hat = self.simulation.data['p_hat']
+        sim = self.simulation
+        p_hat = sim.data['p_hat']
+        alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
         
         # Compute the LHS = C⋅Ãinv⋅B
         if self.inner_iteration == 1:
@@ -365,7 +363,7 @@ class SolverSIMPLE(Solver):
         LHS = self.LHS_pressure
         
         # Compute the divergence of u* and the rest of the right hand side
-        uvw_star = self.simulation.data['uvw_star']
+        uvw_star = sim.data['uvw_star']
         RHS = self.matrices.assemble_E_star(uvw_star)
         
         # Inform PETSc about the null space
@@ -400,7 +398,7 @@ class SolverSIMPLE(Solver):
             p_hat.vector()[:] -= pavg
         
         # Calculate p = p* + α p^
-        self.simulation.data['p'].vector().axpy(self.alpha_p, p_hat.vector())
+        sim.data['p'].vector().axpy(alpha, p_hat.vector())
         
         return p_hat.vector().norm('l2')
     
