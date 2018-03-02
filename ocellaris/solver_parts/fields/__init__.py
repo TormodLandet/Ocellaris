@@ -2,6 +2,7 @@ import dolfin
 from ocellaris.utils import ocellaris_error
 
 
+DEFAULT_POLYDEG = 2
 _KNOWN_FIELDS = {}
 
 
@@ -40,4 +41,5 @@ class KnownField(object):
     description = 'No description available'
 
 
+from . import scalar_field
 from . import airy_waves

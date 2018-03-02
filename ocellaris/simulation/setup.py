@@ -2,10 +2,12 @@ import sys, time, importlib
 import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.probes import setup_probes
-from ocellaris.utils import interactive_console_hook, ocellaris_error, ocellaris_interpolate, log_timings
+from ocellaris.utils import (interactive_console_hook, ocellaris_error,
+                             ocellaris_interpolate, log_timings)
 from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
 from ocellaris.utils import verify_key
-from ocellaris.solver_parts import BoundaryRegion, get_multi_phase_model, MeshMorpher
+from ocellaris.solver_parts import (BoundaryRegion, get_multi_phase_model, 
+                                    get_known_field, MeshMorpher)
 
 
 def setup_simulation(simulation):
@@ -70,6 +72,9 @@ def setup_simulation(simulation):
     
     # Setup physical constants and multi-phase model (g, rho, nu, mu)
     setup_physical_properties(simulation, multiphase_class)
+    
+    # Setup known fields (incomming waves etc)
+    setup_known_fields(simulation)
     
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs
@@ -359,6 +364,23 @@ def setup_physical_properties(simulation, multiphase_class):
     simulation.data['mu'] = simulation.multi_phase_model.get_laminar_dynamic_viscosity(0)
 
 
+def setup_known_fields(simulation):
+    """
+    Setup known fields like incoming waves etc
+    """
+    simulation.log.info('Creating known fields')
+    Nfields = len(simulation.input.get_value('fields', [], 'list(dict)'))
+    for i in range(Nfields):
+        field_inp = simulation.input.get_value('fields/%d' % i, required_type='Input')
+        name = field_inp.get_value('name', required_type='string')
+        field_type = field_inp.get_value('type', required_type='string')
+        if name in simulation.fields:
+            ocellaris_error('Field %s is defined multiple times' % name,
+                            'Input file contains multiple fields with the same name')
+        field_class = get_known_field(field_type)
+        simulation.fields[name] = field_class(simulation, field_inp)
+
+
 def setup_boundary_conditions(simulation):
     """
     Setup boundary conditions based on the simulation input
@@ -382,7 +404,7 @@ def setup_sources(simulation):
     """
     simulation.log.info('Creating sources')
     
-    ms = simulation.input.get_value('momentum_sources', {}, 'list(dict)')
+    ms = simulation.input.get_value('momentum_sources', [], 'list(dict)')
     sources = []
     for i in range(len(ms)):
         name = simulation.input.get_value('momentum_sources/%d/name' % i, required_type='string')

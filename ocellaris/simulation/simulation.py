@@ -28,9 +28,11 @@ class Simulation(object):
         self.ncpu = dolfin.MPI.size(dolfin.MPI.comm_world)
         self.rank = dolfin.MPI.rank(dolfin.MPI.comm_world)
         
+        self.data = {} # Unknowns, coefficients and solutions
+        self.fields = {} # Known fields (incoming waves etc)
+        
         self.hooks = Hooks(self)
         self.input = Input(self)
-        self.data = {}
         self.reporting = Reporting(self)
         self.log = Log(self)
         self.io = InputOutputHandling(self)

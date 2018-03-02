@@ -1,0 +1,119 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+metadata:
+    author: Tormod Landet
+    date: 2017-11-01
+    description: |
+        Flow around a free falling 3D sphere
+        Made to test/develop 3D support in Ocellaris  
+
+user_code:
+    constants:
+        L: 140
+        H: 10
+        h: 7
+        N: 10
+        dz0: 100
+        dz1: 140
+
+physical_properties:
+    rho0: 1000.0
+    nu0:     1.0e-6
+    rho1:    1.0
+    nu1:     1.5e-5
+    g: [0, -9.81]
+
+mesh:
+    type: Rectangle
+    Nx: py$ int(N * L/10)
+    Ny: py$ int(N * H/4)
+    endx: py$ L
+    endy: py$ H
+
+fields:
+-   name: waves
+    type: AiryWaves
+    still_water_position: py$ h
+    depth: py$ h
+    amplitudes: [0.2]
+    wave_lengths: [20.0]
+-   name: damping zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: 'x[0] < dz0 ? 0.0 : (x[0] > dz1 ? 1.0 : pow((x[0] - dz0)/(dz1 - dz0), 2))'
+
+# BCs with wall slip
+boundary_conditions:
+-   name: bottom, top & end wall
+    selector: code
+    inside_code: 'on_boundary'
+    p:
+        type: WallPressure
+    u:
+        type: FreeSlip
+-   name: inlet
+    selector: code
+    inside_code: 'on_boundary and x[0] < 1e-5'
+
+initial_conditions:
+    cp:
+        cpp_code: '(x[1] < h + 1e-5) ? 1.0 : 0.0'
+    cpp:
+        cpp_code: '(x[1] < h + 1e-5) ? 1.0 : 0.0'
+
+time:
+    dt: 0.1
+    tmax: 1.0
+
+output:
+    prefix: 'output/wave_tank'
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    xdmf_write_interval: 10
+    divergence_method: div0
+
+multiphase_solver:
+    type: BlendedAlgebraicVOF
+    function_space_colour: DG
+    polynomial_degree_colour: 0
+    plot_fields: yes
+
+solver:
+    type: IPCS-A
+    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
+    allowable_error_inner: 1e-8    
+    u:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+    p:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+
+convection:
+    c:
+        convection_scheme: HRIC
+
+slope_limiter:
+    c:
+        enforce_bounds: yes
+    u:
+        method: Componentwise
+        comp_method: HierarchicalTaylor
+        limit_conv: no
+
+probes:
+    -   name: free_surface
+        enabled: yes
+        type: IsoSurface
+        value: 0.5
+        field: c
+        file_name: '_free_surface.out'
+        custom_hook: MultiPhaseModelUpdated

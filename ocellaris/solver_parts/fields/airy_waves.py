@@ -1,7 +1,7 @@
 from math import pi, tanh, sqrt
 import dolfin
 from ocellaris.utils import ocellaris_error, OcellarisCppExpression, verify_key
-from . import register_known_field, KnownField
+from . import register_known_field, KnownField, DEFAULT_POLYDEG
 
 
 @register_known_field('AiryWaves')
@@ -16,8 +16,9 @@ class AiryWaveField(KnownField):
         self.read_input(field_inp)
         
         # Show the input data
-        simulation.log.info('Creating a linear Airy wave field %s')
+        simulation.log.info('Creating a linear Airy wave field %r' % self.name)
         simulation.log.info('    Still water depth: %r' % self.h)
+        simulation.log.info('    Pos. free surface: %r' % self.still_water_pos)
         simulation.log.info('    Vertical comp. gravity: %r' % self.g)
         simulation.log.info('    Wave frequencies: %r' % self.omegas)
         simulation.log.info('    Wave periods: %r' % self.periods)
@@ -58,12 +59,12 @@ class AiryWaveField(KnownField):
         # Compute the missing data
         self.omegas, self.periods, self.wave_lengths, self.wave_numbers = \
             get_airy_wave_specs(g, h, omegas, periods, wave_lengths, wave_numbers)
-        Nwave = len(self.omega)
+        Nwave = len(self.omegas)
         
         self.still_water_pos = field_inp.get_value('still_water_position', required_type='float')
         self.current_speed = field_inp.get_value('current_speed', 0, required_type='float')
         self.wind_speed = field_inp.get_value('wind_speed', 0, required_type='float')
-        self.polydeg = field_inp.get_value('polynomial_degree', 2, required_type='int')
+        self.polydeg = field_inp.get_value('polynomial_degree', DEFAULT_POLYDEG, required_type='int')
         self.g = g
         self.h = h
         self.thetas = field_inp.get_value('wave_phases', [0] * Nwave, required_type='list(float)')
@@ -77,7 +78,7 @@ class AiryWaveField(KnownField):
                             'The length of the wave amplitude list does not match the number '
                             'of waves specified, %d != %d' % (len(self.amplitudes), Nwave))
     
-    def updater(self, timestep_number, t, dt):
+    def update(self, timestep_number, t, dt):
         """
         Called by simulation.hooks on the start of each time step
         """
