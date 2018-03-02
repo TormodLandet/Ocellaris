@@ -83,10 +83,11 @@ class AiryWaveField(KnownField):
         Called by simulation.hooks on the start of each time step
         """
         # Update C++ expressions
+        self._get_expression('elevation')
         elev_updater = self._expressions['elevation'][1]
         elev_updater(timestep_number, t, dt)
         
-        for _expr, updater in self.expressions:
+        for _expr, updater in self._expressions.values():
             updater(timestep_number, t, dt)
     
     def _get_cpp(self, name):
@@ -98,7 +99,7 @@ class AiryWaveField(KnownField):
         
         # Construct C++ code to compute the named variable
         cpp = []
-        Nwave = len(self.omega)
+        Nwave = len(self.omegas)
         params = dict(h=self.h, g=self.g, x='x[0]', z='(x[%d] - %r)' % (self.simulation.ndim - 1, self.still_water_pos))
         for i in range(Nwave):
             params['a'] = self.amplitudes[i]
@@ -106,7 +107,7 @@ class AiryWaveField(KnownField):
             params['k'] = self.wave_numbers[i]
             params['theta'] = self.thetas[i]
             if name == 'elevation':
-                cppi = '{a} * sin({w} * t - {k} * {x[0] + {theta})'.format(**params)
+                cppi = '{a} * sin({w} * t - {k} * {x} + {theta})'.format(**params)
             elif name == 'uhoriz':
                 cppi = '{w} * {a} * cosh({k} * ({z} + {h})) / sinh({k} * {h}) * sin({w} * t - {k} * {x} + {theta})'.format(**params)
             elif name == 'uvert':
@@ -120,15 +121,17 @@ class AiryWaveField(KnownField):
     
     def _get_expression(self, name):
         if name not in self._expressions and name != 'c':
-            cpp = self.get_cpp(name)
+            cpp = self._get_cpp(name)
             expr, updater = OcellarisCppExpression(self.simulation, cpp,
                                                    'Airy wave field %s' % name,
                                                    self.polydeg, update=False,
                                                    return_updater=True)
             self._expressions[name] = expr, updater
         
-        # Define values below and above the wave 
-        if name == 'c':
+        # Define values below and above the wave
+        if name == 'elevation':
+            return self._expressions[name][0]
+        elif name == 'c':
             below_val = dolfin.Constant(1)
             above_val = dolfin.Constant(0)
         elif name == 'uhoriz':
@@ -137,6 +140,8 @@ class AiryWaveField(KnownField):
         elif name in ('uvert', 'pdyn', 'pstat', 'ptot'):
             above_val = dolfin.Constant(0)
             below_val = self._expressions[name][0]
+        else:
+            raise ValueError('%s is not a valid variable' % name)
         
         mesh = self.simulation.data['mesh']
         z = dolfin.SpatialCoordinate(mesh)[self.simulation.ndim - 1]
