@@ -3,7 +3,8 @@ import dolfin
 from ocellaris.solvers import get_solver
 from ocellaris.probes import setup_probes
 from ocellaris.utils import (interactive_console_hook, ocellaris_error,
-                             ocellaris_interpolate, log_timings)
+                             ocellaris_interpolate, log_timings,
+                             verify_field_variable_definition)
 from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
 from ocellaris.utils import verify_key
 from ocellaris.solver_parts import (BoundaryRegion, get_multi_phase_model, 
@@ -434,19 +435,12 @@ def setup_initial_conditions(simulation):
         if name == 'file':
             has_file = True
             continue
-        
-        if not 'p' in name:
+        elif not 'p' in name:
             ocellaris_error('Invalid initial condition',
                             'You have given initial conditions for %r but this does '
                             'not seem to be a previous or pressure field.\n\n'
                             'Valid names: up0, up1, ... , p, cp, rho_p, ...' % name)
-        
-        if 'cpp_code' not in ic[name]:
-            ocellaris_error('Invalid initial condition',
-                            'You have not given "cpp_code" for %r' % name)
-        cpp_code = ic.get_value('%s/cpp_code' % name, required_type='string!')
-        
-        if not name in simulation.data:
+        elif not name in simulation.data:
             ocellaris_error('Invalid initial condition',
                             'You have given initial conditions for %r but this does '
                             'not seem to be an existing field.' % name)
@@ -454,10 +448,19 @@ def setup_initial_conditions(simulation):
         func = simulation.data[name]
         V = func.function_space()
         description = 'initial conditions for %r' % name
-        simulation.log.info('    C++ %s' % description)
         
-        # Run the C++ code to set the initial value of the function
-        ocellaris_interpolate(simulation, cpp_code, description, V, func)
+        if 'cpp_code' in ic[name]:
+            cpp_code = ic.get_value('%s/cpp_code' % name, required_type='string!')
+            simulation.log.info('    C++ %s' % description)
+            ocellaris_interpolate(simulation, cpp_code, description, V, func)
+        elif 'function' in ic[name]:
+            vardef = ic.get_value('%s/function' % name, required_type='string!')
+            simulation.log.info('    Field function %s' % description)
+            f = verify_field_variable_definition(simulation, vardef, description)
+            dolfin.project(f, V, function=func)
+        else:
+            ocellaris_error('Invalid initial condition',
+                            'You have not given "cpp_code" or "function" for %r' % name)
     
     # Some fields start out as copies, we do that here so that the input file
     # does not have to contain superfluous initial conditions

@@ -15,7 +15,9 @@ user_code:
         H: 10
         h: 7
         N: 10
-        dz0: 100
+        iz0: 0    # Inlet zone x pos 
+        iz1: 40
+        dz0: 100  # Outlet zone x pos
         dz1: 140
 
 physical_properties:
@@ -39,15 +41,45 @@ fields:
     depth: py$ h
     amplitudes: [0.2]
     wave_lengths: [20.0]
--   name: damping zone
+
+-   name: still water
+    type: AiryWaves
+    still_water_position: py$ h
+    depth: py$ h
+    amplitudes: []
+    wave_lengths: []
+
+-   name: outlet zone
     type: ScalarField
     variable_name: beta
     stationary: yes
     cpp_code: 'x[0] < dz0 ? 0.0 : (x[0] > dz1 ? 1.0 : pow((x[0] - dz0)/(dz1 - dz0), 2))'
 
+-   name: inlet zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: 'x[0] < iz0 ? 1.0 : (x[0] > iz1 ? 0.0 : pow((x[0] - iz1)/(iz0 - iz1), 2))'
+
+-   name: initial field
+    type: BlendedField
+    field0: waves
+    field1: still water
+    blending_function: outlet zone/beta
+
+forcing_zones:
+-   name: wave damping
+    type: MomentumForcing
+    zone: outlet zone
+    target: still water/u
+-   name: wave creation
+    type: MomentumForcing
+    zone: inlet zone
+    target: waves/u
+
 # BCs with wall slip
 boundary_conditions:
--   name: bottom, top & end wall
+-   name: bottom and top
     selector: code
     inside_code: 'on_boundary'
     p:
@@ -57,12 +89,30 @@ boundary_conditions:
 -   name: inlet
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
+    u:
+        type: FieldFunction
+        function: ['waves/uhoriz', 'waves/uvert']
+    c:
+        type: FieldFunction
+        function: waves/c
+-   name: outlet
+    selector: code
+    inside_code: 'on_boundary and x[0] > L - 1e-5'
+    u:
+        type: FieldFunction
+        function: ['still water/uhoriz', 'still water/uvert']
+    c:
+        type: FieldFunction
+        function: still water/c
+
 
 initial_conditions:
     cp:
-        cpp_code: '(x[1] < h + 1e-5) ? 1.0 : 0.0'
-    cpp:
-        cpp_code: '(x[1] < h + 1e-5) ? 1.0 : 0.0'
+        function: initial field/c
+    up0:
+        function: initial field/uhoriz
+    up1:
+        function: initial field/uvert
 
 time:
     dt: 0.1

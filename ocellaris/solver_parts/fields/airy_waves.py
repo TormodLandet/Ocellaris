@@ -30,10 +30,11 @@ class AiryWaveField(KnownField):
         simulation.log.info('    Wind speed: %r' % self.wind_speed)
         simulation.log.info('    Polynomial degree: %r' % self.polydeg)
         
+        self._cpp = {}
+        self.construct_cpp_code()
         self._expressions = {}
         self._functions = {}
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
-        self.elevation = dolfin.Function(self.V)
         simulation.hooks.add_pre_timestep_hook(self.update, 'Update Airy wave field %r' % self.name)
     
     def read_input(self, field_inp):
@@ -87,78 +88,88 @@ class AiryWaveField(KnownField):
             return
         
         # Update C++ expressions
-        self._get_expression('elevation')
-        elev_updater = self._expressions['elevation'][1]
-        elev_updater(timestep_number, t, dt)
-        
-        for _expr, updater in self._expressions.values():
+        for name, func in self._functions.items():
+            expr, updater = self._expressions[name]
             updater(timestep_number, t, dt)
+            func.interpolate(expr)
     
-    def _get_cpp(self, name):
-        # Check that this variable name is something we can compute
-        verify_key('variable', name, 'elevation uhoriz uvert pdyn pstat ptot')
-        
-        if name == 'ptot':
-            return '%s + %s' % (self.get_cpp('pdyn'), self.get_cpp('pstat'))
-        
-        # Construct C++ code to compute the named variable
-        cpp = []
-        Nwave = len(self.omegas)
-        params = dict(h=self.h, g=self.g, x='x[0]', z='(x[%d] - %r)' % (self.simulation.ndim - 1, self.still_water_pos))
-        for i in range(Nwave):
-            params['a'] = self.amplitudes[i]
-            params['w'] = self.omegas[i]
-            params['k'] = self.wave_numbers[i]
-            params['theta'] = self.thetas[i]
+    def construct_cpp_code(self):
+        for name in 'elevation c uhoriz uvert pdyn pstat ptot'.split():
+            # C++ code for still water
+            params = dict(h=self.h,
+                          g=self.g,
+                          x='x[0]',
+                          z='(x[%d] - %r)' % (self.simulation.ndim - 1, self.still_water_pos))
+            above_cpp = None
             if name == 'elevation':
-                cppi = '{a} * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                below_cpp = [repr(self.still_water_pos)]
+            elif name == 'c':
+                below_cpp = ['1']
+                above_cpp = ['0']
             elif name == 'uhoriz':
-                cppi = '{w} * {a} * cosh({k} * ({z} + {h})) / sinh({k} * {h}) * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                below_cpp = [repr(self.current_speed)]
+                above_cpp = [repr(self.wind_speed)]
             elif name == 'uvert':
-                cppi = '{w} * {a} * sinh({k} * ({z} + {h})) / sinh({k} * {h}) * cos({w} * t - {k} * {x} + {theta})'.format(**params)
+                below_cpp = ['0']
+                above_cpp = ['0']
             elif name == 'pdyn':
-                cppi = 'rho * {g} * {a} * cosh({k} * ({z} + {h})) / cosh({k} * {h}) * sin({w} * t - {k} * {x} + {theta})'.format(**params)
-            elif name == 'pstat':
-                cppi = '-1 * rho * {g} * {z}'.format(**params)
-            cpp.append(cppi)
-        return ' + '.join(cpp) if cpp else '0'
+                below_cpp = ['0']
+                above_cpp = ['0']
+            elif name in ('pstat', 'ptot'):
+                below_cpp = ['-1 * rho * {g} * {z}'.format(**params)]
+                above_cpp = ['0']
+            
+            # Construct C++ code to compute the named variable
+            Nwave = len(self.omegas)
+            for i in range(Nwave):
+                params['a'] = self.amplitudes[i]
+                params['w'] = self.omegas[i]
+                params['k'] = self.wave_numbers[i]
+                params['theta'] = self.thetas[i]
+                
+                cppb = None
+                cppa = None
+                if name == 'elevation':
+                    cppb = '{a} * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                elif name == 'uhoriz':
+                    cppb = '{w} * {a} * cosh({k} * ({z} + {h})) / sinh({k} * {h}) * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                elif name == 'uvert':
+                    cppb = '{w} * {a} * sinh({k} * ({z} + {h})) / sinh({k} * {h}) * cos({w} * t - {k} * {x} + {theta})'.format(**params)
+                elif name in ('pdyn', 'ptot'):
+                    cppb = 'rho * {g} * {a} * cosh({k} * ({z} + {h})) / cosh({k} * {h}) * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                
+                if cppb is not None:
+                    below_cpp.append(cppb)
+                if cppa is not None:
+                    above_cpp.append(cppa)
+            
+            full_code_below = ' + '.join(below_cpp)
+            if above_cpp is None:
+                # No special treatment of values above the free surface
+                self._cpp[name] = full_code_below
+            else:
+                # Separate between values above and below the free surface
+                full_code_above = ' + '.join(above_cpp) 
+                self._cpp[name] = '({z}) <= ({elev} - {swpos}) ? ({below_code}) : ({above_code})'.format(z=params['z'],
+                                                                                                         elev= self._cpp['elevation'],
+                                                                                                         swpos=self.still_water_pos,
+                                                                                                         below_code=full_code_below,
+                                                                                                         above_code=full_code_above) 
     
     def _get_expression(self, name):
-        if name not in self._expressions and name != 'c':
-            cpp = self._get_cpp(name)
-            expr, updater = OcellarisCppExpression(self.simulation, cpp,
+        verify_key('variable', name, self._cpp, 'Airy wave field %r' % self.name)
+        if name not in self._expressions:
+            expr, updater = OcellarisCppExpression(self.simulation, self._cpp[name],
                                                    'Airy wave field %s' % name,
                                                    self.polydeg, update=False,
                                                    return_updater=True)
             self._expressions[name] = expr, updater
-        
-        # Define values below and above the wave
-        if name == 'elevation':
-            return self._expressions[name][0]
-        elif name == 'c':
-            below_val = dolfin.Constant(1)
-            above_val = dolfin.Constant(0)
-        elif name == 'uhoriz':
-            above_val = dolfin.Constant(self.wind_speed)
-            below_val = self._expressions[name][0] + dolfin.Constant(self.current_speed)
-        elif name in ('uvert', 'pdyn', 'pstat', 'ptot'):
-            above_val = dolfin.Constant(0)
-            below_val = self._expressions[name][0]
-        else:
-            raise ValueError('%s is not a valid variable' % name)
-        
-        mesh = self.simulation.data['mesh']
-        z = dolfin.SpatialCoordinate(mesh)[self.simulation.ndim - 1]
-        return dolfin.conditional(dolfin.ge(self.elevation, z), below_val, above_val)
+        return self._expressions[name][0]
     
     def get_variable(self, name):
-        if name == 'elevation':
-            return self.elevation
-        elif name not in self._functions:
+        if name not in self._functions:
             expr = self._get_expression(name)
-            func = dolfin.Function(self.V)
-            func.interpolate(expr)
-            self._functions[name] = func
+            self._functions[name] = dolfin.interpolate(expr, self.V)
         return self._functions[name]
 
 

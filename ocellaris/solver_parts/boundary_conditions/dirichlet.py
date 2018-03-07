@@ -1,6 +1,7 @@
 import dolfin
 from . import register_boundary_condition, BoundaryConditionCreator
-from ocellaris.utils import CodedExpression, OcellarisCppExpression, OcellarisError
+from ocellaris.utils import (CodedExpression, OcellarisCppExpression,
+                             OcellarisError, verify_field_variable_definition)
 
 
 class OcellarisDirichletBC(dolfin.DirichletBC):
@@ -175,3 +176,43 @@ class CppCodedDirichletBoundary(BoundaryConditionCreator):
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
         self.simulation.log.info('    C++ coded value for %s' % var_name)
+
+
+@register_boundary_condition('FieldFunction')
+class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
+    description = 'A Dirichlet condition with values from a field function'
+    
+    def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
+        """
+        Dirichlet boundary condition with value from a field function
+        """
+        self.simulation = simulation
+        if var_name[-1].isdigit():
+            # A var_name like "u0" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name[:-1]]
+        else:
+            # A var_name like "u" was given. Look up "Vu"
+            self.func_space = simulation.data['V%s' % var_name]
+        
+        # Get the field function
+        vardef = inp_dict.get_value('function', required_type='any')
+        
+        if isinstance(vardef, list):
+            assert len(vardef) == simulation.ndim
+            for d in range(simulation.ndim):
+                name = '%s%d' % (var_name, d)
+                sub_vardef = inp_dict.get_value('function/%d' % d, required_type='string')
+                self.register_dirichlet_condition(name, sub_vardef, subdomains, subdomain_id)
+        else:
+            self.register_dirichlet_condition(var_name, vardef, subdomains, subdomain_id)
+    
+    def register_dirichlet_condition(self, var_name, vardef, subdomains, subdomain_id):
+        """
+        Store the boundary condition for use in the solver
+        """
+        description = 'boundary condititon for %s' % var_name
+        expr = verify_field_variable_definition(self.simulation, vardef, description)
+        bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
+        bcs = self.simulation.data['dirichlet_bcs']
+        bcs.setdefault(var_name, []).append(bc)
+        self.simulation.log.info('    Field function value for %s' % var_name)

@@ -41,6 +41,12 @@ def verify_key(name, key, options, loc=None):
                             (name, key, loc, available_options))
 
 def verify_field_variable_definition(simulation, vardef, loc, return_var=True):
+    """
+    Verify that a variable definition like "my field/psi" refers to an existing
+    field (here "my field") and contains exactly one forward slash. Optionally
+    the field variable with the given name (here "psi") will be returned and in
+    that process the existance of that field variable in the field is verified. 
+    """
     comps = vardef.strip().split('/')
     if len(comps) != 2:
         ocellaris_error('Fild variable reference error',
