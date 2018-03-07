@@ -104,6 +104,23 @@ solver:
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
+    u:
+        use_ksp: yes
+        petsc_ksp_type: gmres
+        petsc_pc_type: asm
+        petsc_ksp_initial_guess_nonzero: yes
+        inner_iter_rtol: [1.0e-15, 1.0e-15, 1.0e-15]
+        inner_iter_atol: [1.0e-15, 1.0e-15, 1.0e-15]
+        inner_iter_max_it: [100, 100, 100]
+    p:
+        use_ksp: yes
+        petsc_ksp_type: gmres
+        petsc_pc_type: hypre
+        petsc_pc_hypre_type: boomeramg
+        petsc_ksp_initial_guess_nonzero: yes
+        inner_iter_rtol: [1.0e-15, 1.0e-15, 1.0e-15]
+        inner_iter_atol: [1.0e-15, 1.0e-15, 1.0e-15]
+        inner_iter_max_it: [100, 100, 100]
 
 _slope_limiter:
     u:
