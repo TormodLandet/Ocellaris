@@ -39,3 +39,15 @@ def verify_key(name, key, options, loc=None):
             ocellaris_error('Unsupported %s' % name,
                             'The %s %r is not available%s, only %s is available' %
                             (name, key, loc, available_options))
+
+def verify_field_variable_definition(simulation, vardef, loc, return_var=True):
+    comps = vardef.strip().split('/')
+    if len(comps) != 2:
+        ocellaris_error('Fild variable reference error',
+                        'Field variable should be on format "field name/varname", found %r in %s' % (vardef, loc))
+    field_name, var_name = comps
+    
+    verify_key('field name', field_name, simulation.fields, loc)
+    field = simulation.fields[field_name]
+    if return_var:
+        return field.get_variable(var_name)

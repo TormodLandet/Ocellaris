@@ -1,4 +1,5 @@
-from .error_handling import OcellarisError, ocellaris_error, verify_key
+from .error_handling import (OcellarisError, ocellaris_error, verify_key,
+                             verify_field_variable_definition)
 from .alarm import AlarmTimeout
 from .interactive_console import interactive_console_hook, run_debug_console
 from .timer import timeit, log_timings

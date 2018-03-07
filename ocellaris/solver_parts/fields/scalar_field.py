@@ -1,6 +1,5 @@
-from math import pi, tanh, sqrt
 import dolfin
-from ocellaris.utils import ocellaris_error, OcellarisCppExpression, verify_key
+from ocellaris.utils import ocellaris_error, OcellarisCppExpression
 from . import register_known_field, KnownField, DEFAULT_POLYDEG
 
 
@@ -19,11 +18,12 @@ class ScalarField(KnownField):
         simulation.log.info('Creating a scalar field %r' % self.name)
         simulation.log.info('    Variable: %r' % self.var_name)
         simulation.log.info('    Stationary: %r' % self.stationary)
+        simulation.log.info('    Polynomial degree: %r' % self.polydeg)
         
         self.expr = None
         self.func = None
+        self.updater = None
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
-        self.elevation = dolfin.Function(self.V)
         simulation.hooks.add_pre_timestep_hook(self.update, 'Update scalar field %r' % self.name)
     
     def read_input(self, field_inp):
@@ -31,7 +31,7 @@ class ScalarField(KnownField):
         self.var_name = field_inp.get_value('variable_name', 'phi', required_type='string')
         self.stationary = field_inp.get_value('stationary', False, required_type='bool')
         self.polydeg = field_inp.get_value('polynomial_degree', DEFAULT_POLYDEG, required_type='int')
-        self.cpp = field_inp.get_value('cpp_code', required_type='string')
+        self.cpp_code = field_inp.get_value('cpp_code', required_type='string')
     
     def update(self, timestep_number, t, dt):
         """
@@ -40,6 +40,7 @@ class ScalarField(KnownField):
         if self.stationary:
             return
         self.updater(timestep_number, t, dt)
+        self.func.interpolate(self.expr)
     
     def _get_expression(self):
         if self.expr is None:
@@ -47,7 +48,7 @@ class ScalarField(KnownField):
                                                    'Scalar field %s' % self.name,
                                                    self.polydeg, update=False,
                                                    return_updater=True)
-            self.exp = expr
+            self.expr = expr
             self.updater = updater
         return self.expr
     

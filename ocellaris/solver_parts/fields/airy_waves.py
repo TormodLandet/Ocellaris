@@ -60,6 +60,7 @@ class AiryWaveField(KnownField):
         self.omegas, self.periods, self.wave_lengths, self.wave_numbers = \
             get_airy_wave_specs(g, h, omegas, periods, wave_lengths, wave_numbers)
         Nwave = len(self.omegas)
+        self.stationary = Nwave == 0
         
         self.still_water_pos = field_inp.get_value('still_water_position', required_type='float')
         self.current_speed = field_inp.get_value('current_speed', 0, required_type='float')
@@ -82,6 +83,9 @@ class AiryWaveField(KnownField):
         """
         Called by simulation.hooks on the start of each time step
         """
+        if self.stationary:
+            return
+        
         # Update C++ expressions
         self._get_expression('elevation')
         elev_updater = self._expressions['elevation'][1]
@@ -117,7 +121,7 @@ class AiryWaveField(KnownField):
             elif name == 'pstat':
                 cppi = '-1 * rho * {g} * {z}'.format(**params)
             cpp.append(cppi)
-        return ' + '.join(cpp)
+        return ' + '.join(cpp) if cpp else '0'
     
     def _get_expression(self, name):
         if name not in self._expressions and name != 'c':
