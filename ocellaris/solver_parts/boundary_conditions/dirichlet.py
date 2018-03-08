@@ -194,24 +194,33 @@ class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
         
-        # Get the field function
+        # Get the field function expression object
         vardef = inp_dict.get_value('function', required_type='any')
-        
+        description = 'boundary condititon for %s' % var_name
         if isinstance(vardef, list):
             assert len(vardef) == simulation.ndim
+            exprs = [verify_field_variable_definition(simulation, vd, description) for vd in vardef]
+        else:
+            expr = verify_field_variable_definition(simulation, vardef, description)
+            if expr.ufl_shape != ():
+                assert expr.ufl_shape == (simulation.ndim,)
+                exprs = [expr[d] for d in range(simulation.ndim)]
+            else:
+                exprs = [expr]
+        
+        # Register BCs
+        if len(exprs) > 1:
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
-                sub_vardef = inp_dict.get_value('function/%d' % d, required_type='string')
-                self.register_dirichlet_condition(name, sub_vardef, subdomains, subdomain_id)
+                self.register_dirichlet_condition(name, exprs[d], subdomains, subdomain_id)
         else:
-            self.register_dirichlet_condition(var_name, vardef, subdomains, subdomain_id)
+            self.register_dirichlet_condition(var_name, exprs[0], subdomains, subdomain_id)
     
-    def register_dirichlet_condition(self, var_name, vardef, subdomains, subdomain_id):
+    def register_dirichlet_condition(self, var_name, expr, subdomains, subdomain_id):
         """
         Store the boundary condition for use in the solver
         """
-        description = 'boundary condititon for %s' % var_name
-        expr = verify_field_variable_definition(self.simulation, vardef, description)
+        assert expr.ufl_shape == ()
         bc = OcellarisDirichletBC(self.simulation, self.func_space, expr, subdomains, subdomain_id)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)

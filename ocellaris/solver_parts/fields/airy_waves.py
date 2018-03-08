@@ -157,7 +157,8 @@ class AiryWaveField(KnownField):
                                                                                                          above_code=full_code_above) 
     
     def _get_expression(self, name):
-        verify_key('variable', name, self._cpp, 'Airy wave field %r' % self.name)
+        keys = list(self._cpp.keys()) + ['u']
+        verify_key('variable', name, keys, 'Airy wave field %r' % self.name)
         if name not in self._expressions:
             expr, updater = OcellarisCppExpression(self.simulation, self._cpp[name],
                                                    'Airy wave field %s' % name,
@@ -167,6 +168,16 @@ class AiryWaveField(KnownField):
         return self._expressions[name][0]
     
     def get_variable(self, name):
+        if name == 'u':
+            # Assume uhoriz == u0 and uvert = uD where D is 2 or 3
+            if self.simulation.ndim == 2:
+                return dolfin.as_vector([self.get_variable('uhoriz'),
+                                         self.get_variable('uvert')])
+            else:
+                return dolfin.as_vector([self.get_variable('uhoriz'),
+                                         0,
+                                         self.get_variable('uvert')])
+        
         if name not in self._functions:
             expr = self._get_expression(name)
             self._functions[name] = dolfin.interpolate(expr, self.V)
