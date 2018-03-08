@@ -33,6 +33,7 @@ mesh:
     Ny: py$ int(N * H/4)
     endx: py$ L
     endy: py$ H
+    move: ['0', '0.0297619048*pow(x[1], 3) - 0.520833333*pow(x[1], 2) + 2.23214286*x[1] + 3.55271368e-15']
 
 fields:
 -   name: waves
@@ -79,13 +80,16 @@ forcing_zones:
 
 # BCs with wall slip
 boundary_conditions:
--   name: bottom and top
+-   name: bottom
     selector: code
-    inside_code: 'on_boundary'
-    p:
-        type: WallPressure
+    inside_code: 'on_boundary and x[1] < 1e-5'
     u:
         type: FreeSlip
+-   name: top
+    selector: code
+    inside_code: 'on_boundary and x[1] > H - 1e-5'
+    u:
+        type: OpenOutletBoundary
 -   name: inlet
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
@@ -115,7 +119,7 @@ initial_conditions:
         function: initial field/uvert
 
 time:
-    dt: 0.1
+    dt: 0.01
     tmax: 1.0
 
 output:
@@ -132,20 +136,20 @@ multiphase_solver:
     plot_fields: yes
 
 solver:
-    type: IPCS-A
-    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
-    num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
-    allowable_error_inner: 1e-8    
-    u:
-        inner_iter_control: [5, 3]
-        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
-        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
-        inner_iter_max_it: [5, 20, 30]
-    p:
-        inner_iter_control: [5, 3]
-        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
-        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
-        inner_iter_max_it: [5, 20, 30]
+    type: Coupled
+    #num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    #num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
+    #allowable_error_inner: 1e-8    
+    #u:
+    #    inner_iter_control: [5, 3]
+    #    inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+    #    inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+    #    inner_iter_max_it: [5, 20, 30]
+    #p:
+    #    inner_iter_control: [5, 3]
+    #    inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+    #    inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+    #    inner_iter_max_it: [5, 20, 30]
 
 convection:
     c:

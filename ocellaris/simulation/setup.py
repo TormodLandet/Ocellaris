@@ -273,6 +273,21 @@ def load_mesh(simulation):
         ocellaris_error('Unknown mesh type',
                         'Mesh type %r is not supported' % mesh_type)
     
+    
+    # Optionally move the mesh (for simple grading etc)
+    move = inp.get_value('mesh/move', None, required_type='list(string)')
+    if move is not None:
+        simulation.log.info('    Moving mesh')
+        if len(move) != mesh.geometry().dim():
+            ocellaris_error('Mesh move not correct',
+                            'Length of move field is %d while geometric dimension is %r'
+                            % (len(move), mesh.geometry().dim()))
+        e_move = dolfin.Expression(move, degree=1)
+        V_move = dolfin.VectorFunctionSpace(mesh, 'CG', 1)
+        f_move = dolfin.interpolate(e_move, V_move)
+        dolfin.ALE.move(mesh, f_move)
+        mesh.bounding_box_tree().build(mesh)
+    
     simulation.set_mesh(mesh, mesh_facet_regions)
 
 
