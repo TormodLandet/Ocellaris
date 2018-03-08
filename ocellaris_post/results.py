@@ -356,6 +356,9 @@ def read_iteration_reports(results):
         results.reports[name2] = numpy.array(value[:Nmin])
         results.reports_x[name2] = xaxis
     
+    if not final_vals:
+        return
+    
     # Get minimum length of the last inner iters
     Nmin = 1e100
     for name, value in final_vals.items():
