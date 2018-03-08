@@ -87,7 +87,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         h.Add(self.time_selector, proportion=1)
         
         # Customize the plot text
-        fgs = wx.FlexGridSizer(rows=3, cols=2, vgap=3, hgap=10)
+        fgs = wx.FlexGridSizer(cols=2, vgap=3, hgap=10)
         fgs.AddGrowableCol(1, proportion=1)
         v.Add(fgs, flag=wx.ALL|wx.EXPAND, border=6)
         
@@ -108,6 +108,14 @@ class OcellarisSurfacesPanel(wx.Panel):
         self.ylabel = wx.TextCtrl(self)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
         fgs.Add(self.ylabel, flag=wx.EXPAND)
+        
+        # Plot ylabel
+        fgs.Add(wx.StaticText(self, label='Aspect ratio:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        self.aspect = wx.Choice(self)
+        self.aspect.Set(['equal', 'auto'])
+        self.aspect.Select(0)
+        self.aspect.Bind(wx.EVT_CHOICE, self.update_plot_soon)
+        fgs.Add(self.aspect, flag=wx.EXPAND)
         
         v.Fit(self)
     
@@ -222,7 +230,7 @@ class OcellarisSurfacesPanel(wx.Panel):
         
         self.axes.set_xlim(self.xmin, self.xmax)
         self.axes.set_ylim(self.ymin, self.ymax)
-        self.axes.set_aspect('equal')
+        self.axes.set_aspect(self.aspect.GetStringSelection())
         
         if len(tsel) == 1:
             t = tsel.pop()
