@@ -71,12 +71,14 @@ fields:
 forcing_zones:
 -   name: wave damping
     type: MomentumForcing
-    zone: outlet zone
+    zone: outlet zone/beta
     target: still water/u
+    penalty: 10
 -   name: wave creation
     type: MomentumForcing
-    zone: inlet zone
+    zone: inlet zone/beta
     target: waves/u
+    penalty: 10
 
 # BCs with wall slip
 boundary_conditions:
@@ -95,7 +97,7 @@ boundary_conditions:
     inside_code: 'on_boundary and x[0] < 1e-5'
     u:
         type: FieldFunction
-        function: ['waves/uhoriz', 'waves/uvert']
+        function: waves/u
     c:
         type: FieldFunction
         function: waves/c
@@ -104,7 +106,7 @@ boundary_conditions:
     inside_code: 'on_boundary and x[0] > L - 1e-5'
     u:
         type: FieldFunction
-        function: ['still water/uhoriz', 'still water/uvert']
+        function: still water/u
     c:
         type: FieldFunction
         function: still water/c
@@ -119,8 +121,8 @@ initial_conditions:
         function: initial field/uvert
 
 time:
-    dt: 0.01
-    tmax: 1.0
+    dt: 0.02
+    tmax: 30.0
 
 output:
     prefix: 'output/wave_tank'
@@ -135,21 +137,22 @@ multiphase_solver:
     polynomial_degree_colour: 0
     plot_fields: yes
 
-solver:
-    type: Coupled
-    #num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
-    #num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
-    #allowable_error_inner: 1e-8    
-    #u:
-    #    inner_iter_control: [5, 3]
-    #    inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
-    #    inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
-    #    inner_iter_max_it: [5, 20, 30]
-    #p:
-    #    inner_iter_control: [5, 3]
-    #    inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
-    #    inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
-    #    inner_iter_max_it: [5, 20, 30]
+solver: {type: Coupled}
+_solver:
+    type: IPCS-A
+    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
+    allowable_error_inner: 1e-8    
+    u:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+    p:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
 
 convection:
     c:

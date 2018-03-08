@@ -8,7 +8,8 @@ from ocellaris.utils import (interactive_console_hook, ocellaris_error,
 from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
 from ocellaris.utils import verify_key
 from ocellaris.solver_parts import (BoundaryRegion, get_multi_phase_model, 
-                                    get_known_field, MeshMorpher)
+                                    get_known_field, MeshMorpher,
+                                    add_forcing_zone)
 
 
 def setup_simulation(simulation):
@@ -416,22 +417,36 @@ def setup_boundary_conditions(simulation):
 
 def setup_sources(simulation):
     """
-    Setup the momentum sources
+    Setup the momentum sources and forcing zones
     """
-    simulation.log.info('Creating sources')
-    
+    # Standard momentum sources
     ms = simulation.input.get_value('momentum_sources', [], 'list(dict)')
-    sources = []
-    for i in range(len(ms)):
-        name = simulation.input.get_value('momentum_sources/%d/name' % i, required_type='string')
-        degree = simulation.input.get_value('momentum_sources/%d/degree' % i, required_type='int')
-        cpp_code = simulation.input.get_value('momentum_sources/%d/cpp_code' % i, required_type='list(string)')
-        description = 'momentum source %r' % name
-        simulation.log.info('    C++ %s' % description)
-        
-        expr = OcellarisCppExpression(simulation, cpp_code, description, degree, update=True)
-        sources.append(expr)
-    simulation.data['momentum_sources'] = sources
+    simulation.data['momentum_sources'] = sources = []
+    if ms:
+        simulation.log.info('Creating sources')
+        for i in range(len(ms)):
+            inp = simulation.input.get_value('momentum_sources/%d', required_type='Input')
+            name = inp.get_value('name', required_type='string')
+            degree = inp.get_value('degree', required_type='int')
+            cpp_code = inp.get_value('cpp_code', required_type='list(string)')
+            description = 'momentum source %r' % name
+            simulation.log.info('    C++ %s' % description)
+            
+            expr = OcellarisCppExpression(simulation, cpp_code, description, degree, update=True)
+            sources.append(expr)
+    
+    # Penalty forcing zones
+    fz = simulation.input.get_value('forcing_zones', [], 'list(dict)')
+    simulation.data['forcing_zones'] = fzones = {}
+    if fz:
+        simulation.log.info('Creating forcing zones')
+        for i in range(len(fz)):
+            inp = simulation.input.get_value('forcing_zones/%d' % i, required_type='Input')
+            name = inp.get_value('name', required_type='string')
+            ztype = inp.get_value('type', required_type='string')
+            description = '%s zone %r' % (ztype, name)
+            simulation.log.info('     %s' % description)
+            add_forcing_zone(simulation, fzones, inp)
 
 
 def setup_initial_conditions(simulation):
