@@ -73,12 +73,15 @@ forcing_zones:
     type: MomentumForcing
     zone: outlet zone/beta
     target: still water/u
-    penalty: 10
+    penalty: 100
+    plot: yes
+
 -   name: wave creation
     type: MomentumForcing
     zone: inlet zone/beta
     target: waves/u
-    penalty: 10
+    penalty: 100
+    plot: yes
 
 # BCs with wall slip
 boundary_conditions:
