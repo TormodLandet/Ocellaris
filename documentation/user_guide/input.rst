@@ -204,6 +204,9 @@ between different mesh file formats.
 .. _meshio: https://github.com/nschloe/meshio
 
 
+Simple geometries
+~~~~~~~~~~~~~~~~~
+
 Example: 2D rectangle
 
 .. code-block:: yaml
@@ -238,7 +241,11 @@ Example: 2D disc
         type: UnitDisc
         N: 20
         degree: 1  # defaults to 1 (degree of mesh elements)
-       
+
+
+Mesh file formats
+~~~~~~~~~~~~~~~~~
+
 Example: legacy DOLFIN XML format
 
 .. code-block:: yaml
@@ -278,6 +285,62 @@ This will only load the mesh and (possibly) facet regions. You can also start
 the simulation from a restart file instead of an input file. Then the mesh *and*
 the function values from that save point are used, allowing you to restart the
 simulation more or less like it was never stopped.
+
+
+Moving the mesh
+~~~~~~~~~~~~~~~
+
+Ocellaris can move the mesh right after it has been created or read from file.
+To move the mesh in order to refine, skew, scale, rotate or translate it you
+must specify a C++ description of the mesh *displacement* from the initial
+position (which was specified in the input file or in the loaded mesh file).
+
+An example is the following 140 meter long 2D wave tank which is 10 m high. To
+refine the mesh in the y-direction such that it is finest around ``x[1] = 7``
+meters—where the free surface is to be located—a function is specified which
+is zero on the boundaries (to avoid changing the domain size) and non-zero in
+the interior in order to move the nodes closer to the free surface. No refinement
+is performed in the x-direction (``x[0]``).
+
+.. code-block:: yaml
+        
+    mesh:
+        type: Rectangle
+        Nx: 140
+        Ny: 20
+        endx: 140
+        endy: 20
+        move: ['0', '0.0297619048*pow(x[1], 3) - 0.520833333*pow(x[1], 2) + 2.23214286*x[1] + 3.55271368e-15']
+
+In order to develop and check the mesh refinement function it can be beneficial
+to generate and plot it, e.g., using matplotlib in jupyter or using similar
+interactive tools. The above refinement was developed using polynomial fitting
+in numpy::
+
+    from matplotlib import pyplot
+    import numpy
+    
+    # Find a polynomial that refines the mesh
+    y_target = [0, 4, 7.5, 10]
+    dy_target = [0, 2.5, 0, 0]  # zero at the boundary
+    P = numpy.polyfit(y_target, dy_target, 3)
+    
+    # Realise the polynomial
+    y = numpy.linspace(0, 10, 20)
+    dy = numpy.polyval(P, y)
+    
+    # Plot the results
+    for ypos in (y + dy):
+        pyplot.plot([0, 1], [ypos, ypos], '-k', lw=1)'
+    pyplot.axhline(7, c='b', ls=':')
+    pyplot.axhline(6, c='b', ls=':', lw=1)
+    pyplot.axhline(8, c='b', ls=':', lw=1)
+
+For more complicated meshes it is recommended to perform mesh grading and other
+mesh operation in an external mesh generator such as gmsh. 
+There is also some (not much used, hence possibly buggy) support for ALE where
+the mesh moves every timestep, but that is not covered by the ``mesh`` section
+of the input file.
 
 
 Boundary conditions
