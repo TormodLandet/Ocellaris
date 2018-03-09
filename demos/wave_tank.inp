@@ -74,14 +74,22 @@ forcing_zones:
     zone: outlet zone/beta
     target: still water/u
     penalty: 100
-    plot: yes
+    plot: no
+
+-   name: density damping
+    type: ScalarForcing
+    variable: c
+    zone: outlet zone/beta
+    target: still water/c
+    penalty: 10
+    plot: no
 
 -   name: wave creation
     type: MomentumForcing
     zone: inlet zone/beta
     target: waves/u
     penalty: 100
-    plot: yes
+    plot: no
 
 # BCs with wall slip
 boundary_conditions:

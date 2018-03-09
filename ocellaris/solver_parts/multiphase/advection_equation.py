@@ -4,7 +4,8 @@ from dolfin import dot, div, grad, jump
 
 
 class AdvectionEquation(object):
-    def __init__(self, simulation, Vc, cp, cpp, u_conv, beta, time_coeffs, dirichlet_bcs):
+    def __init__(self, simulation, Vc, cp, cpp, u_conv, beta, time_coeffs, dirichlet_bcs,
+                 forcing_zones=()):
         """
         This class assembles the advection equation for a scalar function c 
         """
@@ -16,6 +17,7 @@ class AdvectionEquation(object):
         self.beta = beta
         self.time_coeffs = time_coeffs
         self.dirichlet_bcs = dirichlet_bcs
+        self.forcing_zones = forcing_zones
         
         # Discontinuous or continuous elements
         Vc_family = Vc.ufl_element().family()
@@ -128,6 +130,10 @@ class AdvectionEquation(object):
                 eq -= w_nD*c*d*dbc.ds()
                 # Add the boundary value upwind flux
                 eq += w_nD*dbc.func()*d*dbc.ds()
+        
+        # Penalty forcing zones
+        for fz in self.forcing_zones:
+            eq += fz.penalty * fz.beta * (c - fz.target) * d * dx
         
         a, L = dolfin.system(eq)
         self.form_lhs = dolfin.Form(a)

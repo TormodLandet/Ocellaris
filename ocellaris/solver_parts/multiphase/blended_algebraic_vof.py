@@ -141,7 +141,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             self.u_conv = self.vel_dgt0_projector.velocity
         else:
             self.u_conv = sim.data['u_conv']
-        self.eq = AdvectionEquation(sim, Vc, cp, cpp, self.u_conv, beta, self.time_coeffs, dirichlet_bcs)
+        forcing_zones = sim.data['forcing_zones'].get('c', [])
+        self.eq = AdvectionEquation(sim, Vc, cp, cpp, self.u_conv, beta, self.time_coeffs, 
+                                    dirichlet_bcs, forcing_zones)
         
         if self.need_gradient:
             # Reconstruct the gradient from the colour function DG0 field

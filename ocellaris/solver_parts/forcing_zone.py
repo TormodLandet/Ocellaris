@@ -1,5 +1,5 @@
 import dolfin
-from ocellaris.utils import verify_field_variable_definition
+from ocellaris.utils import verify_field_variable_definition, verify_key
 
 
 def add_forcing_zone(simulation, fzones, inp):
@@ -18,6 +18,8 @@ def add_forcing_zone(simulation, fzones, inp):
     target = verify_field_variable_definition(simulation, target_vardef,
                                               'forcing zone %r target' % name)
     
+    verify_key('forcing zone type', ztype, ('MomentumForcing', 'ScalarForcing'),
+               'penalty forcing zone %s' % name)
     if ztype == 'MomentumForcing':
         varname = inp.get_value('variable', 'u', required_type='string')
     else:
