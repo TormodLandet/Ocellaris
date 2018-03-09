@@ -134,8 +134,9 @@ class VariableDensityModel(MultiPhaseModel):
             #    ∂ρ/∂t +  ∇⋅(ρ u) = 0
             beta = None
             u_conv = sim.data['u_conv']
+            forcing_zones = sim.data['forcing_zones'].get('rho', [])
             self.eq = AdvectionEquation(sim, sim.data['Vrho'], self.rho_p, self.rho_pp, u_conv, beta,
-                                        self.time_coeffs, dirichlet_bcs)
+                                        self.time_coeffs, dirichlet_bcs, forcing_zones)
             
             self.solver = linear_solver_from_input(sim, 'solver/rho', SOLVER, PRECONDITIONER, None, KRYLOV_PARAMETERS)
             self.slope_limiter = SlopeLimiter(sim, 'rho', self.rho)
