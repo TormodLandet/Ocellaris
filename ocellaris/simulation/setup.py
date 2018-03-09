@@ -445,7 +445,7 @@ def setup_sources(simulation):
             name = inp.get_value('name', required_type='string')
             ztype = inp.get_value('type', required_type='string')
             description = '%s zone %r' % (ztype, name)
-            simulation.log.info('     %s' % description)
+            simulation.log.info('    %s' % description)
             add_forcing_zone(simulation, fzones, inp)
 
 

@@ -11,6 +11,7 @@ def add_forcing_zone(simulation, fzones, inp):
     penalty = inp.get_value('penalty', required_type='float')
     zone_vardef = inp.get_value('zone', required_type='string')
     target_vardef = inp.get_value('target', required_type='string')
+    plot = inp.get_value('plot', False, required_type='bool')
     
     zone = verify_field_variable_definition(simulation, zone_vardef,
                                             'forcing zone %r zone definition' % name)
@@ -22,7 +23,14 @@ def add_forcing_zone(simulation, fzones, inp):
     else:
         varname = inp.get_value('variable', required_type='string')
     
-    fzones.setdefault(varname, []).append(ForcingZone(name, zone, target, penalty)) 
+    fzones.setdefault(varname, []).append(ForcingZone(name, zone, target, penalty))
+    
+    if plot:
+        # Save zone blending function to a plot file for easy verification
+        prefix = simulation.input.get_value('output/prefix', '', 'string')
+        pfile = prefix + 'blending_zone_%s.vtk' % name
+        zone.rename('beta', 'beta')
+        simulation.io.lvtk.write(pfile, extra_funcs=(zone,), include_standard=False)
 
 
 class ForcingZone:
