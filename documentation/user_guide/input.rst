@@ -1,22 +1,26 @@
 Ocellaris input file format
 ----------------------------------
 
-To run Ocellaris you must create an input file. The Ocellaris input file is on
-YAML format and allows you to control most of the solution process. The
-different sections of the input file are described below. 
+.. contents:: Contents
+    :local:
+
+File format
+...........
+
+Ocellaris uses the YAML format for input files. The input file is divided
+into separate sections dealing with geometry, boundary conditions, solver
+parameters etc. The different sections are described below. Multiple demos
+are provided along with Ocellaris and it is recommended to start with one
+of the demo input files and use the below documentation as an aid to change
+the demo input file into one that is describing your specific simulation.
 
 Note that since JSON is a valid subset of YAML you can also specify the input
 file in JSON format. JSON has no simple support for multi-line strings and
 comments, so YAML is the format used by the Ocellaris demos and also in the
 descriptions below.
 
-
-.. contents:: Contents
-    :local:
-
-
-Gotchas
-.......
+Common errors
+~~~~~~~~~~~~~
 
 Some errors that are easy to make when writing a YAML input file:
 
@@ -26,32 +30,13 @@ Some errors that are easy to make when writing a YAML input file:
   confusion is avoided.
 - The value ``5e-3`` is a string in YAML while ``5.0e-3`` is a float.
 - Indentation is significant, just like in Python
-
-
-The example simulation
-......................
-
-This document describes how to make an input file for Ocellaris. The example
-simulation that is created through the tutorial is the well known lid driven
-cavity flow problem in 2D. An input file for this simulation is used in most
-examples. Input options not used for a 2D lid driven cavity simulation are
-also mentioned and (mostly) complete lists of options are given in tables. 
-
-.. figure:: fig/lid_driven_cavity.png
-    :align: center
-
-    Lid driven cavity
-
-For the example simulation the domain is a 2D unit square with no-slip
-conditions on three walls and a constant horisontal velocity equal to 1.0 on
-the top. The Reynold's number is given by the kinematic viscosity. We will use
-:code:`nu = 0.001` which gives a Reynold's number of 1000.
+- Misspellings are not checked!
 
 
 Header
 ......
 
-The input file must start with the following header:
+The input file **must** start with the following header:
 
 .. code-block:: yaml
 
@@ -59,10 +44,8 @@ The input file must start with the following header:
         type: input
         version: 1.0
 
-You can optionally specify some metadata if you feel like it. This is not
-required, but can be useful for explainations and later references. We are
-making an input file for the lid driven cavity test case, so we write a
-short description of what we will be calculating.
+You can *optionally* specify some metadata if you feel like it. This is not
+required, but can be useful for explainations and later references.
 
 .. code-block:: yaml
 
@@ -78,35 +61,150 @@ short description of what we will be calculating.
 Here you also see the syntax for multi-line strings in YAML.
 
 
+User constants and code
+.......................
+
+You can specify constants that can be used in subsequent sections to make
+the input file easily configurable. You can also specify some code that
+will run right after the input file has been read, before any of the 
+simulation setup such as loading the mesh has been done. You can even
+change the input by accessing the ``simulation.input`` object since no
+parts of Ocellaris has accessed the input yet.
+
+.. code-block:: yaml
+
+    user_code:
+        constants:
+            L: 200       # channel length
+            theta: 30    # angle
+        code: |
+            import subprocess
+            subprocess.call(['command', 'to', 'generate', 'mesh'])
+    
+Example of using the constants in later sections of the input file:
+
+.. code-block:: yaml
+
+    some:
+        section:
+            param1: 4.3
+            param2: py$ 2.3 * L * sin(theta)
+            cpp_code: 'x[0] + L * sin(theta)' 
+
+Any value (except inside the ``user_code/constants`` block) can be given as
+a string starting with ``py$``. Ocellaris will then execute the given Python
+code to produce the value to be used in Ocellaris just as if you had written
+the value directly into the input file. The Python code you give can evaluate
+to a list, string, number...
+
+Code given as strings in the input file, either Python or C++ can also use
+the constants as can be seen in the example. These are typically expressions
+defining initial or boundary values. You can even combine these functions:
+
+.. code-block:: yaml
+
+    some-section:
+        cpp_code: py$ 'x[0] + L * sin(theta)'.replace('theta', 'theta + L') 
+
+This can be handy if you give the C++ code to compute the value of a field
+as a user constant string, and then you can use python code to replace the
+variable  ``t`` in the string with ``(t - dt)`` in order to specify the two
+initial conditions, both at ``t=0`` and ``t=0-dt`` without having to repeat
+the C++ code. This can, e.g., be used to describe a Taylor-Green vortex in
+such a way that the time stepping can be second order from the first time
+step (normally the first time setp is first order accurate since only one
+initial condition is specified:
+
+
+.. code-block:: yaml
+
+    user_code:
+        constants:
+            u0a: '-sin(pi*x[1])*cos(pi*x[0])*exp(-2*pi*pi*nu*t)'
+            u1a: ' sin(pi*x[0])*cos(pi*x[1])*exp(-2*pi*pi*nu*t)'
+    
+    initial_conditions:
+        up0:
+            cpp_code: py$ u0a
+        up1:
+            cpp_code: py$ u1a
+        upp0:
+            cpp_code: py$ u0a.replace('*t)', '*(t - dt))')
+        upp1:
+            cpp_code: py$ u1a.replace('*t)', '*(t - dt))')
+
+
 Physical properties
 ...................
 
-You will need to specify some physical constants. 
+You will need to specify some physical constants. A simple example: 
 
 .. code-block:: yaml
 
     physical_properties:
         g: [0, 0, 0]
-        nu0: 0.001
-        rho0: 1.0
+        nu: 0.001
+        rho: 1.0
 
-The postfix ``0`` is there to  allow for more than one fluid in one simulation.
-The in a two fluid flow simulation the second fluid will use postfix ``1``.
+.. describe:: g
 
-.. csv-table::
-   :header: "key", "Default value", "Description"
+    The acceleration of gravity given as a list of numbers. The length of the
+    list must match the number of spatial directions, e.g. 2 or 3.
+    Use ``[0, -9.81]`` in 2D and ``[0, 0, -9.81]`` in 3D for "standard" gravity.
 
-    "physical_properties/g", "[0]*ndim", "The acceleration of gravity. Use [0, -9.81] in 2D and [0, 0, -9.81] in 3D for ""standard"" gravity"
-    "physical_properties/nuX", "**required input**", "The kinematic viscosity of fluid X"
-    "physical_properties/rhoX", "1.0", "The density of fluid X (required for multi-phase calculations, optional for single phase)"
+
+Single phase properties
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. describe:: nu
+
+    The kinematic viscosity
+
+.. describe:: rho
+
+    The density of the fluid, defaults to ``1.0``.
+
+
+VOF two phase properties
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. describe:: nu0, rho0
+
+    The kinematic viscosity and density of fluid 0 
+
+.. describe:: nu1, rho1
+
+    The kinematic viscosity and density of fluid 1
+
+For a water/air simulation fluid 0 is typically water and corresponds to
+VOF colour function value ``1.0`` while fluid 1 is typically air and
+corresponds to VOF colour function value ``0.0``. 
+
+
+Variable density properties
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. describe:: nu
+
+    The kinematic viscosity of both fluids (single value) 
+
+.. describe::  rho_min, rho_max
+
+    The range of allowable densities. Give one number for each of these settings.
 
 
 Mesh
 ....
 
-You need to load or create a mesh. Currently you can create 2D rectangle meshes
-or load a mesh (2D or 3D) from a FEniCS mesh on xml format. For our test case
-we create a default size square 2D domain with 64 elements along each side.
+You can specify simple geometries using FEniCS DOLFIN built in mesh generators,
+and also load a mesh from file. For realistic cases using something like gmsh
+to generate meshes is recommended. The meshio_ program can be used to convert 
+between different mesh file formats.
+
+.. _meshio: https://github.com/nschloe/meshio
+
+
+Example: 2D rectangle
 
 .. code-block:: yaml
         
@@ -114,27 +212,41 @@ we create a default size square 2D domain with 64 elements along each side.
         type: Rectangle
         Nx: 64
         Ny: 64
+        diagonal: left/right  # defaults to 'right'
+        startx: 0             # defaults to 0
+        endx:   2             # defaults to 1
+        # you can also give starty and endy
 
-The following parameters can be specfied when creating a rectangular mesh:
+Example: 3D box
 
-.. csv-table::
-   :header: "key", "Default value", "Description"
+.. code-block:: yaml
+        
+    mesh:
+        type: Box
+        Nx: 64
+        Ny: 64
+        Nz: 15
+        startx: 0  # defaults to 0
+        endx:   2  # defaults to 1
+        # you can also give starty and endy, startz and endz
 
-    "mesh/type", "**required input**", "What type of mesh to create/load. ``Rectangle`` or ``XML``"
-    "mesh/Nx", "**required input**", "The number of elements in the x-direction"
-    "mesh/Ny", "**required input**", "The number of elements in the y-direction"
-    "mesh/startx", "0.0", "The position of the left hand side of the mesh"
-    "mesh/endx", "1.0", "The position of the right hand side of the mesh"
-    "mesh/starty", "0.0", "The position of the bottom of the mesh"
-    "mesh/endy", "1.0", "The position of the top of the mesh"
+Example: 2D disc
 
-If you select to load the mesh from a FEniCS XML mesh file you can must specify the following:
+.. code-block:: yaml
+        
+    mesh:
+        type: UnitDisc
+        N: 20
+        degree: 1  # defaults to 1 (degree of mesh elements)
+       
+Example: legacy DOLFIN XML format
 
-.. csv-table::
-   :header: "key", "Default value", "Description"
-
-    "mesh/mesh_file", "**required input**", "Name of the XML file containing the mesh"
-    "mesh/facet_region_file", "None (not required)", "Name of the XML file containing boundary region markers. You can use this to prescribe boundary conditions on regions created in the mesh tool (e.g Gmsh *physical lines*)"
+.. code-block:: yaml
+        
+    mesh:
+        type: XML
+        mesh_file: mesh.xml
+        facet_region_file: regions.xml  # not required
 
 Ocellaris will look for the xml files first as absolute paths, then as paths
 relative to the current working directory and last as paths relative to the
@@ -145,6 +257,27 @@ A sample mesh xml file and facet marker file is included in the ``demo/files``
 directory. The mesh ``ocellaris_mesh.xml.gz`` and the facet regions
 ``ocellaris_facet_regions.xml.gz``. You can load these files without unzipping
 them. The *flow around Ocellaris* demo shows how it is done.
+
+Example: XDMF format
+
+.. code-block:: yaml
+        
+    mesh:
+        type: XDMF
+        mesh_file: mesh.xdmf
+
+Example: Ocellaris HDF5 restart file format
+
+.. code-block:: yaml
+        
+    mesh:
+        type: HDF5
+        mesh_file: ocellaris_savepoint000010.h5
+
+This will only load the mesh and (possibly) facet regions. You can also start
+the simulation from a restart file instead of an input file. Then the mesh *and*
+the function values from that save point are used, allowing you to restart the
+simulation more or less like it was never stopped.
 
 
 Boundary conditions

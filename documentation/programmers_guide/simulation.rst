@@ -15,6 +15,12 @@ as plugins (hooks), logging, reporting, plotting and input file handling.
         An :class:`ocellaris.simulation.input.Input` object that holds the input from
         the input file provided by the user
     
+    .. attribute:: io
+        :annotation:
+        
+        An :class:`ocellaris.simulation.io.InputOutputHandling` object that holds 
+        supports writing VTK, XDMF, restart HDF5 files etc
+    
     .. attribute:: hooks
         :annotation:
         
@@ -96,6 +102,8 @@ as plugins (hooks), logging, reporting, plotting and input file handling.
             
 
 .. autoclass:: ocellaris.simulation.input.Input
+
+.. autoclass:: ocellaris.simulation.io.InputOutputHandling
 
 .. autoclass:: ocellaris.simulation.hooks.Hooks
 

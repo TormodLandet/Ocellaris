@@ -8,8 +8,6 @@ code base if you want to help further develop Ocellaris.
 .. toctree::
 
     simulation
-    boundary_conditions
-    solver
     scripting_and_interactive_console
 
 A brief introduction

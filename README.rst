@@ -54,12 +54,13 @@ Please feel free to test Ocellaris, but please keep in mind:
   November 2017)
 - This is a research project, do not expect results to be correct without proper validation!
 
+
 Documentation
 -------------
 
 .. TOC_STARTS_HERE  - in the Sphinx documentation a table of contents will be inserted here 
 
-The documentation can be found on the `Ocellaris web page <https://trlandet.bitbucket.io/ocellaris/>`_.
+The documentation can be found on the `Ocellaris web page <https://trlandet.bitbucket.io/ocellaris/index.html#documentation>`_.
 
 .. TOC_ENDS_HERE
 
