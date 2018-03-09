@@ -240,7 +240,7 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
             
         # Penalty forcing zones
         for fz in sim.data['forcing_zones'].get('u', []):
-            eq += fz.penalty * fz.beta * (u[d] - fz.target[d]) * dx
+            eq += fz.penalty * fz.beta * (u[d] - fz.target[d]) * v[d] * dx
         
         # Boundary conditions that do not couple the velocity components
         # The BCs are imposed for each velocity component u[d] separately
