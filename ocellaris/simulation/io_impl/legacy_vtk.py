@@ -10,8 +10,10 @@ from ocellaris.utils import get_local, ocellaris_error
 
 
 WRITE_BINARY = False
+VTK_QUADRATIC_TRIANGLE = 22
 VTK_QUADRATIC_TETRA = 24
 UFC2VTK_TET10 = [0, 1, 2, 3, 9, 6, 8, 7, 5, 4]
+UFC2VTK_TRI06 = [0, 1, 2, 5, 3, 4]
 
 
 class LegacyVTKIO():
@@ -28,7 +30,7 @@ class LegacyVTKIO():
         """
         pass
     
-    def write(self, file_name=None, extra_funcs=()):
+    def write(self, file_name=None, extra_funcs=(), include_standard=True):
         """
         Write a file that can be used for visualization in Paraview
         """
@@ -40,11 +42,12 @@ class LegacyVTKIO():
         
         sim.log.info('    Writing legacy VTK file %s' % file_name)
         with dolfin.Timer('Ocellaris write legacy VTK file'):
-            self._write_vtk(file_name, binary_format, extra_funcs)
+            self._write_vtk(file_name, binary_format, extra_funcs, include_standard)
         
         return file_name
     
-    def _write_vtk(self, file_name, binary_format=WRITE_BINARY, extra_funcs=()):
+    def _write_vtk(self, file_name, binary_format=WRITE_BINARY, extra_funcs=(),
+                   include_standard=False):
         """
         Write plot file in legacy VTK format
         """
@@ -54,10 +57,11 @@ class LegacyVTKIO():
         
         # The functions to output
         funcs = []
-        for fn in 'u0 u1 u2 rho p p_hydrostatic c'.split():
-            func = sim.data.get(fn, None)
-            if isinstance(func, dolfin.Function):
-                funcs.append(func)
+        if include_standard:
+            for fn in 'u0 u1 u2 rho p p_hydrostatic c'.split():
+                func = sim.data.get(fn, None)
+                if isinstance(func, dolfin.Function):
+                    funcs.append(func)
         funcs.extend(extra_funcs)
         
         # Get the data from all processes (returns None when not on rank 0)
@@ -80,7 +84,7 @@ def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, f
         def write_array(data):
             fmt = '%d' if data.dtype == numpy.intc else '%.5E'
             if len(data.shape) == 1:
-                write_ascii(' '.join(fmt % v for v in data))
+                write_ascii('\n'.join(fmt % v for v in data))
             else:
                 write_ascii('\n'.join(' '.join(fmt % v for v in row) for row in data))
             write_ascii('\n\n')
@@ -154,13 +158,14 @@ def gather_vtk_info(mesh, funcs):
     on the root process
     """
     # The code below assumes that the first function is DG2 (u0)
-    assert funcs[0].function_space().ufl_element().family() == 'Discontinuous Lagrange'
+    assert funcs[0].function_space().ufl_element().family() in (
+        'Discontinuous Lagrange', 'Lagrange')
     assert funcs[0].function_space().ufl_element().degree() == 2
     
     # The code is currently 3D only
     gdim = mesh.geometry().dim()
     dofs_x = funcs[0].function_space().tabulate_dof_coordinates().reshape((-1, gdim))
-    assert gdim == 3, 'VTK output currently only supported for 3D meshes'
+    assert gdim in (2, 3), 'VTK output currently only supported for 2D and 3D meshes'
     
     # Collect information about the functions
     func_names = []
@@ -203,7 +208,7 @@ def gather_vtk_info(mesh, funcs):
     Nverts = len(coords)
     Ncells = len(connectivity)
     assert coords.shape == (Nverts, 3)
-    assert connectivity.shape == (Ncells, 11)
+    assert connectivity.shape == (Ncells, 11 if gdim == 3 else 7)
     assert cell_types.shape == (Ncells,)
     for n in func_names:
         assert func_vals[n].shape == (Nverts,)
@@ -215,22 +220,37 @@ def _collect_3D(mesh, gdim, dofs_x, func_names, all_vals, dofmaps):
     """
     Collect geometry and function values on local process
     """
+    if gdim == 3:
+        # Assume max degree is 2 
+        VTK_TYPE = VTK_QUADRATIC_TETRA
+        UFC2VTK = UFC2VTK_TET10
+    
+    elif gdim == 2:
+        # Assume max degree is 2
+        VTK_TYPE = VTK_QUADRATIC_TRIANGLE
+        UFC2VTK = UFC2VTK_TRI06
+        
+        # Add z-coordinate
+        dx = numpy.zeros((len(dofs_x), 3), float)
+        dx[:,:2] = dofs_x
+        dofs_x = dx
+    
     coords, connectivity, cell_types = [], [], []
     func_vals = {n: [] for n in func_names}
+    M = len(UFC2VTK)
     for cell in dolfin.cells(mesh, 'regular'):
         cidx = cell.index()
         
         # Get the cell geometry and connectivity
-        # (assumes that the max degree is 2 and that we are in 3D)
-        M = 10
-        cell_types.append(VTK_QUADRATIC_TETRA)
+        # (assumes that the max degree is 2)
+        cell_types.append(VTK_TYPE)
         connectivity.append([M])
         dofs = dofmaps[0].cell_dofs(cidx)
         Lc = len(coords)
         for k in range(M):
             d = dofs[k]
             coords.append(tuple(dofs_x[d]))
-            connectivity[-1].append(Lc + UFC2VTK_TET10[k])
+            connectivity[-1].append(Lc + UFC2VTK[k])
         
         for name, vals, dm in zip(func_names, all_vals, dofmaps):
             dofs = dm.cell_dofs(cidx)
@@ -249,7 +269,19 @@ def _collect_3D(mesh, gdim, dofs_x, func_names, all_vals, dofmaps):
                 cvals.append((cvals[0] + cvals[1]) / 2)
             
             elif gdim == 3 and m == 1:
-                cvals = [vals[dofs[0]]] * 10
+                cvals = [vals[dofs[0]]] * M
+            
+            elif gdim == 2 and m == 6:
+                cvals = vals[dofs]
+            
+            elif gdim == 2 and m == 3:
+                cvals = list(vals[dofs])
+                cvals.append((cvals[1] + cvals[2]) / 2)
+                cvals.append((cvals[0] + cvals[2]) / 2)
+                cvals.append((cvals[0] + cvals[1]) / 2)
+            
+            elif gdim == 2 and m == 1:
+                cvals = [vals[dofs[0]]] * M
             
             else:
                 ocellaris_error('VTK write error', 'Unsupported geometry dimension / '
