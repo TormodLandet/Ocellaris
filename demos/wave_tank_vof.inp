@@ -6,8 +6,7 @@ metadata:
     author: Tormod Landet
     date: 2017-11-01
     description: |
-        Flow around a free falling 3D sphere
-        Made to test/develop 3D support in Ocellaris  
+        2D wave tank with damping zone. VOF version
 
 user_code:
     constants:
@@ -26,7 +25,7 @@ physical_properties:
     rho1:    1.0
     nu1:     1.5e-5
     g: [0, -9.81]
-
+    
 mesh:
     type: Rectangle
     Nx: py$ int(N * L/10)
@@ -42,6 +41,7 @@ fields:
     depth: py$ h
     amplitudes: [0.2]
     wave_lengths: [20.0]
+    vertical_blend_height: 2
 
 -   name: still water
     type: AiryWaves
@@ -73,7 +73,7 @@ forcing_zones:
     type: MomentumForcing
     zone: outlet zone/beta
     target: still water/u
-    penalty: 100
+    penalty: 10
     plot: no
 
 -   name: density damping
@@ -88,10 +88,9 @@ forcing_zones:
     type: MomentumForcing
     zone: inlet zone/beta
     target: waves/u
-    penalty: 100
+    penalty: 10
     plot: no
 
-# BCs with wall slip
 boundary_conditions:
 -   name: bottom
     selector: code

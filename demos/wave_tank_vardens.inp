@@ -1,0 +1,182 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+metadata:
+    author: Tormod Landet
+    date: 2017-11-01
+    description: |
+        2D wave tank with damping zone. Varriable density version  
+
+user_code:
+    constants:
+        L: 140
+        H: 10
+        h: 7
+        N: 10
+        iz0: 0    # Inlet zone x pos 
+        iz1: 40
+        dz0: 100  # Outlet zone x pos
+        dz1: 140
+
+physical_properties:
+    rho_min: 1.0
+    rho_max: 1000.0
+    nu:     1.0e-6
+    g: [0, -9.81]
+
+mesh:
+    type: Rectangle
+    Nx: py$ int(N * L/10)
+    Ny: py$ int(N * H/4)
+    endx: py$ L
+    endy: py$ H
+    move: ['0', '0.0297619048*pow(x[1], 3) - 0.520833333*pow(x[1], 2) + 2.23214286*x[1] + 3.55271368e-15']
+
+fields:
+-   name: waves
+    type: AiryWaves
+    still_water_position: py$ h
+    depth: py$ h
+    amplitudes: [0.2]
+    wave_lengths: [20.0]
+
+-   name: still water
+    type: AiryWaves
+    still_water_position: py$ h
+    depth: py$ h
+    amplitudes: []
+    wave_lengths: []
+
+-   name: outlet zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: 'x[0] < dz0 ? 0.0 : (x[0] > dz1 ? 1.0 : pow((x[0] - dz0)/(dz1 - dz0), 2))'
+
+-   name: inlet zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: 'x[0] < iz0 ? 1.0 : (x[0] > iz1 ? 0.0 : pow((x[0] - iz1)/(iz0 - iz1), 2))'
+
+-   name: initial field
+    type: BlendedField
+    field0: waves
+    field1: still water
+    blending_function: outlet zone/beta
+
+forcing_zones:
+-   name: wave damping
+    type: MomentumForcing
+    zone: outlet zone/beta
+    target: still water/u
+    penalty: 10
+    plot: no
+
+-   name: density damping
+    type: ScalarForcing
+    variable: rho
+    zone: outlet zone/beta
+    target: still water/rho
+    penalty: 10
+    plot: no
+
+-   name: wave creation
+    type: MomentumForcing
+    zone: inlet zone/beta
+    target: waves/u
+    penalty: 10
+    plot: no
+
+boundary_conditions:
+-   name: bottom
+    selector: code
+    inside_code: 'on_boundary and x[1] < 1e-5'
+    u:
+        type: FreeSlip
+-   name: top
+    selector: code
+    inside_code: 'on_boundary and x[1] > H - 1e-5'
+    u:
+        type: OpenOutletBoundary
+-   name: inlet
+    selector: code
+    inside_code: 'on_boundary and x[0] < 1e-5'
+    u:
+        type: FieldFunction
+        function: waves/u
+    rho:
+        type: FieldFunction
+        function: waves/rho
+-   name: outlet
+    selector: code
+    inside_code: 'on_boundary and x[0] > L - 1e-5'
+    u:
+        type: FieldFunction
+        function: still water/u
+    rho:
+        type: FieldFunction
+        function: still water/rho
+
+
+initial_conditions:
+    rho_p:
+        function: initial field/rho
+    up0:
+        function: initial field/uhoriz
+    up1:
+        function: initial field/uvert
+
+time:
+    dt: 0.02
+    tmax: 30.0
+
+output:
+    prefix: 'output/wave_tank_vd'
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    xdmf_write_interval: 10
+    divergence_method: div0
+    
+multiphase_solver:
+    type: VariableDensity
+    function_space_rho: DG
+    polynomial_degree_rho: 2
+    plot_fields: yes
+
+solver: {type: Coupled}
+_solver:
+    type: IPCS-A
+    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
+    allowable_error_inner: 1e-8    
+    u:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+    p:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+
+slope_limiter:
+    rho:
+        method: HierarchicalTaylor
+        enforce_bounds: yes
+    u:
+        method: Componentwise
+        comp_method: HierarchicalTaylor
+        limit_conv: no
+
+probes:
+    -   name: free_surface rho
+        enabled: yes
+        type: IsoSurface
+        value: 500
+        field: rho
+        file_name: '_free_surface.out'
+        custom_hook: MultiPhaseModelUpdated
+

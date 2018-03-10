@@ -28,6 +28,8 @@ class AiryWaveField(KnownField):
         simulation.log.info('    Wave amplitudes: %r' % self.amplitudes)
         simulation.log.info('    Current speed: %r' % self.current_speed)
         simulation.log.info('    Wind speed: %r' % self.wind_speed)
+        simulation.log.info('    Vertical blend height: %r' %
+                            self.vertical_blend_height)
         simulation.log.info('    Polynomial degree: %r' % self.polydeg)
         
         self._cpp = {}
@@ -79,6 +81,9 @@ class AiryWaveField(KnownField):
             ocellaris_error('Error with wave amplitudes in Airy wave field input',
                             'The length of the wave amplitude list does not match the number '
                             'of waves specified, %d != %d' % (len(self.amplitudes), Nwave))
+        max_ampl = sum(abs(a) for a in self.amplitudes)
+        self.vertical_blend_height = field_inp.get_value('vertical_blend_height', 
+                                                         max_ampl, required_type='float')
     
     def update(self, timestep_number, t, dt):
         """
@@ -94,70 +99,113 @@ class AiryWaveField(KnownField):
             func.interpolate(expr)
     
     def construct_cpp_code(self):
-        for name in 'elevation c uhoriz uvert pdyn pstat ptot'.split():
+        """
+        This code runs once at setup time and constructs the C++ code that
+        defines the analytical Airy wave field
+        """
+        rho_min, rho_max = self.simulation.multi_phase_model.get_density_range()
+        
+        for name in 'elevation c rho uhoriz uvert pdyn pstat ptot'.split():
             # C++ code for still water
-            params = dict(h=self.h,
-                          g=self.g,
-                          x='x[0]',
-                          z='(x[%d] - %r)' % (self.simulation.ndim - 1, self.still_water_pos))
             above_cpp = None
+            blend_up = False
             if name == 'elevation':
-                below_cpp = [repr(self.still_water_pos)]
+                below_cpp = ['swpos']
             elif name == 'c':
                 below_cpp = ['1']
                 above_cpp = ['0']
+            elif name == 'rho':
+                below_cpp = ['rho_max']
+                above_cpp = ['rho_min']
             elif name == 'uhoriz':
+                blend_up = True
                 below_cpp = [repr(self.current_speed)]
                 above_cpp = [repr(self.wind_speed)]
             elif name == 'uvert':
+                blend_up = True
                 below_cpp = ['0']
                 above_cpp = ['0']
             elif name == 'pdyn':
                 below_cpp = ['0']
                 above_cpp = ['0']
             elif name in ('pstat', 'ptot'):
-                below_cpp = ['-1 * rho * {g} * {z}'.format(**params)]
+                below_cpp = ['-1 * rho_max * g * D']
                 above_cpp = ['0']
             
             # Construct C++ code to compute the named variable
             Nwave = len(self.omegas)
             for i in range(Nwave):
-                params['a'] = self.amplitudes[i]
-                params['w'] = self.omegas[i]
-                params['k'] = self.wave_numbers[i]
-                params['theta'] = self.thetas[i]
-                
+                params = dict(a=self.amplitudes[i],
+                              w=self.omegas[i],
+                              k=self.wave_numbers[i],
+                              theta=self.thetas[i])
                 cppb = None
                 cppa = None
                 if name == 'elevation':
-                    cppb = '{a} * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                    cppb = '{a} * sin({w} * t - {k} * X + {theta})'.format(**params)
                 elif name == 'uhoriz':
-                    cppb = '{w} * {a} * cosh({k} * ({z} + {h})) / sinh({k} * {h}) * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                    cppb = '{w} * {a} * cosh({k} * (Z + h)) / sinh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
                 elif name == 'uvert':
-                    cppb = '{w} * {a} * sinh({k} * ({z} + {h})) / sinh({k} * {h}) * cos({w} * t - {k} * {x} + {theta})'.format(**params)
+                    cppb = '{w} * {a} * sinh({k} * (Z + h)) / sinh({k} * h) * cos({w} * t - {k} * X + {theta})'.format(**params)
                 elif name in ('pdyn', 'ptot'):
-                    cppb = 'rho * {g} * {a} * cosh({k} * ({z} + {h})) / cosh({k} * {h}) * sin({w} * t - {k} * {x} + {theta})'.format(**params)
+                    cppb = 'rho_max * g * {a} * cosh({k} * (Z + h)) / cosh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
                 
                 if cppb is not None:
                     below_cpp.append(cppb)
                 if cppa is not None:
                     above_cpp.append(cppa)
             
+            # Wrap the code in a lambda function that is evaluated immediately.
+            # (to allow defining helper variables and write cleaner code)
+            lamcode = '[&]() {\n  %s;\n}();'
+            
+            # Lines inside the lambda function. Some will be unused, but
+            # the C++ compiler should be able to remove these easily
+            lines = ['double val;',
+                     'double X = x[0];',
+                     'double Z0 = x[%d];' % (self.simulation.ndim - 1),
+                     'double swpos = %r;' % self.still_water_pos,
+                     'double Z = Z0 - swpos;',
+                     'double h = %r;' % self.h,
+                     'double g = %r;' % self.g,
+                     'double rho_min = %r;' % rho_min,
+                     'double rho_max = %r;' % rho_max,
+                     'double vblend = %r;' % self.vertical_blend_height]
+            
             full_code_below = ' + '.join(below_cpp)
             if above_cpp is None:
                 # No special treatment of values above the free surface
-                self._cpp[name] = full_code_below
+                lines.append('val = %s;' % full_code_below)
+            elif blend_up:
+                # Separate between values above and below the free surface
+                # Blend just above the free surface to get continuous velocities
+                full_code_above = ' + '.join(above_cpp)
+                lines.append('double elev = %s;' % self._cpp['elevation'])
+                lines.append('double D = Z0 - elev;')
+                lines.append('if (D <= 0) {')
+                lines.append('  val = %s;' % full_code_below)
+                lines.append('} else if (D <= vblend and vblend > 0) {')
+                lines.append('  val = %s;' % full_code_above)
+                lines.append('  double fac = 1.0 - D / vblend;')
+                lines.append('  val += fac * (%s);' % full_code_below)
+                lines.append('} else {')
+                lines.append('  val = %s;' % full_code_above)
+                lines.append('}')
             else:
                 # Separate between values above and below the free surface
-                full_code_above = ' + '.join(above_cpp) 
-                self._cpp[name] = '({z}) <= ({elev} - {swpos}) ? ({below_code}) : ({above_code})'.format(z=params['z'],
-                                                                                                         elev= self._cpp['elevation'],
-                                                                                                         swpos=self.still_water_pos,
-                                                                                                         below_code=full_code_below,
-                                                                                                         above_code=full_code_above) 
+                full_code_above = ' + '.join(above_cpp)
+                lines.append('double elev = %s;' % self._cpp['elevation'])
+                lines.append('double D = Z0 - elev;')
+                lines.append('if (D <= 0) {')
+                lines.append('  val = %s;' % full_code_below)
+                lines.append('} else {')
+                lines.append('  val = %s;' % full_code_above)
+                lines.append('}')
+            lines.append('return val;')
+            self._cpp[name] = lamcode % ('\n  '.join(lines))
     
     def _get_expression(self, name):
-        keys = list(self._cpp.keys()) + ['u', 'rho']
+        keys = list(self._cpp.keys()) + ['u']
         verify_key('variable', name, keys, 'Airy wave field %r' % self.name)
         if name not in self._expressions:
             expr, updater = OcellarisCppExpression(self.simulation, self._cpp[name],
@@ -177,10 +225,6 @@ class AiryWaveField(KnownField):
                 return dolfin.as_vector([self.get_variable('uhoriz'),
                                          0,
                                          self.get_variable('uvert')])
-        elif name == 'rho':
-            rho_min, rho_max = self.simulation.multi_phase_model.get_density_range()
-            c = self.get_variable('c')
-            return (1 - c) * dolfin.Constant(rho_min) + c * dolfin.Constant(rho_max)
         
         if name not in self._functions:
             expr = self._get_expression(name)
