@@ -17,7 +17,8 @@ class AiryWaveField(KnownField):
         
         # Show the input data
         simulation.log.info('Creating a linear Airy wave field %r' % self.name)
-        simulation.log.info('    Still water depth: %r' % self.h)
+        simulation.log.info('    Wave depth below: %r' % self.h)
+        simulation.log.info('    Wave depth above: %r' % self.h_above)
         simulation.log.info('    Pos. free surface: %r' % self.still_water_pos)
         simulation.log.info('    Vertical comp. gravity: %r' % self.g)
         simulation.log.info('    Wave frequencies: %r' % self.omegas)
@@ -28,8 +29,6 @@ class AiryWaveField(KnownField):
         simulation.log.info('    Wave amplitudes: %r' % self.amplitudes)
         simulation.log.info('    Current speed: %r' % self.current_speed)
         simulation.log.info('    Wind speed: %r' % self.wind_speed)
-        simulation.log.info('    Vertical blend height: %r' %
-                            self.vertical_blend_height)
         simulation.log.info('    Polynomial degree: %r' % self.polydeg)
         
         self._cpp = {}
@@ -82,8 +81,7 @@ class AiryWaveField(KnownField):
                             'The length of the wave amplitude list does not match the number '
                             'of waves specified, %d != %d' % (len(self.amplitudes), Nwave))
         max_ampl = sum(abs(a) for a in self.amplitudes)
-        self.vertical_blend_height = field_inp.get_value('vertical_blend_height', 
-                                                         max_ampl, required_type='float')
+        self.h_above = field_inp.get_value('depth_above', 2*max_ampl, required_type='float')
     
     def update(self, timestep_number, t, dt):
         """
@@ -144,11 +142,11 @@ class AiryWaveField(KnownField):
                 if name == 'elevation':
                     cppb = '{a} * sin({w} * t - {k} * X + {theta})'.format(**params)
                 elif name == 'uhoriz':
-                    cppb = '{w} * {a} * cosh({k} * (Z + h)) / sinh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
+                    cppb = '{w} * {a} * cosh({k} * (Zp + h)) / sinh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
                 elif name == 'uvert':
-                    cppb = '{w} * {a} * sinh({k} * (Z + h)) / sinh({k} * h) * cos({w} * t - {k} * X + {theta})'.format(**params)
+                    cppb = '{w} * {a} * sinh({k} * (Zp + h)) / sinh({k} * h) * cos({w} * t - {k} * X + {theta})'.format(**params)
                 elif name in ('pdyn', 'ptot'):
-                    cppb = 'rho_max * g * {a} * cosh({k} * (Z + h)) / cosh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
+                    cppb = 'rho_max * g * {a} * cosh({k} * (Zp + h)) / cosh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
                 
                 if cppb is not None:
                     below_cpp.append(cppb)
@@ -167,10 +165,20 @@ class AiryWaveField(KnownField):
                      'double swpos = %r;' % self.still_water_pos,
                      'double Z = Z0 - swpos;',
                      'double h = %r;' % self.h,
+                     'double h_above = %r;' % self.h_above,
                      'double g = %r;' % self.g,
                      'double rho_min = %r;' % rho_min,
-                     'double rho_max = %r;' % rho_max,
-                     'double vblend = %r;' % self.vertical_blend_height]
+                     'double rho_max = %r;' % rho_max]
+            
+            if name != 'elevation':
+                # Compute the vertical distance D to the free surface
+                # (negative below the free surface, positive above) 
+                elev_cpp = self._cpp['elevation'].replace('  ', '    ')
+                lines.append('double elev = %s;' % elev_cpp)
+                lines.append('double eta = elev - swpos;')
+                lines.append('double D = Z0 - elev;')
+                # Wheeler stretching
+                lines.append('double Zp = h * (Z + h) / (eta + h) - h;')
             
             full_code_below = ' + '.join(below_cpp)
             if above_cpp is None:
@@ -178,24 +186,25 @@ class AiryWaveField(KnownField):
                 lines.append('val = %s;' % full_code_below)
             elif blend_up:
                 # Separate between values above and below the free surface
-                # Blend just above the free surface to get continuous velocities
+                # Replace (Z + h) with (Z - h_above) in the wave velocities
+                # which matches the solution of an internal wave 
                 full_code_above = ' + '.join(above_cpp)
-                lines.append('double elev = %s;' % self._cpp['elevation'])
-                lines.append('double D = Z0 - elev;')
+                if Nwave == 0:
+                    full_code_below_above = '0'
+                else:
+                    full_code_below_above = ' + '.join(below_cpp[1:])
                 lines.append('if (D <= 0) {')
                 lines.append('  val = %s;' % full_code_below)
-                lines.append('} else if (D <= vblend and vblend > 0) {')
+                lines.append('} else if (D <= h_above and h_above > 0) {')
                 lines.append('  val = %s;' % full_code_above)
-                lines.append('  double fac = 1.0 - D / vblend;')
-                lines.append('  val += fac * (%s);' % full_code_below)
+                lines.append('  Zp = (Z * h - eta * h) / (eta - h_above);')
+                lines.append('  val += %s;' % full_code_below_above)
                 lines.append('} else {')
                 lines.append('  val = %s;' % full_code_above)
                 lines.append('}')
             else:
                 # Separate between values above and below the free surface
                 full_code_above = ' + '.join(above_cpp)
-                lines.append('double elev = %s;' % self._cpp['elevation'])
-                lines.append('double D = Z0 - elev;')
                 lines.append('if (D <= 0) {')
                 lines.append('  val = %s;' % full_code_below)
                 lines.append('} else {')
@@ -209,7 +218,7 @@ class AiryWaveField(KnownField):
         verify_key('variable', name, keys, 'Airy wave field %r' % self.name)
         if name not in self._expressions:
             expr, updater = OcellarisCppExpression(self.simulation, self._cpp[name],
-                                                   'Airy wave field %s' % name,
+                                                   'Airy wave field %r' % name,
                                                    self.polydeg, update=False,
                                                    return_updater=True)
             self._expressions[name] = expr, updater

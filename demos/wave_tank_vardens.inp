@@ -13,6 +13,7 @@ user_code:
         L: 140
         H: 10
         h: 7
+        h_above: 3
         N: 10
         iz0: 0    # Inlet zone x pos 
         iz1: 40
@@ -38,6 +39,7 @@ fields:
     type: AiryWaves
     still_water_position: py$ h
     depth: py$ h
+    depth_above: py$ h
     amplitudes: [0.2]
     wave_lengths: [20.0]
 
