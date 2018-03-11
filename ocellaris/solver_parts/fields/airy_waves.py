@@ -99,12 +99,18 @@ class AiryWaveField(KnownField):
     def construct_cpp_code(self):
         """
         This code runs once at setup time and constructs the C++ code that
-        defines the analytical Airy wave field
+        defines the analytical Airy wave field below and above the free surface
+        
+        Above the free surface the velocities are made continuous by reversing
+        the Wheeler streatching a distance h_above up (depth_above input param) 
         """
         rho_min, rho_max = self.simulation.multi_phase_model.get_density_range()
         
         for name in 'elevation c rho uhoriz uvert pdyn pstat ptot'.split():
             # C++ code for still water
+            # The fact that the first element of below_cpp is the static
+            # value is used in the Wheeler stretching of velocities above
+            # the free surface. Beware when refactoring this code!
             above_cpp = None
             blend_up = False
             if name == 'elevation':
@@ -175,9 +181,11 @@ class AiryWaveField(KnownField):
                 # (negative below the free surface, positive above) 
                 elev_cpp = self._cpp['elevation'].replace('  ', '    ')
                 lines.append('double elev = %s;' % elev_cpp)
-                lines.append('double eta = elev - swpos;')
                 lines.append('double D = Z0 - elev;')
-                # Wheeler stretching
+                # Wave elevation relative to still water
+                lines.append('double eta = elev - swpos;')
+                # Wheeler stretching below the free surface
+                # Zp is between -h and 0 when Z is between -d and eta
                 lines.append('double Zp = h * (Z + h) / (eta + h) - h;')
             
             full_code_below = ' + '.join(below_cpp)
@@ -197,6 +205,8 @@ class AiryWaveField(KnownField):
                 lines.append('  val = %s;' % full_code_below)
                 lines.append('} else if (D <= h_above and h_above > 0) {')
                 lines.append('  val = %s;' % full_code_above)
+                # Wheeler stretching above the free surface
+                # Zp is between -h and 0 when Z is between eta and h_above
                 lines.append('  Zp = (Z * h - eta * h) / (eta - h_above);')
                 lines.append('  val += %s;' % full_code_below_above)
                 lines.append('} else {')
