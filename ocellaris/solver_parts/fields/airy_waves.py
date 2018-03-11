@@ -194,12 +194,13 @@ class AiryWaveField(KnownField):
                 lines.append('val = %s;' % full_code_below)
             elif blend_up:
                 # Separate between values above and below the free surface
-                # Replace (Z + h) with (Z - h_above) in the wave velocities
-                # which matches the solution of an internal wave 
+                # Apply reverse Wheeler streching in the upper fluid to
+                # make the velocities continuous 
                 full_code_above = ' + '.join(above_cpp)
                 if Nwave == 0:
                     full_code_below_above = '0'
                 else:
+                    # Wave values without the static component
                     full_code_below_above = ' + '.join(below_cpp[1:])
                 lines.append('if (D <= 0) {')
                 lines.append('  val = %s;' % full_code_below)
