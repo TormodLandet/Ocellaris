@@ -44,5 +44,6 @@ class KnownField(object):
 from . import scalar_field
 from . import vector_field
 from . import airy_waves
+from . import wave_outflow
 from . import blended_field
 from . import conditional_field

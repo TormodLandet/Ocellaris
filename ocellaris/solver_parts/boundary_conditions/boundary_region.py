@@ -28,6 +28,7 @@ class BoundaryRegion(object):
         self.selector_name = self.input.get_value('selector', required_type='string')
         
         # Let the default boundary marking 0 be for unmarked regions
+        # The fact that mark_id == index - 1 is used in other places! 
         self.mark_id = index + 1
         
         # Mark the region of the boundary covered by this boundary condition

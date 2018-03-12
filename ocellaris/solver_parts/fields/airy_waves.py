@@ -37,6 +37,7 @@ class AiryWaveField(KnownField):
         self._functions = {}
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
         simulation.hooks.add_pre_timestep_hook(self.update, 'Update Airy wave field %r' % self.name)
+        self._dependent_fields = []
     
     def read_input(self, field_inp):
         sim = self.simulation
@@ -95,6 +96,18 @@ class AiryWaveField(KnownField):
             expr, updater = self._expressions[name]
             updater(timestep_number, t, dt)
             func.interpolate(expr)
+        
+        # Update dependet
+        for f in self._dependent_fields:
+            f.update(timestep_number, t, dt)
+    
+    def register_dependent_field(self, field):
+        """
+        We may have dependent fields, typically still water outflow
+        fields that use our functions in order to compute their own
+        functions 
+        """
+        self._dependent_fields.append(field)
     
     def construct_cpp_code(self):
         """
