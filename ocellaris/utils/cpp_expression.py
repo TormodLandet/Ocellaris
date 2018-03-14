@@ -17,9 +17,19 @@ def make_expression(simulation, cpp_code, description, element, params=None):
     else:
         degree = None
     
+    # Get variables that can be used in the expression, but are defined
+    # elsewhere, either in Ocellaris (timestep, density etc), or defined
+    # in the user constants section in the input file.
     available_vars = get_vars(simulation)
     if params:
         available_vars.update(params)
+    
+    # Get all identifiers found in the C++ code. Variables from the 
+    # available_vars dictionary that are not found as identifiers in
+    # the code are not needed and can be dropped. This simplifies and
+    # potentially speeds up the generated code
+    identifiers = get_identifiers(cpp_code)
+    available_vars = {k: v for k, v in available_vars.items() if k in identifiers}
     
     try:
         return dolfin.Expression(cpp_code, element=element, degree=degree, **available_vars)
@@ -61,6 +71,32 @@ def get_vars(simulation):
         assert not hasattr(dolfin.Expression, name)
     
     return available_vars
+
+
+def get_identifiers(code_string):
+    """
+    Return all valid identifiers found in the C++ code string by finding
+    uninterrupted strings that start with a character or an underscore and
+    continues with characters, underscores or digits. Any spaces, tabs,
+    newlines, paranthesis, punctuations or newlines will mark the end of
+    an identifier (anything that is not underscore or alphanumeric).
+    
+    The returned set will include reserved keywords (if, for, while ...),
+    names of types (float, double, int ...), names of functions that are
+    called (cos, sin ...) in addition to any variables that are used or
+    defined in the code.
+    """
+    identifiers = set()
+    identifier = []
+    for c in code_string + ' ':
+        if identifier and (c == '_' or c.isalnum()):
+            identifier.append(c)
+        elif c == '_' or c.isalpha():
+            identifier = [c]
+        elif identifier:
+            identifiers.add(''.join(identifier))
+            identifier = None
+    return identifiers
 
 
 @timeit
