@@ -203,7 +203,8 @@ class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
         else:
             expr = verify_field_variable_definition(simulation, vardef, description)
             if expr.ufl_shape != ():
-                assert expr.ufl_shape == (simulation.ndim,)
+                assert expr.ufl_shape == (simulation.ndim,), 'Expected shape %r got %r' \
+                    % ((simulation.ndim,), expr.ufl_shape)
                 exprs = [expr[d] for d in range(simulation.ndim)]
             else:
                 exprs = [expr]
