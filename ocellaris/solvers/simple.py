@@ -41,6 +41,8 @@ INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
 ALPHA_U = 0.7
 ALPHA_P = 0.9
+PISO_ALPHA_U = 1.0
+PISO_ALPHA_P = 1.0
 
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
@@ -48,6 +50,7 @@ PROJECT_RHS = False
 
 
 @register_solver('SIMPLE')
+@register_solver('PISO')
 class SolverSIMPLE(Solver):
     def __init__(self, simulation, embedded=False):
         """
@@ -148,8 +151,10 @@ class SolverSIMPLE(Solver):
         self.C = None
         
         # Temporary matrices to store matrix matrix products
-        self.mat_AinvB = None
-        self.mat_CAinvB = None
+        self.mat_AinvB = None   # SIMPLE & PISO
+        self.mat_CAinvB = None  # SIMPLE & PISO
+        self.mat_AinvA = None   # PISO
+        self.mat_CAinvA = None  # PISO
         
         # Store number of iterations
         self.niters_u = None
@@ -160,6 +165,9 @@ class SolverSIMPLE(Solver):
         Read the simulation input
         """
         sim = self.simulation
+        
+        # PISO mode switch
+        self.solver_type = sim.input.get_value('solver/type', required_type='string')
         
         # Create linear solvers
         self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u',
@@ -240,6 +248,9 @@ class SolverSIMPLE(Solver):
         sim.data['uvw_temp'] = dolfin.Function(Vcoupled)
         sim.ndofs += Vcoupled.dim() + Vp.dim()
         
+        if self.solver_type == 'PISO':
+            sim.data['minus_uvw_hat'] = dolfin.Function(Vcoupled)
+        
         # Create assigner to extract split function from uvw and vice versa
         self.assigner_split = dolfin.FunctionAssigner([Vu] * sim.ndim, Vcoupled)
         self.assigner_merge = dolfin.FunctionAssigner(Vcoupled, [Vu] * sim.ndim)
@@ -260,7 +271,8 @@ class SolverSIMPLE(Solver):
             Assemble the linear systems
             """
             p_star = sim.data['p']
-            alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
+            default_alpha = ALPHA_U if self.solver_type == 'SIMPLE' else PISO_ALPHA_U
+            alpha = sim.input.get_value('solver/relaxation_u', default_alpha, 'float')
             assert 0 < alpha
             relax = (1 - alpha) / alpha
             
@@ -280,6 +292,7 @@ class SolverSIMPLE(Solver):
             A_tilde = self.A_tilde
             B = self.B
             D = dolfin.as_backend_type(self.matrices.assemble_D())
+            self.D = D
             
             if True:
                 lhs = dolfin.as_backend_type(A.copy())
@@ -345,14 +358,15 @@ class SolverSIMPLE(Solver):
         return err
     
     @timeit
-    def pressure_correction(self):
+    def pressure_correction(self, corr_number=1):
         """
         Solve the Navier-Stokes equations on SIMPLE form
         (Semi-Implicit Method for Pressure-Linked Equations)
         """
         sim = self.simulation
         p_hat = sim.data['p_hat']
-        alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
+        default_alpha = ALPHA_P if self.solver_type == 'SIMPLE' else PISO_ALPHA_P
+        alpha = sim.input.get_value('solver/relaxation_p', default_alpha, 'float')
         
         # Compute the LHS = C⋅Ãinv⋅B
         if self.inner_iteration == 1:
@@ -361,10 +375,22 @@ class SolverSIMPLE(Solver):
             self.mat_CAinvB = matmul(C, self.mat_AinvB, self.mat_CAinvB)
             self.LHS_pressure = dolfin.as_backend_type(self.mat_CAinvB.copy())
         LHS = self.LHS_pressure
-        
-        # Compute the divergence of u* and the rest of the right hand side
-        uvw_star = sim.data['uvw_star']
-        RHS = self.matrices.assemble_E_star(uvw_star)
+    
+        if corr_number == 1:
+            # Standard SIMPLE pressure correction
+            # Compute the divergence of u* and the rest of the right hand side
+            uvw_star = sim.data['uvw_star']
+            RHS = self.matrices.assemble_E_star(uvw_star)
+        elif corr_number == 2:
+            # PISO pressure correction (the second pressure correction)
+            # Compute the RHS = - C⋅Ãinv⋅(Ãinv - A)⋅û
+            C, Ainv = self.C, self.A_tilde_inv
+            if self.inner_iteration == 1:
+                C, Ainv, A = self.C, self.A_tilde_inv, self.A
+                self.mat_AinvA = matmul(Ainv, A, self.mat_AinvA)
+                self.mat_CAinvA = matmul(C, self.mat_AinvA, self.mat_CAinvA)
+            m_u_hat = sim.data['minus_uvw_hat']
+            RHS = C * m_u_hat.vector() - self.mat_CAinvA * m_u_hat.vector()
         
         # Inform PETSc about the null space
         if self.remove_null_space:
@@ -408,10 +434,50 @@ class SolverSIMPLE(Solver):
         Update the velocity predictions with the updated pressure
         field from the pressure correction equation
         """
-        p_hat = self.simulation.data['p_hat']
         uvw = self.simulation.data['uvw_star']
+        if self.solver_type == 'PISO':
+            # Store the original u* for PISO
+            self.simulation.data['minus_uvw_hat'].assign(uvw)
+        
+        p_hat = self.simulation.data['p_hat']
         uvw.vector().axpy(-1, self.mat_AinvB * p_hat.vector())
         uvw.vector().apply('insert')
+        
+        if self.solver_type == 'PISO':
+            # Compute -û = u* - u** for PISO 
+            self.simulation.data['minus_uvw_hat'].vector().axpy(-1.0, uvw.vector())
+            self.simulation.data['minus_uvw_hat'].vector().apply('insert')
+    
+    @timeit
+    def momentum_correction_piso(self):
+        """
+        Solve the simplified momentum equations using the twice corrected
+        PISO pressure p***
+        """
+        sim = self.simulation
+        
+        p_sss = sim.data['p']
+        u_ss = sim.data['uvw_star']
+        m_u_hat = sim.data['minus_uvw_hat']
+        
+        lhs = self.A_tilde        
+        rhs = self.D
+        rhs.axpy(-1.0, self.B * p_sss.vector())
+        rhs.axpy(-1.0, self.A * u_ss.vector())
+        rhs.axpy(+1.0, self.A_tilde * u_ss.vector())
+        rhs.apply('insert')
+        
+        # Set m_u_hat to the original u*
+        m_u_hat.vector().axpy(1.0, u_ss.vector())
+        
+        self.niters_u = self.velocity_solver.inner_solve(lhs, u_ss.vector(), rhs,
+                                                         in_iter=self.inner_iteration,
+                                                         co_iter=self.co_inner_iter)
+        
+        # Compute change from last iteration, -û = u* - u*** 
+        m_u_hat.vector().axpy(-1.0, u_ss.vector())
+        m_u_hat.vector().apply('insert')
+        return m_u_hat.vector().norm('l2')
     
     @timeit
     def postprocess_velocity(self):
@@ -500,9 +566,15 @@ class SolverSIMPLE(Solver):
                 err_u = self.momentum_prediction()
                 err_p = self.pressure_correction()
                 self.velocity_update()
-                sim.log.info('  SIMPLE iteration %3d - err u* %10.3e - err p %10.3e'
-                             ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
-                             err_u, err_p, self.niters_u, self.niters_p))
+                
+                if self.solver_type == 'PISO':
+                    err_p += self.pressure_correction(corr_number=2)
+                    err_u = self.momentum_correction_piso() 
+                
+                sim.log.info('  %s iteration %3d - err u* %10.3e - err p %10.3e'
+                             ' - Num Krylov iters - u %3d - p %3d'
+                             % (self.solver_type, self.inner_iteration,
+                                err_u, err_p, self.niters_u, self.niters_p))
                 self.inner_iteration += 1
                 
                 if err_u < allowable_error_inner:

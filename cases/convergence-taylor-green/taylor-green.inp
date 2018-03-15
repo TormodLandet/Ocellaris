@@ -99,7 +99,7 @@ output:
     save_restart_file_at_end: no
 
 solver:
-    type: IPCS-D
+    type: PISO
     num_inner_iter: 10
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
