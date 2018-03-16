@@ -45,7 +45,7 @@ class ScalarField(KnownField):
     def _get_expression(self):
         if self.expr is None:
             expr, updater = OcellarisCppExpression(self.simulation, self.cpp_code,
-                                                   'Scalar field %s' % self.name,
+                                                   'Scalar field %r' % self.name,
                                                    self.polydeg, update=False,
                                                    return_updater=True)
             self.expr = expr

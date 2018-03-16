@@ -37,6 +37,7 @@ class AiryWaveField(KnownField):
         self._functions = {}
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
         simulation.hooks.add_pre_timestep_hook(self.update, 'Update Airy wave field %r' % self.name)
+        self._dependent_fields = []
     
     def read_input(self, field_inp):
         sim = self.simulation
@@ -95,6 +96,18 @@ class AiryWaveField(KnownField):
             expr, updater = self._expressions[name]
             updater(timestep_number, t, dt)
             func.interpolate(expr)
+        
+        # Update dependet
+        for f in self._dependent_fields:
+            f.update(timestep_number, t, dt)
+    
+    def register_dependent_field(self, field):
+        """
+        We may have dependent fields, typically still water outflow
+        fields that use our functions in order to compute their own
+        functions 
+        """
+        self._dependent_fields.append(field)
     
     def construct_cpp_code(self):
         """
@@ -112,7 +125,7 @@ class AiryWaveField(KnownField):
             # value is used in the Wheeler stretching of velocities above
             # the free surface. Beware when refactoring this code!
             above_cpp = None
-            blend_up = False
+            blend_sign = None
             if name == 'elevation':
                 below_cpp = ['swpos']
             elif name == 'c':
@@ -122,11 +135,11 @@ class AiryWaveField(KnownField):
                 below_cpp = ['rho_max']
                 above_cpp = ['rho_min']
             elif name == 'uhoriz':
-                blend_up = True
+                blend_sign = '-'
                 below_cpp = [repr(self.current_speed)]
                 above_cpp = [repr(self.wind_speed)]
             elif name == 'uvert':
-                blend_up = True
+                blend_sign = '+'
                 below_cpp = ['0']
                 above_cpp = ['0']
             elif name == 'pdyn':
@@ -192,10 +205,10 @@ class AiryWaveField(KnownField):
             if above_cpp is None:
                 # No special treatment of values above the free surface
                 lines.append('val = %s;' % full_code_below)
-            elif blend_up:
+            elif blend_sign is not None:
                 # Separate between values above and below the free surface
-                # Apply reverse Wheeler streching in the upper fluid to
-                # make the velocities continuous 
+                # The potential flow solution is that the velocities have
+                # opposite sign above the free surface
                 full_code_above = ' + '.join(above_cpp)
                 if Nwave == 0:
                     full_code_below_above = '0'
@@ -209,7 +222,7 @@ class AiryWaveField(KnownField):
                 # Wheeler stretching above the free surface
                 # Zp is between -h and 0 when Z is between eta and h_above
                 lines.append('  Zp = (Z * h - eta * h) / (eta - h_above);')
-                lines.append('  val += %s;' % full_code_below_above)
+                lines.append('  val %s= %s;' % (blend_sign, full_code_below_above))
                 lines.append('} else {')
                 lines.append('  val = %s;' % full_code_above)
                 lines.append('}')
@@ -243,7 +256,7 @@ class AiryWaveField(KnownField):
                                          self.get_variable('uvert')])
             else:
                 return dolfin.as_vector([self.get_variable('uhoriz'),
-                                         0,
+                                         dolfin.Constant(0.0),
                                          self.get_variable('uvert')])
         
         if name not in self._functions:

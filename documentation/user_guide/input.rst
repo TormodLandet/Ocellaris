@@ -1,5 +1,5 @@
-Ocellaris input file format
-----------------------------------
+Ocellaris input file description
+--------------------------------
 
 .. contents:: Contents
     :local:
@@ -14,7 +14,7 @@ are provided along with Ocellaris and it is recommended to start with one
 of the demo input files and use the below documentation as an aid to change
 the demo input file into one that is describing your specific simulation.
 
-Note that since JSON is a valid subset of YAML you can also specify the input
+Note that since JSON is a valid subset of YAML, you can also write the input
 file in JSON format. JSON has no simple support for multi-line strings and
 comments, so YAML is the format used by the Ocellaris demos and also in the
 descriptions below.

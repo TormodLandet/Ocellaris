@@ -30,7 +30,7 @@ def add_forcing_zone(simulation, fzones, inp):
     if plot:
         # Save zone blending function to a plot file for easy verification
         prefix = simulation.input.get_value('output/prefix', '', 'string')
-        pfile = prefix + 'blending_zone_%s.pvd' % name
+        pfile = prefix + '_blending_zone_%s.pvd' % name
         zone.rename('beta', 'beta')
         dolfin.File(pfile) << zone
 

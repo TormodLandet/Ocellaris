@@ -302,8 +302,10 @@ def read_iteration_reports(results):
     for line in StringIO(log):
         if line.startswith('Running simulation on'):
             results.ncpus = int(line.split()[3])
+            continue
         elif line.startswith('Degrees of freedom'):
             results.ndofs = int(line.split()[3])
+            continue
         elif line.startswith('Reports for timestep') and line_vals:
             # Store the final inner iteration values which were printed on
             # the previous lines
@@ -315,6 +317,7 @@ def read_iteration_reports(results):
             for k, v in line_vals.items():
                 final_vals.setdefault(k, []).append(v)
             final_vals.setdefault('__time__', []).append(time)
+            continue
         elif not ('iteration' in line and 'Krylov' in line):
             continue
         

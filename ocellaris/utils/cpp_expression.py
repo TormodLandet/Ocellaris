@@ -2,7 +2,8 @@ import traceback
 import dolfin
 from . import ocellaris_error, timeit
 
-def make_expression(simulation, cpp_code, description, element):
+
+def make_expression(simulation, cpp_code, description, element, params=None):
     """
     Create a C++ expression with parameters like time and all scalars in 
     simulation.data available (nu and rho for single phase simulations) 
@@ -16,7 +17,20 @@ def make_expression(simulation, cpp_code, description, element):
     else:
         degree = None
     
-    available_vars = get_vars(simulation)    
+    # Get variables that can be used in the expression, but are defined
+    # elsewhere, either in Ocellaris (timestep, density etc), or defined
+    # in the user constants section in the input file.
+    available_vars = get_vars(simulation)
+    if params:
+        available_vars.update(params)
+    
+    # Get all identifiers found in the C++ code. Variables from the 
+    # available_vars dictionary that are not found as identifiers in
+    # the code are not needed and can be dropped. This simplifies and
+    # potentially speeds up the generated code
+    identifiers = get_identifiers(cpp_code)
+    available_vars = {k: v for k, v in available_vars.items() if k in identifiers}
+    
     try:
         return dolfin.Expression(cpp_code, element=element, degree=degree, **available_vars)
     except Exception:
@@ -59,8 +73,35 @@ def get_vars(simulation):
     return available_vars
 
 
+def get_identifiers(code_string):
+    """
+    Return all valid identifiers found in the C++ code string by finding
+    uninterrupted strings that start with a character or an underscore and
+    continues with characters, underscores or digits. Any spaces, tabs,
+    newlines, paranthesis, punctuations or newlines will mark the end of
+    an identifier (anything that is not underscore or alphanumeric).
+    
+    The returned set will include reserved keywords (if, for, while ...),
+    names of types (float, double, int ...), names of functions that are
+    called (cos, sin ...) in addition to any variables that are used or
+    defined in the code.
+    """
+    identifiers = set()
+    identifier = []
+    for c in code_string + ' ':
+        if identifier and (c == '_' or c.isalnum()):
+            identifier.append(c)
+        elif c == '_' or c.isalpha():
+            identifier = [c]
+        elif identifier:
+            identifiers.add(''.join(identifier))
+            identifier = None
+    return identifiers
+
+
 @timeit
-def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
+def ocellaris_interpolate(simulation, cpp_code, description, V,
+                          function=None, params=None):
     """
     Create a C++ expression with parameters like time and all scalars in 
     simulation.data available (nu and rho for single phase simulations) 
@@ -70,7 +111,8 @@ def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
     """
     # Compile the C++ code
     with dolfin.Timer('Ocellaris make expression'):
-        expr = make_expression(simulation, cpp_code, description, element=V.ufl_element())
+        expr = make_expression(simulation, cpp_code, description,
+                               element=V.ufl_element(), params=params)
     
     if function is None:
         function = dolfin.Function(V)
@@ -84,7 +126,9 @@ def ocellaris_interpolate(simulation, cpp_code, description, V, function=None):
         return function.interpolate(expr)
 
 
-def OcellarisCppExpression(simulation, cpp_code, description, degree, update=True, return_updater=False):
+def OcellarisCppExpression(simulation, cpp_code, description, degree,
+                           update=True, return_updater=False,
+                           params=None):
     """
     Create a dolfin.Expression and make sure it has variables like time
     available when executing.
@@ -104,7 +148,7 @@ def OcellarisCppExpression(simulation, cpp_code, description, degree, update=Tru
                 expression.user_parameters[name] = value
     
     # Create the expression
-    expression = make_expression(simulation, cpp_code, description, degree)
+    expression = make_expression(simulation, cpp_code, description, degree, params)
     
     # Return the expression. Optionally register an update each time step
     if update:

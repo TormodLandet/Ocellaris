@@ -32,9 +32,10 @@ class VectorField(KnownField):
         self.stationary = field_inp.get_value('stationary', False, required_type='bool')
         self.polydeg = field_inp.get_value('polynomial_degree', DEFAULT_POLYDEG, required_type='int')
         self.cpp_code = field_inp.get_value('cpp_code', required_type='list(string)')
-        if len(self.cpp) != self.simulation.ndim:
-            ocellaris_error('Wrong number of dimensions',
-                            '')
+        if len(self.cpp_code) != self.simulation.ndim:
+            ocellaris_error('Wrong number of dimensions in cpp code for field %r' % self.name,
+                            'Simulation has %d dimensions, cpp_code length is %d' %
+                            (self.simulation.ndim, len(self.cpp_code)))
     
     def update(self, timestep_number, t, dt):
         """
@@ -45,19 +46,17 @@ class VectorField(KnownField):
         for u in self.updaters:
             u(timestep_number, t, dt)
     
-    def _get_expression(self):
+    def _get_expressions(self):
         if self.exprs is None:
             self.exprs = []
             self.updaters = []
             for d, cpp in enumerate(self.cpp_code):
                 expr, updater = OcellarisCppExpression(self.simulation, cpp,
-                                                       'Vector field %s component %d' % (self.name, d),
+                                                       'Vector field %r component %d' % (self.name, d),
                                                        self.polydeg, update=False,
                                                        return_updater=True)
                 self.exprs.append(expr)
                 self.updaters.append(updater)
-            self.exprs = expr
-            self.updaters = updater
         return self.exprs
     
     def get_variable(self, name):
@@ -66,7 +65,7 @@ class VectorField(KnownField):
                             'This vector field defines %r' % self.var_name)
         if self.funcs is None:
             funcs = []
-            for e in self._get_expression():
+            for e in self._get_expressions():
                 func = dolfin.Function(self.V)
                 func.interpolate(e)
                 funcs.append(func)

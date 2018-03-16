@@ -1,3 +1,5 @@
-h3 a:link, h4 a:link {
+h3 a:link {
     color: #fb880c;
+    font-weight: normal;
+    font-size: 1em;
 }

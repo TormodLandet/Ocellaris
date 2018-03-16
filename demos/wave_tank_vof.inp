@@ -13,7 +13,7 @@ user_code:
         L: 140
         H: 10
         h: 7
-        h_above: 3
+        h_above: 3 
         N: 10
         iz0: 0    # Inlet zone x pos 
         iz1: 40
@@ -45,11 +45,9 @@ fields:
     wave_lengths: [20.0]
 
 -   name: still water
-    type: AiryWaves
-    still_water_position: py$ h
-    depth: py$ h
-    amplitudes: []
-    wave_lengths: []
+    type: WaveOutflow
+    inflow_region: inlet
+    outflow_region: outlet
 
 -   name: outlet zone
     type: ScalarField
@@ -102,7 +100,7 @@ boundary_conditions:
     selector: code
     inside_code: 'on_boundary and x[1] > H - 1e-5'
     u:
-        type: OpenOutletBoundary
+        type: FreeSlip # OpenOutletBoundary
 -   name: inlet
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
