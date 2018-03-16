@@ -174,6 +174,9 @@ class SolverSIMPLE(Solver):
                                                         default_parameters=SOLVER_U_OPTIONS)
         self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p',
                                                         default_parameters=SOLVER_P_OPTIONS)
+        if self.solver_type == 'PISO':
+            self.velocity_solver2 = linear_solver_from_input(self.simulation, 'solver/u_piso',
+                                                             default_parameters=SOLVER_U_OPTIONS)
         
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value('solver/equation_subtype', EQUATION_SUBTYPE, 'string')
@@ -376,17 +379,18 @@ class SolverSIMPLE(Solver):
             self.LHS_pressure = dolfin.as_backend_type(self.mat_CAinvB.copy())
         LHS = self.LHS_pressure
     
+        # Compute the RHS
         if corr_number == 1:
             # Standard SIMPLE pressure correction
             # Compute the divergence of u* and the rest of the right hand side
             uvw_star = sim.data['uvw_star']
             RHS = self.matrices.assemble_E_star(uvw_star)
+            self.niters_p = 0
         elif corr_number == 2:
             # PISO pressure correction (the second pressure correction)
             # Compute the RHS = - C⋅Ãinv⋅(Ãinv - A)⋅û
-            C, Ainv = self.C, self.A_tilde_inv
+            C, Ainv, A = self.C, self.A_tilde_inv, self.A
             if self.inner_iteration == 1:
-                C, Ainv, A = self.C, self.A_tilde_inv, self.A
                 self.mat_AinvA = matmul(Ainv, A, self.mat_AinvA)
                 self.mat_CAinvA = matmul(C, self.mat_AinvA, self.mat_CAinvA)
             m_u_hat = sim.data['minus_uvw_hat']
@@ -411,9 +415,9 @@ class SolverSIMPLE(Solver):
             self.pressure_null_space.orthogonalize(RHS)
         
         # Solve for the new pressure correction
-        self.niters_p = self.pressure_solver.inner_solve(LHS, p_hat.vector(), RHS,
-                                                         in_iter=self.inner_iteration,
-                                                         co_iter=self.co_inner_iter)
+        self.niters_p += self.pressure_solver.inner_solve(LHS, p_hat.vector(), RHS,
+                                                          in_iter=self.inner_iteration,
+                                                          co_iter=self.co_inner_iter)
         
         # Removing the null space of the matrix system is not strictly the same as removing
         # the null space of the equation, so we correct for this here 
@@ -425,6 +429,7 @@ class SolverSIMPLE(Solver):
         
         # Calculate p = p* + α p^
         sim.data['p'].vector().axpy(alpha, p_hat.vector())
+        sim.data['p'].vector().apply('insert')
         
         return p_hat.vector().norm('l2')
     
@@ -461,7 +466,7 @@ class SolverSIMPLE(Solver):
         m_u_hat = sim.data['minus_uvw_hat']
         
         lhs = self.A_tilde        
-        rhs = self.D
+        rhs = dolfin.as_backend_type(self.D.copy())
         rhs.axpy(-1.0, self.B * p_sss.vector())
         rhs.axpy(-1.0, self.A * u_ss.vector())
         rhs.axpy(+1.0, self.A_tilde * u_ss.vector())
@@ -470,9 +475,9 @@ class SolverSIMPLE(Solver):
         # Set m_u_hat to the original u*
         m_u_hat.vector().axpy(1.0, u_ss.vector())
         
-        self.niters_u = self.velocity_solver.inner_solve(lhs, u_ss.vector(), rhs,
-                                                         in_iter=self.inner_iteration,
-                                                         co_iter=self.co_inner_iter)
+        self.niters_u += self.velocity_solver2.inner_solve(lhs, u_ss.vector(), rhs,
+                                                           in_iter=self.inner_iteration,
+                                                           co_iter=self.co_inner_iter)
         
         # Compute change from last iteration, -û = u* - u*** 
         m_u_hat.vector().axpy(-1.0, u_ss.vector())
