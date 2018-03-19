@@ -43,8 +43,8 @@ SOLVER_SIMPLE = 'SIMPLE'
 SOLVER_PISO = 'PISO'
 ALPHA_U = 0.7
 ALPHA_P = 0.9
-PISO_ALPHA_U = 1.0
-PISO_ALPHA_P = 1.0
+PISO_ALPHA_U = 0.5
+PISO_ALPHA_P = 0.5
 
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
@@ -270,8 +270,10 @@ class SolverSIMPLE(Solver):
             Assemble the linear systems
             """
             p_star = sim.data['p']
-            default_alpha = ALPHA_U if self.solver_type == 'SIMPLE' else PISO_ALPHA_U
-            alpha = sim.input.get_value('solver/relaxation_u', default_alpha, 'float')
+            if self.solver_type == SOLVER_SIMPLE:
+                alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
+            else:
+                alpha = 1.0
             assert 0 < alpha
             relax = (1 - alpha) / alpha
             
@@ -359,8 +361,10 @@ class SolverSIMPLE(Solver):
         """
         sim = self.simulation
         p_hat = sim.data['p_hat']
-        default_alpha = ALPHA_P if self.solver_type == 'SIMPLE' else PISO_ALPHA_P
-        alpha = sim.input.get_value('solver/relaxation_p', default_alpha, 'float')
+        if self.solver_type == SOLVER_SIMPLE:
+            alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
+        else:
+            alpha = 1.0
         
         # Compute the LHS = C⋅Ãinv⋅B
         if self.inner_iteration == 1:
@@ -542,13 +546,30 @@ class SolverSIMPLE(Solver):
             self.inner_iteration = 1
             while self.inner_iteration <= num_inner_iter:
                 self.co_inner_iter = num_inner_iter - self.inner_iteration
-                err_u = self.momentum_prediction()
-                err_p = self.pressure_correction()
-                self.velocity_update()
                 
-                if self.solver_type == SOLVER_PISO:
+                if self.solver_type == SOLVER_SIMPLE:
+                    err_u = self.momentum_prediction()
+                    err_p = self.pressure_correction()
+                    self.velocity_update()
+                
+                elif self.solver_type == SOLVER_PISO:
+                    self.orig_u = sim.data['uvw_star'].vector().copy()
+                    self.orig_p = sim.data['p'].vector().copy()
+                    
+                    err_u = self.momentum_prediction()
+                    err_p = self.pressure_correction()
+                    self.velocity_update()
                     err_p += self.pressure_correction(corr_number=2)
-                    err_u += self.velocity_update_piso() 
+                    err_u += self.velocity_update_piso()
+                    
+                    # Explicit relaxation
+                    def update_with_relaxation(vec, orig_vec, alpha):
+                        vec[:] = alpha * vec + (1 - alpha) * orig_vec
+                        vec.apply('insert')
+                    alpha_u = sim.input.get_value('solver/relaxation_u', PISO_ALPHA_U, 'float')
+                    alpha_p = sim.input.get_value('solver/relaxation_p', PISO_ALPHA_P, 'float')
+                    update_with_relaxation(sim.data['uvw_star'].vector(), self.orig_u, alpha_u)
+                    update_with_relaxation(sim.data['p'].vector(), self.orig_p, alpha_p)
                 
                 sim.log.info('  %s iteration %3d - err u* %10.3e - err p %10.3e'
                              ' - Num Krylov iters - u %3d - p %3d'
