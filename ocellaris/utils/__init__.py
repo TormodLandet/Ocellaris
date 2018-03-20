@@ -14,3 +14,4 @@ from .small_helpers import (create_vector_functions, shift_fields, velocity_chan
                             get_local, set_local, dolfin_log_level)
 from .field_inspector import FieldInspector
 from .ufl_transformers import is_zero_ufl_expression, split_form_into_matrix
+from .meshio import load_meshio_mesh

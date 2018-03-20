@@ -4,7 +4,8 @@ from ocellaris.solvers import get_solver
 from ocellaris.probes import setup_probes
 from ocellaris.utils import (interactive_console_hook, ocellaris_error,
                              ocellaris_interpolate, log_timings,
-                             verify_field_variable_definition)
+                             verify_field_variable_definition,
+                             load_meshio_mesh)
 from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
 from ocellaris.utils import verify_key
 from ocellaris.solver_parts import (BoundaryRegion, get_multi_phase_model, 
@@ -269,6 +270,12 @@ def load_mesh(simulation):
                 h5.read(mesh_facet_regions, '/mesh_facet_regions')
             else:
                 mesh_facet_regions = None
+    
+    elif mesh_type == 'meshio':
+        simulation.log.info('Creating mesh from meshio file')
+        file_name = inp.get_value('mesh/mesh_file', required_type='string')
+        file_type = inp.get_value('mesh/meshio_type', None, required_type='string')
+        mesh, mesh_facet_regions = load_meshio_mesh(comm, file_name, file_type)
     
     else:
         ocellaris_error('Unknown mesh type',

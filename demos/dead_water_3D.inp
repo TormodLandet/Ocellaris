@@ -32,15 +32,10 @@ user_code:
             mydir = os.path.dirname(os.path.abspath(__file__))
             geo = os.path.join(mydir, 'datafiles', 'dead_water_3D.geo')
             msh = os.path.join(mydir, 'datafiles', 'dead_water_3D.msh')
-            xml = os.path.join(mydir, 'datafiles', 'dead_water_3D.xml')
             assert os.path.isfile(geo)
             if not os.path.isfile(msh):
                 print('Running gmsh on', geo)
                 subprocess.call(['gmsh', '-2', '-optimize', geo, '-o', msh])
-            if not os.path.isfile(xml):
-                print('Running meshio-convert on', msh)
-                subprocess.call(['meshio-convert', '--input-format', 'gmsh-ascii',
-                                 '--output-format', 'dolfin-xml', msh, xml])
         dolfin.MPI.comm_world.barrier()
 
 _physical_properties:
@@ -57,8 +52,8 @@ physical_properties:
     g: [0, 0, -9.81]
 
 mesh:
-    type: XML
-    mesh_file: datafiles/dead_water_3D.xml
+    type: meshio
+    mesh_file: datafiles/dead_water_3D.msh
     
     #type: HDF5
     #mesh_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
