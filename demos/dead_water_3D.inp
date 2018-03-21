@@ -54,6 +54,7 @@ physical_properties:
 mesh:
     type: meshio
     mesh_file: datafiles/dead_water_3D.msh
+    sort_order: [2, 1, 0]
     
     #type: HDF5
     #mesh_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5

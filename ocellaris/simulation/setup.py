@@ -275,6 +275,11 @@ def load_mesh(simulation):
         simulation.log.info('Creating mesh with meshio reader')
         file_name = inp.get_value('mesh/mesh_file', required_type='string')
         file_type = inp.get_value('mesh/meshio_type', None, required_type='string')
+        sort_order = inp.get_value('mesh/sort_order', None, required_type='list(int)')
+        
+        if sort_order:
+            simulation.log.info('    Ordering mesh elements by ' + 
+                                ', then '.join('xyz'[i] for i in sort_order))
         
         # Read mesh on rank 0
         t1 = time.time()
@@ -282,8 +287,7 @@ def load_mesh(simulation):
         mesh_facet_regions = None
         if comm.rank == 0:
             # Read a mesh file by use of meshio
-            comm_self = dolfin.MPI.comm_self
-            load_meshio_mesh(mesh, file_name, file_type)
+            load_meshio_mesh(mesh, file_name, file_type, sort_order)
             simulation.log.info('    Read mesh with %d cells in %.2f seconds'
                                 % (mesh.num_cells(), time.time() - t1))
         
@@ -298,7 +302,6 @@ def load_mesh(simulation):
     else:
         ocellaris_error('Unknown mesh type',
                         'Mesh type %r is not supported' % mesh_type)
-    
     
     # Optionally move the mesh (for simple grading etc)
     move = inp.get_value('mesh/move', None, required_type='list(string)')

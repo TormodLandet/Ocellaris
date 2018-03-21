@@ -3,7 +3,7 @@ import dolfin
 from ocellaris.utils import ocellaris_error
 
 
-def load_meshio_mesh(mesh, file_name, meshio_file_type=None):
+def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
     """
     Use Nico Schlömer's meshio library to read a mesh
     https://github.com/nschloe/meshio
@@ -29,6 +29,9 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None):
     * vtu-binary
     * xdmf
     
+    The sort_order order keyword, if specified, must be an iterable of
+    integers. Giving sort_order=(2, 0, 1) will sort elements first by
+    z-coordinate, then by x and last by y. Vertices are not sorted
     """
     try:
         import meshio
@@ -41,10 +44,12 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None):
         meshio.read(file_name, meshio_file_type)
     
     if 'triangle' in cells:
+        assert len(cells) == 1, 'Mixed element meshes is not supported'
         dim = 2
         cell_type = 'triangle'
         connectivity = cells['triangle']
     elif 'tetra' in cells:
+        assert len(cells) == 1, 'Mixed element meshes is not supported'
         dim = 3
         cell_type = 'tetrahedron'
         connectivity = cells['tetra']
@@ -52,21 +57,29 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None):
         ocellaris_error('Mesh loaded by meshio contains unsupported cells',
                         'Expected to find tetrahedra or triangles, found %r'
                         % (tuple(cells.keys()), ))
-    assert 'triangle' in cells or 'tetra' in cells
+    
+    # Get global mesh sizes
+    Nvert = points.shape[0]
+    Ncell = connectivity.shape[0]
+    
+    # Order elements by location of the first vertex
+    if sort_order is not None:
+        connectivity = [[int(c) for c in conn] for conn in connectivity]
+        connectivity.sort(key=lambda el: tuple(points[el[0]][i] for i in sort_order)) 
     
     # Open mesh for editing
     editor = dolfin.MeshEditor()
     editor.open(mesh, cell_type, dim, dim)
     
     # Add vertices
-    editor.init_vertices(points.shape[0])
-    for i, p in enumerate(points):
-        editor.add_vertex(i, p)
+    editor.init_vertices_global(Nvert, Nvert)
+    for i, pnt in enumerate(points):
+        editor.add_vertex(i, [float(xi) for xi in pnt])
     
     # Add cells
-    editor.init_cells(connectivity.shape[0])
-    for i, c in enumerate(connectivity):
-        editor.add_cell(i, c)
+    editor.init_cells_global(Ncell, Ncell)
+    for i, conn in enumerate(connectivity):
+        editor.add_cell(i, conn)
     
     editor.close()
 
@@ -78,22 +91,39 @@ def build_distributed_mesh(mesh):
     """
     if build_distributed_mesh.func is None:
         cpp_code = """
-        #include<pybind11/pybind11.h>
-        #include<dolfin/mesh/MeshPartitioning.h>
-        #include<dolfin/mesh/Mesh.h>
-
-        void my_distributer(dolfin::Mesh mesh)
+        #include <pybind11/pybind11.h>
+        #include <dolfin/common/MPI.h>
+        #include <dolfin/mesh/MeshPartitioning.h>
+        #include <dolfin/mesh/LocalMeshData.h>
+        #include <dolfin/mesh/Mesh.h>
+        #include <dolfin/parameter/GlobalParameters.h>
+        
+        /**
+            Code taken from XMLFile::read(Mesh& input_mesh)
+            in dolfin/io/XMLFile.cpp on 2018-03-21
+        */
+        void distribute_mesh(dolfin::Mesh &mesh)
         {
-            return dolfin::MeshPartitioning::build_distributed_mesh(mesh);
+            // Distribute local data
+            mesh.domains().clear();
+            dolfin::LocalMeshData local_mesh_data(mesh);
+            
+            // Mesh domain data not present
+            if (dolfin::MPI::rank(mesh.mpi_comm()) == 0)
+                local_mesh_data.domain_data.clear();
+            
+            // Partition and build mesh
+            const std::string ghost_mode = dolfin::parameters["ghost_mode"];
+            dolfin::MeshPartitioning::build_distributed_mesh(mesh, local_mesh_data, ghost_mode);
         }
-
+        
         namespace py = pybind11;
-
+        
         PYBIND11_MODULE(SIGNATURE, m) {
-           m.def("build_distributed_mesh", &my_distributer, py::arg("mesh"));
+           m.def("distribute_mesh", &distribute_mesh, py::arg("mesh"));
         }
         """
-        build_distributed_mesh.func = dolfin.compile_cpp_code(cpp_code).build_distributed_mesh
+        build_distributed_mesh.func = dolfin.compile_cpp_code(cpp_code).distribute_mesh
     return build_distributed_mesh.func(mesh)
 build_distributed_mesh.func = None
 
