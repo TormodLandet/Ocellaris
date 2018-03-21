@@ -5,7 +5,7 @@ from ocellaris.probes import setup_probes
 from ocellaris.utils import (interactive_console_hook, ocellaris_error,
                              ocellaris_interpolate, log_timings,
                              verify_field_variable_definition,
-                             load_meshio_mesh)
+                             load_meshio_mesh, build_distributed_mesh)
 from ocellaris.utils import RunnablePythonString, OcellarisCppExpression
 from ocellaris.utils import verify_key
 from ocellaris.solver_parts import (BoundaryRegion, get_multi_phase_model, 
@@ -272,10 +272,27 @@ def load_mesh(simulation):
                 mesh_facet_regions = None
     
     elif mesh_type == 'meshio':
-        simulation.log.info('Creating mesh from meshio file')
+        simulation.log.info('Creating mesh with meshio reader')
         file_name = inp.get_value('mesh/mesh_file', required_type='string')
         file_type = inp.get_value('mesh/meshio_type', None, required_type='string')
-        mesh, mesh_facet_regions = load_meshio_mesh(comm, file_name, file_type)
+        
+        # Read mesh on rank 0
+        t1 = time.time()
+        mesh = dolfin.Mesh(comm)
+        mesh_facet_regions = None
+        if comm.rank == 0:
+            # Create a h5 file containing the mesh by use of meshio
+            comm_self = dolfin.MPI.comm_self
+            load_meshio_mesh(mesh, file_name, file_type)
+        simulation.log.info('    Read mesh in %.2f seconds' % (time.time() - t1))
+        
+        # Distribute the mesh (can be sloooow)
+        if comm.size > 1:
+            comm.barrier()
+            t1 = time.time()
+            simulation.log.info('    Distributing mesh to %d processors' % comm.size)
+            build_distributed_mesh(mesh)
+            simulation.log.info('    Distributed mesh in %.2f seconds' % (time.time() - t1))
     
     else:
         ocellaris_error('Unknown mesh type',

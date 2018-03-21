@@ -3,7 +3,7 @@ import dolfin
 from ocellaris.utils import ocellaris_error
 
 
-def load_meshio_mesh(mpi_comm, file_name, meshio_file_type=None):
+def load_meshio_mesh(mesh, file_name, meshio_file_type=None):
     """
     Use Nico Schlömer's meshio library to read a mesh
     https://github.com/nschloe/meshio
@@ -30,39 +30,6 @@ def load_meshio_mesh(mpi_comm, file_name, meshio_file_type=None):
     * xdmf
     
     """
-    # Construct mesh on rank 0
-    if mpi_comm.rank == 0:
-        # Create a h5 file containing the mesh by use of meshio
-        comm_self = dolfin.MPI.comm_self 
-        mesh, _ = _make_mesh(comm_self, file_name, meshio_file_type)
-        
-        # Find an available file name
-        while True:
-            h5_file_name = '%s.%s.h5' % (file_name, uuid.uuid4())
-            if not os.path.exists(h5_file_name):
-                break
-        
-        # Save to h5 format
-        with dolfin.HDF5File(comm_self, h5_file_name, "w") as h5:
-            h5.write(mesh, '/mesh')
-    
-    # Get the file name to all processes
-    h5_file_name = mpi_comm.bcast(h5_file_name, root=0)
-    
-    # Load the mesh
-    mesh = dolfin.Mesh(mpi_comm)
-    with dolfin.HDF5File(mpi_comm, h5_file_name, "r") as h5:
-        h5.read(mesh, '/mesh', False)
-    
-    mpi_comm.barrier()
-    if mpi_comm.rank == 0:
-        os.remove(h5_file_name)
-    
-    # Return mesh and facet markers
-    return mesh, None
-
-
-def _make_mesh(mpi_comm, file_name, meshio_file_type=None):
     try:
         import meshio
     except ImportError:
@@ -87,8 +54,7 @@ def _make_mesh(mpi_comm, file_name, meshio_file_type=None):
                         % (tuple(cells.keys()), ))
     assert 'triangle' in cells or 'tetra' in cells
     
-    # Create the mesh and open for editing
-    mesh = dolfin.Mesh(mpi_comm)
+    # Open mesh for editing
     editor = dolfin.MeshEditor()
     editor.open(mesh, cell_type, dim, dim)
     
@@ -103,4 +69,31 @@ def _make_mesh(mpi_comm, file_name, meshio_file_type=None):
         editor.add_cell(i, c)
     
     editor.close()
-    return mesh, None
+
+
+def build_distributed_mesh(mesh):
+    """
+    Work around missing dolfin pybind11 wrapped method
+    FIXME: get this into dolfin / dolfin-x
+    """
+    if build_distributed_mesh.func is None:
+        cpp_code = """
+        #include<pybind11/pybind11.h>
+        #include<dolfin/mesh/MeshPartitioning.h>
+        #include<dolfin/mesh/Mesh.h>
+
+        void my_distributer(dolfin::Mesh mesh)
+        {
+            return dolfin::MeshPartitioning::build_distributed_mesh(mesh);
+        }
+
+        namespace py = pybind11;
+
+        PYBIND11_MODULE(SIGNATURE, m) {
+           m.def("build_distributed_mesh", &my_distributer, py::arg("mesh"));
+        }
+        """
+        build_distributed_mesh.func = dolfin.compile_cpp_code(cpp_code).build_distributed_mesh
+    return build_distributed_mesh.func(mesh)
+build_distributed_mesh.func = None
+
