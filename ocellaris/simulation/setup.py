@@ -281,10 +281,11 @@ def load_mesh(simulation):
         mesh = dolfin.Mesh(comm)
         mesh_facet_regions = None
         if comm.rank == 0:
-            # Create a h5 file containing the mesh by use of meshio
+            # Read a mesh file by use of meshio
             comm_self = dolfin.MPI.comm_self
             load_meshio_mesh(mesh, file_name, file_type)
-        simulation.log.info('    Read mesh in %.2f seconds' % (time.time() - t1))
+            simulation.log.info('    Read mesh with %d cells in %.2f seconds'
+                                % (mesh.num_cells(), time.time() - t1))
         
         # Distribute the mesh (can be sloooow)
         if comm.size > 1:
