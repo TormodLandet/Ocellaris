@@ -1,12 +1,11 @@
-import os, uuid
 import dolfin
 from ocellaris.utils import ocellaris_error
 
 
 def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
     """
-    Use Nico Schlömer's meshio library to read a mesh
-    https://github.com/nschloe/meshio
+    Use Nico Schlömer's meshio library to read a mesh, see 
+    https://github.com/nschloe/meshio for more information on meshio.
     
     The meshio_file_type can be None (auto detect based on file extension) or
     one of the following (taken from meshio source code in March 2018):
@@ -31,7 +30,7 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
     
     The sort_order order keyword, if specified, must be an iterable of
     integers. Giving sort_order=(2, 0, 1) will sort elements first by
-    z-coordinate, then by x and last by y. Vertices are not sorted
+    z-coordinate, then by x and last by y. Vertices are not sorted.
     """
     try:
         import meshio
@@ -86,8 +85,11 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
 
 def build_distributed_mesh(mesh):
     """
-    Work around missing dolfin pybind11 wrapped method
-    FIXME: get this into dolfin / dolfin-x
+    Work around some missing dolfin pybind11 wrapped methods
+    Performs the same actions as what happens when reading
+    a mesh from an XML file, except for the very first step
+    (constructing the whole global mesh on the root process)
+    which is assumed to have happened allready 
     """
     if build_distributed_mesh.func is None:
         cpp_code = """
