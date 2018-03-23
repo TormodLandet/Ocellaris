@@ -41,11 +41,15 @@ def interactive_console_hook(simulation):
         commands = comm.bcast(commands)
     
     for command in commands:
+        cwords = command.split()
+        
+        # One-word commands in alphabetical order:
+        
         if command == 'd' and simulation.ncpu == 1:
             # d == "debug" -> start the debug console
-            return run_debug_console(simulation)
+            run_debug_console(simulation)
         
-        if command == 'f':
+        elif command == 'f':
             # f == "flush" -> flush open files
             simulation.log.info('\nCommand line action:\n  Flushing open files')
             simulation.hooks.run_custom_hook('flush')
@@ -55,7 +59,7 @@ def interactive_console_hook(simulation):
             funcs, _ = define_convenience_functions(simulation)
             simulation.log.info('\nCommand line action:\n  Plotting fields')
             funcs['plot_all']()
-            
+        
         elif command == 'r':
             # r == "restart" -> write restart file
             simulation.log.info('\nCommand line action:\n  Writing restart file')
@@ -66,16 +70,33 @@ def interactive_console_hook(simulation):
             simulation.log.info('\nCommand line action:\n  Setting simulation '
                                 'control parameter tmax to %r\n' % simulation.time)
             simulation.input['time']['tmax'] = simulation.time
-
+        
         elif command == 't':
             # t == "timings" -> show timings
             simulation.log.info('\nCommand line action:\n  Showing timings')
             log_timings(simulation)
         
-        elif command.startswith('prof') and simulation.rank == 0:
+        # Two-word commands in alphabetical order:
+        
+        elif len(cwords) < 2:
+            continue
+        
+        elif cwords[0] == 'w':
+            # w == "write" -> write output file (restart files use "r" command)
+            file_format = cwords[1]
+            simulation.log.info('\nCommand line action:\n  Writing %s file'
+                                % file_format)
+            if file_format == 'vtf':
+                simulation.io.lvtk.write()
+            elif file_format == 'xdmf':
+                simulation.io.xdmf.write()
+            else:
+                simulation.log.warning('Unsupported file type %r' % file_format)
+        
+        elif cwords[0] == 'prof' and simulation.rank == 0:
             # Run the profiler
             try:
-                num_timesteps = int(command.split()[1])
+                num_timesteps = int(cwords[1])
             except:
                 simulation.log.warning('Did not understand requested number of profile time steps')
                 return
