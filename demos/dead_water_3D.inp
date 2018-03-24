@@ -12,18 +12,19 @@ user_code:
     constants:
         # Geometry. DO NOT CHANGE WITHOUT UPDATING gmesh geo FILE!!
         L: 200       # domain length
-        H: 30        # domain depth
-        B: 30        # domain breadth
-        h: 6         # depth to pycnocline
+        H: 35        # domain depth
+        B: 50        # domain breadth
+        h: 7.0       # depth to pycnocline
         d: 5         # draught amidships
         l: 30        # length of hull water line
-        C: 50        # distance from midships to inlet
+        C: 65        # distance from midships to inlet
         
         # Non-geometry parameters (these are controlled by a post_timestep hook below)
         Velocity: 0.0    # vessel speed (divide by 0.514444 to get knots)
         Tmax:  1.0e+6    # maximum duration
         FRESH: 1000.0    # Upper layer density
         SALT: 1028.0     # Lower layer density
+        rho_eps: 0.2     # Half thickness of the free surface
     code: |
         # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
         # with support for the OpenCASCADE geometry engine
@@ -38,13 +39,6 @@ user_code:
                 subprocess.call(['gmsh', '-2', '-optimize', geo, '-o', msh])
         dolfin.MPI.comm_world.barrier()
 
-_physical_properties:
-    g: [0, 0, -9.81]
-    nu0: 1.0e-6
-    rho0: py$ SALT
-    nu1: 1.0e-6
-    rho1: py$ FRESH
-
 physical_properties:
     nu: 1.0e-6
     rho_min: py$ FRESH
@@ -54,10 +48,89 @@ physical_properties:
 mesh:
     type: meshio
     mesh_file: datafiles/dead_water_3D.msh
+    meshio_type: gmsh
     sort_order: [2, 1, 0]
-    
-    #type: HDF5
-    #mesh_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
+
+fields:
+-   name: velocity
+    type: VectorField
+    variable_name: u
+    cpp_code: ['Velocity', '0', '0']
+
+-   name: density
+    type: SharpField
+    variable_name: rho
+    value_above: py$ FRESH
+    value_below: py$ SALT
+    z: py$ -h
+
+-   name: outlet zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: |
+        [&]() {
+            double approx_wave_length = l;
+            double dz0 = L - 2 * approx_wave_length;
+            double dz1 = L;
+            if (x[0] < dz0) {
+                return 0.0;
+            } else if (x[0] > dz1) {
+                return 1.0;
+            } else {
+                return pow((x[0] - dz0)/(dz1 - dz0), 2);
+            }
+        }()
+
+-   name: inlet zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: |
+        [&]() {
+            double dz0 = 0;
+            double dz1 = (C - l/2)/2;
+            if (x[0] < dz0) {
+                return 1.0;
+            } else if (x[0] > dz1) {
+                return 0.0;
+            } else {
+                return pow((x[0] - dz1)/(dz0 - dz1), 2);
+            }
+        }()
+
+forcing_zones:
+-   name: outlet velocity damping
+    type: MomentumForcing
+    zone: outlet zone/beta
+    target: velocity/u
+    penalty: 5
+
+-   name: outlet density damping
+    type: ScalarForcing
+    zone: outlet zone/beta
+    target: density/rho
+    variable: rho
+    penalty: 1
+    plot: yes
+
+-   name: inlet velocity damping
+    type: MomentumForcing
+    zone: inlet zone/beta
+    target: velocity/u
+    penalty: 5
+
+-   name: inlet density damping
+    type: ScalarForcing
+    zone: inlet zone/beta
+    target: density/rho
+    variable: rho
+    penalty: 1
+    plot: yes
+
+initial_conditions:
+    rho_p:
+        function: density/rho
 
 boundary_conditions:
 
@@ -71,37 +144,27 @@ boundary_conditions:
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
     u:
-        type: CppCodedValue
-        cpp_code: ['Velocity', '0', '0']
-    #c:
-    #    type: CppCodedValue
-    #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+        type: FieldFunction
+        function: velocity/u
     rho:
-        type: CppCodedValue
-        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
+        type: FieldFunction
+        function: density/rho
 
 -   name: Outlet
     selector: code
     inside_code: 'on_boundary and x[0] > C + l'
     u:
-        type: CppCodedValue
-        cpp_code: ['Velocity', '0', '0']
-    #u0: {type: 'ConstantGradient', value: 0}
-    #u1: {type: 'ConstantValue', value: 0}
-    #u2: {type: 'ConstantValue', value: 0}
-    #c:
-    #    type: CppCodedValue
-    #    cpp_code: '(x[1] < -h + 1e-5) ? 1.0 : 0.0'
+        type: FieldFunction
+        function: velocity/u
     rho:
-        type: CppCodedValue
-        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
+        type: FieldFunction
+        function: density/rho
 
 -   name: Bottom
     selector: code
     inside_code: 'on_boundary and x[2] < -H + 1e-5'
     u:
-        type: CppCodedValue
-        cpp_code: ['Velocity', '0', '0']
+        type: FreeSlip
 
 -   name: Surface z=0
     selector: code
@@ -115,35 +178,24 @@ boundary_conditions:
     u:
         type: FreeSlip
 
-_initial_conditions:
-    file:
-        h5_file: output/dead_water_3D_rstairs01_savepoint_U_2.000.h5
-        same_mesh: yes
-
 time:
     dt: 0.1
     tmax: py$ Tmax
 
 output:
-    prefix: output/dead_water_3D_stairs_finer_08
+    prefix: ocellaris_out
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 200
-    hdf5_write_interval: 200
+    stdout_enabled: yes # needed for stdout monitoring in orun
+    flush_interval: 60 # interval in seconds for log file and stdout flushing (default 5 sec)
+    #xdmf_write_interval: 200
+    hdf5_write_interval: 10
+    hdf5_only_store_latest: yes
 
 solver:
     type: IPCS-A
     num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
     allowable_error_inner: 1.0e-4
-    polynomial_degree_pressure: 1
-    polynomial_degree_velocity: 2
-    function_space_pressure: DG
-    function_space_velocity: DG
-    #steady_velocity_stopping_criterion: 1e-5
-    #force_steady: no
-
-_multiphase_solver:
-    type: BlendedAlgebraicVOF
 
 multiphase_solver:
     type: VariableDensity
@@ -157,41 +209,13 @@ slope_limiter:
         enforce_bounds: yes
         enforce_bcs: no
 
-probes:
-    -   name: free_surface
-        enabled: no
-        type: IsoSurface
-        value: py$ (SALT + FRESH) / 2
-        field: rho
-        file_name: '_free_surface.out'
-        write_interval: 10
-        custom_hook: MultiPhaseModelUpdated
-
 hooks:
-    pre_simulation:
-
-    -   name: Initial density field with discrete jump at z=-h
-        enabled: yes
-        code: |
-            if t < 1:
-                # We assume that the mesh aligns with the pycnocline
-                dm = Vrho.dofmap()
-                arr = rho.vector().get_local()
-                for cell in cells(mesh):
-                    rho_cell = SALT if cell.midpoint().z() < -h else FRESH
-                    for dof in dm.cell_dofs(cell.index()):
-                        arr[dof] = rho_cell
-                rho.vector().set_local(arr)
-                rho.vector().apply('insert')
-                rho_p.assign(rho)
-                rho_pp.assign(rho)
-
     post_timestep:
 
     -   name: Forces on the hull
         enabled: yes
         code: |
-            if not hook_data:
+            if not 'forceforms' in hook_data:
                 hull_id = boundary_by_name['Hull'].mark_id
                 hull_ds = ds(hull_id)
                 n = FacetNormal(mesh)
@@ -203,20 +227,22 @@ hooks:
             simulation.reporting.report_timestep_value('Fpx', assemble(Fpx))
             simulation.reporting.report_timestep_value('Fpy', assemble(Fpy))
             simulation.reporting.report_timestep_value('Fpz', assemble(Fpz))
-
+            
             N = 300
             all_Fpx = simulation.reporting.timestep_xy_reports['Fpx']
             simulation.reporting.report_timestep_value('Fpx_avg', numpy.mean(all_Fpx[-N:]))
             simulation.reporting.report_timestep_value('Fpx_std', numpy.std(all_Fpx[-N:]))
-
+    
     -   name: Update velocity
         enabled: yes
         code: |
-            U_vals = [0.00, 0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.0, 2.25]
-            U_vals = [0.00, 1.00, 1.25, 1.50, 1.75, 2.0]
-            Nramp = 200
-            Ntot = 2800
+            U_vals = [0.00, 0.30, 0.40, 0.50, 0.60, 0.70]
+            U_vals = [0.00, 0.60, 0.70, 0.80, 1.00, 1.10]
+            TIMESTEP_BASE = 0.05
             prefix = simulation.input.get_value('output/prefix', '')
+            Nramp = 100
+            Ntot_min = 8000
+            duration_min = 800
             
             if not hook_data:
                 simulation.log.warning('Creating initial update velocity hook data')
@@ -224,6 +250,7 @@ hooks:
                 hook_data['t_start'] = -1
                 hook_data['t_ramp'] = -1
                 hook_data['t_end'] = -1
+                simulation.io.lvtk.write()
             
             i = hook_data['iU']
             U = U_vals[i]
@@ -241,24 +268,25 @@ hooks:
                 else:
                     # Go to next velocity
                     hook_data['iU'] += 1
-                    dt = 0.1 / U_vals[hook_data['iU']]
+                    dt = TIMESTEP_BASE / U_vals[hook_data['iU']]
                     simulation.input.set_value('time/dt', dt)
                     simulation.data['time_coeffs'].assign(dolfin.Constant([1, -1, 0]))
                     simulation.log.info('Changing timestep to %r' % dt)
                     hook_data['Uprev'] = U
                     hook_data['t_start'] = t
                     hook_data['t_ramp'] = t + dt * Nramp
-                    hook_data['t_end'] = t + dt * Ntot
+                    hook_data['t_end'] = t + max(dt * Ntot_min, duration_min)
             elif t < t2:
                 f = (t - t1) / (t2 - t1)
                 F = (3 * f**2 - 2 * f**3)
                 U = (1 - F) * hook_data['Uprev'] +  F * U
             
+            # Write some plot files towards the end of the velocity
+            lvtk_write_interval = 0
+            if t > t3 - 500 * simulation.input.get_value('time/dt', 0, 'float'):
+                lvtk_write_interval = 100
+            simulation.input.set_value('output/vtk_write_interval', lvtk_write_interval)
+            
             Vel = simulation.input.get_value('user_code/constants/Velocity')
             simulation.reporting.report_timestep_value('Vel', Vel)
             simulation.input.set_value('user_code/constants/Velocity', U)
-
-            #if simulation.timestep % 100:
-            #    fn = prefix + '_restart.h5'
-            #    simulation.io.write_restart_file(fn)
-            #    simulation.log.info('Saving restart file at timestep %d' % simulation.timestep)
