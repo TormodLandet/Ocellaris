@@ -1,3 +1,4 @@
+import os
 import dolfin
 from ocellaris.utils import timeit
 from .io_impl import RestartFileIO, XDMFFileIO, LegacyVTKIO, DebugIO
@@ -35,6 +36,10 @@ class InputOutputHandling():
         # with automatic restarts from checkpointing jobs. The only difference
         # is the name of the file
         self.last_savepoint_is_checkpoint = False
+        
+        # Last savepoint written. To be deleted after writing new save point
+        # if only keeping the last save point file
+        self.prev_savepoint_file_name = ''
     
     def add_extra_output_function(self, function):
         """
@@ -122,7 +127,16 @@ class InputOutputHandling():
             self.lvtk.write()
         
         if hdf5_write_interval > 0 and sim.timestep % hdf5_write_interval == 0 and not just_restarted:
-            self.write_restart_file()
+            h5_file_name = self.write_restart_file()
+            
+            # To avoid filling up the disk we can delete the previous save point
+            # file after successfully writing a new save point file
+            if sim.input.get_value('output/hdf5_only_store_latest', False, 'bool'):
+                if os.path.isfile(self.prev_savepoint_file_name) and sim.rank == 0:
+                    sim.log.info('Deleting previous save point file %r'
+                                 % self.prev_savepoint_file_name)
+                    os.unlink(self.prev_savepoint_file_name)
+                self.prev_savepoint_file_name = h5_file_name
     
     def write_restart_file(self, h5_file_name=None):
         """
