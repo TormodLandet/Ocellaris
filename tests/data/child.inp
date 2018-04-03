@@ -1,0 +1,16 @@
+ocellaris:
+    type: input
+    version: 1.0
+    bases:
+    -   base.inp
+
+metadata:
+    date: 2018-04-03
+    description: ThisIsTheDescription
+
+user_code:
+    constants:
+        B: 4
+
+test_py_val:
+    C: py$ A*B

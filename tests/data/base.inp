@@ -1,0 +1,16 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+metadata:
+    author: Tormod Landet
+    description: NoDescription
+
+user_code:
+    constants:
+        A: 2
+        
+some_vals:
+    bools: [yes, true, no, false]
+    floats: [1.1, 2, 3.0e+3]
+    computed: py$ A

@@ -39,21 +39,47 @@ class Input(collections.OrderedDict):
                 yaml_string = inpf.read()
         else:
             assert file_name is None
+            
+        def load_ocellaris_input_from_string(yaml_string):
+            try:
+                inp = yaml.load(yaml_string)
+            except ValueError as e:
+                ocellaris_error('Error on input file', str(e))
+            except yaml.YAMLError as e:
+                ocellaris_error('Input file "%s" is not a valid YAML file' % file_name, str(e))
+            
+            assert 'ocellaris' in inp
+            assert inp['ocellaris']['type'] == 'input'
+            assert inp['ocellaris']['version'] == 1.0
+            return inp
         
-        try:
-            inp = yaml.load(yaml_string)
-        except ValueError as e:
-            ocellaris_error('Error on input file', str(e))
-        except yaml.YAMLError as e:
-            ocellaris_error('Input file "%s" is not a valid YAML file' % file_name, str(e))
+        inp_dicts = []
+        seen_files = set()
+        def add_input_dictionary_to_list(inp):
+            inp_dicts.append(inp)
+            
+            for base_file_name in inp['ocellaris'].get('bases', []):
+                fn = self.get_input_file_path(base_file_name)
+                
+                # Make sure there are no circular dependencies
+                fn = os.path.abspath(fn)
+                assert fn not in seen_files, 'Circular dependency in input file bases'
+                seen_files.add(fn)
+                
+                # Load base input file
+                with open(fn, 'rt') as inpf:
+                    base_yaml_string = inpf.read()
+                base_inp = load_ocellaris_input_from_string(base_yaml_string)
+                add_input_dictionary_to_list(base_inp)
         
-        assert 'ocellaris' in inp
-        assert inp['ocellaris']['type'] == 'input'
-        assert inp['ocellaris']['version'] == 1.0
-        
-        self.clear()
-        self.update(inp)
         self.file_name = file_name
+        
+        # Read the YAML data, potentially with base input files
+        inp = load_ocellaris_input_from_string(yaml_string)
+        add_input_dictionary_to_list(inp)
+        self.clear()
+        for inp in inp_dicts[::-1]:
+            merge_nested_dicts(self, inp)
     
     def get_value(self, path, default_value=UNDEFINED, required_type='any',
                   mpi_root_value=False, safe_mode=False):
@@ -271,7 +297,7 @@ class Input(collections.OrderedDict):
             return file_name
         self.simulation.log.debug('File does not exist: %s' % file_name)
         
-        # Check if the path is relative to the inouf file dir
+        # Check if the path is relative to the input file dir
         inp_file_dir = os.path.dirname(self.file_name)
         pth2 = os.path.join(inp_file_dir, file_name)
         if os.path.exists(pth2):
@@ -306,6 +332,21 @@ class Input(collections.OrderedDict):
         inp = collections.OrderedDict(self.items())
         return yaml.dump(inp, indent=4)
 
+
+def merge_nested_dicts(base, child):
+    """
+    Merge child dictionary into parent dictionary, overwriting and adding data
+    from the child, keeping the base value if the child value is not specified
+    for a given key. Dictionaries are merged recursively, other data like lists
+    are treated as values and just replaced directly if found.
+    """
+    for k, v in child.items():
+        if (not k in base or
+            not isinstance(base[k], collections.abc.Mapping) or
+            not isinstance(v, collections.abc.Mapping)):
+            base[k] = v
+        else:
+            merge_nested_dicts(base[k], v)
 
 def eval_python_expression(simulation, value, pathstr, safe_mode=False):
     """

@@ -1,9 +1,15 @@
+import os
 import dolfin
 import pytest
 
 
 skip_in_parallel = pytest.mark.skipif(dolfin.MPI.size(dolfin.MPI.comm_world) > 1,
                                       reason="This test should only be run in serial.")
+
+
+def get_test_file_name(fn):
+    mydir = os.path.dirname(__file__)
+    return os.path.join(mydir, 'data', fn)
 
 
 def mpi_tmpdir(tmpdir_factory, dir_name):
