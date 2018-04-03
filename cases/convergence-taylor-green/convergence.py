@@ -200,7 +200,7 @@ def run_convergence_space(N_list, modifier=None):
     prev_N = None
     for N in N_list:
         say('Running N = %g with dt = %g' % (N, dt))
-        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=1, modifier=modifier)
+        results[N] = run_and_calculate_error(N=N, dt=dt, tmax=tmax, polydeg_u=2, polydeg_p=2, modifier=modifier)
         print_results(results, N_list, 'h')
 
 

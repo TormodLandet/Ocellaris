@@ -14,7 +14,7 @@ user_code:
         L: 200       # domain length
         H: 35        # domain depth
         B: 50        # domain breadth
-        h: 7.0       # depth to pycnocline
+        h: 6.0       # depth to pycnocline
         d: 5         # draught amidships
         l: 30        # length of hull water line
         C: 65        # distance from midships to inlet
@@ -24,7 +24,6 @@ user_code:
         Tmax:  1.0e+6    # maximum duration
         FRESH: 1000.0    # Upper layer density
         SALT: 1028.0     # Lower layer density
-        rho_eps: 0.2     # Half thickness of the free surface
     code: |
         # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
         # with support for the OpenCASCADE geometry engine
@@ -112,7 +111,6 @@ forcing_zones:
     target: density/rho
     variable: rho
     penalty: 1
-    plot: yes
 
 -   name: inlet velocity damping
     type: MomentumForcing
@@ -126,7 +124,6 @@ forcing_zones:
     target: density/rho
     variable: rho
     penalty: 1
-    plot: yes
 
 initial_conditions:
     rho_p:
@@ -144,27 +141,28 @@ boundary_conditions:
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
     u:
-        type: FieldFunction
-        function: velocity/u
+        type: CppCodedValue
+        cpp_code: ['Velocity', '0', '0']
     rho:
-        type: FieldFunction
-        function: density/rho
+        type: CppCodedValue
+        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
 
 -   name: Outlet
     selector: code
     inside_code: 'on_boundary and x[0] > C + l'
     u:
-        type: FieldFunction
-        function: velocity/u
+        type: CppCodedValue
+        cpp_code: ['Velocity', '0', '0']
     rho:
-        type: FieldFunction
-        function: density/rho
+        type: CppCodedValue
+        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
 
 -   name: Bottom
     selector: code
     inside_code: 'on_boundary and x[2] < -H + 1e-5'
     u:
-        type: FreeSlip
+        type: CppCodedValue
+        cpp_code: ['Velocity', '0', '0']
 
 -   name: Surface z=0
     selector: code
@@ -178,18 +176,27 @@ boundary_conditions:
     u:
         type: FreeSlip
 
+-   name: Valve
+    selector: code
+    inside_code: 'on_boundary and x[2] > -1e-5 and x[0] > L - 2.5 * l'
+    u:
+        type: OpenOutletBoundary
+    rho:
+        type: ConstantValue
+        value: py$ FRESH
+
 time:
     dt: 0.1
     tmax: py$ Tmax
 
 output:
-    prefix: ocellaris_out
+    prefix: output/dead_water_3D
     dolfin_log_level: warning
     ocellaris_log_level: info
     stdout_enabled: yes # needed for stdout monitoring in orun
     flush_interval: 60 # interval in seconds for log file and stdout flushing (default 5 sec)
     #xdmf_write_interval: 200
-    hdf5_write_interval: 10
+    hdf5_write_interval: 50
     hdf5_only_store_latest: yes
 
 solver:
@@ -208,6 +215,9 @@ slope_limiter:
         skip_boundary: no
         enforce_bounds: yes
         enforce_bcs: no
+    u:
+        method: Componentwise
+        comp_method: HierarchicalTaylor
 
 hooks:
     post_timestep:
@@ -238,10 +248,10 @@ hooks:
         code: |
             U_vals = [0.00, 0.30, 0.40, 0.50, 0.60, 0.70]
             U_vals = [0.00, 0.60, 0.70, 0.80, 1.00, 1.10]
-            TIMESTEP_BASE = 0.05
+            TIMESTEP_BASE = 0.20
             prefix = simulation.input.get_value('output/prefix', '')
             Nramp = 100
-            Ntot_min = 8000
+            Ntot_min = 2000
             duration_min = 800
             
             if not hook_data:
@@ -290,3 +300,4 @@ hooks:
             Vel = simulation.input.get_value('user_code/constants/Velocity')
             simulation.reporting.report_timestep_value('Vel', Vel)
             simulation.input.set_value('user_code/constants/Velocity', U)
+

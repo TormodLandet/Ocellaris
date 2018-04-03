@@ -8,7 +8,7 @@ SetFactory("OpenCASCADE");
 
 // Parameters of the geometry
 DefineConstant[ H = {  35.0, Name "Parameters/Total depth" } ];
-DefineConstant[ h = {   7.0, Name "Parameters/Upper layer depth" } ];
+DefineConstant[ h = {   6.0, Name "Parameters/Upper layer depth" } ];
 DefineConstant[ L = { 200.0, Name "Parameters/Domain length" } ];
 DefineConstant[ B = {  50.0, Name "Parameters/Domain breadth" } ];
 DefineConstant[ C = {  65.0, Name "Parameters/Hull inlet offset amidships" } ];

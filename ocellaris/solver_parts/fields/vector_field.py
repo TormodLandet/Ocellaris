@@ -22,7 +22,7 @@ class VectorField(KnownField):
         
         self.exprs = None
         self.funcs = None
-        self.updaters = None
+        self.updaters = ()
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
         simulation.hooks.add_pre_timestep_hook(self.update, 'Update scalar field %r' % self.name)
     

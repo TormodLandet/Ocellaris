@@ -86,7 +86,7 @@ def interactive_console_hook(simulation):
             file_format = cwords[1]
             simulation.log.info('\nCommand line action:\n  Writing %s file'
                                 % file_format)
-            if file_format == 'vtf':
+            if file_format == 'vtk':
                 simulation.io.lvtk.write()
             elif file_format == 'xdmf':
                 simulation.io.xdmf.write()

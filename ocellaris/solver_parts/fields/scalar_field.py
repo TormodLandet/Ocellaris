@@ -39,8 +39,9 @@ class ScalarField(KnownField):
         """
         if self.stationary:
             return
-        self.updater(timestep_number, t, dt)
-        self.func.interpolate(self.expr)
+        if self.updater is not None:
+            self.updater(timestep_number, t, dt)
+            self.func.interpolate(self.expr)
     
     def _get_expression(self):
         if self.expr is None:

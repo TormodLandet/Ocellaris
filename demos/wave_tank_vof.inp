@@ -43,6 +43,8 @@ fields:
     depth_above: py$ h_above
     amplitudes: [0.2]
     wave_lengths: [20.0]
+    #wind_speed: 0.5
+    #current_speed: 0.5
 
 -   name: still water
     type: WaveOutflow
