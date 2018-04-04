@@ -255,7 +255,8 @@ Mesh
 You can specify simple geometries using FEniCS DOLFIN built in mesh generators,
 and also load a mesh from file. For realistic cases using something like gmsh
 to generate meshes is recommended. The meshio_ program can be used to convert 
-between different mesh file formats.
+between different mesh file formats and also loading these formats directly,
+see below.
 
 .. _meshio: https://github.com/nschloe/meshio
 
@@ -341,6 +342,19 @@ This will only load the mesh and (possibly) facet regions. You can also start
 the simulation from a restart file instead of an input file. Then the mesh *and*
 the function values from that save point are used, allowing you to restart the
 simulation more or less like it was never stopped.
+
+Example: using meshio_ to load all its supported formats
+
+.. code-block:: yaml
+        
+    mesh:
+        type: meshio
+        mesh_file: mesh.msh
+        meshio_type: gmsh
+
+The supported formats (as of April 2018) can be found `in this list 
+<https://github.com/nschloe/meshio/blob/f37dd29d67a35ec49a02bd131d1bf11ffde9ff85/meshio/helpers.py#L104>`_
+in the meshio source on github.
 
 
 Moving the mesh
