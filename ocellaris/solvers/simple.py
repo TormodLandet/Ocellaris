@@ -43,8 +43,8 @@ SOLVER_SIMPLE = 'SIMPLE'
 SOLVER_PISO = 'PISO'
 ALPHA_U = 0.7
 ALPHA_P = 0.9
-PISO_ALPHA_U = 0.5
-PISO_ALPHA_P = 0.5
+PISO_ALPHA_U = 1.0
+PISO_ALPHA_P = 1.0
 
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
@@ -460,6 +460,7 @@ class SolverSIMPLE(Solver):
         u_ss.vector().axpy(1.0, u_hat2)
         u_ss.vector().apply('insert')
         
+        self.uvw_hat2 = u_hat2
         return u_hat2.norm('l2')
     
     @timeit
@@ -556,16 +557,24 @@ class SolverSIMPLE(Solver):
                     self.orig_u = sim.data['uvw_star'].vector().copy()
                     self.orig_p = sim.data['p'].vector().copy()
                     
-                    err_u = self.momentum_prediction()
-                    err_p = self.pressure_correction()
-                    self.velocity_update()
+                    if self.inner_iteration == 1:
+                        # SIMPLE
+                        err_u = self.momentum_prediction()
+                        err_p = self.pressure_correction()
+                        self.velocity_update()
+                    else:
+                        self.minus_uvw_hat = -1.0 * self.uvw_hat2
+                        err_u = err_p = 0
+                    
+                    # PISO correction
                     err_p += self.pressure_correction(corr_number=2)
                     err_u += self.velocity_update_piso()
                     
                     # Explicit relaxation
                     def update_with_relaxation(vec, orig_vec, alpha):
-                        vec[:] = alpha * vec + (1 - alpha) * orig_vec
-                        vec.apply('insert')
+                        if alpha != 1.0:
+                            vec[:] = alpha * vec + (1 - alpha) * orig_vec
+                            vec.apply('insert')
                     alpha_u = sim.input.get_value('solver/relaxation_u', PISO_ALPHA_U, 'float')
                     alpha_p = sim.input.get_value('solver/relaxation_p', PISO_ALPHA_P, 'float')
                     update_with_relaxation(sim.data['uvw_star'].vector(), self.orig_u, alpha_u)
