@@ -352,7 +352,7 @@ class SolverSIMPLE(Solver):
         return err
     
     @timeit
-    def pressure_correction(self, corr_number=1):
+    def pressure_correction(self, piso_rhs=False):
         """
         Solve the Navier-Stokes equations on SIMPLE form
         (Semi-Implicit Method for Pressure-Linked Equations)
@@ -373,13 +373,13 @@ class SolverSIMPLE(Solver):
         LHS = self.LHS_pressure
     
         # Compute the RHS
-        if corr_number == 1:
+        if not piso_rhs:
             # Standard SIMPLE pressure correction
             # Compute the divergence of u* and the rest of the right hand side
             uvw_star = sim.data['uvw_star']
             RHS = self.matrices.assemble_E_star(uvw_star)
             self.niters_p = 0
-        elif corr_number == 2:
+        else:
             # PISO pressure correction (the second pressure correction)
             # Compute the RHS = - C⋅Ãinv⋅(Ãinv - A)⋅û
             C, Ainv, A = self.C, self.A_tilde_inv, self.A
@@ -553,17 +553,13 @@ class SolverSIMPLE(Solver):
                 
                 elif self.solver_type == SOLVER_PISO:
                     if self.inner_iteration == 1:
-                        # SIMPLE
-                        err_u = self.momentum_prediction()
-                        err_p = self.pressure_correction()
+                        self.momentum_prediction()
+                        self.pressure_correction()
                         self.velocity_update()
                     else:
                         self.minus_uvw_hat = -1.0 * self.uvw_hat2
-                        err_u = err_p = 0
-                    
-                    # PISO correction
-                    err_p += self.pressure_correction(corr_number=2)
-                    err_u += self.velocity_update_piso()
+                    err_p = self.pressure_correction(piso_rhs=True)
+                    err_u = self.velocity_update_piso()
                 
                 sim.log.info('  %s iteration %3d - err u* %10.3e - err p %10.3e'
                              ' - Num Krylov iters - u %3d - p %3d'
