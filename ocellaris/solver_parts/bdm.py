@@ -38,7 +38,7 @@ class VelocityBDMProjection():
         assert ue.family() == 'Discontinuous Lagrange'
         assert incompressibility_flux_type in ('central', 'upwind')
         
-        if use_nedelec:
+        if use_nedelec and pdeg > 1:
             a, L, V = self._setup_projection_nedelec(w, incompressibility_flux_type, D12, use_bcs, pdeg, gdim)
         elif gdim == 2 and pdeg == 1:
             a, L, V = self._setup_dg1_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
