@@ -487,18 +487,8 @@ class SolverSIMPLE(Solver):
                                  ui_tmp=self.simulation.data['ui_tmp'])
         
         return change
-            
-    @timeit
-    def calculate_divergence_error(self):
-        """
-        Check the convergence towards zero divergence. This is just for user output
-        """
-        div_dS_f, div_dx_f = self.simulation.solution_properties.divergences()
-        div_dS = div_dS_f.vector().max()
-        div_dx = div_dx_f.vector().max()
-        return div_dS + div_dx
     
-    @timeit.named('run SIMPLE solver')
+    @timeit.named('run SIMPLE/PISO solver')
     def run(self):
         """
         Run the simulation
@@ -557,6 +547,7 @@ class SolverSIMPLE(Solver):
                         self.pressure_correction()
                         self.velocity_update()
                     else:
+                        self.niters_u = self.niters_p = 0
                         self.minus_uvw_hat = -1.0 * self.uvw_hat2
                     err_p = self.pressure_correction(piso_rhs=True)
                     err_u = self.velocity_update_piso()
