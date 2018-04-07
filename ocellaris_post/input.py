@@ -53,7 +53,7 @@ def read_yaml_input_file(file_name=None, yaml_string=None, error_func=None):
     # Read the YAML data, potentially with base input files
     inp = load_ocellaris_input(file_name, yaml_string)
     add_input_dictionary_to_list(inp)
-    final = {}
+    final = collections.OrderedDict()
     for inp in inp_dicts[::-1]:
         merge_nested_dicts(final, inp)
     return final
