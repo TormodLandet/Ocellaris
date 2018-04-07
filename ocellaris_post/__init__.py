@@ -1,4 +1,5 @@
 from .results import Results
+from .input import read_yaml_input_file
 
 
 def open_results(file_or_dir, derived=True, inner_iterations=True):

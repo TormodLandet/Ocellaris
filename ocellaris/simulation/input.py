@@ -1,5 +1,6 @@
 import os, collections
 from ocellaris.utils import ocellaris_error, get_root_value
+from ocellaris_post import read_yaml_input_file
 import yaml
 
 
@@ -32,54 +33,17 @@ class Input(collections.OrderedDict):
         Read the input to an Ocellaris simulation from a YAML formated input file or a 
         YAML formated string. The user will get an error if the input is malformed 
         """
-        self._setup_yaml()
-        
-        if yaml_string is None:
-            with open(file_name, 'rt') as inpf:
-                yaml_string = inpf.read()
-        else:
-            assert file_name is None
-            
-        def load_ocellaris_input_from_string(yaml_string):
-            try:
-                inp = yaml.load(yaml_string)
-            except ValueError as e:
-                ocellaris_error('Error on input file', str(e))
-            except yaml.YAMLError as e:
-                ocellaris_error('Input file "%s" is not a valid YAML file' % file_name, str(e))
-            
-            assert 'ocellaris' in inp
-            assert inp['ocellaris']['type'] == 'input'
-            assert inp['ocellaris']['version'] == 1.0
-            return inp
-        
-        inp_dicts = []
-        seen_files = set()
-        def add_input_dictionary_to_list(inp):
-            inp_dicts.append(inp)
-            
-            for base_file_name in inp['ocellaris'].get('bases', []):
-                fn = self.get_input_file_path(base_file_name)
-                
-                # Make sure there are no circular dependencies
-                fn = os.path.abspath(fn)
-                assert fn not in seen_files, 'Circular dependency in input file bases'
-                seen_files.add(fn)
-                
-                # Load base input file
-                with open(fn, 'rt') as inpf:
-                    base_yaml_string = inpf.read()
-                base_inp = load_ocellaris_input_from_string(base_yaml_string)
-                add_input_dictionary_to_list(base_inp)
-        
         self.file_name = file_name
+        inp = read_yaml_input_file(file_name, yaml_string, ocellaris_error)
         
-        # Read the YAML data, potentially with base input files
-        inp = load_ocellaris_input_from_string(yaml_string)
-        add_input_dictionary_to_list(inp)
+        # Remove the bases now that they have been read
+        # (to make any exported inp file consistent)
+        if 'bases' in inp['ocellaris']:
+            inp['ocellaris']['orig_bases'] = inp['ocellaris']['bases'] 
+            del inp['ocellaris']['bases']
+                      
         self.clear()
-        for inp in inp_dicts[::-1]:
-            merge_nested_dicts(self, inp)
+        self.update(inp)
     
     def get_value(self, path, default_value=UNDEFINED, required_type='any',
                   mpi_root_value=False, safe_mode=False):
@@ -306,47 +270,10 @@ class Input(collections.OrderedDict):
         
         ocellaris_error('File not found', 'The specified file "%s" was not found' % file_name)
     
-    def _setup_yaml(self):
-        """
-        Make PyYaml load and store keys in dictionaries 
-        ordered like they were on the input file
-        """
-        _mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
-    
-        def dict_representer(dumper, data):
-            return dumper.represent_dict(data.items())
-    
-        def dict_constructor(loader, node):
-            return collections.OrderedDict(loader.construct_pairs(node))
-    
-        yaml.add_representer(collections.OrderedDict, dict_representer)
-        yaml.add_constructor(_mapping_tag, dict_constructor)
-        
-        # PyYAML bugfix to be able to read, e.g., 𝜏𝜀𝜁𝜃
-        # See https://stackoverflow.com/a/44875714
-        import re
-        yaml.reader.Reader.NON_PRINTABLE = re.compile(
-            '[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]')
-    
     def __str__(self):
         inp = collections.OrderedDict(self.items())
         return yaml.dump(inp, indent=4)
 
-
-def merge_nested_dicts(base, child):
-    """
-    Merge child dictionary into parent dictionary, overwriting and adding data
-    from the child, keeping the base value if the child value is not specified
-    for a given key. Dictionaries are merged recursively, other data like lists
-    are treated as values and just replaced directly if found.
-    """
-    for k, v in child.items():
-        if (not k in base or
-            not isinstance(base[k], collections.abc.Mapping) or
-            not isinstance(v, collections.abc.Mapping)):
-            base[k] = v
-        else:
-            merge_nested_dicts(base[k], v)
 
 def eval_python_expression(simulation, value, pathstr, safe_mode=False):
     """

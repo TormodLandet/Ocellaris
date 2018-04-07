@@ -29,7 +29,7 @@ from time import sleep, time
 import signal
 from fcntl import fcntl, F_GETFL, F_SETFL
 from os import O_NONBLOCK, read, environ
-import yaml
+from ocellaris_post import read_yaml_input_file
 
 
 # Restore signals in non-interactive background shells
@@ -201,9 +201,7 @@ def get_restart_files(inp_file):
     save point files in order such that the latest version is always last in
     the returned list
     """
-    with open(inp_file, 'rt') as inp:
-        input_str = inp.read()
-    inp = yaml.load(input_str)
+    inp = read_yaml_input_file(inp_file)
     
     prefix = inp['output']['prefix']
     restart_files = glob.glob(prefix + '_savepoint_*.h5')
