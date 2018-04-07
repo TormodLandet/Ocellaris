@@ -43,8 +43,6 @@ SOLVER_SIMPLE = 'SIMPLE'
 SOLVER_PISO = 'PISO'
 ALPHA_U = 0.7
 ALPHA_P = 0.9
-PISO_ALPHA_U = 0.5
-PISO_ALPHA_P = 0.5
 
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
@@ -354,7 +352,7 @@ class SolverSIMPLE(Solver):
         return err
     
     @timeit
-    def pressure_correction(self, corr_number=1):
+    def pressure_correction(self, piso_rhs=False):
         """
         Solve the Navier-Stokes equations on SIMPLE form
         (Semi-Implicit Method for Pressure-Linked Equations)
@@ -375,13 +373,13 @@ class SolverSIMPLE(Solver):
         LHS = self.LHS_pressure
     
         # Compute the RHS
-        if corr_number == 1:
+        if not piso_rhs:
             # Standard SIMPLE pressure correction
             # Compute the divergence of u* and the rest of the right hand side
             uvw_star = sim.data['uvw_star']
             RHS = self.matrices.assemble_E_star(uvw_star)
             self.niters_p = 0
-        elif corr_number == 2:
+        else:
             # PISO pressure correction (the second pressure correction)
             # Compute the RHS = - C⋅Ãinv⋅(Ãinv - A)⋅û
             C, Ainv, A = self.C, self.A_tilde_inv, self.A
@@ -460,6 +458,7 @@ class SolverSIMPLE(Solver):
         u_ss.vector().axpy(1.0, u_hat2)
         u_ss.vector().apply('insert')
         
+        self.uvw_hat2 = u_hat2
         return u_hat2.norm('l2')
     
     @timeit
@@ -488,18 +487,8 @@ class SolverSIMPLE(Solver):
                                  ui_tmp=self.simulation.data['ui_tmp'])
         
         return change
-            
-    @timeit
-    def calculate_divergence_error(self):
-        """
-        Check the convergence towards zero divergence. This is just for user output
-        """
-        div_dS_f, div_dx_f = self.simulation.solution_properties.divergences()
-        div_dS = div_dS_f.vector().max()
-        div_dx = div_dx_f.vector().max()
-        return div_dS + div_dx
     
-    @timeit.named('run SIMPLE solver')
+    @timeit.named('run SIMPLE/PISO solver')
     def run(self):
         """
         Run the simulation
@@ -553,23 +542,15 @@ class SolverSIMPLE(Solver):
                     self.velocity_update()
                 
                 elif self.solver_type == SOLVER_PISO:
-                    self.orig_u = sim.data['uvw_star'].vector().copy()
-                    self.orig_p = sim.data['p'].vector().copy()
-                    
-                    err_u = self.momentum_prediction()
-                    err_p = self.pressure_correction()
-                    self.velocity_update()
-                    err_p += self.pressure_correction(corr_number=2)
-                    err_u += self.velocity_update_piso()
-                    
-                    # Explicit relaxation
-                    def update_with_relaxation(vec, orig_vec, alpha):
-                        vec[:] = alpha * vec + (1 - alpha) * orig_vec
-                        vec.apply('insert')
-                    alpha_u = sim.input.get_value('solver/relaxation_u', PISO_ALPHA_U, 'float')
-                    alpha_p = sim.input.get_value('solver/relaxation_p', PISO_ALPHA_P, 'float')
-                    update_with_relaxation(sim.data['uvw_star'].vector(), self.orig_u, alpha_u)
-                    update_with_relaxation(sim.data['p'].vector(), self.orig_p, alpha_p)
+                    if self.inner_iteration == 1:
+                        self.momentum_prediction()
+                        self.pressure_correction()
+                        self.velocity_update()
+                    else:
+                        self.niters_u = self.niters_p = 0
+                        self.minus_uvw_hat = -1.0 * self.uvw_hat2
+                    err_p = self.pressure_correction(piso_rhs=True)
+                    err_u = self.velocity_update_piso()
                 
                 sim.log.info('  %s iteration %3d - err u* %10.3e - err p %10.3e'
                              ' - Num Krylov iters - u %3d - p %3d'

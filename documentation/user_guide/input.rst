@@ -61,6 +61,62 @@ required, but can be useful for explainations and later references.
 Here you also see the syntax for multi-line strings in YAML.
 
 
+Templates
+~~~~~~~~~
+
+You can specify a list of base input files that will be read first and used
+as a basis for the input. Any values given in an input file will then extend
+the template basis. This support is limited to key-value mappings. It is not
+possible to replace parts of a list. Changing a list must be done by changing
+the whole list in the derived input file.
+
+Example base input file, ``base.inp``:
+
+.. code-block:: yaml
+
+    ocellaris:
+        type: input
+        version: 1.0
+    
+    user_code:
+        constants:
+            A: 2
+    
+    some_section:
+        D: py$ A/B
+
+The derived input file can use values defined in the base and extend it with
+further data—you may need to read the `User constants and code`_ section to
+fully  understand this example:
+
+.. code-block:: yaml
+
+    ocellaris:
+        type: input
+        version: 1.0
+        bases:
+        -   base.inp
+    
+    user_code:
+        constants:
+            B: 4
+    
+    some_section:
+        C: py$ A*B
+
+Ocellaris will interpret the input as:
+
+.. code-block:: yaml
+
+    ocellaris:
+        type: input
+        version: 1.0
+    
+    some_section:
+        D: 0.5
+        C: 8  
+
+
 User constants and code
 .......................
 
@@ -199,7 +255,8 @@ Mesh
 You can specify simple geometries using FEniCS DOLFIN built in mesh generators,
 and also load a mesh from file. For realistic cases using something like gmsh
 to generate meshes is recommended. The meshio_ program can be used to convert 
-between different mesh file formats.
+between different mesh file formats and also loading these formats directly,
+see below.
 
 .. _meshio: https://github.com/nschloe/meshio
 
@@ -285,6 +342,19 @@ This will only load the mesh and (possibly) facet regions. You can also start
 the simulation from a restart file instead of an input file. Then the mesh *and*
 the function values from that save point are used, allowing you to restart the
 simulation more or less like it was never stopped.
+
+Example: using meshio_ to load all its supported formats
+
+.. code-block:: yaml
+        
+    mesh:
+        type: meshio
+        mesh_file: mesh.msh
+        meshio_type: gmsh
+
+The supported formats (as of April 2018) can be found `in this list 
+<https://github.com/nschloe/meshio/blob/f37dd29d67a35ec49a02bd131d1bf11ffde9ff85/meshio/helpers.py#L104>`_
+in the meshio source on github.
 
 
 Moving the mesh
