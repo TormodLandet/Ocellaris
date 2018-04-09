@@ -214,7 +214,7 @@ class RestartFileIO():
                     
                     # Parse YAML data and update the persistent data store
                     data2 = yaml.load(data)
-                    data3 = self.get_persisted_dict(name)
+                    data3 = self.persisted_python_data.setdefault(name, {})
                     data3.update(data2)
     
     def read_functions(self, h5_file_name):
