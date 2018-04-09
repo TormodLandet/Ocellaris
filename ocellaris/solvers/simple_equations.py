@@ -9,7 +9,7 @@ class SimpleEquations(object):
     def __init__(self, simulation, use_stress_divergence_form, use_grad_p_form,
                  use_grad_q_form, use_lagrange_multiplicator, 
                  include_hydrostatic_pressure, incompressibility_flux_type,
-                 num_elements_in_block, lump_diagonal):
+                 num_elements_in_block, lump_diagonal, a_tilde_is_mass=False):
         """
         This class assembles the coupled Navier-Stokes equations as a set of
         matrices and vectors
@@ -35,6 +35,7 @@ class SimpleEquations(object):
         self.num_elements_in_block = num_elements_in_block
         self.lump_diagonal = lump_diagonal
         self.block_partitions = None
+        self.a_tilde_is_mass = a_tilde_is_mass
         
         # We do not currently support all possible options
         assert self.incompressibility_flux_type in ('central', 'upwind')
@@ -96,7 +97,17 @@ class SimpleEquations(object):
         self.eqE = vec[1]
         
         if self.eqE is None:
-            self.eqE = dolfin.TrialFunction(Vp)*dolfin.Constant(0)*dolfin.dx
+            self.eqE = dolfin.TrialFunction(Vp) * dolfin.Constant(0) * dolfin.dx
+        
+        if self.a_tilde_is_mass:
+            # The mass matrix. Consistent with the implementation in define_dg_equations
+            rho = sim.multi_phase_model.get_density(0)
+            c1 = sim.data['time_coeffs'][0]
+            dt = sim.data['dt']
+            eqM = rho * c1 / dt * dolfin.dot(u, v) * dolfin.dx
+            matM, _vecM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)
+            self.eqM = dolfin.Form(matM[0, 0])
+            self.M = None
     
     @timeit
     def assemble_matrices(self, reassemble=False):
@@ -110,6 +121,12 @@ class SimpleEquations(object):
                 setattr(self, name, M)
             elif reas:
                 dolfin.assemble(eq, tensor=M)
+        
+        if self.a_tilde_is_mass:
+            if self.M is None:
+                self.M = dolfin.as_backend_type(dolfin.assemble(self.eqM))
+            else:
+                dolfin.assemble(self.eqM, tensor=self.M)
         
         # Assemble Ã and Ã_inv matrices
         Nelem = self.num_elements_in_block
@@ -131,8 +148,7 @@ class SimpleEquations(object):
         """
         uvw = self.simulation.data['uvw_star']
         Vuvw = uvw.function_space()
-        Aglobal = dolfin.as_backend_type(self.A)
-        
+        Aglobal = self.M if self.a_tilde_is_mass else self.A
         if self.A_tilde is None:
             At = create_block_matrix(Vuvw, 'diag')
             Ati = create_block_matrix(Vuvw, 'diag')
@@ -167,7 +183,7 @@ class SimpleEquations(object):
         Assemble block diagonal Ã and Ã_inv matrices where the blocks
         are the dofs in a single element
         """
-        Aglobal = dolfin.as_backend_type(self.A)
+        Aglobal = self.M if self.a_tilde_is_mass else self.A
         if self.A_tilde is None:
             At = Aglobal.copy()
             Ati = Aglobal.copy()
@@ -205,7 +221,7 @@ class SimpleEquations(object):
             self.simulation.log.info('SIMPLE solver with %d cell blocks found %d blocks in total'
                                      % (Nelem, len(self.block_partitions)))
         
-        Aglobal = dolfin.as_backend_type(self.A)
+        Aglobal = self.M if self.a_tilde_is_mass else self.A
         if self.A_tilde is None:
             block_dofs = [dofs for _, dofs, _ in self.block_partitions]
             At = create_block_matrix(self.Vuvw, block_dofs)

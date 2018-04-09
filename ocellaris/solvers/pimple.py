@@ -52,6 +52,7 @@ ALPHA_P_LAST = 1.0
 # Approximation of Ã
 NUM_ELEMENTS_IN_BLOCK = 0
 LUMP_DIAGONAL = False
+MASS_ONLY_A_TILDE = False
 
 
 @register_solver('PIMPLE')
@@ -122,7 +123,8 @@ class SolverPIMPLE(Solver):
                                    include_hydrostatic_pressure=ph_every_timestep,
                                    incompressibility_flux_type=self.incompressibility_flux_type,
                                    num_elements_in_block=self.num_elements_in_block,
-                                   lump_diagonal=self.lump_diagonal)
+                                   lump_diagonal=self.lump_diagonal,
+                                   a_tilde_is_mass=self.mass_only_A_tilde)
         self.matrices = matrices
         
         # Slope limiter for the momentum equation velocity components
@@ -189,6 +191,7 @@ class SolverPIMPLE(Solver):
         # How to approximate A_tilde
         self.num_elements_in_block = sim.input.get_value('solver/num_elements_in_A_tilde_block', NUM_ELEMENTS_IN_BLOCK, 'int')
         self.lump_diagonal = sim.input.get_value('solver/lump_A_tilde_diagonal', LUMP_DIAGONAL, 'bool')
+        self.mass_only_A_tilde = sim.input.get_value('solver/A_tilde_is_mass_only', MASS_ONLY_A_TILDE, 'bool')
     
     def create_functions(self):
         """
