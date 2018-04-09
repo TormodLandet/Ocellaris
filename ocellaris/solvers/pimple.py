@@ -1,8 +1,7 @@
-import numpy.linalg
 import dolfin
 from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
                              create_vector_functions, shift_fields,
-                             velocity_change, matmul, split_form_into_matrix)
+                             velocity_change, matmul)
 from . import Solver, register_solver, BDM
 from .simple_equations import SimpleEquations
 from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
@@ -28,9 +27,6 @@ SOLVER_P_OPTIONS = {'use_ksp': True,
                     'inner_iter_rtol': [1e-10] * 3,
                     'inner_iter_atol': [1e-15] * 3,
                     'inner_iter_max_it': [100] * 3}
-MAX_INNER_ITER = 10
-MAX_PRESSURE_ITER = 3 
-ALLOWABLE_ERROR_INNER = 1e-10
 
 # Equations - default values, can be changed in the input file
 USE_STRESS_DIVERGENCE = False
@@ -40,9 +36,18 @@ USE_GRAD_Q_FORM = True
 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
 INCOMPRESSIBILITY_FLUX_TYPE = 'central'
 
-# Relaxation
-ALPHA_U = 0.5
-ALPHA_P = 0.5
+# PIMPLE iteration control
+MAX_INNER_ITER = 10
+MAX_PRESSURE_ITER = 3 
+ALLOWABLE_ERROR_INNER = 1e-10
+SKIP_MOM_PRED = False
+
+# Relaxation for normal iterations and for the last
+# iteration in each time step
+ALPHA_U = 0.7
+ALPHA_P = 0.2
+ALPHA_U_LAST = 1.0
+ALPHA_P_LAST = 1.0
 
 # Approximation of Ã
 NUM_ELEMENTS_IN_BLOCK = 0
@@ -51,33 +56,50 @@ LUMP_DIAGONAL = False
 
 @register_solver('PIMPLE')
 class SolverPIMPLE(Solver):
-    description = 'The PIMPLE algorithm (ala OpenFOAM)'
+    description = 'The PIMPLE algorithm'
     
     def __init__(self, simulation):
         """
         A Navier-Stokes solver based on the PIMPLE algorithm as implemented
-        in OpenFOAM and partially described in the PhD thesis of Jasak (1996)
+        in OpenFOAM and partially described in the PhD thesis of Jasak (1996;
+        the PISO loop only)
         
         Starting with the coupled Navier-Stokes saddle point system:
         
-            | M+A  B |   | u |   | d |
-            |        | . |   | = |   |                                     (1)
-            | C    0 |   | p |   | e |
+            | A  B |   | u |   | d |
+            |      | . |   | = |   |                                     (1)
+            | C  0 |   | p |   | e |
         
         where e is not allways zero since we use weak BCs for the normal velocity.
         
         (1) Momentum prediction: guess a pressure p* and then solve for u*
         
-            (Â + G) u* = d - B p*
+            A u* = d - B p*
             
-            G = A - Ã
+            Optionally apply relaxation to u* here
+         
+        (2) Reformulate the equation for u* into an approximate equation for u**
+        
+            Ã u** = (Ã - A) u* - B p** + d
             
-            G is almost equal to H in OpenFOAM, but it has a different sign and 
-            only the bilinear part is included (H in OpenFOAM carries the linear
-            source terms as well (see PhD thesis of Rusche (2002) ch. 2.7)
+            Require continuity of u** by setting C u** = e and inserting the 
+            expression for u** from the approximate momentum equation into
+            the continuity equation (Ã needs to be easily invertible / block diag)
+            
+            CÃ⁻¹B p** = C u* - CÃ⁻¹A u* - CÃ⁻¹B + CÃ⁻¹ d - e
+            
+            Solve for p**. We may optionally apply relaxation to p** here
+            
+        (3) Update the velocity based on the new pressure
+        
+            u** = u* - Ã⁻¹A u* - Ã⁻¹B p + Ã⁻¹d
          
-         (2) ....
-         
+        (4) Go back to step 2 and compute a new pressure correction if requested
+            This is the "PISO-loop" of PIMPLE, steps 2 and 3
+        
+        (5) Go back to step (1) and complete the whole computation again if 
+            required for convergence. If this is done then the algorithm is using
+            PIMPLE mode and relaxation should be applied   
          """
         self.simulation = sim = simulation
         self.read_input()
@@ -224,6 +246,11 @@ class SolverPIMPLE(Solver):
             self.C = dolfin.as_backend_type(C)
             self.D = dolfin.as_backend_type(self.matrices.assemble_D())
         
+        # Optionally skip the momentum prediction entirely
+        if sim.input.get_value('solver/skip_momentum_predictor', SKIP_MOM_PRED, 'bool'):
+            self.niters_u = 0
+            return 0
+        
         lhs = self.A
         rhs = self.D - self.B * p_star.vector()
         
@@ -238,7 +265,10 @@ class SolverPIMPLE(Solver):
         minus_u_hat.vector().apply('insert')
         
         # Explicit relaxation
-        alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
+        if self.last_inner_iter:
+            alpha = sim.input.get_value('solver/relaxation_u_last_iter', ALPHA_U_LAST, 'float')
+        else:
+            alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
         if alpha != 1:
             u_star.vector().axpy(1 - alpha, minus_u_hat.vector())
             u_star.vector().apply('insert')
@@ -284,7 +314,9 @@ class SolverPIMPLE(Solver):
         
         # The equation system
         lhs = self.CAtinvB
-        rhs = self.CAtinvA * u_star.vector() - self.C * u_star.vector() - self.E
+        U = u_star.vector()
+        #rhs = self.CAtinvA * u_star.vector() - self.C *  + self.E
+        rhs = self.C * U - self.CAtinvA * U + self.C * (self.A_tilde_inv * self.D) - self.E
         
         # Inform PETSc about the pressure null space
         if self.remove_null_space:
@@ -323,7 +355,10 @@ class SolverPIMPLE(Solver):
             p_star.vector()[:] -= pavg
         
         # Explicit relaxation
-        alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
+        if self.last_inner_iter:
+            alpha = sim.input.get_value('solver/relaxation_p_last_iter', ALPHA_P_LAST, 'float')
+        else:
+            alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
         if alpha != 1:
             p_star.vector().axpy(1 - alpha, minus_p_hat.vector())
             p_star.vector().apply('insert')
@@ -339,7 +374,7 @@ class SolverPIMPLE(Solver):
         p = self.simulation.data['p']
         uvw = self.simulation.data['uvw_star']
         
-        minus_u_upd = self.AtinvA * uvw.vector() + self.AtinvB * p.vector()  
+        minus_u_upd = self.AtinvA * uvw.vector() + self.AtinvB * p.vector() - self.A_tilde_inv * self.D  
         uvw.vector().axpy(-1.0, minus_u_upd)
         uvw.vector().apply('insert')
     
@@ -415,7 +450,11 @@ class SolverPIMPLE(Solver):
                 
                 # Run inner iterations
                 self.inner_iteration = 1
-                while self.inner_iteration <= num_inner_iter:
+                self.last_inner_iter = False
+                while 1:
+                    if self.inner_iteration == num_inner_iter:
+                        self.last_inner_iter = True
+                    
                     self.co_inner_iter = num_inner_iter - self.inner_iteration
                     err_u = self.momentum_prediction()
                     err_p = self.piso_loop()
@@ -424,8 +463,10 @@ class SolverPIMPLE(Solver):
                                      err_u, err_p, self.niters_u, self.niters_p))
                     self.inner_iteration += 1
                     
-                    if err_u < allowable_error_inner:
+                    if self.last_inner_iter:
                         break
+                    elif err_u < allowable_error_inner:
+                        self.last_inner_iter = True
                 
                 # Extract the separate velocity component functions
                 self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])

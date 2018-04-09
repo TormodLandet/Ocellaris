@@ -101,7 +101,7 @@ output:
 solver:
     type: PIMPLE
     num_inner_iter: 10
-    num_pressure_corr: 1
+    num_pressure_corr: 3
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
