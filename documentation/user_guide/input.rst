@@ -782,14 +782,15 @@ FEniCS DOLFIN solver setup (use_ksp = no)
     documentation for these.
 
 
-Navier-Stokes solver
-....................
+Navier-Stokes solvers
+.....................
 
 Some parameters are shared between all the available velocity-pressure solvers.
-All the following parameters have sensible defaults (the values show are the
-defaults) except for the solver ``type`` which you must set. The possible
-values for solver type (IPCS-A, SIMPLE, PISO etc) are listed in the sections
-below. 
+All the parameters in the following example have sensible defaults except for
+the solver ``type`` which you must set. For the other parameters in the example
+the values shown are the default values. The possible values for solver type
+(IPCS-A, SIMPLE, PISO etc) are listed in the sections below with a brief
+description. 
 
 .. code-block:: yaml
     
@@ -807,13 +808,28 @@ below.
             # see linear solver documentation above
 
 The inner iterations (pressure correction iterations) will run a maximum of
-``num_inner_iter`` times, but will exit early if the :math:`L^2` error of the
-difference between the predicted and corrected velocity field is less than the
-given value ``allowable_error_inner``.
+``num_inner_iter`` times for each time step, but the iterations will exit early
+if the :math:`l^2` error of the difference between the predicted and corrected
+velocity field is less than the given value ``allowable_error_inner``.
 
 Some control parameters exist outside the common ones shown above, but none of
 these are of the type that a normal user would probably need to change, so they
 are only documented in the source code of the individual solvers.
+
+The following parameters are relevant for under-relaxed solver implementations
+(SIMPLE, PISO, PIMPLE):
+
+.. describe::  relaxation_u, relaxation_p
+
+    Relaxation factors. A value of 1.0 means no relaxation, 0.0 means no update
+    at all (pointless). A value of 0.5 means that the result is an even blend
+    of the computed value and the previous iteration value
+    
+.. describe::  relaxation_u_last_iter, relaxation_p_last_iter
+
+    Some solvers will differentiate the last inner iteration from all other
+    iterations. These parameters default to 1.0 in order to perform a "propper"
+    update at the end of a time step with no relaxation applied.
 
 IPCS-A
 ~~~~~~
@@ -877,7 +893,7 @@ Analytical
 Use the initial condition C++ code (possibly containing the time variable ``t``
 which will be updated for each time step) to define the velocity and pressure
 for all time steps. This can be usefull for testing other parts of the 
-Ocellaris solution framework with a know Navier-Stokes solution.
+Ocellaris solution framework with a known Navier-Stokes solution.
 
 
 Multi phase solver
