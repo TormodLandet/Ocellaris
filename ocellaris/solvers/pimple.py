@@ -218,7 +218,7 @@ class SolverPIMPLE(Solver):
         e_mixed = dolfin.MixedElement([ue] * sim.ndim)
         Vcoupled = dolfin.FunctionSpace(Vu.mesh(), e_mixed)
         sim.data['uvw_star'] = dolfin.Function(Vcoupled)
-        sim.data['uvw_hat'] = dolfin.Function(Vcoupled)
+        sim.data['uvw_start'] = dolfin.Function(Vcoupled)
         sim.ndofs += Vcoupled.dim() + Vp.dim()
         
         # Create assigner to extract split function from uvw and vice versa
@@ -236,7 +236,6 @@ class SolverPIMPLE(Solver):
         """
         sim = self.simulation
         u_star = sim.data['uvw_star']
-        minus_u_hat = sim.data['uvw_hat']
         p_star = sim.data['p']
         
         # Assemble the LHS matrices only the first inner iteration
@@ -248,50 +247,58 @@ class SolverPIMPLE(Solver):
             self.B = dolfin.as_backend_type(B)
             self.C = dolfin.as_backend_type(C)
             self.D = dolfin.as_backend_type(self.matrices.assemble_D())
+            
+        # Save the u_star we have at the beginning of the iteration so that we
+        # can later compute the change in u_star after the end of the vel update
+        sim.data['uvw_start'].assign(u_star)
         
         # Optionally skip the momentum prediction entirely
         if sim.input.get_value('solver/skip_momentum_predictor', SKIP_MOM_PRED, 'bool'):
             self.niters_u = 0
             return 0
         
+        # The equation system to solve
         lhs = self.A
         rhs = self.D - self.B * p_star.vector()
         
-        # Solve the linearised convection-diffusion system
-        minus_u_hat.assign(u_star)
-        self.niters_u = self.velocity_solver.inner_solve(lhs, u_star.vector(), rhs,
-                                                         in_iter=self.inner_iteration,
-                                                         co_iter=self.co_inner_iter)
-        
-        # Compute change from last iteration
-        minus_u_hat.vector().axpy(-1, u_star.vector())
-        minus_u_hat.vector().apply('insert')
-        
-        # Explicit relaxation
+        # Add optional under relaxation
         if self.last_inner_iter:
             alpha = sim.input.get_value('solver/relaxation_u_last_iter', ALPHA_U_LAST, 'float')
         else:
             alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
-        if alpha != 1:
-            u_star.vector().axpy(1 - alpha, minus_u_hat.vector())
-            u_star.vector().apply('insert')
+        if alpha != 1.0:
+            # Implicit under relaxation
+            relax = (1 - alpha) / alpha
+            lhs = dolfin.as_backend_type(lhs.copy())
+            lhs.axpy(relax, self.A_tilde, False)
+            lhs.apply('insert')
+            rhs.axpy(relax, self.A_tilde * u_star.vector())
+            rhs.apply('insert')
         
-        return minus_u_hat.vector().norm('l2')
+        # Solve the linearised convection-diffusion system
+        self.niters_u = self.velocity_solver.inner_solve(lhs, u_star.vector(), rhs,
+                                                         in_iter=self.inner_iteration,
+                                                         co_iter=self.co_inner_iter)
     
     def piso_loop(self):
         """
-        Perform pressure correction and velocity update. This is the "PISO"
-        part of the PIMPLE algorithm, but it is quite different from the real
-        PISO algoritm by Issa (1986)
+        Perform pressure correction and velocity update iteratively.
+        This is the "PISO" part of the PIMPLE algorithm
         """
         N = self.simulation.input.get_value('solver/num_pressure_corr', MAX_PRESSURE_ITER, 'int')
         for i in range(N):
             err_p = self.pressure_correction()
-            self.velocity_update()
+            err_u = self.velocity_update()
             if N != 1:
-                self.simulation.log.info('    Pressure correction %3d - err p %10.3e'
-                                         ' - Kry. iters %3d' % (i, err_p, self.niters_p))
-        return err_p
+                self.simulation.log.info('    Pressure correction %2d - err u* %10.3e - err p %10.3e'
+                                         ' - Kry. iters %3d' % (i + 1, err_u, err_p, self.niters_p))
+        
+        # The change in u_star from before the momentum prediction and up to now
+        u_star_old = self.simulation.data['uvw_start']
+        u_star_new = self.simulation.data['uvw_star']
+        err_u = (u_star_new.vector() - u_star_old.vector()).norm('l2')
+        
+        return err_p, err_u
     
     @timeit
     def pressure_correction(self):
@@ -380,6 +387,8 @@ class SolverPIMPLE(Solver):
         minus_u_upd = self.AtinvA * uvw.vector() + self.AtinvB * p.vector() - self.A_tilde_inv * self.D  
         uvw.vector().axpy(-1.0, minus_u_upd)
         uvw.vector().apply('insert')
+        
+        return minus_u_upd.norm('l2')
     
     @timeit
     def postprocess_velocity(self):
@@ -459,8 +468,8 @@ class SolverPIMPLE(Solver):
                         self.last_inner_iter = True
                     
                     self.co_inner_iter = num_inner_iter - self.inner_iteration
-                    err_u = self.momentum_prediction()
-                    err_p = self.piso_loop()
+                    self.momentum_prediction()
+                    err_p, err_u = self.piso_loop()
                     sim.log.info('  PIMPLE iteration %3d - err u* %10.3e - err p %10.3e'
                                  ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
                                      err_u, err_p, self.niters_u, self.niters_p))
