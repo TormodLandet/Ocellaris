@@ -45,26 +45,35 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
     if 'triangle' in cells:
         assert len(cells) == 1, 'Mixed element meshes is not supported'
         dim = 2
-        cell_type = 'triangle'
         connectivity = cells['triangle']
     elif 'tetra' in cells:
         assert len(cells) == 1, 'Mixed element meshes is not supported'
         dim = 3
-        cell_type = 'tetrahedron'
         connectivity = cells['tetra']
     else:
         ocellaris_error('Mesh loaded by meshio contains unsupported cells',
                         'Expected to find tetrahedra or triangles, found %r'
                         % (tuple(cells.keys()), ))
     
-    # Get global mesh sizes
-    Nvert = points.shape[0]
-    Ncell = connectivity.shape[0]
-    
     # Order elements by location of the first vertex
     if sort_order is not None:
         connectivity = [[int(c) for c in conn] for conn in connectivity]
         connectivity.sort(key=lambda el: tuple(points[el[0]][i] for i in sort_order)) 
+    
+    # Add the vertices and cells
+    init_mesh_geometry(mesh, points, connectivity, dim)
+
+
+def init_mesh_geometry(mesh, points, connectivity, dim):
+    """
+    Create a dolfin mesh from a list of points and connectivity  for each cell
+    (as returned by meshio). The geometric dimmension dim should be 2 or 3
+    """
+    cell_type = {2: 'triangle', 3: 'tetrahedron'}[dim]
+    
+    # Get global mesh sizes
+    Nvert = points.shape[0]
+    Ncell = connectivity.shape[0]
     
     # Open mesh for editing
     editor = dolfin.MeshEditor()
