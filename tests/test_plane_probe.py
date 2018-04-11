@@ -1,7 +1,25 @@
 import dolfin
 import numpy
-from ocellaris.probes.plane_probe import (get_plane_normal, get_plane_coefficients,
-                                          get_point_sides, get_points_in_plane)
+from ocellaris.probes.plane_probe import (make_cut_plane_mesh, get_points_in_plane,
+                                          get_plane_normal, get_point_sides,
+                                          get_plane_coefficients)
+
+
+def test_cut_mesh():
+    mesh = dolfin.UnitCubeMesh(2, 2, 2)
+    mesh.init(3, 0)
+    pt = (0.1, 0.1, 0.1)
+    n = (0, 0, 1)
+    mesh2d, cell_origins = make_cut_plane_mesh(pt, n, mesh)
+    
+    import pprint; pprint.pprint(cell_origins)
+    
+    if False and mesh2d is not None:
+        import matplotlib; matplotlib.use('Agg')
+        from matplotlib import pyplot
+        fig = pyplot.figure()
+        dolfin.plot(mesh2d)
+        fig.savefig('test_cut_mesh.png')
 
 
 def test_points_in_mesh():

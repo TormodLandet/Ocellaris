@@ -61,15 +61,15 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
         connectivity.sort(key=lambda el: tuple(points[el[0]][i] for i in sort_order)) 
     
     # Add the vertices and cells
-    init_mesh_geometry(mesh, points, connectivity, dim)
+    init_mesh_geometry(mesh, points, connectivity, dim, dim)
 
 
-def init_mesh_geometry(mesh, points, connectivity, dim):
+def init_mesh_geometry(mesh, points, connectivity, tdim, gdim):
     """
     Create a dolfin mesh from a list of points and connectivity  for each cell
     (as returned by meshio). The geometric dimmension dim should be 2 or 3
     """
-    cell_type = {2: 'triangle', 3: 'tetrahedron'}[dim]
+    cell_type = {2: 'triangle', 3: 'tetrahedron'}[tdim]
     
     # Get global mesh sizes
     Nvert = points.shape[0]
@@ -77,7 +77,7 @@ def init_mesh_geometry(mesh, points, connectivity, dim):
     
     # Open mesh for editing
     editor = dolfin.MeshEditor()
-    editor.open(mesh, cell_type, dim, dim)
+    editor.open(mesh, cell_type, tdim, gdim)
     
     # Add vertices
     editor.init_vertices_global(Nvert, Nvert)

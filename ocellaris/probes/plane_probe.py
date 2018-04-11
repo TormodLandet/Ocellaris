@@ -17,11 +17,11 @@ def make_cut_plane_mesh(pt, n, mesh3d):
     res = get_points_in_plane(pt, n, mesh3d)
     comm = mesh3d.mpi_comm()
     
-    results = comm.rank(), res
+    results = comm.rank, res
     all_results = comm.gather(results)
     
     # No collective operatione below this point!
-    if comm.rank() != 0:
+    if comm.rank != 0:
         return None, None
     
     point_ids = {}
@@ -29,29 +29,35 @@ def make_cut_plane_mesh(pt, n, mesh3d):
     connectivity = []
     cell_origins = []
     for rank, res in all_results:
-        for cell_id, points in res.items():
-            cell_points = []
-            for pt in points:
-                if pt not in point_ids:
-                    point_ids[pt] = len(point_ids)
-                    points.append(pt)
-                cell_points.append(point_ids[pt])
-            connectivity.append(point_ids)
-            cell_origins.append(rank, cell_id)
+        for cell_id, cell_coords in res.items():
+            if len(cell_coords) == 4:
+                subcells = (cell_coords[1:], cell_coords[:-1])
+            else:
+                subcells = (cell_coords,)
+            
+            for cell_coords in subcells:
+                cell_points = []
+                for coords in cell_coords:
+                    if coords not in point_ids:
+                        point_ids[coords] = len(point_ids)
+                        points.append(coords)
+                    cell_points.append(point_ids[coords])
+                connectivity.append(cell_points)
+                cell_origins.append((rank, cell_id))
     
     # Create the mesh
     points = numpy.array(points, float)
     connectivity = numpy.array(connectivity, int)
-    dim = 3
+    tdim, gdim = 2, 3
     mesh2d = dolfin.Mesh(dolfin.MPI.comm_self)
-    init_mesh_geometry(mesh2d, points, connectivity, dim)
+    init_mesh_geometry(mesh2d, points, connectivity, tdim, gdim)
     
     return mesh2d, cell_origins
 
 
 def get_points_in_plane(pt, n, mesh, eps=1e-8):
     """
-    Returns a dictionary of cell_id -> list of three coordinate (x, y, z,)
+    Returns a dictionary of cell_id -> list of three/four coordinate (x, y, z)
     tuples for any cell that has three points on a mesh edge that crosses the
     given plane. For edges coincident with the plane only the two end points
     are returned
@@ -104,7 +110,7 @@ def get_points_in_plane(pt, n, mesh, eps=1e-8):
             cell_points.append((pos[0], pos[1], pos[2]))
         
         # Only add this cell if in contributes with some area to the plane
-        if len(cell_points) == 3:
+        if len(cell_points) > 2:
             results[cid] = cell_points
     
     return results
