@@ -53,6 +53,10 @@ def setup_probes(simulation):
     
     simulation.probes = {}
     Nprobes = len(simulation.input.get_value('probes', []))
+    
+    if Nprobes:
+        simulation.log.info('Setting up probes')
+    
     for i in range(Nprobes):
         # Read input about this probe
         inp = simulation.input.get_value('probes/%d' % i, required_type='Input')
@@ -62,6 +66,7 @@ def setup_probes(simulation):
         
         if not enabled:
             continue
+        simulation.log.info('    Setting up %s probe %s' % (probe_type, probe_name))
         
         # Get the probe object
         probe_class = get_probe(probe_type)
@@ -69,7 +74,7 @@ def setup_probes(simulation):
         
         # Store for access from other parts of the code
         if probe_name in simulation.probes:
-            simulation.log.warning('Probe name "%s" used for multiple probes. Names should be unique!')
+            simulation.log.warning('    Probe name "%s" used for multiple probes. Names should be unique!')
         simulation.probes[probe_name] = probe
         
         # Register callbacks
@@ -84,6 +89,8 @@ def setup_probes(simulation):
 
 
 class Probe(object):
+    description = 'No description available'
+    
     def __init__(self, simulation, probe_input):
         """
         A base class for post-processing probes
@@ -100,3 +107,4 @@ class Probe(object):
 
 from . import line_probe
 from . import iso_surface
+from . import plane_probe

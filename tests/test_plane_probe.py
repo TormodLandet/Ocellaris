@@ -7,7 +7,7 @@ from ocellaris.probes.plane_probe import (make_cut_plane_mesh, get_points_in_pla
 
 def test_function_slice():
     # Create a smooth scalar 3D function
-    mesh = dolfin.UnitCubeMesh(2, 2, 2)
+    mesh =  dolfin.UnitCubeMesh(2, 2, 2)
     mesh.init(3, 0)
     V = dolfin.FunctionSpace(mesh, 'DG', 2)
     u = dolfin.Function(V)
@@ -20,26 +20,28 @@ def test_function_slice():
     func_slice = FunctionSlice(pt, n, V)
     u_2D = func_slice.get_slice(u)
     
-    if mesh.mpi_comm().rank != 0:
-        return
-    
-    # Compute error norm of 2D function wrt the known answer
+    # The 2D solution we want to obtain
     cpp_2d = cpp.replace('x[2]', repr(pt[2]))
     analytical = dolfin.Expression(cpp_2d, degree=2+3)
-    error = dolfin.errornorm(analytical, u_2D)
     
-    if True:
-        import matplotlib; matplotlib.use('Agg')
-        from matplotlib import pyplot
-        fig = pyplot.figure()
-        dolfin.plot(u_2D)
-        fig.savefig('test_func_slice.png')
-    
-    assert error < 0.015
+    comm = dolfin.MPI.comm_world
+    if comm.rank == 0:
+        error = dolfin.errornorm(analytical, u_2D)
+        
+        if False:
+            import matplotlib; matplotlib.use('Agg')
+            from matplotlib import pyplot
+            fig = pyplot.figure()
+            dolfin.plot(u_2D)
+            fig.savefig('test_func_slice.png')
+    else:
+        error = 0.0
+        
+    assert dolfin.MPI.max(comm, error) < 0.015
 
 
 def test_cut_mesh():
-    mesh = dolfin.UnitCubeMesh(2, 2, 2)
+    mesh =  dolfin.UnitCubeMesh(2, 2, 2)
     mesh.init(3, 0)
     pt = (0.1, 0.1, 0.1)
     n = (0, 0, 1)

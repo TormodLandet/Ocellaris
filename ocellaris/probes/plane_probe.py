@@ -2,6 +2,64 @@ import dolfin
 import numpy
 from collections import OrderedDict
 from ocellaris.utils import init_mesh_geometry, timeit
+from . import Probe, register_probe
+
+
+WRITE_INTERVAL = 1
+
+
+@register_probe('PlaneProbe')
+class PlaneProbe(Probe):
+    description = 'Produce a 2D slice function from a 3D mesh'
+    
+    def __init__(self, simulation, probe_input):
+        self.simulation = simulation
+        assert self.simulation.ndim == 3, 'PlaneProbe only implemented in 3D'
+
+        # Read input
+        inp = probe_input
+        self.name = inp.get_value('name', required_type='string')
+        self.field_name = inp.get_value('field', required_type='string')
+        self.plane_point = inp.get_value('plane_point', required_type='list(float)',
+                                         required_length=3)
+        self.plane_normal = inp.get_value('plane_normal', required_type='list(float)',
+                                          required_length=3)
+        self.custom_hook_point = inp.get_value('custom_hook', None, required_type='string')
+        self.func_3d = simulation.data[self.field_name]
+    
+        prefix = simulation.input.get_value('output/prefix', '', 'string')
+        self.file_name = '%s_slice_%s.xdmf' % (prefix, self.name) 
+        self.write_interval = inp.get_value('write_interval', WRITE_INTERVAL, 'int')
+        
+        if simulation.rank == 0:
+            simulation.log.info('        Creating XDMF file %s' % self.file_name)
+            self.xdmf_file = dolfin.XDMFFile(dolfin.MPI.comm_self, self.file_name)
+            self.xdmf_file.parameters['flush_output'] = True
+            self.xdmf_file.parameters['rewrite_function_mesh'] = False
+            self.xdmf_file.parameters['functions_share_mesh'] = True
+        
+        V = self.func_3d.function_space()
+        self.slice = FunctionSlice(self.plane_point, self.plane_normal, V)
+        self.func_2d = dolfin.Function(self.slice.slice_function_space)
+        self.func_2d.rename(self.func_3d.name(), self.func_3d.name())
+        
+        if self.custom_hook_point is not None:
+            simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
+        else:
+            self.end_of_timestep = self.run
+
+    def run(self):
+        """
+        Find and output the plane probe
+        """
+        it = self.simulation.timestep
+        
+        # Should we update the file?
+        if not (it == 1 or it % self.write_interval == 0):
+            return
+        
+        self.slice.get_slice(self.func_3d, self.func_2d)
+        self.xdmf_file.write(self.func_2d, self.simulation.time)
 
 
 class FunctionSlice:
