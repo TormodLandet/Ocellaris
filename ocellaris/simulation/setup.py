@@ -397,8 +397,9 @@ def setup_physical_properties(simulation, multiphase_class):
     Gravity vector and rho/nu/mu fields are created here
     """
     ndim = simulation.ndim
-    g = simulation.input.get_value('physical_properties/g', [0]*ndim, required_type='list(float)')
-    assert len(g) == simulation.ndim
+    g = simulation.input.get_value('physical_properties/g', [0]*ndim,
+                                   required_type='list(float)',
+                                   required_length=simulation.ndim)
     simulation.data['g'] = dolfin.Constant(g)
     
     # Get the density and viscosity properties from the multi phase model

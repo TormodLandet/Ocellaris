@@ -46,7 +46,7 @@ class Input(collections.OrderedDict):
         self.update(inp)
     
     def get_value(self, path, default_value=UNDEFINED, required_type='any',
-                  mpi_root_value=False, safe_mode=False):
+                  mpi_root_value=False, safe_mode=False, required_length=None):
         """
         Get an input value by its path in the input dictionary
         
@@ -110,6 +110,11 @@ class Input(collections.OrderedDict):
             d_new = []
             for val in d:
                 d_new.append(check_isinstance(val, valtype))
+            
+            if required_length is not None and len(d_new) != required_length:
+                ocellaris_error('Malformed data on input file',
+                                'Parameter %s should be length %r found %r' % 
+                                (pathstr, required_length, len(d_new)))
             return d_new
         
         # Get validation function according to required data type
