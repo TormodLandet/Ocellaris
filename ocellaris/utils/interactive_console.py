@@ -16,12 +16,15 @@ def interactive_console_hook(simulation):
     Commands:
     
     * d - debug console
+    * f - flush open files
+    * i - change input
     * p - plot fields
+    * prof N - profile the next N time steps
     * r - write restart file
     * s - stop the simulation (changes the maximum simulation
           time to current time)
     * t - print timings to screen
-    * prof N - profile the next N time steps
+    * w - write output file (vtk or xdmf)
     
     Interactive console commands are not available on Windows
     or during non-interactive (queue system/batch) use
@@ -76,10 +79,29 @@ def interactive_console_hook(simulation):
             simulation.log.info('\nCommand line action:\n  Showing timings')
             log_timings(simulation)
         
-        # Two-word commands in alphabetical order:
+        # Multi-word commands in alphabetical order:
         
         elif len(cwords) < 2:
             continue
+        
+        elif cwords[0] == 'i':
+            # i == "input" -> set input variable, e.g., "i time/dt = 0.04"
+            assignment = ' '.join(cwords[1:])
+            simulation.log.info('\nCommand line action:\n  Input modification: %s'
+                                % assignment)
+            i = assignment.find('=')
+            if i == -1:
+                simulation.log.warning('Malformed input, no "=" found')
+                continue
+            path = assignment[:i].strip()
+            value = assignment[i+1:].strip()
+            try:
+                py_value = eval(value)
+            except Exception:
+                simulation.log.warning('Could not get Python value from %r' % value)
+                continue
+            simulation.log.info('  Setting input %r to %r' % (path, py_value))
+            simulation.input.set_value(path, py_value)
         
         elif cwords[0] == 'w':
             # w == "write" -> write output file (restart files use "r" command)
