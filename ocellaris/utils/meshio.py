@@ -73,7 +73,7 @@ def init_mesh_geometry(mesh, points, connectivity, tdim, gdim):
     
     # Get global mesh sizes
     Nvert = points.shape[0]
-    Ncell = connectivity.shape[0]
+    Ncell = len(connectivity)
     
     # Open mesh for editing
     editor = dolfin.MeshEditor()
