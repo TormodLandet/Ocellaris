@@ -31,6 +31,9 @@ class PlaneProbe(Probe):
         self.file_name = '%s_slice_%s.xdmf' % (prefix, self.name) 
         self.write_interval = inp.get_value('write_interval', WRITE_INTERVAL, 'int')
         
+        V = self.func_3d.function_space()
+        self.slice = FunctionSlice(self.plane_point, self.plane_normal, V)
+        
         if simulation.rank == 0:
             simulation.log.info('        Creating XDMF file %s' % self.file_name)
             self.xdmf_file = dolfin.XDMFFile(dolfin.MPI.comm_self, self.file_name)
@@ -38,10 +41,10 @@ class PlaneProbe(Probe):
             self.xdmf_file.parameters['rewrite_function_mesh'] = False
             self.xdmf_file.parameters['functions_share_mesh'] = True
         
-        V = self.func_3d.function_space()
-        self.slice = FunctionSlice(self.plane_point, self.plane_normal, V)
-        self.func_2d = dolfin.Function(self.slice.slice_function_space)
-        self.func_2d.rename(self.func_3d.name(), self.func_3d.name())
+            self.func_2d = dolfin.Function(self.slice.slice_function_space)
+            self.func_2d.rename(self.func_3d.name(), self.func_3d.name())
+        else:
+            self.func_2d = None
         
         if self.custom_hook_point is not None:
             simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
@@ -59,7 +62,8 @@ class PlaneProbe(Probe):
             return
         
         self.slice.get_slice(self.func_3d, self.func_2d)
-        self.xdmf_file.write(self.func_2d, self.simulation.time)
+        if self.simulation.rank == 0:
+            self.xdmf_file.write(self.func_2d, self.simulation.time)
 
 
 class FunctionSlice:
@@ -200,7 +204,7 @@ def make_cut_plane_mesh(pt, n, mesh3d):
             
             for cell_coords in subcells:
                 cell_points = []
-                for coords in cell_coords:
+                for coords in cell_coords: 
                     if coords not in point_ids:
                         point_ids[coords] = len(point_ids)
                         points.append(coords)
@@ -250,7 +254,7 @@ def get_points_in_plane(pt, n, mesh, eps=1e-8):
         for i, v in enumerate(verts):
             if on_plane[i]:
                 pos = coords[v]
-                cell_points.append((pos[0], pos[1], pos[2], cid))
+                cell_points.append((pos[0], pos[1], pos[2]))
         
         for v0, v1 in [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]:
             if on_plane[v0] or on_plane[v1]:

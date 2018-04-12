@@ -219,6 +219,24 @@ slope_limiter:
         method: Componentwise
         comp_method: HierarchicalTaylor
 
+probes:
+    -   name: cutY1.0_rho
+        enabled: yes
+        type: PlaneProbe
+        plane_point: [0, 1, 0]
+        plane_normal: [0, 1, 0]
+        field: rho
+        write_interval: 10
+        custom_hook: MultiPhaseModelUpdated
+        
+    -   name: cutZh_p
+        enabled: yes
+        type: PlaneProbe
+        plane_point: py$ [0, h, 0]
+        plane_normal: [0, 0, 1]
+        field: p
+        write_interval: 10
+
 hooks:
     post_timestep:
 
