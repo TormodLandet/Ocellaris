@@ -8,7 +8,7 @@ SetFactory("OpenCASCADE");
 
 // Parameters of the geometry
 DefineConstant[ H = {  35.0, Name "Parameters/Total depth" } ];
-DefineConstant[ h = {   6.0, Name "Parameters/Upper layer depth" } ];
+DefineConstant[ h = {   7.0, Name "Parameters/Upper layer depth" } ];
 DefineConstant[ L = { 200.0, Name "Parameters/Domain length" } ];
 DefineConstant[ B = {  50.0, Name "Parameters/Domain breadth" } ];
 DefineConstant[ C = {  65.0, Name "Parameters/Hull inlet offset amidships" } ];
@@ -18,9 +18,9 @@ DefineConstant[ w = {  11.0, Name "Parameters/Hull width" } ];
 DefineConstant[ d = {   5.0, Name "Parameters/Draught amidships" } ];
 
 // Mesh params
-DefineConstant[ lc_fine   = { 2.0, Name "Parameters/LC fine" } ];
-DefineConstant[ lc_med    = { 5.0, Name "Parameters/LC medium" } ];
-DefineConstant[ lc_course = {15.0, Name "Parameters/LC course" } ];
+DefineConstant[ lc_fine   = { 3.0, Name "Parameters/LC fine" } ];
+DefineConstant[ lc_med    = { 8.0, Name "Parameters/LC medium" } ];
+DefineConstant[ lc_course = {20.0, Name "Parameters/LC course" } ];
 DefineConstant[ fs_eps    = { 5.0, Name "Parameters/Fine mesh free surface thickness" } ];
 
 

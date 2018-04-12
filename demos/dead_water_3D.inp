@@ -14,7 +14,7 @@ user_code:
         L: 200       # domain length
         H: 35        # domain depth
         B: 50        # domain breadth
-        h: 6.0       # depth to pycnocline
+        h: 7.0       # depth to pycnocline
         d: 5         # draught amidships
         l: 30        # length of hull water line
         C: 65        # distance from midships to inlet
@@ -186,7 +186,7 @@ boundary_conditions:
         value: py$ FRESH
 
 time:
-    dt: 0.1
+    dt: 0.5
     tmax: py$ Tmax
 
 output:
