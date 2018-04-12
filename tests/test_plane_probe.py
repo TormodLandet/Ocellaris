@@ -2,7 +2,40 @@ import dolfin
 import numpy
 from ocellaris.probes.plane_probe import (make_cut_plane_mesh, get_points_in_plane,
                                           get_plane_normal, get_point_sides,
-                                          get_plane_coefficients)
+                                          get_plane_coefficients, FunctionSlice)
+
+
+def test_function_slice():
+    # Create a smooth scalar 3D function
+    mesh = dolfin.UnitCubeMesh(2, 2, 2)
+    mesh.init(3, 0)
+    V = dolfin.FunctionSpace(mesh, 'DG', 2)
+    u = dolfin.Function(V)
+    cpp = 'sin(2 * x[0]) * sin(2 * x[1]) * sin(2 * x[2])'
+    u.interpolate(dolfin.Expression(cpp, degree=2))
+    
+    # Get a 2D slice of the 3D function
+    pt = (0.1, 0.1, 0.1)
+    n = (0, 0, 1)
+    func_slice = FunctionSlice(pt, n, V)
+    u_2D = func_slice.get_slice(u)
+    
+    if mesh.mpi_comm().rank != 0:
+        return
+    
+    # Compute error norm of 2D function wrt the known answer
+    cpp_2d = cpp.replace('x[2]', repr(pt[2]))
+    analytical = dolfin.Expression(cpp_2d, degree=2+3)
+    error = dolfin.errornorm(analytical, u_2D)
+    
+    if True:
+        import matplotlib; matplotlib.use('Agg')
+        from matplotlib import pyplot
+        fig = pyplot.figure()
+        dolfin.plot(u_2D)
+        fig.savefig('test_func_slice.png')
+    
+    assert error < 0.015
 
 
 def test_cut_mesh():

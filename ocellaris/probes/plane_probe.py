@@ -1,6 +1,112 @@
 import dolfin
 import numpy
-from ocellaris.utils import init_mesh_geometry
+from collections import OrderedDict
+from ocellaris.utils import init_mesh_geometry, timeit
+
+
+class FunctionSlice:
+    def __init__(self, pt, n, V3d):
+        """
+        Take the definition of a plane and a 3D function space
+        Construct a 2D mesh on rank 0 (only) and the necessary
+        data structures to extract function values at the 2D
+        mesh in an efficient way
+        
+        * pt: a point in the plane
+        * n: a normal vector to the plane. Does not need to be a unit normal
+        * V3d: the 3D function space to be intersected by the plane 
+        """
+        gdim = V3d.mesh().geometry().dim()
+        assert gdim == 3, 'Function slice only supported in 3D'
+        
+        # 3D function space data
+        comm = V3d.mesh().mpi_comm()
+        elem_3d = V3d.ufl_element()
+        family = elem_3d.family()
+        degree = elem_3d.degree()
+        
+        # Create the 2D mesh
+        # The 2D mesh uses MPI_COMM_SELF and lives only on the root process
+        mesh_2d, cell_origins = make_cut_plane_mesh(pt, n, V3d.mesh())
+        
+        # Precompute data on root process
+        if comm.rank == 0:
+            # Make the 2D function space
+            
+            V2d = dolfin.FunctionSpace(mesh_2d, family, degree)
+            self.slice_function_space = V2d
+            
+            # Get 2D dof coordinates and dofmap
+            dof_pos_2d = V2d.tabulate_dof_coordinates().reshape((-1, gdim))
+            dofmap_2d = V2d.dofmap()
+            
+            # Link 2D dofs and 3D ranks
+            links_for_rank = [[] for _ in range(comm.size)]
+            for cell in dolfin.cells(mesh_2d):
+                cid = cell.index()
+                
+                # Assume no cell renumbering
+                orig_rank, orig_cell_index = cell_origins[cid]
+                
+                for dof in dofmap_2d.cell_dofs(cid):
+                    links_for_rank[orig_rank].append((dof, orig_cell_index))
+            
+            # Distribute data to all ranks
+            distribute_this = []
+            for rank in range(comm.size):
+                positions = [dof_pos_2d[i] for i, _ in links_for_rank[rank]]
+                orig_cells = [ocid for _, ocid in links_for_rank[rank]]
+                positions = numpy.array(positions, float)
+                orig_cells = numpy.array(orig_cells, numpy.intc)
+                distribute_this.append((positions, orig_cells))
+            
+            # Store which 2D dof belongs on which rank
+            self._dofs_for_rank = []
+            for rank in range(comm.size):
+                dfr = [dof for dof, _ in links_for_rank[rank]]
+                self._dofs_for_rank.append(numpy.array(dfr, int))
+        else:
+            distribute_this = None
+        
+        # Get positions along with the index of the 3D cell for all points that
+        # need to be evaluated in order to build the 2D function
+        # Each rank gets positions corresponding to cells located on that rank
+        positions, cell_index_3d = comm.scatter(distribute_this)
+        
+        # Establish efficient ways to get the 2D data from the 3D function
+        cell_dofs = [V3d.dofmap().cell_dofs(i) for i in cell_index_3d]
+        self._cell_dofs = numpy.array(cell_dofs, int)
+        self._factors = numpy.zeros(self._cell_dofs.shape, float)
+        evaluate_basis_functions(V3d, positions, cell_index_3d, self._factors)
+        self._local_data = numpy.zeros(len(self._cell_dofs), float)
+    
+    @timeit.named('FunctionSlice.get_slice')
+    def get_slice(self, func_3d, func_2d=None):
+        """
+        Return the function on the 2D slice of the 3D mesh 
+        """
+        comm = func_3d.function_space().mesh().mpi_comm()
+        
+        # Get local values from all processes
+        arr_3d = func_3d.vector().get_local()
+        local_data = self._local_data
+        N = local_data.size
+        facs = self._factors
+        cd = self._cell_dofs
+        for i in range(N):
+            local_data[i] = arr_3d[cd[i]].dot(facs[i]) 
+        all_data = comm.gather(local_data)
+        
+        if comm.rank == 0:
+            if func_2d is None:
+                func_2d = dolfin.Function(self.slice_function_space)
+            arr_2d = func_2d.vector().get_local()
+            for data, dofs in zip(all_data, self._dofs_for_rank):
+                arr_2d[dofs] = data
+            func_2d.vector().set_local(arr_2d)
+            func_2d.vector().apply('insert')
+            
+            return func_2d 
 
 
 def make_cut_plane_mesh(pt, n, mesh3d):
@@ -14,11 +120,10 @@ def make_cut_plane_mesh(pt, n, mesh3d):
     This function assumes that the 3D mesh consists solely of tetrahedra which
     gives a 2D mesh of triangles 
     """
-    res = get_points_in_plane(pt, n, mesh3d)
+    # Get results on this rank and send to root process
+    rank_results = get_points_in_plane(pt, n, mesh3d)
     comm = mesh3d.mpi_comm()
-    
-    results = comm.rank, res
-    all_results = comm.gather(results)
+    all_results = comm.gather((comm.rank, rank_results))
     
     # No collective operatione below this point!
     if comm.rank != 0:
@@ -75,7 +180,7 @@ def get_points_in_plane(pt, n, mesh, eps=1e-8):
     sign = lambda x: -1 if x < 0 else 1
     n = plane_coefficients[:3] # normal to the plane
     
-    results = {}
+    results = OrderedDict()
     for cell in dolfin.cells(mesh, 'regular'):
         cid = cell.index()
         verts = conn_C_V(cid)
@@ -159,3 +264,64 @@ def get_point_sides(plane_coeffs, points):
     coincident with the plane
     """
     return numpy.dot(points, plane_coeffs[:3]) + plane_coeffs[3]
+
+
+def evaluate_basis_functions(V, positions, cell_indices, factors):
+    """
+    Current FEniCS pybind11 bindings lack wrappers for these functions,
+    so a small C++ snippet is used to generate the necessary dof factors
+    to evaluate a function at the given points
+    """
+    if evaluate_basis_functions.func is None:
+        cpp_code = """
+        #include <vector>
+        #include <pybind11/pybind11.h>
+        #include <pybind11/eigen.h>
+        #include <pybind11/numpy.h>
+        #include <dolfin/fem/FiniteElement.h>
+        #include <dolfin/function/FunctionSpace.h>
+        #include <dolfin/mesh/Mesh.h>
+        #include <dolfin/mesh/Cell.h>
+        #include <Eigen/Core>
+        
+        using IntVecIn = Eigen::Ref<const Eigen::VectorXi>;
+        using RowMatrixXd = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;        
+        namespace py = pybind11;
+        
+        void dof_factors(const dolfin::FunctionSpace &V, const RowMatrixXd &positions,
+                         const IntVecIn &cell_indices, Eigen::Ref<RowMatrixXd> out)
+        {
+            const auto &element = V.element();
+            const auto &mesh = V.mesh();
+            const auto &ufc_element = element->ufc_element();
+            std::vector<double> coordinate_dofs;
+            
+            const std::size_t size = ufc_element->value_size();
+            const std::size_t space_dimension = ufc_element->space_dimension();
+            if (size * space_dimension != out.cols())
+                throw std::length_error("ERROR: out.cols() != ufc element size * ufc element space_dimension");
+            
+            const int N = out.rows();
+            for (int i = 0; i < N; i++)
+            {
+                int cell_index = cell_indices(i);
+                dolfin::Cell cell(*mesh, cell_index);
+                cell.get_coordinate_dofs(coordinate_dofs);
+                element->evaluate_basis_all(out.row(i).data(),
+                                            positions.row(i).data(),
+                                            coordinate_dofs.data(),
+                                            cell.orientation());
+            }
+        }
+        
+        PYBIND11_MODULE(SIGNATURE, m) {
+           m.def("dof_factors", &dof_factors, py::arg("V"),
+                 py::arg("positions"), py::arg("cell_indices"),
+                 py::arg("out").noconvert());
+        }
+        """
+        evaluate_basis_functions.func = dolfin.compile_cpp_code(cpp_code).dof_factors
+    
+    assert len(cell_indices) == len(positions) == len(factors)
+    evaluate_basis_functions.func(V._cpp_object, positions, cell_indices, factors)
+evaluate_basis_functions.func = None
