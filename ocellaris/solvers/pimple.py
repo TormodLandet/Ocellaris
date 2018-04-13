@@ -325,7 +325,6 @@ class SolverPIMPLE(Solver):
         # The equation system
         lhs = self.CAtinvB
         U = u_star.vector()
-        #rhs = self.CAtinvA * u_star.vector() - self.C *  + self.E
         rhs = self.C * U - self.CAtinvA * U + self.C * (self.A_tilde_inv * self.D) - self.E
         
         # Inform PETSc about the pressure null space
