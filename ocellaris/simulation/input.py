@@ -75,6 +75,66 @@ class Input(collections.OrderedDict):
         else:
             pathstr = self.basepath + '/'.join(path)
         
+        # Look for the requested key
+        d = self
+        for p in path:
+            if isinstance(d, str):
+                assert d.strip().startswith('py$')
+                d = eval_python_expression(self.simulation, d, pathstr, safe_mode)
+            
+            if isinstance(d, list):
+                # This is a list, assume the key "p" is an integer position
+                try:
+                    p = int(p)
+                except ValueError:
+                    ocellaris_error('List index not integer',
+                                    'Not a valid list index:  %s' % p)
+            elif d is None or p not in d:
+                # This is an empty dict or a dict missing the key "p"
+                if default_value is UNDEFINED:
+                    ocellaris_error('Missing parameter on input file',
+                                    'Missing required input parameter:\n  %s' % pathstr)
+                else:
+                    msg  = '    No value set for "%s", using default value %r' % (pathstr, default_value)
+                    if not msg in self._already_logged:
+                        self.simulation.log.debug(msg)
+                        self._already_logged.add(msg)
+                    if required_type == 'Input':
+                        default_value = Input(self.simulation, default_value)
+                    return default_value
+            d = d[p]
+        
+        # Validate the input data and convert to the requested type
+        d = self.validate_and_convert(path, d, required_type, safe_mode, required_length)
+        
+        # Get the value on the root process
+        if mpi_root_value:
+            d = get_root_value(d)
+        
+        # Show what input values we use
+        msg  = '    Input value "%s" set to %r' % (pathstr, d)
+        if not msg in self._already_logged:
+            self.simulation.log.debug(msg)
+            self._already_logged.add(msg)
+        
+        return d
+    
+    def validate_and_convert(self, path, value, required_type='any',
+                             safe_mode=False, required_length=None):
+        """
+        Verify that the given value has an appropriate type. Returns
+        the value if it is OK, else calls ocellaris_error
+        
+        NOTE: returns copies of any mutable value type to avoid being
+        able to change the input object by modifying the returned data   
+        """
+        # Allow path to be a list or a "/" separated string
+        if isinstance(path, str):
+            pathstr = self.basepath + path
+            path = path.split('/')
+        else:
+            pathstr = self.basepath + '/'.join(path)
+        
         def check_isinstance(value, classes):
             """
             Give error if the input data is not of the required type
@@ -171,49 +231,7 @@ class Input(collections.OrderedDict):
         else:
             raise ValueError('Unknown required_type %s' % required_type)
         
-        # Look for the requested key
-        d = self
-        for p in path:
-            if isinstance(d, str):
-                assert d.strip().startswith('py$')
-                d = eval_python_expression(self.simulation, d, pathstr, safe_mode)
-            
-            if isinstance(d, list):
-                # This is a list, assume the key "p" is an integer position
-                try:
-                    p = int(p)
-                except ValueError:
-                    ocellaris_error('List index not integer',
-                                    'Not a valid list index:  %s' % p)
-            elif d is None or p not in d:
-                # This is an empty dict or a dict missing the key "p"
-                if default_value is UNDEFINED:
-                    ocellaris_error('Missing parameter on input file',
-                                    'Missing required input parameter:\n  %s' % pathstr)
-                else:
-                    msg  = '    No value set for "%s", using default value %r' % (pathstr, default_value)
-                    if not msg in self._already_logged:
-                        self.simulation.log.debug(msg)
-                        self._already_logged.add(msg)
-                    if required_type == 'Input':
-                        default_value = Input(self.simulation, default_value)
-                    return default_value
-            d = d[p]
-        
-        # Validate the input data and convert to the requested type
-        d = validate_and_convert(d)
-        
-        # Get the value on the root process
-        if mpi_root_value:
-            d = get_root_value(d)
-        
-        # Show what input values we use
-        msg  = '    Input value "%s" set to %r' % (pathstr, d)
-        if not msg in self._already_logged:
-            self.simulation.log.debug(msg)
-            self._already_logged.add(msg)
-        
-        return d
+        return validate_and_convert(value)
     
     def set_value(self, path, value):
         """

@@ -225,7 +225,7 @@ probes:
         type: PlaneProbe
         plane_point: [0, 1, 0]
         plane_normal: [0, 1, 0]
-        field: rho
+        field: [rho, u0, u2]
         write_interval: 10
         custom_hook: MultiPhaseModelUpdated
         

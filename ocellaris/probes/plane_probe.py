@@ -2,7 +2,7 @@ import os
 import dolfin
 import numpy
 from collections import OrderedDict
-from ocellaris.utils import init_mesh_geometry, timeit
+from ocellaris.utils import init_mesh_geometry, timeit, ocellaris_error
 from . import Probe, register_probe
 
 
@@ -20,20 +20,42 @@ class PlaneProbe(Probe):
         # Read input
         inp = probe_input
         self.name = inp.get_value('name', required_type='string')
-        self.field_name = inp.get_value('field', required_type='string')
         self.plane_point = inp.get_value('plane_point', required_type='list(float)',
                                          required_length=3)
         self.plane_normal = inp.get_value('plane_normal', required_type='list(float)',
                                           required_length=3)
         self.custom_hook_point = inp.get_value('custom_hook', None, required_type='string')
-        self.func_3d = simulation.data[self.field_name]
-    
-        prefix = simulation.input.get_value('output/prefix', '', 'string')
-        self.file_name = '%s_slice_%s.xdmf' % (prefix, self.name) 
         self.write_interval = inp.get_value('write_interval', WRITE_INTERVAL, 'int')
         
-        V = self.func_3d.function_space()
+        # Get the names of the function(s) to be sliced
+        fn = inp.get_value('field', required_type='any')
+        if isinstance(fn, str):
+            self.field_names = [fn]
+        else:
+            self.field_names = inp.validate_and_convert('field', fn, 'list(string)')
+        
+        # Get the functions and verify the function spaces
+        self.funcs_3d = []
+        for fn in self.field_names:
+            func_3d = simulation.data[fn]
+            V = func_3d.function_space()
+            fam = V.ufl_element().family()
+            deg = V.ufl_element().degree()
+            if not self.funcs_3d:
+                self.family = fam
+                self.degree = deg
+            elif fam != self.family or deg != self.degree:
+                ocellaris_error('Mismatching function spaces in PlainProbe %s' % self.name,
+                                'All functions must have the same function space.' +
+                                '%s is %r but %r was expected' % (fn, (fam, deg),
+                                                                  self.family,
+                                                                  self.degree))
+            self.funcs_3d.append(func_3d)
+        
+        # Create the slice
         self.slice = FunctionSlice(self.plane_point, self.plane_normal, V)
+        prefix = simulation.input.get_value('output/prefix', '', 'string')
+        self.file_name = '%s_slice_%s.xdmf' % (prefix, self.name)
         
         if simulation.rank == 0:
             V_2d = self.slice.slice_function_space
@@ -56,10 +78,14 @@ class PlaneProbe(Probe):
             self.xdmf_file.parameters['rewrite_function_mesh'] = False
             self.xdmf_file.parameters['functions_share_mesh'] = True
         
-            self.func_2d = dolfin.Function(V_2d)
-            self.func_2d.rename(self.field_name, self.field_name)
+            # Create storage for 2D functions
+            self.funcs_2d = []
+            for fn in self.field_names:
+                func_2d = dolfin.Function(V_2d)
+                func_2d.rename(fn, fn)
+                self.funcs_2d.append(func_2d)
         else:
-            self.func_2d = None
+            self.funcs_2d = [None] * len(self.field_names)
         
         if self.custom_hook_point is not None:
             simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
@@ -76,9 +102,10 @@ class PlaneProbe(Probe):
         if not (it == 1 or it % self.write_interval == 0):
             return
         
-        self.slice.get_slice(self.func_3d, self.func_2d)
-        if self.simulation.rank == 0:
-            self.xdmf_file.write(self.func_2d, self.simulation.time)
+        for func_3d, func_2d in zip(self.funcs_3d, self.funcs_2d):
+            self.slice.get_slice(func_3d, func_2d)
+            if self.simulation.rank == 0:
+                self.xdmf_file.write(func_2d, self.simulation.time)
 
 
 class FunctionSlice:
