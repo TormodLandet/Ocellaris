@@ -29,6 +29,7 @@ def plot_memory_usage(log_statements):
     
     ax = plot_annotated(datetimes, max_rss, annotations)
     ax.set_title('MAX RSS')
+    ax.set_ylabel('MB')
     
     ax = plot_annotated(datetimes, maj_faults, annotations)
     ax.set_title('Major page faults')
@@ -76,17 +77,17 @@ def show_worst_offenders(log_statements):
     mls = log_statements[0]
     prev_max_rss = mls.max_rss
     print('-------------------------------------------------------------------')
-    print('Start with MAX RSS %r at %s' % (mls.max_rss, mls.iso_dt))
+    print('Start with MAX RSS %.1f MB at %s' % (mls.max_rss, mls.iso_dt))
     
     for mls in log_statements:
-        if mls.max_rss > 1.1 * prev_max_rss:
+        if mls.max_rss > 10 + prev_max_rss:
             pst = (mls.max_rss - prev_max_rss) / prev_max_rss
-            print('Increase from %r to %r (%.1f%%) at %s:\n\t%s'
+            print('Increase from %.1f to %.1f (%.1f%%) at %s:\n\t%s'
                   % (prev_max_rss, mls.max_rss, pst * 100,
                      mls.iso_dt, mls.log_text))
         prev_max_rss = mls.max_rss
     
-    print('End with MAX RSS %r at %s' % (mls.max_rss, mls.iso_dt))
+    print('End with MAX RSS %.1f MB at %s' % (mls.max_rss, mls.iso_dt))
     
     ############################################################################
     
@@ -96,7 +97,7 @@ def show_worst_offenders(log_statements):
     print('Start with maj. page faults %r at %s' % (mls.maj_faults, mls.iso_dt))
     
     for mls in log_statements:
-        if mls.maj_faults > 10 + prev_maj_faults:
+        if mls.maj_faults > 5 + prev_maj_faults:
             pst = (mls.maj_faults - prev_maj_faults) / prev_maj_faults
             print('Increase from %r to %r (%.1f%%) at %s:\n\t%s'
                   % (prev_maj_faults, mls.maj_faults, pst * 100,
@@ -133,6 +134,10 @@ def read_memory_usage(log_file_name, only_last_run=False):
         max_rss = int(words[4])
         maj_faults = int(words[6])
         
+        # Convert max RSS to MB. Assumes that ru_max_rss is in kB which is
+        # correct on linux and BSD, but it is bytes on Mac OS X for some reason
+        max_rss /= 1024
+                
         # Store the log statement along with the preceding log text
         mls = MemoryLogStatement(timestep, iso_dt, max_rss, maj_faults, text)
         log_statements.append(mls)
