@@ -26,6 +26,7 @@ class Log(object):
         self.write_log = False
         self.write_stdout = False
         self.force_flush_all = False
+        self.show_memory_usage = False
         self._the_log = []
     
     def write(self, message, msg_log_level=ALWAYS_WRITE, color=NO_COLOR, flush=None):
@@ -34,6 +35,18 @@ class Log(object):
         """
         message = str(message) # hypotetically a collective operation ...
         
+        # Show memory usage
+        if self.show_memory_usage:
+            # This only works on some Unices and the unit is not kB on all
+            # of them (bytes Mac OS X). Only shows memory usage for rank 0.
+            import resource, datetime
+            rusage = resource.getrusage(resource.RUSAGE_SELF) 
+            now = datetime.datetime.now().isoformat()
+            info = (('Current max RSS memory at timestep %d datetime %s is %r '
+                     'with %r maj. page faults') % (self.simulation.timestep,
+                     now, rusage.ru_maxrss, rusage.ru_majflt))
+            message += '\n' + info
+        
         if self.log_level <= msg_log_level:
             if self.write_log:
                 self.log_file.write(message + '\n')
@@ -41,7 +54,7 @@ class Log(object):
                 print(color % message)
         
         # Store all messages irrespective of the log level
-        self._the_log.append(message)
+        self._the_log.append(message)    
         
         # Optionally, flush the log
         if self.force_flush_all:
@@ -88,6 +101,7 @@ class Log(object):
         log_append_existing = self.simulation.input.get_value('output/log_append_to_existing_file', True, 'bool')
         stdout_on_all_ranks = self.simulation.input.get_value('output/stdout_on_all_ranks', False, 'bool')
         stdout_enabled = self.simulation.input.get_value('output/stdout_enabled', True, 'bool')
+        self.show_memory_usage = self.simulation.input.get_value('output/show_memory_usage', False, 'bool')
         rank = self.simulation.rank
         
         self.write_stdout = (rank == 0 or stdout_on_all_ranks) and stdout_enabled
