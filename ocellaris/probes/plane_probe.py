@@ -91,7 +91,7 @@ class PlaneProbe(Probe):
             simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
         else:
             self.end_of_timestep = self.run
-
+    
     def run(self):
         """
         Find and output the plane probe
@@ -181,8 +181,8 @@ class FunctionSlice:
         cell_dofs = [V3d.dofmap().cell_dofs(i) for i in cell_index_3d]
         self._cell_dofs = numpy.array(cell_dofs, int)
         self._factors = numpy.zeros(self._cell_dofs.shape, float)
+        self._local_data = numpy.zeros(len(cell_dofs), float)
         evaluate_basis_functions(V3d, positions, cell_index_3d, self._factors)
-        self._local_data = numpy.zeros(len(self._cell_dofs), float)
     
     @timeit.named('FunctionSlice.get_slice')
     def get_slice(self, func_3d, func_2d=None):
@@ -395,6 +395,10 @@ def evaluate_basis_functions(V, positions, cell_indices, factors):
         void dof_factors(const dolfin::FunctionSpace &V, const RowMatrixXd &positions,
                          const IntVecIn &cell_indices, Eigen::Ref<RowMatrixXd> out)
         {
+            const int N = out.rows();
+            if (N == 0)
+                return;
+            
             const auto &element = V.element();
             const auto &mesh = V.mesh();
             const auto &ufc_element = element->ufc_element();
@@ -405,7 +409,6 @@ def evaluate_basis_functions(V, positions, cell_indices, factors):
             if (size * space_dimension != out.cols())
                 throw std::length_error("ERROR: out.cols() != ufc element size * ufc element space_dimension");
             
-            const int N = out.rows();
             for (int i = 0; i < N; i++)
             {
                 int cell_index = cell_indices(i);

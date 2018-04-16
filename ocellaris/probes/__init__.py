@@ -1,3 +1,4 @@
+import time
 from ocellaris.utils import ocellaris_error
 
 
@@ -66,6 +67,7 @@ def setup_probes(simulation):
         
         if not enabled:
             continue
+        t1 = time.time()
         simulation.log.info('    Setting up %s probe %s' % (probe_type, probe_name))
         
         # Get the probe object
@@ -86,6 +88,8 @@ def setup_probes(simulation):
             simulation.hooks.add_post_timestep_hook(hook_post_timestep(probe), 'Probe "%s"' % probe_name)
         if probe.end_of_simulation is not None:
             simulation.hooks.add_post_simulation_hook(hook_final(probe), 'Probe "%s"' % probe_name)
+        
+        simulation.log.info('    Probe %s set-up done in %.1f seconds' % (probe_name, time.time() - t1))
 
 
 class Probe(object):
