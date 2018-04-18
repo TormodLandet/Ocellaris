@@ -113,6 +113,7 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
     dt = sim.data['dt']
     g = sim.data['g']
     n = dolfin.FacetNormal(mesh)
+    x = dolfin.SpatialCoordinate(mesh)
     
     # Fluid properties
     rho = mpm.get_density(0)
@@ -201,7 +202,7 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
             eq += flux_mesh*jump(v[d])*dS
         
         # Diffusion:
-        # -∇⋅∇u
+        # -∇⋅μ∇u
         eq += mu*dot(grad(u[d]), grad(v[d]))*dx
         
         # Symmetric Interior Penalty method for -∇⋅μ∇u
@@ -255,7 +256,7 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
                             yh, use_grad_q_form, use_grad_p_form)
         
         eq += add_outlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                             penalty_ds, use_grad_q_form, use_grad_p_form)
+                             g, x, use_grad_q_form, use_grad_p_form)
     
     # Boundary conditions that couple the velocity components
     # Decomposing the velocity into wall normal and parallel parts
@@ -379,9 +380,11 @@ def add_robin_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
 
 
 def add_outlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                   penalty_ds, use_grad_q_form, use_grad_p_form):
+                   g, x, use_grad_q_form, use_grad_p_form):
     """
     Outlet boundary contitions for one velocity component
+    
+    p = μ∇u (+ ρg⋅x)
     """
     eq = 0
     for obc in sim.data['outlet_bcs']:
@@ -394,13 +397,18 @@ def add_outlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
         # Convection
         eq += rho*u[d]*w_nU*v[d]*obc.ds()
         
+        if obc.hydrostatic:
+            rgx = rho * g[d] * x[d]
+        else:
+            rgx = 0
+        
         # Diffusion
-        mu_dudn = p*n[d]
+        mu_dudn = (p - rgx) * n[d]
         eq -= mu_dudn*v[d]*obc.ds()
         
         # Pressure
         if not use_grad_p_form:
-            p_ = mu*dot(dot(grad(u), n), n)
+            p_ = mu*dot(dot(grad(u), n), n) + rgx
             eq += p_*n[d]*v[d]*obc.ds()
     return eq
 

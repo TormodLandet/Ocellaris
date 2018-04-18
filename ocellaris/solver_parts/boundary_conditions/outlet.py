@@ -11,6 +11,7 @@ class OcellarisOutletBC(object):
         """
         self.simulation = simulation
         self.subdomain_id = subdomain_id
+        self.hydrostatic = False
         
     def ds(self):
         """
@@ -31,6 +32,7 @@ class OpenOutletBoundary(BoundaryConditionCreator):
         Open outlet boundary condition
         """
         self.simulation = simulation
+        hydrostatic = inp_dict.get_value('hydrostatic', False, 'bool')
         
         if not var_name == 'u':
             raise OcellarisError('Error in boundary condition',
@@ -39,6 +41,7 @@ class OpenOutletBoundary(BoundaryConditionCreator):
         
         # Store the boundary condition for use in the solver
         bc = OcellarisOutletBC(self.simulation, subdomain_id)
+        bc.hydrostatic = hydrostatic
         self.simulation.data['outlet_bcs'].append(bc)
         
         self.simulation.log.info('    OpenOutletBoundary for %s' % var_name)

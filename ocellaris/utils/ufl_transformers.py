@@ -203,7 +203,11 @@ class EstimateZeroForms(MultiFunction):
     def facet_normal(self, o):
         assert len(o.ufl_shape) == 1
         return as_vector([1] * o.ufl_shape[0])
-
+    
+    def spatial_coordinate(self, o):
+        assert len(o.ufl_shape) == 1
+        return as_vector([1] * o.ufl_shape[0])
+    
     def argument(self, o):
         shape = o.ufl_shape
         if len(shape) == 0:
