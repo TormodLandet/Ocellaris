@@ -24,7 +24,7 @@ class VectorField(KnownField):
         self.funcs = None
         self.updaters = ()
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
-        simulation.hooks.add_pre_timestep_hook(self.update, 'Update scalar field %r' % self.name)
+        simulation.hooks.add_pre_timestep_hook(self.update, 'Update vector field %r' % self.name)
     
     def read_input(self, field_inp):
         self.name = field_inp.get_value('name', required_type='string')
