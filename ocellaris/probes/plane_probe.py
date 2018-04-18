@@ -46,10 +46,10 @@ class PlaneProbe(Probe):
                 self.degree = deg
             elif fam != self.family or deg != self.degree:
                 ocellaris_error('Mismatching function spaces in PlainProbe %s' % self.name,
-                                'All functions must have the same function space.' +
+                                'All functions must have the same function space. ' +
                                 '%s is %r but %r was expected' % (fn, (fam, deg),
-                                                                  self.family,
-                                                                  self.degree))
+                                                                  (self.family,
+                                                                   self.degree)))
             self.funcs_3d.append(func_3d)
         
         # Create the slice
