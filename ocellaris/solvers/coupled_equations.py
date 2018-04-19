@@ -397,6 +397,7 @@ def add_outlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
         # Convection
         eq += rho*u[d]*w_nU*v[d]*obc.ds()
         
+        # FIXME: this does not work and is disabled by default
         if obc.hydrostatic:
             rgx = rho * g[d] * x[d]
         else:
