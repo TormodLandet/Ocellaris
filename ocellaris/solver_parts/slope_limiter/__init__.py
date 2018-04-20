@@ -140,7 +140,7 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     
     # Get boundary region marks and get the helper class used to limit along the boundaries
     drm = get_dof_region_marks(simulation, V)
-    bcs = SlopeLimiterBoundaryConditions(simulation, phi_name, drm, V)
+    bcs = SlopeLimiterBoundaryConditions(simulation, phi_name, output_name, drm, V)
     
     if skip_boundary:
         # Mark boundary cells for skipping (cells containing dofs with region marks)

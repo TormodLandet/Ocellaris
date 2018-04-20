@@ -8,7 +8,7 @@ class SlopeLimiterBoundaryConditions(object):
     BC_TYPE_NEUMANN = 2
     BC_TYPE_OTHER = 3
     
-    def __init__(self, simulation, field_name, dof_region_marks, V):
+    def __init__(self, simulation, field_name, output_name, dof_region_marks, V):
         """
         This class helps slope limiting of cells adjacent to the boundary by
         providing either values of the function and its derivatives at the
@@ -18,7 +18,14 @@ class SlopeLimiterBoundaryConditions(object):
         """
         assert field_name is not None
         self.simulation = simulation
-        self.field_name = field_name
+        
+        # Velocity BCs can be given for u itself (coupled components like slip
+        # BCs) or for u0, u1 and u2 separately (e.g., for pure Dirichlet BCs)
+        if output_name in (field_name + '0', field_name + '1', field_name + '2'):
+            self.field_names = [field_name, output_name]
+        else:
+            self.field_names = [field_name]
+        
         self.function_space = V
         self.active = False
         self.set_dof_region_marks(dof_region_marks)
@@ -68,30 +75,33 @@ class SlopeLimiterBoundaryConditions(object):
         # This is potentially slow, so we time this code
         timer = Timer("Ocellaris get slope limiter boundary conditions")
         
-        # Collect Dirichlet BCs for this field
+        # Collect BCs - field name for u0 can be u (FreeSlip) and u0 (CppCodedValue)
         dirichlet = {}
-        for bc in sim.data['dirichlet_bcs'].get(self.field_name, []):
-            region_number = bc.subdomain_id - 1
-            dirichlet[region_number] = bc
-        
-        # Collect Neumann BCs for this field
         neumann = {}
-        for bc in sim.data['neumann_bcs'].get(self.field_name, []):
-            region_number = bc.subdomain_id - 1
-            neumann[region_number] = bc
-        
-        # Collect Robin BCs for this field
         robin = {}
-        for bc in sim.data['robin_bcs'].get(self.field_name, []):
-            region_number = bc.subdomain_id - 1
-            robin[region_number] = bc
-        
-        # Collect Slip BCs for this field
         slip = {}
-        for bc in sim.data['slip_bcs'].get(self.field_name, []):
-            region_number = bc.subdomain_id - 1
-            slip[region_number] = bc
+        for field_name in self.field_names:
+            # Collect Dirichlet BCs for this field
+            for bc in sim.data['dirichlet_bcs'].get(field_name, []):
+                region_number = bc.subdomain_id - 1
+                dirichlet[region_number] = bc
+            
+            # Collect Neumann BCs for this field
+            for bc in sim.data['neumann_bcs'].get(field_name, []):
+                region_number = bc.subdomain_id - 1
+                neumann[region_number] = bc
+            
+            # Collect Robin BCs for this field
+            for bc in sim.data['robin_bcs'].get(field_name, []):
+                region_number = bc.subdomain_id - 1
+                robin[region_number] = bc
+            
+            # Collect Slip BCs for this field
+            for bc in sim.data['slip_bcs'].get(field_name, []):
+                region_number = bc.subdomain_id - 1
+                slip[region_number] = bc
         
+        fname = ', '.join(self.field_names)
         regions = sim.data['boundary']
         for region_number, dofs in self.region_dofs.items():
             boundary_region = regions[region_number]
@@ -104,11 +114,13 @@ class SlopeLimiterBoundaryConditions(object):
                 bc_type = self.BC_TYPE_NEUMANN
                 value = neumann[region_number].func()
             elif region_number in robin or region_number in slip:
-                bc_type = self.BC_TYPE_OTHER
                 value = None
+                for dof in dofs:
+                    boundary_dof_type[dof] = self.BC_TYPE_OTHER
+                continue
             else:
-                self._warn('WARNING: Field %s has no BC in region %s' %
-                           (self.field_name, boundary_region.name))
+                self._warn('WARNING: Slope limiter found no BC for field %s '
+                           'in region %s' % (fname, boundary_region.name))
                 continue
             
             if bc_type == self.BC_TYPE_DIRICHLET and weak_dof_values is not None:
@@ -140,8 +152,8 @@ class SlopeLimiterBoundaryConditions(object):
                     boundary_dof_value[dof] = val[0]
             
             else:
-                self._warn('WARNING: Field %s has unsupported limiter BC %r in region %s' %
-                           (self.field_name, type(value), boundary_region.name))
+                self._warn('WARNING: Field %s has unsupported limiter BC %r in '
+                           'region %s' % (fname, type(value), boundary_region.name))
         
         timer.stop()
         return boundary_dof_type, boundary_dof_value
