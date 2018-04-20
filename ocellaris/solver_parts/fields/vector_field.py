@@ -43,8 +43,10 @@ class VectorField(KnownField):
         """
         if self.stationary:
             return
-        for u in self.updaters:
+        
+        for u, e, f in zip(self.updaters, self.exprs, self.funcs):
             u(timestep_number, t, dt)
+            f.interpolate(e)
     
     def _get_expressions(self):
         if self.exprs is None:
