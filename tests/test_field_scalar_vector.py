@@ -2,6 +2,7 @@ import dolfin
 from ocellaris import Simulation
 from ocellaris.solver_parts.fields.vector_field import VectorField
 from ocellaris.solver_parts.fields.scalar_field import ScalarField
+from utils import check_vector_value_histogram
 
 INP = """
 ocellaris:
@@ -90,34 +91,3 @@ def test_vector_field():
     sim.input.set_value('user_code/constants/A', A)
     field.update(2, t, 1.0)
     verify(f, t, A)
-
-
-def check_vector_value_histogram(vec, expected):
-    hist = get_vector_value_histogram(vec)
-    print(hist, expected)
-    assert len(hist) == len(expected)
-    for k, v in expected.items():
-        assert k in hist
-        assert hist[k] == v
-
-
-def get_vector_value_histogram(vec):
-    hist = {}
-    for v in vec.get_local():
-        if v in hist:
-            hist[v] += 1
-        else:
-            hist[v] = 1
-    
-    comm = dolfin.MPI.comm_world
-    all_hist = comm.gather(hist)
-    hist2 = None
-    if comm.rank == 0:
-        hist2 = {}
-        for hist in all_hist:
-            for k, v in hist.items():
-                if k in hist2:
-                    hist2[k] += v
-                else:
-                    hist2[k] = v
-    return comm.bcast(hist2)
