@@ -13,6 +13,7 @@ def test_function_slice():
     u = dolfin.Function(V)
     cpp = 'sin(2 * x[0]) * sin(2 * x[1]) * sin(2 * x[2])'
     u.interpolate(dolfin.Expression(cpp, degree=2))
+    comm = dolfin.MPI.comm_world
     
     # Define the slicing plane position and normal vector
     pt = (0.1, 0.1, 0.1)
@@ -22,20 +23,14 @@ def test_function_slice():
     # Get a 2D slice of the 3D function and verify that the
     # resulting slice function matches the expected expression
     func_slice = FunctionSlice(pt, n, V)
-    verify_function_slice(func_slice, u, cpp_2d)
-    mesh = func_slice.slice_function_space.mesh()
-    area = dolfin.assemble(1 * dolfin.dx(domain=mesh))
-    assert abs(area - 1) < 1e-8
+    verify_function_slice(func_slice, u, cpp_2d, 1.0)
     
     # Get a slice of the center portion only
     func_slice = FunctionSlice(pt, n, V, xlim=(0.25, 0.75), ylim=(0.25, 0.75))
-    verify_function_slice(func_slice, u, cpp_2d)
-    mesh = func_slice.slice_function_space.mesh()
-    area = dolfin.assemble(1 * dolfin.dx(domain=mesh))
-    assert abs(area - 0.25) < 1e-8
+    verify_function_slice(func_slice, u, cpp_2d, 0.25)
 
 
-def verify_function_slice(func_slice, u, cpp_2d):
+def verify_function_slice(func_slice, u, cpp_2d, expected_area):
     u_2D = func_slice.get_slice(u)
     
     # The 2D solution we want to obtain
@@ -44,6 +39,8 @@ def verify_function_slice(func_slice, u, cpp_2d):
     comm = dolfin.MPI.comm_world
     if comm.rank == 0:
         error = dolfin.errornorm(analytical, u_2D)
+        mesh = func_slice.slice_function_space.mesh()
+        area = dolfin.assemble(1 * dolfin.dx(domain=mesh))
         
         if True:
             import matplotlib; matplotlib.use('Agg')
@@ -57,8 +54,11 @@ def verify_function_slice(func_slice, u, cpp_2d):
             fig.savefig('test_func_slice.png')
     else:
         error = 0.0
+        area = 0.0
         
     assert dolfin.MPI.max(comm, error) < 0.015
+    area = dolfin.MPI.sum(comm, area)
+    assert abs(area - expected_area) < 1e-8
 
 
 def test_cut_mesh():
