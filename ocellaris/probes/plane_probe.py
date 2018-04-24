@@ -24,6 +24,9 @@ class PlaneProbe(Probe):
                                          required_length=3)
         self.plane_normal = inp.get_value('plane_normal', required_type='list(float)',
                                           required_length=3)
+        xlim = inp.get_value('xlim', None, 'list(float)', required_length=2)
+        ylim = inp.get_value('ylim', None, 'list(float)', required_length=2)
+        zlim = inp.get_value('zlim', None, 'list(float)', required_length=2)
         self.custom_hook_point = inp.get_value('custom_hook', None, required_type='string')
         self.write_interval = inp.get_value('write_interval', WRITE_INTERVAL, 'int')
         
@@ -53,7 +56,8 @@ class PlaneProbe(Probe):
             self.funcs_3d.append(func_3d)
         
         # Create the slice
-        self.slice = FunctionSlice(self.plane_point, self.plane_normal, V)
+        self.slice = FunctionSlice(self.plane_point, self.plane_normal, V,
+                                   xlim, ylim, zlim)
         prefix = simulation.input.get_value('output/prefix', '', 'string')
         self.file_name = '%s_slice_%s.xdmf' % (prefix, self.name)
         
@@ -109,7 +113,7 @@ class PlaneProbe(Probe):
 
 
 class FunctionSlice:
-    def __init__(self, pt, n, V3d):
+    def __init__(self, pt, n, V3d, xlim=None, ylim=None, zlim=None):
         """
         Take the definition of a plane and a 3D function space
         Construct a 2D mesh on rank 0 (only) and the necessary
@@ -131,7 +135,8 @@ class FunctionSlice:
         
         # Create the 2D mesh
         # The 2D mesh uses MPI_COMM_SELF and lives only on the root process
-        mesh_2d, cell_origins = make_cut_plane_mesh(pt, n, V3d.mesh())
+        mesh_2d, cell_origins = make_cut_plane_mesh(pt, n, V3d.mesh(),
+                                                    xlim, ylim, zlim)
         
         # Precompute data on root process
         if comm.rank == 0:
@@ -213,19 +218,25 @@ class FunctionSlice:
             return func_2d 
 
 
-def make_cut_plane_mesh(pt, n, mesh3d):
+def make_cut_plane_mesh(pt, n, mesh3d, xlim=None, ylim=None, zlim=None):
     """
-    Returns a 2D mesh of the intersection of a 3D mesh and a plane
+    Returns a 2D mesh of the intersection of a 3D mesh and a plane. The result
+    can optionally be restricted to the intersection of the plane and a cube
+    with sides parallel to the axes by specifying one or more of the coordinate
+    limits as tuples, they are by default None which means _lim = (-inf, inf).
     
     * pt: a point in the plane
     * n: a normal vector to the plane. Does not need to be a unit normal
     * mesh3d: the 3D mesh to be intersected by the plane
+    * xlim, ylim, zlim: each of these must be a tuple of two numbers or None 
     
     This function assumes that the 3D mesh consists solely of tetrahedra which
     gives a 2D mesh of triangles 
     """
     # Get results on this rank and send to root process
     rank_results = get_points_in_plane(pt, n, mesh3d)
+    rank_results = split_cells(rank_results)
+    rank_results = limit_plane(rank_results, xlim, ylim, zlim)
     comm = mesh3d.mpi_comm()
     all_results = comm.gather((comm.rank, rank_results))
     
@@ -238,12 +249,7 @@ def make_cut_plane_mesh(pt, n, mesh3d):
     connectivity = []
     cell_origins = []
     for rank, res in all_results:
-        for cell_id, cell_coords in res.items():
-            if len(cell_coords) == 4:
-                subcells = (cell_coords[1:], cell_coords[:-1])
-            else:
-                subcells = (cell_coords,)
-            
+        for cell_id, subcells in res.items():
             for cell_coords in subcells:
                 cell_points = []
                 for coords in cell_coords: 
@@ -262,6 +268,160 @@ def make_cut_plane_mesh(pt, n, mesh3d):
     init_mesh_geometry(mesh2d, points, connectivity, tdim, gdim)
     
     return mesh2d, cell_origins
+
+
+def limit_plane(unlimited, xlim=None, ylim=None, zlim=None, eps=1e-8):
+    """
+    Given a set of triangles in a 2D plane, limit the extents of the plane to a
+    given quadratic area which sides are parallel to the axes  
+    """
+    if xlim is None and ylim is None and zlim is None:
+        return unlimited
+    
+    # Remove / alter cells that are outside the coordinate limits
+    results = OrderedDict()
+    for cell_id, subcells in unlimited.items():
+        subcells = limit_triangles(subcells, xlim, ylim, zlim, eps)
+        if subcells:
+            results[cell_id] = subcells
+    
+    return results
+
+
+def limit_triangles(triangles, xlim, ylim, zlim, eps=1e-8):
+    """
+    Given a list of triangles, return a new list of triangles which covers the
+    same area, limited to the given axis limits (i.e. the area of the triangles
+    returned is always equal to or lower than the area of the input triangles.
+    An ampty list can be returned if no area exists inside the axes limits
+    """
+    for d, lim in enumerate((xlim, ylim, zlim)):
+        if lim is None:
+            continue
+        
+        # Check lower limit
+        new_triangles = []
+        for cell_coords in triangles:
+            below = [1 if c[d] < lim[0] - eps else 0 for c in cell_coords]
+            num_below = sum(below)
+            
+            if num_below == 0:
+                # Cell completely inside the bounds
+                new_triangles.append(cell_coords)
+                continue
+            
+            elif num_below in (1, 2):
+                # Cell partially inside the bounds
+                if num_below == 1:
+                    # Get the index of the one vertex that is below lim
+                    i = 0 if below[0] == 1 else (1 if below[1] == 1 else 2)
+                else:
+                    # Get the index of the one vertex that is not below lim
+                    i = 0 if below[0] == 0 else (1 if below[1] == 0 else 2)
+                
+                # Coordinates of the vertices
+                c0 = cell_coords[(i + 0) % 3]
+                c1 = cell_coords[(i + 1) % 3]
+                c2 = cell_coords[(i + 2) % 3]
+                
+                # Coordinates of the crossing points
+                f01 = (lim[0] - c0[d]) / (c1[d] - c0[d])
+                f02 = (lim[0] - c0[d]) / (c2[d] - c0[d])
+                c01 = (c0[0] * (1 - f01) + c1[0] * f01,
+                       c0[1] * (1 - f01) + c1[1] * f01,
+                       c0[2] * (1 - f01) + c1[2] * f01)
+                c02 = (c0[0] * (1 - f02) + c2[0] * f02,
+                       c0[1] * (1 - f02) + c2[1] * f02,
+                       c0[2] * (1 - f02) + c2[2] * f02)
+                
+                # Create new triangles that are inside the bounds
+                if num_below == 1:
+                    # Split into two new triangles
+                    new_triangles.append((c1, c01, c2))
+                    new_triangles.append((c2, c01, c02))
+                else:
+                    new_triangles.append((c0, c01, c02))
+            
+            elif num_below == 3:
+                # Cell completely outside the bounds
+                continue
+        triangles = new_triangles
+        
+        # Check upper limit
+        new_triangles = []
+        for cell_coords in triangles:
+            above = [1 if c[d] > lim[1] + eps else 0 for c in cell_coords]
+            num_above = sum(above)
+            
+            if num_above == 0:
+                # Cell completely inside the bounds
+                new_triangles.append(cell_coords)
+                continue
+            
+            elif num_above in (1, 2):
+                # Cell partially inside the bounds
+                if num_above == 1:
+                    # Get the index of the one vertex that is above lim
+                    i = 0 if above[0] == 1 else (1 if above[1] == 1 else 2)
+                else:
+                    # Get the index of the one vertex that is not above lim
+                    i = 0 if above[0] == 0 else (1 if above[1] == 0 else 2)
+                
+                # Coordinates of the vertices
+                c0 = cell_coords[(i + 0) % 3]
+                c1 = cell_coords[(i + 1) % 3]
+                c2 = cell_coords[(i + 2) % 3]
+                
+                # Coordinates of the crossing points
+                f01 = (lim[1] - c0[d]) / (c1[d] - c0[d])
+                f02 = (lim[1] - c0[d]) / (c2[d] - c0[d])
+                c01 = (c0[0] * (1 - f01) + c1[0] * f01,
+                       c0[1] * (1 - f01) + c1[1] * f01,
+                       c0[2] * (1 - f01) + c1[2] * f01)
+                c02 = (c0[0] * (1 - f02) + c2[0] * f02,
+                       c0[1] * (1 - f02) + c2[1] * f02,
+                       c0[2] * (1 - f02) + c2[2] * f02)
+                
+                # Create new triangles that are inside the bounds
+                if num_above == 1:
+                    # Split into two new triangles
+                    new_triangles.append((c1, c01, c2))
+                    new_triangles.append((c2, c01, c02))
+                else:
+                    new_triangles.append((c0, c01, c02))
+            
+            elif num_above == 3:
+                # Cell completely outside the bounds
+                continue
+        triangles = new_triangles
+    
+    def has_area(cell_coords):
+        c0, c1, c2 = cell_coords
+        u = (c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2])
+        v = (c2[0] - c0[0], c2[1] - c0[1], c2[2] - c0[2])
+        areaish = (u[1] * v[2] - u[2] * v[1])**2 +\
+                  (u[2] * v[0] - u[0] * v[2])**2 +\
+                  (u[0] * v[1] - u[1] * v[0])**2    
+        return areaish > eps
+    
+    return [cell_coords for cell_coords in triangles if has_area(cell_coords)]
+
+
+def split_cells(unsplit):
+    """
+    Split non-triangles into triangles
+    """
+    results = OrderedDict()
+    for cell_id, cell_coords in unsplit.items():
+        N = len(cell_coords)        
+        if N == 4:
+            results[cell_id] = [cell_coords[1:], cell_coords[:-1]]
+        elif N == 3:
+            results[cell_id] = [cell_coords]
+        else:
+            raise NotImplementedError('Expected elements with 3 or 4 '
+                                      'vertices, not %d' % N)
+    return results
 
 
 def get_points_in_plane(pt, n, mesh, eps=1e-8):
