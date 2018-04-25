@@ -88,7 +88,7 @@ fields:
     cpp_code: |
         [&]() {
             double dz0 = 0;
-            double dz1 = (C - l/2)/2;
+            double dz1 = (C - l/2)/3;
             if (x[0] < dz0) {
                 return 1.0;
             } else if (x[0] > dz1) {
@@ -141,28 +141,27 @@ boundary_conditions:
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
     u:
-        type: CppCodedValue
-        cpp_code: ['Velocity', '0', '0']
+        type: FieldFunction
+        function: velocity/u
     rho:
-        type: CppCodedValue
-        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
+        type: FieldFunction
+        function: density/rho
 
 -   name: Outlet
     selector: code
     inside_code: 'on_boundary and x[0] > C + l'
     u:
-        type: CppCodedValue
-        cpp_code: ['Velocity', '0', '0']
+        type: FieldFunction
+        function: velocity/u
     rho:
-        type: CppCodedValue
-        cpp_code: '(x[2] < -h + 1e-5) ? SALT : FRESH'
+        type: FieldFunction
+        function: density/rho
 
 -   name: Bottom
     selector: code
     inside_code: 'on_boundary and x[2] < -H + 1e-5'
     u:
-        type: CppCodedValue
-        cpp_code: ['Velocity', '0', '0']
+        type: FreeSlip
 
 -   name: Surface z=0
     selector: code
@@ -176,14 +175,14 @@ boundary_conditions:
     u:
         type: FreeSlip
 
--   name: Valve
-    selector: code
-    inside_code: 'on_boundary and x[2] > -1e-5 and x[0] > L - 2.5 * l'
-    u:
-        type: OpenOutletBoundary
-    rho:
-        type: ConstantValue
-        value: py$ FRESH
+#-   name: Valve
+#    selector: code
+#    inside_code: 'on_boundary and x[2] > -1e-5 and x[0] > L - 2.5 * l'
+#    u:
+#        type: OpenOutletBoundary
+#    rho:
+#        type: ConstantValue
+#        value: py$ FRESH
 
 time:
     dt: 0.5
@@ -196,8 +195,10 @@ output:
     stdout_enabled: yes # needed for stdout monitoring in orun
     flush_interval: 60 # interval in seconds for log file and stdout flushing (default 5 sec)
     #xdmf_write_interval: 200
+    vtk_write_interval: 0 # overridden in hook-script (see below)
     hdf5_write_interval: 50
     hdf5_only_store_latest: yes
+    show_memory_usage: no
 
 solver:
     type: IPCS-A
@@ -232,7 +233,7 @@ probes:
     -   name: cutZh_p
         enabled: yes
         type: PlaneProbe
-        plane_point: py$ [0, h, 0]
+        plane_point: py$ [0, 0, -h]
         plane_normal: [0, 0, 1]
         field: p
         write_interval: 10
