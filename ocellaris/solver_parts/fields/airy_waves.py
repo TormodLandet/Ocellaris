@@ -64,6 +64,7 @@ class AiryWaveField(KnownField):
             get_airy_wave_specs(g, h, omegas, periods, wave_lengths, wave_numbers)
         Nwave = len(self.omegas)
         self.stationary = Nwave == 0
+        self.ramp_time = field_inp.get_value('ramp_time', 0, required_type='float')
         
         self.still_water_pos = field_inp.get_value('still_water_position', required_type='float')
         self.current_speed = field_inp.get_value('current_speed', 0, required_type='float')
@@ -152,7 +153,8 @@ class AiryWaveField(KnownField):
             # Construct C++ code to compute the named variable
             Nwave = len(self.omegas)
             for i in range(Nwave):
-                params = dict(a=self.amplitudes[i],
+                
+                params = dict(a='(ramp * %r)' % self.amplitudes[i],
                               w=self.omegas[i],
                               k=self.wave_numbers[i],
                               theta=self.thetas[i])
@@ -179,24 +181,31 @@ class AiryWaveField(KnownField):
             # Lines inside the lambda function. Some will be unused, but
             # the C++ compiler should be able to remove these easily
             lines = ['double val;',
-                     'double X = x[0];',
-                     'double Z0 = x[%d];' % (self.simulation.ndim - 1),
-                     'double swpos = %r;' % self.still_water_pos,
-                     'double Z = Z0 - swpos;',
-                     'double h = %r;' % self.h,
-                     'double h_above = %r;' % self.h_above,
-                     'double g = %r;' % self.g,
-                     'double rho_min = %r;' % rho_min,
-                     'double rho_max = %r;' % rho_max]
+                     'const double X = x[0];',
+                     'const double Z0 = x[%d];' % (self.simulation.ndim - 1),
+                     'const double swpos = %r;' % self.still_water_pos,
+                     'const double Z = Z0 - swpos;',
+                     'const double h = %r;' % self.h,
+                     'const double h_above = %r;' % self.h_above,
+                     'const double g = %r;' % self.g,
+                     'const double rho_min = %r;' % rho_min,
+                     'const double rho_max = %r;' % rho_max]
+            
+            # Ramping up of amplitudes with time
+            if self.ramp_time > 0:
+                ramp = float(self.ramp_time);
+                lines.append('const double ramp = min(t / %r, 1.0);' % ramp)
+            else:
+                lines.append('const double ramp = 1.0;')
             
             if name != 'elevation':
                 # Compute the vertical distance D to the free surface
                 # (negative below the free surface, positive above) 
                 elev_cpp = self._cpp['elevation'].replace('  ', '    ')
-                lines.append('double elev = %s;' % elev_cpp)
-                lines.append('double D = Z0 - elev;')
+                lines.append('const double elev = %s;' % elev_cpp)
+                lines.append('const double D = Z0 - elev;')
                 # Wave elevation relative to still water
-                lines.append('double eta = elev - swpos;')
+                lines.append('const double eta = elev - swpos;')
                 # Wheeler stretching below the free surface
                 # Zp is between -h and 0 when Z is between -d and eta
                 lines.append('double Zp = h * (Z + h) / (eta + h) - h;')
