@@ -15,6 +15,8 @@ from .setup import setup_simulation
 # Flush log and other output files at regular intervals, but not every
 # timestep in case there are a lot of them per second
 FLUSH_INTERVAL = 5 # seconds
+# Stop simulation if Courant number exceeds a given value
+CO_LIM = 1e3
 
 
 class Simulation(object):
@@ -154,8 +156,12 @@ class Simulation(object):
                                              u2=self.data['up_conv'],
                                              ui_tmp=self.data['ui_tmp'])
                     self.reporting.report_timestep_value('uconv_diff', ucdiff)
-                
-            if not numpy.isfinite(Co_max):
+            
+            Co_lim = self.input.get_value('simulation/Co_lim', CO_LIM, 'float')
+            if Co_lim > 0 and Co_max > Co_lim:
+                ocellaris_error('Courant number exceeded limit',
+                                'Found Co = %g > %g' % (Co_max, Co_lim))
+            elif not numpy.isfinite(Co_max):
                 ocellaris_error('Non finite Courant number',
                                 'Found Co = %g' % Co_max)
         
