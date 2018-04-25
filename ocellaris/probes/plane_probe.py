@@ -94,6 +94,7 @@ class PlaneProbe(Probe):
         if self.custom_hook_point is not None:
             simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
         else:
+            self.new_simulation = self.run
             self.end_of_timestep = self.run
     
     def run(self):
@@ -103,7 +104,7 @@ class PlaneProbe(Probe):
         it = self.simulation.timestep
         
         # Should we update the file?
-        if not (it == 1 or it % self.write_interval == 0):
+        if self.write_interval < 0 or it % self.write_interval != 0:
             return
         
         for func_3d, func_2d in zip(self.funcs_3d, self.funcs_2d):
@@ -399,10 +400,11 @@ def limit_triangles(triangles, xlim, ylim, zlim, eps=1e-8):
         c0, c1, c2 = cell_coords
         u = (c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2])
         v = (c2[0] - c0[0], c2[1] - c0[1], c2[2] - c0[2])
+        # Cross product to find area of trapezoid, squared
         areaish = (u[1] * v[2] - u[2] * v[1])**2 +\
                   (u[2] * v[0] - u[0] * v[2])**2 +\
                   (u[0] * v[1] - u[1] * v[0])**2    
-        return areaish > eps
+        return areaish > eps**2
     
     return [cell_coords for cell_coords in triangles if has_area(cell_coords)]
 
