@@ -23,6 +23,7 @@ class VelocityBDMProjection():
         The flux type can be 'central' or 'upwind'
         """
         self.simulation = simulation
+        simulation.log.info('    Setting up velocity BDM projection')
         
         V = w[0].function_space()
         ue = V.ufl_element()

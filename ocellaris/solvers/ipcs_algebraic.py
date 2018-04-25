@@ -212,6 +212,7 @@ class SolverIPCSA(Solver):
                                  use_grad_q_form=self.use_grad_q_form,
                                  use_grad_p_form=self.use_grad_p_form,
                                  use_stress_divergence_form=self.use_stress_divergence_form)
+        sim.log.info('    Splitting coupled form')
         mat, vec = split_form_into_matrix(eq, Vcoupled, Vcoupled, check_zeros=True)
         
         # Check matrix and vector shapes and that the matrix is a saddle point matrix
@@ -220,6 +221,7 @@ class SolverIPCSA(Solver):
         assert mat[-1,-1] is None, 'Found p-q coupling, this is not a saddle point system!'
         
         # Compile and store the forms
+        sim.log.info('    Compiling IPCS-A forms')
         self.eqA = dolfin.Form(mat[0, 0])
         self.eqB = dolfin.Form(mat[0, 1])
         self.eqC = dolfin.Form(mat[1, 0])

@@ -102,6 +102,7 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
     
     :type simulation: ocellaris.Simulation
     """
+    simulation.log.info('    Creating DG weak form with BCs')
     sim = simulation
     mpm = sim.multi_phase_model
     mesh = sim.data['mesh']

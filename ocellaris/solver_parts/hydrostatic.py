@@ -113,6 +113,7 @@ def setup_hydrostatic_pressure(simulation, needs_initial_value, default_every_ti
         return NoHydrostaticPressure()
     
     # Hydrostatic pressure is always CG
+    simulation.log.info('    Setting up hydrostatic pressure calculations')
     Vp = simulation.data['Vp']
     Pp = Vp.ufl_element().degree()
     Vph = FunctionSpace(simulation.data['mesh'], 'CG', Pp)
