@@ -98,7 +98,7 @@ class AiryWaveField(KnownField):
             updater(timestep_number, t, dt)
             func.interpolate(expr)
         
-        # Update dependet
+        # Update dependent fields
         for f in self._dependent_fields:
             f.update(timestep_number, t, dt)
     
