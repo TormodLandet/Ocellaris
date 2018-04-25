@@ -42,16 +42,8 @@ class XDMFFileIO():
         sim = self.simulation
         xdmf_flush =  sim.input.get_value('output/xdmf_flush', XDMF_FLUSH, 'bool')
         
-        file_name = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
-        file_name2 = os.path.splitext(file_name)[0] + '.h5'
-        
-        # Remove previous files
-        if os.path.isfile(file_name) and sim.rank == 0:
-            sim.log.info('    Removing existing XDMF file %s' % file_name)
-            os.remove(file_name)
-        if os.path.isfile(file_name2) and sim.rank == 0:
-            sim.log.info('    Removing existing XDMF file %s' % file_name2)
-            os.remove(file_name2)
+        fn = sim.input.get_output_file_path('output/xdmf_file_name', '.xdmf')
+        file_name = get_xdmf_file_name(sim, fn)
         
         sim.log.info('    Creating XDMF file %s' % file_name)
         comm = sim.data['mesh'].mpi_comm()
@@ -111,3 +103,27 @@ class XDMFFileIO():
             self.xdmf_file.write(func, t)
         
         self.xdmf_first_output = False
+
+
+def get_xdmf_file_name(simulation, file_name_suggestion):
+    """
+    Deletes any previous files with the same name unless
+    the simulation is restarted. If will then return a new
+    name to avoid overwriting the existing files
+    """
+    base = os.path.splitext(file_name_suggestion)[0]
+    if simulation.restarted:
+        base = base + '_restarted_%08d' % simulation.timestep 
+    
+    file_name = base + '.xdmf'
+    file_name2 = base + '.h5'
+    
+    # Remove any existing files with the same base file name
+    if os.path.isfile(file_name) and simulation.rank == 0:
+        simulation.log.info('    Removing existing XDMF file %s' % file_name)
+        os.remove(file_name)
+    if os.path.isfile(file_name2) and simulation.rank == 0:
+        simulation.log.info('    Removing existing XDMF file %s' % file_name2)
+        os.remove(file_name2)
+    
+    return file_name

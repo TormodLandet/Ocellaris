@@ -3,6 +3,7 @@ import dolfin
 import numpy
 from collections import OrderedDict
 from ocellaris.utils import init_mesh_geometry, timeit, ocellaris_error
+from ocellaris.simulation.io_impl.xdmf import get_xdmf_file_name
 from . import Probe, register_probe
 
 
@@ -59,29 +60,21 @@ class PlaneProbe(Probe):
         self.slice = FunctionSlice(self.plane_point, self.plane_normal, V,
                                    xlim, ylim, zlim)
         prefix = simulation.input.get_value('output/prefix', '', 'string')
-        self.file_name = '%s_slice_%s.xdmf' % (prefix, self.name)
+        
+        # Get the XDMF file name (also ensures it does not exist)
+        fn = '%s_slice_%s.xdmf' % (prefix, self.name)
+        self.file_name = get_xdmf_file_name(simulation, fn)
         
         if simulation.rank == 0:
             V_2d = self.slice.slice_function_space
             mesh_2d = V_2d.mesh()
             simulation.log.info('        Created 2D mesh with %r cells' % mesh_2d.num_cells())
-            
-            # Remove any previous XDMF files
-            file_name = self.file_name
-            file_name2 = os.path.splitext(file_name)[0] + '.h5'
-            if os.path.isfile(file_name):
-                simulation.log.info('        Removing existing XDMF file %s' % file_name)
-                os.remove(file_name)
-            if os.path.isfile(file_name2):
-                simulation.log.info('        Removing existing XDMF file %s' % file_name2)
-                os.remove(file_name2)
-            
             simulation.log.info('        Creating XDMF file %s' % self.file_name)
-            self.xdmf_file = dolfin.XDMFFile(dolfin.MPI.comm_self, file_name)
+            self.xdmf_file = dolfin.XDMFFile(dolfin.MPI.comm_self, self.file_name)
             self.xdmf_file.parameters['flush_output'] = True
             self.xdmf_file.parameters['rewrite_function_mesh'] = False
             self.xdmf_file.parameters['functions_share_mesh'] = True
-        
+            
             # Create storage for 2D functions
             self.funcs_2d = []
             for fn in self.field_names:

@@ -43,11 +43,11 @@ class Simulation(object):
         # Several parts of the code wants to know these things,
         # so we keep them in a central place
         self.ndim = 0
-        self.timestep = 0
-        self.timestep_restart = 0
+        self.timestep = 0           # Number of timesteps since beginning of sim
+        self.timestep_restart = 0   # Number of timesteps since last restart 
         self.time = 0.0
         self.dt = 0.0
-        self.restarted = False
+        self.restarted = False      # Starting from a restart file or from inp
         self.ndofs = 0
         
         # These will be filled out when .setup() is configuring the Navier-Stokes
