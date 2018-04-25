@@ -1,4 +1,5 @@
 import dolfin
+from ocellaris import Simulation
 from ocellaris.solver_parts import VelocityBDMProjection
 import pytest
 
@@ -30,7 +31,7 @@ def test_bdm_identity_transform(gdim):
         a[i].assign(u[i])
     
     # Run the projection into BDM and then assign this to u
-    bdm = VelocityBDMProjection(simulation=None, w=u, use_bcs=False)
+    bdm = VelocityBDMProjection(simulation=Simulation(), w=u, use_bcs=False)
     bdm.run()
     
     # Check the changes made
