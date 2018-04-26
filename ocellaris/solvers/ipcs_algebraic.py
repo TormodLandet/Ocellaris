@@ -439,9 +439,6 @@ class SolverIPCSA(Solver):
         t = sim.time
         it = sim.timestep
         
-        # Give reasonable starting guesses for the solvers
-        shift_fields(sim, ['up%d', 'u%d']) # get the initial u star
-    
         with dolfin.Timer('Ocellaris run IPCS-A solver'):    
             while True:
                 # Get input values, these can possibly change over time

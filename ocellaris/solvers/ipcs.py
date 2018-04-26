@@ -365,9 +365,6 @@ class SolverIPCS(Solver):
         t = sim.time
         it = sim.timestep
         
-        # Give reasonable starting guesses for the solvers
-        shift_fields(sim, ['up%d', 'u%d'])
-        
         while True:
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')

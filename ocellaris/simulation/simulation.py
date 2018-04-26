@@ -1,7 +1,6 @@
 import time
-import numpy
 import dolfin
-from ocellaris.utils import ocellaris_error, velocity_change, timeit
+from ocellaris.utils import timeit, shift_fields
 from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
@@ -15,8 +14,6 @@ from .setup import setup_simulation
 # Flush log and other output files at regular intervals, but not every
 # timestep in case there are a lot of them per second
 FLUSH_INTERVAL = 5 # seconds
-# Stop simulation if Courant number exceeds a given value
-CO_LIM = 1e3
 
 
 class Simulation(object):
@@ -113,6 +110,14 @@ class Simulation(object):
             h = dolfin.CellDiameter(mesh)
         self.data['h'] = h
     
+    def _at_start_of_simulation(self):
+        # Give reasonable starting guesses for the solvers and something
+        # sensible to use when computing the initial solution properties
+        shift_fields(self, ['up%d', 'u%d'])
+        
+        # Show solution properties without adding to the timestep reports 
+        self.solution_properties.report(create_report=False)
+    
     def _at_start_of_timestep(self, timestep_number, t, dt):
         self.timestep = timestep_number
         self.timestep_restart += 1
@@ -127,45 +132,8 @@ class Simulation(object):
         self.reporting.report_timestep_value('tottime', newtime-self.starttime)
         self.prevtime = newtime
         
-        # Report the solution properties
-        if self.solution_properties.active:
-            with dolfin.Timer('Ocellaris solution_properties'):
-                Co_max = self.solution_properties.courant_number().vector().max()
-                Pe_max = self.solution_properties.peclet_number().vector().max()
-                div_dS_f, div_dx_f = self.solution_properties.divergences()
-                div_dS = div_dS_f.vector().max()
-                div_dx = div_dx_f.vector().max()
-                mass = self.solution_properties.total_mass()
-                Ek, Ep = self.solution_properties.total_energy()
-                self.reporting.report_timestep_value('Co', Co_max)
-                self.reporting.report_timestep_value('Pe', Pe_max)
-                self.reporting.report_timestep_value('div', div_dx + div_dS)
-                self.reporting.report_timestep_value('mass', mass)
-                self.reporting.report_timestep_value('Ek', Ek)
-                self.reporting.report_timestep_value('Ep', Ep)
-                
-                if self.solution_properties.has_div_conv:
-                    # Convecting and convected velocities are separate
-                    div_conv_dS_f, div_conv_dx_f = self.solution_properties.divergences('u_conv')
-                    div_conv_dS = div_conv_dS_f.vector().max()
-                    div_conv_dx = div_conv_dx_f.vector().max()
-                    self.reporting.report_timestep_value('div_conv', div_conv_dx + div_conv_dS)
-                    
-                    # Difference between the convective and the convected velocity
-                    ucdiff = velocity_change(u1=self.data['up'],
-                                             u2=self.data['up_conv'],
-                                             ui_tmp=self.data['ui_tmp'])
-                    self.reporting.report_timestep_value('uconv_diff', ucdiff)
-            
-            Co_lim = self.input.get_value('simulation/Co_lim', CO_LIM, 'float')
-            if Co_lim > 0 and Co_max > Co_lim:
-                ocellaris_error('Courant number exceeded limit',
-                                'Found Co = %g > %g' % (Co_max, Co_lim))
-            elif not numpy.isfinite(Co_max):
-                ocellaris_error('Non finite Courant number',
-                                'Found Co = %g' % Co_max)
-        
         # Write timestep report
+        self.solution_properties.report()
         self.reporting.log_timestep_reports()
         
         # Write fields to output file

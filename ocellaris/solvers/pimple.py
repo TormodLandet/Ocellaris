@@ -87,7 +87,7 @@ class SolverPIMPLE(Solver):
             expression for u** from the approximate momentum equation into
             the continuity equation (Ã needs to be easily invertible / block diag)
             
-            CÃ⁻¹B p** = C u* - CÃ⁻¹A u* - CÃ⁻¹B + CÃ⁻¹ d - e
+            CÃ⁻¹B p** = C u* - e - CÃ⁻¹A u* + CÃ⁻¹ d
             
             Solve for p**. We may optionally apply relaxation to p** here
             
@@ -430,9 +430,6 @@ class SolverPIMPLE(Solver):
         t = sim.time
         it = sim.timestep
         
-        # Give reasonable starting guesses for the solvers
-        shift_fields(sim, ['up%d', 'u%d']) # get the initial u star
-    
         with dolfin.Timer('Ocellaris run IPCS-A solver'):    
             while True:
                 # Get input values, these can possibly change over time

@@ -94,6 +94,9 @@ class Hooks(object):
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 self.simulation.log.error(traceback.format_exc())
                 raise
+        # This reports solution properties right before starting the solver
+        # loop, after any hooks have altered the initial conditions
+        self.simulation._at_start_of_simulation()
         # Flush open files
         self.simulation.hooks.run_custom_hook('flush')
     

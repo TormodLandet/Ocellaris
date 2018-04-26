@@ -278,12 +278,6 @@ class SolverFSVD(Solver):
             self.is_first_timestep = False
             self.simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
         
-        # Give reasonable starting guesses for the solvers
-        for d in range(sim.ndim):
-            up = self.simulation.data['up%d' % d]
-            u_new = self.simulation.data['u%d' % d]
-            u_new.assign(up)
-        
         while True:
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')

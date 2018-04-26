@@ -1,6 +1,11 @@
+import numpy
 import dolfin as df
 from dolfin import dot, sqrt, grad, jump, avg, dx, dS, Form
-from ocellaris.utils import timeit
+from ocellaris.utils import timeit, ocellaris_error, velocity_change
+
+
+# Stop simulation if Courant number exceeds a given value
+CO_LIM = 1e3
 
 
 class SolutionProperties(object):
@@ -49,6 +54,65 @@ class SolutionProperties(object):
                 if name in self._div:
                     sim.io.add_extra_output_function(self._div[name]['div_dS'])
                     sim.io.add_extra_output_function(self._div[name]['div_dx'])
+    
+    @timeit.named('compute solution properties')
+    def report(self, create_report=True):
+        """
+        Compute and report the solution properties
+        """
+        if not self.active:
+            return
+        
+        sim = self.simulation
+        reports = []
+        
+        Co_max = self.courant_number().vector().max()
+        Pe_max = self.peclet_number().vector().max()
+        div_dS_f, div_dx_f = self.divergences()
+        div_dS = div_dS_f.vector().max()
+        div_dx = div_dx_f.vector().max()
+        mass = self.total_mass()
+        Ek, Ep = self.total_energy()
+        reports.append(('Co', Co_max))
+        reports.append(('Pe', Pe_max))
+        reports.append(('div', div_dx + div_dS))
+        reports.append(('mass', mass))
+        reports.append(('Ek', Ek))
+        reports.append(('Ep', Ep))
+        
+        if self.has_div_conv:
+            # Convecting and convected velocities are separate
+            div_conv_dS_f, div_conv_dx_f = self.divergences('u_conv')
+            div_conv_dS = div_conv_dS_f.vector().max()
+            div_conv_dx = div_conv_dx_f.vector().max()
+            reports.append(('div_conv', div_conv_dx + div_conv_dS))
+            
+            # Difference between the convective and the convected velocity
+            ucdiff = velocity_change(u1=sim.data['up'],
+                                     u2=sim.data['up_conv'],
+                                     ui_tmp=sim.data['ui_tmp'])
+            reports.append(('uconv_diff', ucdiff))
+        
+        if create_report:
+            # Add computed solution properties to the timestep reports 
+            for name, value in reports:
+                sim.reporting.report_timestep_value(name, value)
+        else:
+            # Log solution properties instead of adding to the timestep reports. 
+            # Done to avoid variable length time step report time series which
+            # will be generated when calling this method at a different time
+            # than at the end of a time step
+            info = ['%s = %10g' % (name, value) for name, value in reports]
+            sim.log.info('Simulation properties for timestep = %5d, time = %10.4f, %s' %
+                         (sim.timestep, sim.time, ', '.join(info)))
+        
+        Co_lim = sim.input.get_value('simulation/Co_lim', CO_LIM, 'float')
+        if Co_lim > 0 and Co_max > Co_lim:
+            ocellaris_error('Courant number exceeded limit',
+                            'Found Co = %g > %g' % (Co_max, Co_lim))
+        elif not numpy.isfinite(Co_max):
+            ocellaris_error('Non finite Courant number',
+                            'Found Co = %g' % Co_max)
     
     def _setup_courant(self, vel, dt):
         """
