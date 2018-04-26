@@ -113,7 +113,8 @@ class Simulation(object):
     def _at_start_of_simulation(self):
         # Give reasonable starting guesses for the solvers and something
         # sensible to use when computing the initial solution properties
-        shift_fields(self, ['up%d', 'u%d'])
+        if 'up0' in self.data:
+            shift_fields(self, ['up%d', 'u%d'])
         
         # Show solution properties without adding to the timestep reports 
         self.solution_properties.report(create_report=False)
