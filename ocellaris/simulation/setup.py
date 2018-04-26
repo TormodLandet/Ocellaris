@@ -358,6 +358,13 @@ def mark_boundaries(simulation):
     length0 = dolfin.assemble(one*ds(0, domain=mesh))
     pf = simulation.log.info if length0 == 0.0 else simulation.log.warning
     pf('    Boundary region UNMARKED has size %f' % length0)
+    
+    # Optionally plot boundary regions to file
+    if simulation.input.get_value('output/plot_bcs', False, 'boolean'):
+        prefix = simulation.input.get_value('output/prefix', '', 'string')
+        pfile = prefix + '_boundary_regions.pvd'
+        simulation.log.info('    Plotting boundary regions to file %r' % pfile)
+        dolfin.File(pfile) << marker
 
 
 def setup_periodic_domain(simulation):

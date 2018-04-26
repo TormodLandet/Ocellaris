@@ -106,6 +106,12 @@ class BoundaryRegion(object):
             bc_class = get_boundary_condition(bc_type)
             bc = bc_class(sim, key, inp, self.marker, self.mark_id)
             self.conditions[key] = bc
+    
+    def ds(self):
+        """
+        Get a measure to integrate over this boundary region 
+        """
+        return self.simulation.data['ds'](self.mark_id)
 
 
 class RegionSelector(dolfin.SubDomain):
