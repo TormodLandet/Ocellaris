@@ -61,14 +61,22 @@ class AnalyticalSolution(Solver):
             
             if not name in funcs:
                 continue
-            
-            cpp_code = str(info['cpp_code'])
             func = funcs[name]
-            V = func.function_space()
-            description = 'initial conditions for %r' % name
             
-            # Update the function by running the C++ code
-            ocellaris_interpolate(sim, cpp_code, description, V, func)
+            if 'cpp_code' in info:
+                # Initial condition given as a C++ code string
+                cpp_code = str(info['cpp_code'])                
+                V = func.function_space()
+                description = 'initial conditions for %r' % name
+                
+                # Update the function by running the C++ code
+                ocellaris_interpolate(sim, cpp_code, description, V, func)
+            
+            else:
+                # Initial condition given as a known field function
+                field_name, func_name = info['function'].strip().split('/')
+                field = self.simulation.fields[field_name]
+                func.interpolate(field.get_variable(func_name))
     
     @timeit
     def run(self):
