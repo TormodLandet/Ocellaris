@@ -99,13 +99,10 @@ class Simulation(object):
         precompute_cell_data(self)
         precompute_facet_data(self)
         
-        # Work around uflacs missing CellSize and CellVolume etc for isoparametric elements
-        # FIXME: is this still needed?
+        # Work around missing consensus on what CellDiameter is for bendy cells
         mesh = self.data['mesh']
         if mesh.ufl_coordinate_element().degree() > 1:
-            # FIXME: this is only valid for uniform meshes!
-            area = dolfin.assemble(1.0*dolfin.dx(mesh, degree=2))
-            h = dolfin.Constant((area / mesh.num_cells())**(1.0 / mesh.topology().dim()))
+            h = dolfin.CellVolume(mesh)**(1 / mesh.topology().dim())
         else:
             h = dolfin.CellDiameter(mesh)
         self.data['h'] = h
