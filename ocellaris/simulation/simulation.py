@@ -108,15 +108,34 @@ class Simulation(object):
         self.data['h'] = h
     
     def _at_start_of_simulation(self):
+        """
+        Runs after all the pre_simulation hooks, before staring the solver
+        """
         # Give reasonable starting guesses for the solvers and something
         # sensible to use when computing the initial solution properties
         if 'up0' in self.data:
             shift_fields(self, ['up%d', 'u%d'])
         
+        # Setup IO and dump initial fields
+        self.io.setup()
+        self.io.write_fields()
+        
         # Show solution properties without adding to the timestep reports 
         self.solution_properties.report(create_report=False)
+        
+        self.flush(force=True)
+    
+    def _at_end_of_simulation(self, success):
+        """
+        Runs after the solver and after any post_simulation hooks
+        """
+        self.flush(force=True)
     
     def _at_start_of_timestep(self, timestep_number, t, dt):
+        """
+        Runs before any pre_timestep hooks, at the very beginning of the each
+        time step in the solver
+        """
         self.timestep = timestep_number
         self.timestep_restart += 1
         self.time = t
@@ -124,6 +143,9 @@ class Simulation(object):
     
     @timeit.named('simulation at_end_of_timestep')
     def _at_end_of_timestep(self):
+        """
+        Runs after each time step in the solver, after all post_timestep hooks
+        """
         # Report the time spent in this time step
         newtime = time.time()
         self.reporting.report_timestep_value('tstime', newtime-self.prevtime)

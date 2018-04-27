@@ -27,7 +27,6 @@ class InputOutputHandling():
         self.lvtk = LegacyVTKIO(simulation)
         self.debug = DebugIO(simulation)
         
-        sim.hooks.add_pre_simulation_hook(self._setup_io, 'Setup simulation IO')
         close = lambda success: self._close_files() #@UnusedVariable - must be named success
         sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
         
@@ -40,6 +39,26 @@ class InputOutputHandling():
         # Last savepoint written. To be deleted after writing new save point
         # if only keeping the last save point file
         self.prev_savepoint_file_name = ''
+    
+    def setup(self):
+        sim = self.simulation
+        sim.log.info('Setting up simulation IO')
+        
+        # Make sure functions have nice names for output
+        for name, description in (('p', 'Pressure'),
+                                  ('p_hydrostatic', 'Hydrostatic pressure'),
+                                  ('c', 'Colour function'),
+                                  ('rho', 'Density'),
+                                  ('u0', 'X-component of velocity'),
+                                  ('u1', 'Y-component of velocity'),
+                                  ('u2', 'Z-component of velocity'),
+                                  ('boundary_marker', 'Domain boundary regions')):
+            if not name in sim.data:
+                continue
+            func = sim.data[name]
+            if hasattr(func, 'rename'):
+                func.rename(name, description)
+        self.ready = True
     
     def add_extra_output_function(self, function):
         """
@@ -62,29 +81,6 @@ class InputOutputHandling():
         """
         assert isinstance(name, str)
         return self.persisted_python_data.setdefault(name, {})
-    
-    def _setup_io(self):
-        sim = self.simulation
-        sim.log.info('Setting up simulation IO')
-        
-        # Make sure functions have nice names for output
-        for name, description in (('p', 'Pressure'),
-                                  ('p_hydrostatic', 'Hydrostatic pressure'),
-                                  ('c', 'Colour function'),
-                                  ('rho', 'Density'),
-                                  ('u0', 'X-component of velocity'),
-                                  ('u1', 'Y-component of velocity'),
-                                  ('u2', 'Z-component of velocity'),
-                                  ('boundary_marker', 'Domain boundary regions')):
-            if not name in sim.data:
-                continue
-            func = sim.data[name]
-            if hasattr(func, 'rename'):
-                func.rename(name, description)
-        
-        # Dump initial state
-        self.ready = True
-        self.write_fields()
     
     def _close_files(self):
         """

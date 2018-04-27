@@ -94,11 +94,11 @@ class Hooks(object):
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 self.simulation.log.error(traceback.format_exc())
                 raise
-        # This reports solution properties right before starting the solver
-        # loop, after any hooks have altered the initial conditions
+        
+        # Reports the solution properties and create initial condition plot
+        # files right before starting the solver loop. It is important that this
+        # happens after the hooks, as they may alter the initial conditions
         self.simulation._at_start_of_simulation()
-        # Flush open files
-        self.simulation.hooks.run_custom_hook('flush')
     
     @timeit.named('all hooks: new_timestep')
     def new_timestep(self, timestep_number, t, dt):
@@ -108,7 +108,9 @@ class Hooks(object):
         Will run all pre timestep hooks in the reverse
         order they have been added 
         """
+        # Update the time step etc before running any hooks
         self.simulation._at_start_of_timestep(timestep_number, t, dt)
+        
         for hook, description, timer_name in self._pre_timestep_hooks[::-1]:
             with dolfin.Timer('Ocellaris hook %s' % timer_name):
                 try:
@@ -134,6 +136,9 @@ class Hooks(object):
                     self.simulation.log.error('Got exception in hook: %s' % description)
                     self.simulation.log.error(traceback.format_exc())
                     raise
+        
+        # Take care of reporting etc after the solver and any hooks have
+        # finished running the current time step
         self.simulation._at_end_of_timestep()
     
     def simulation_ended(self, success):
@@ -155,9 +160,14 @@ class Hooks(object):
                 self.simulation.log.error('Got exception in hook: %s' % description)
                 self.simulation.log.error(traceback.format_exc())
                 raise
-        # Flush open files
-        self.simulation.hooks.run_custom_hook('flush')
+        
+        # Take care of flushing files after the solver and any hooks are done
+        self.simulation._at_end_of_simulation(success)
     
+    # FIXME: this is not really used and the whole matrix_ready machinery should
+    # probably be removed or made into a custom hook in case someone wants to
+    # hook into the matrix assembly process. The intent was to report condition
+    # numbers and possibly to add special terms to some matrices
     @timeit.named('all hooks: matrix_ready')
     def matrix_ready(self, Aname, A, b=None):
         """
