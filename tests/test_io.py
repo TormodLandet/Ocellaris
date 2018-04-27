@@ -115,7 +115,7 @@ def test_plot_io_3D(iotype, tmpdir_factory):
     sim.input.set_value('output/prefix', prefix)
     sim.input.set_value('user_code/constants/N', N)
     setup_simulation(sim)
-    sim.io._setup_io() # Normally called in 'pre_simulation' hook
+    sim.io.setup() # Normally called in sim._at_start_of_simulation()
     
     for d in range(3):
         sim.data['u%d' % d].assign(sim.data['up%d' % d])
