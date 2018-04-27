@@ -4,6 +4,10 @@ from ocellaris.utils import ocellaris_error, OcellarisCppExpression, verify_key
 from . import register_known_field, KnownField, DEFAULT_POLYDEG
 
 
+# Degree used to go from colour field with jump to DG colour field
+# Set it to -1 to use the same interpolation as for the other fields
+COLOUR_PROJECTION_DEGREE = 6
+
 @register_known_field('AiryWaves')
 class AiryWaveField(KnownField):
     description = 'Linear airy waves'
@@ -30,6 +34,7 @@ class AiryWaveField(KnownField):
         simulation.log.info('    Current speed: %r' % self.current_speed)
         simulation.log.info('    Wind speed: %r' % self.wind_speed)
         simulation.log.info('    Polynomial degree: %r' % self.polydeg)
+        simulation.log.info('    Colour proj. degree: %r' % self.colour_projection_degree)
         
         self._cpp = {}
         self.construct_cpp_code()
@@ -84,6 +89,11 @@ class AiryWaveField(KnownField):
                             'of waves specified, %d != %d' % (len(self.amplitudes), Nwave))
         max_ampl = sum(abs(a) for a in self.amplitudes)
         self.h_above = field_inp.get_value('depth_above', 2*max_ampl, required_type='float')
+        
+        # Project the colour function to DG0 (set degree to -1 to prevent this)
+        self.colour_projection_degree = field_inp.get_value('colour_projection_degree',
+                                                            COLOUR_PROJECTION_DEGREE, 'int')
+        self.colour_projection_form = None
     
     def update(self, timestep_number, t, dt):
         """
@@ -96,7 +106,7 @@ class AiryWaveField(KnownField):
         for name, func in self._functions.items():
             expr, updater = self._expressions[name]
             updater(timestep_number, t, dt)
-            func.interpolate(expr)
+            self._interp(name, expr, func)
         
         # Update dependent fields
         for f in self._dependent_fields:
@@ -246,16 +256,67 @@ class AiryWaveField(KnownField):
             lines.append('return val;')
             self._cpp[name] = lamcode % ('\n  '.join(lines))
     
-    def _get_expression(self, name):
+    def _get_expression(self, name, quad_degree=None):
         keys = list(self._cpp.keys()) + ['u']
         verify_key('variable', name, keys, 'Airy wave field %r' % self.name)
         if name not in self._expressions:
+            degree = self.polydeg if quad_degree is None else None
             expr, updater = OcellarisCppExpression(self.simulation, self._cpp[name],
                                                    'Airy wave field %r' % name,
-                                                   self.polydeg, update=False,
-                                                   return_updater=True)
+                                                   degree, update=False,
+                                                   return_updater=True,
+                                                   quad_degree=quad_degree)
             self._expressions[name] = expr, updater
         return self._expressions[name][0]
+    
+    def _interp(self, name, expr=None, func=None):
+        """
+        Interpolate the expression into the given function
+        """
+        sim = self.simulation
+        
+        # Determine the function space
+        V = self.V
+        quad_degree = None
+        if name == 'c' and self.colour_projection_degree >= 0:
+            # Perform projection for c instead of interpolation to better
+            # capture the discontinuous nature of the colour field
+            if not 'Vc' in sim.data:
+                ocellaris_error('Error in AiryWaves %r input' % self.name,
+                                'Cannot specify colour_to_dg_degree when c is '
+                                'not used in the multiphase_solver.')
+            V = sim.data['Vc']
+            quad_degree = self.colour_projection_degree
+        
+        # Get the expression
+        if expr is None:
+            expr = self._get_expression(name, quad_degree)
+        
+        # Get the function
+        if func is None:
+            if name not in self._functions:
+                self._functions[name] = dolfin.Function(V)
+            func = self._functions[name]
+        
+        if quad_degree is not None:
+            if self.colour_projection_form is None:
+                # Ensure that we can use the DG0 trick of dividing by the mass
+                # matrix diagonal to get the projected value
+                if V.ufl_element().degree() != 0:
+                    ocellaris_error('Error in AiryWaves %r input' % self.name,
+                                    'The colour_to_dg_degree projection is '
+                                    'currently only implemented when c is DG0')
+                v = dolfin.TestFunction(V)
+                dx = dolfin.dx(metadata={'quadrature_degree': quad_degree})
+                d = dolfin.CellVolume(V.mesh()) # mass matrix diagonal
+                form = expr * v / d * dx
+                self.colour_projection_form = dolfin.Form(form)
+            
+            # Perform projection by assembly (DG0 only!)
+            dolfin.assemble(self.colour_projection_form, tensor=func.vector())
+        else:
+            # Perform standard interpolation
+            func.interpolate(expr)
     
     def get_variable(self, name):
         if name == 'u':
@@ -269,8 +330,7 @@ class AiryWaveField(KnownField):
                                          self.get_variable('uvert')])
         
         if name not in self._functions:
-            expr = self._get_expression(name)
-            self._functions[name] = dolfin.interpolate(expr, self.V)
+            self._interp(name)
         return self._functions[name]
 
 

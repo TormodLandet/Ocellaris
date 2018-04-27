@@ -128,7 +128,7 @@ def ocellaris_interpolate(simulation, cpp_code, description, V,
 
 def OcellarisCppExpression(simulation, cpp_code, description, degree,
                            update=True, return_updater=False,
-                           params=None):
+                           params=None, quad_degree=None):
     """
     Create a dolfin.Expression and make sure it has variables like time
     available when executing.
@@ -147,13 +147,21 @@ def OcellarisCppExpression(simulation, cpp_code, description, degree,
             if name in expression.user_parameters:
                 expression.user_parameters[name] = value
     
+    if quad_degree is not None:
+        mesh = simulation.data['mesh']
+        element = dolfin.FiniteElement('Quadrature', mesh.ufl_cell(),
+                                       quad_degree, quad_scheme='default')
+    else:
+        # Element = integer creates a CG element with the given degree
+        element = degree
+    
     # Create the expression
-    expression = make_expression(simulation, cpp_code, description, degree, params)
+    expression = make_expression(simulation, cpp_code, description, element, params)
     
     # Return the expression. Optionally register an update each time step
     if update:
-        simulation.hooks.add_pre_timestep_hook(updater, 'Update C++ expression "%s"' % description,
-                                               'Update C++ expression')
+        simulation.hooks.add_pre_timestep_hook(updater,
+            'Update C++ expression "%s"' % description, 'Update C++ expression')
     
     if return_updater:
         return expression, updater
