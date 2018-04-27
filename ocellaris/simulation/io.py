@@ -22,10 +22,18 @@ class InputOutputHandling():
         self.ready = False
         self.persisted_python_data = {}
         
+        # Initialise the main plot file types
         self.restart = RestartFileIO(simulation, self.persisted_python_data)
         self.xdmf = XDMFFileIO(simulation)
         self.lvtk = LegacyVTKIO(simulation)
         self.debug = DebugIO(simulation)
+        
+        # Set up periodic output of plot files. Other parts of Ocellaris may
+        # also add their plot writers to this list 
+        self._plotters = []
+        self.add_plotter(self.xdmf.write, 'output/xdmf_write_interval',XDMF_WRITE_INTERVAL)
+        self.add_plotter(self.lvtk.write, 'output/vtk_write_interval', LVTK_WRITE_INTERVAL)
+        self.add_plotter(self._interval_write_restart, 'output/hdf5_write_interval', HDF5_WRITE_INTERVAL)
         
         close = lambda success: self._close_files() #@UnusedVariable - must be named success
         sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
@@ -59,6 +67,12 @@ class InputOutputHandling():
             if hasattr(func, 'rename'):
                 func.rename(name, description)
         self.ready = True
+    
+    def add_plotter(self, func, interval_inp_key, default_interval):
+        """
+        Add a plotting function which produces IO output every timestep
+        """
+        self._plotters.append((func, interval_inp_key, default_interval))
     
     def add_extra_output_function(self, function):
         """
@@ -108,31 +122,38 @@ class InputOutputHandling():
         """
         sim = self.simulation
         
-        # Allow these to change over time
-        hdf5_write_interval = sim.input.get_value('output/hdf5_write_interval', HDF5_WRITE_INTERVAL, 'int')
-        xdmf_write_interval = sim.input.get_value('output/xdmf_write_interval', XDMF_WRITE_INTERVAL, 'int')
-        lvtk_write_interval = sim.input.get_value('output/vtk_write_interval', LVTK_WRITE_INTERVAL, 'int')
+        # No need to output just after restarting, this will overwrite the
+        # output from the previous simulation
+        if sim.restarted and sim.timestep_restart == 0:
+            return
         
-        # No need to output just after restarting, this will overwrite the output from the previous simulation
-        just_restarted = sim.restarted and sim.timestep_restart == 0
-        
-        if xdmf_write_interval > 0 and sim.timestep % xdmf_write_interval == 0 and not just_restarted:
-            self.xdmf.write()
-        
-        if lvtk_write_interval > 0 and sim.timestep % lvtk_write_interval == 0 and not just_restarted:
-            self.lvtk.write()
-        
-        if hdf5_write_interval > 0 and sim.timestep % hdf5_write_interval == 0 and not just_restarted:
-            h5_file_name = self.write_restart_file()
+        # Call the output functions at the right intervals
+        for func, interval_inp_key, default_interval in self._plotters:
+            # Check this every timestep, it might change
+            write_interval = sim.input.get_value(interval_inp_key,
+                                                 default_interval, 'int')
             
-            # To avoid filling up the disk we can delete the previous save point
-            # file after successfully writing a new save point file
-            if sim.input.get_value('output/hdf5_only_store_latest', False, 'bool'):
-                if os.path.isfile(self.prev_savepoint_file_name) and sim.rank == 0:
-                    sim.log.info('Deleting previous save point file %r'
-                                 % self.prev_savepoint_file_name)
-                    os.unlink(self.prev_savepoint_file_name)
-                self.prev_savepoint_file_name = h5_file_name
+            # Write plot file this time step if it aligns with the interval
+            if write_interval > 0 and sim.timestep % write_interval == 0:
+                func()
+    
+    def _interval_write_restart(self):
+        """
+        Special treatment for restart files, to avoid filling up the disk we
+        can delete the previous save point file after successfully writing 
+        a new save point file. This is only done for interval writes, not
+        direct calls to write_restart_file ...
+        """
+        sim = self.simulation
+        h5_file_name = self.write_restart_file()
+        
+        # Write was successfull (no exception) -> delete previous files
+        if sim.input.get_value('output/hdf5_only_store_latest', False, 'bool'):
+            if os.path.isfile(self.prev_savepoint_file_name) and sim.rank == 0:
+                sim.log.info('Deleting previous save point file %r'
+                             % self.prev_savepoint_file_name)
+                os.unlink(self.prev_savepoint_file_name)
+            self.prev_savepoint_file_name = h5_file_name
     
     def write_restart_file(self, h5_file_name=None):
         """

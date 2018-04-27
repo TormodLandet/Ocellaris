@@ -1,4 +1,3 @@
-import os
 import dolfin
 import numpy
 from collections import OrderedDict
@@ -28,8 +27,6 @@ class PlaneProbe(Probe):
         xlim = inp.get_value('xlim', None, 'list(float)', required_length=2)
         ylim = inp.get_value('ylim', None, 'list(float)', required_length=2)
         zlim = inp.get_value('zlim', None, 'list(float)', required_length=2)
-        self.custom_hook_point = inp.get_value('custom_hook', None, required_type='string')
-        self.write_interval = inp.get_value('write_interval', WRITE_INTERVAL, 'int')
         
         # Get the names of the function(s) to be sliced
         fn = inp.get_value('field', required_type='any')
@@ -84,22 +81,14 @@ class PlaneProbe(Probe):
         else:
             self.funcs_2d = [None] * len(self.field_names)
         
-        if self.custom_hook_point is not None:
-            simulation.hooks.add_custom_hook(self.custom_hook_point, self.run, 'Probe "%s"' % self.name)
-        else:
-            self.new_simulation = self.run
-            self.end_of_timestep = self.run
+        # Add field to list of IO plotters
+        inp_key = probe_input.basepath + 'write_interval'
+        simulation.io.add_plotter(self.write_field, inp_key, WRITE_INTERVAL)
     
-    def run(self):
+    def write_field(self):
         """
         Find and output the plane probe
         """
-        it = self.simulation.timestep
-        
-        # Should we update the file?
-        if self.write_interval < 0 or it % self.write_interval != 0:
-            return
-        
         for func_3d, func_2d in zip(self.funcs_3d, self.funcs_2d):
             self.slice.get_slice(func_3d, func_2d)
             if self.simulation.rank == 0:
