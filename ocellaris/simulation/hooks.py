@@ -185,8 +185,7 @@ class Hooks(object):
                 raise
             finally:
                 t.stop()
-                
-    @timeit.named('all hooks: custom_hook')
+    
     def run_custom_hook(self, hook_point, *args, **kwargs):
         """
         Called by the solver at a custom point
@@ -195,13 +194,14 @@ class Hooks(object):
         been added
         """
         verify_key('custom hook point', hook_point, self._custom_hooks)
-        for hook, description in self._custom_hooks[hook_point][::-1]:
-            try:
-                hook(*args, **kwargs)
-            except:
-                self.simulation.log.error('Got exception in hook: %s' % description)
-                self.simulation.log.error(traceback.format_exc())
-                raise
+        with dolfin.Timer('Ocellaris custom hook %s' % hook_point):
+            for hook, description in self._custom_hooks[hook_point][::-1]:
+                try:
+                    hook(*args, **kwargs)
+                except:
+                    self.simulation.log.error('Got exception in hook: %s' % description)
+                    self.simulation.log.error(traceback.format_exc())
+                    raise
     
     def show_hook_info(self):
         """
