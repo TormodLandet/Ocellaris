@@ -1,4 +1,5 @@
 from math import pi, tanh, sqrt
+from collections import OrderedDict
 import dolfin
 from ocellaris.utils import ocellaris_error, OcellarisCppExpression, verify_key
 from . import register_known_field, KnownField, DEFAULT_POLYDEG
@@ -38,8 +39,8 @@ class AiryWaveField(KnownField):
         
         self._cpp = {}
         self.construct_cpp_code()
-        self._expressions = {}
-        self._functions = {}
+        self._expressions = OrderedDict()
+        self._functions = OrderedDict()
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
         simulation.hooks.add_pre_timestep_hook(self.update, 'Update Airy wave field %r' % self.name)
         self._dependent_fields = []

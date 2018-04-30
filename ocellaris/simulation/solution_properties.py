@@ -103,7 +103,7 @@ class SolutionProperties(object):
             # will be generated when calling this method at a different time
             # than at the end of a time step
             info = ['%s = %10g' % (name, value) for name, value in reports]
-            sim.log.info('Simulation properties for timestep = %5d, time = %10.4f, %s' %
+            sim.log.info('Solution properties for timestep = %5d, time = %10.4f, %s' %
                          (sim.timestep, sim.time, ', '.join(info)))
         
         Co_lim = sim.input.get_value('simulation/Co_lim', CO_LIM, 'float')
