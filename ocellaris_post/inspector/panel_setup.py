@@ -29,17 +29,6 @@ class OcellarisSetupPanel(wx.Panel):
         b.Bind(wx.EVT_BUTTON, self.show_cluster_connector)
         h.Add(b)
         
-        h = wx.BoxSizer(wx.HORIZONTAL)
-        v.Add(h, flag=wx.EXPAND|wx.ALL, border=10)
-        h.Add(wx.StaticText(self, label='Open previous file:'), flag=wx.ALIGN_CENTER_VERTICAL)
-        h.AddSpacer(5)
-        self.prevfiles = wx.Choice(self)
-        h.Add(self.prevfiles, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL)
-        h.AddSpacer(5)
-        b = wx.Button(self, label='Open')
-        b.Bind(wx.EVT_BUTTON, self.open_previous_file)
-        h.Add(b, flag=wx.ALIGN_CENTER_VERTICAL)
-        
         #######################################################################
         st = wx.StaticText(self, label='Change lables of open files:')
         st.SetFont(st.GetFont().Bold())
@@ -52,7 +41,6 @@ class OcellarisSetupPanel(wx.Panel):
         self.file_lable_sizer = wx.FlexGridSizer(rows=1, cols=4, vgap=3, hgap=10)
         self.file_lable_sizer.AddGrowableCol(1, proportion=1)
         v.Add(self.file_lable_sizer, flag=wx.ALL|wx.EXPAND, border=6)
-        self.update_open_files()
         
         #######################################################################
         st = wx.StaticText(self, label='Reload running simulation data:')
@@ -62,7 +50,21 @@ class OcellarisSetupPanel(wx.Panel):
         b.Bind(wx.EVT_BUTTON, self.reload_data)
         v.Add(b, flag=wx.ALL, border=10)
         pub.sendMessage(TOPIC_NEW_ACCEL, callback=self.reload_data, key='R')
+                
+        #######################################################################
+        v.AddStretchSpacer(prop=1)
+        h = wx.BoxSizer(wx.HORIZONTAL)
+        v.Add(h, flag=wx.EXPAND|wx.ALL, border=10)
+        h.Add(wx.StaticText(self, label='Open previous file:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        h.AddSpacer(10)
+        self.prevfiles = wx.Choice(self)
+        h.Add(self.prevfiles, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL)
+        h.AddSpacer(10)
+        b = wx.Button(self, label='Open')
+        b.Bind(wx.EVT_BUTTON, self.open_previous_file)
+        h.Add(b, flag=wx.ALIGN_CENTER_VERTICAL)
         
+        self.update_open_files()
         v.Fit(self)
     
     def update_open_files(self, _evt=None):
