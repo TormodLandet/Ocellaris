@@ -39,17 +39,23 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
                         'The meshio library is missing. Run something like '
                         '"python3 -m pip install --user meshio" to install it.')
     
-    points, cells, _point_data, _cell_data, _field_data = \
+    points, cells, _point_data, cell_data, _field_data = \
         meshio.read(file_name, meshio_file_type)
     
-    if 'triangle' in cells:
-        assert len(cells) == 1, 'Mixed element meshes is not supported'
-        dim = 2
-        connectivity = cells['triangle']
-    elif 'tetra' in cells:
-        assert len(cells) == 1, 'Mixed element meshes is not supported'
+    if 'tetra' in cells:
+        # There should be only tetras and possibly facet triangles
+        assert len(cells) == 1 or len(cells) == 2 and 'triangle' in cells, \
+               'Mixed element meshes is not supported'
         dim = 3
         connectivity = cells['tetra']
+    
+    elif 'triangle' in cells:
+        # There should be only triangles and possibly facet lines
+        assert len(cells) == 1 or len(cells) == 2 and 'line' in cells, \
+               'Mixed element meshes is not supported'
+        dim = 2
+        connectivity = cells['triangle']
+    
     else:
         ocellaris_error('Mesh loaded by meshio contains unsupported cells',
                         'Expected to find tetrahedra or triangles, found %r'
@@ -62,6 +68,8 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
     
     # Add the vertices and cells
     init_mesh_geometry(mesh, points, connectivity, dim, dim)
+    
+    return create_facet_regions(dim, points, cells, cell_data)
 
 
 def init_mesh_geometry(mesh, points, connectivity, tdim, gdim):
@@ -82,7 +90,7 @@ def init_mesh_geometry(mesh, points, connectivity, tdim, gdim):
     # Add vertices
     editor.init_vertices_global(Nvert, Nvert)
     for i, pnt in enumerate(points):
-        editor.add_vertex(i, [float(xi) for xi in pnt])
+        editor.add_vertex(i, [float(xi) for xi in pnt[:gdim]])
     
     # Add cells
     editor.init_cells_global(Ncell, Ncell)
@@ -90,6 +98,31 @@ def init_mesh_geometry(mesh, points, connectivity, tdim, gdim):
         editor.add_cell(i, conn)
     
     editor.close()
+
+
+def create_facet_regions(dim, points, cells, cell_data):
+    """
+    Create a dictionary mapping from facet (via vertex coordinates)
+    to facet region. Returns an empty dictionary if there are no
+    facet regions (physical regions in gmsh) defined
+    """
+    if dim == 2:
+        facets = cells.get('line', [])
+        numbers = cell_data.get('line', {}).get('physical', None)
+    else:
+        facets = cells.get('triangle', [])
+        numbers = cell_data.get('triangle', {}).get('physical', None)
+    
+    if numbers is None:
+        return {}
+    
+    facet_regions = {}
+    for f, num in zip(facets, numbers):
+        facet_points = [tuple(points[p][:dim]) for p in f]
+        facet_points.sort()
+        facet_regions[tuple(facet_points)] = num
+    
+    return facet_regions
 
 
 def build_distributed_mesh(mesh):

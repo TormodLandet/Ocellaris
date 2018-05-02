@@ -229,6 +229,7 @@ def load_mesh(simulation):
     
     elif mesh_type == 'XML':
         simulation.log.info('Creating mesh from XML file')
+        simulation.log.warning('(deprecated, please use meshio reader)')
         
         mesh_file = inp.get_value('mesh/mesh_file', required_type='string')
         facet_region_file = inp.get_value('mesh/facet_region_file', None, required_type='string')
@@ -246,6 +247,7 @@ def load_mesh(simulation):
     
     elif mesh_type == 'XDMF':
         simulation.log.info('Creating mesh from XDMF file')
+        simulation.log.warning('(deprecated, please use meshio reader)')
         
         mesh_file = inp.get_value('mesh/mesh_file', required_type='string')
         
@@ -284,21 +286,21 @@ def load_mesh(simulation):
         # Read mesh on rank 0
         t1 = time.time()
         mesh = dolfin.Mesh(comm)
-        mesh_facet_regions = None
         if comm.rank == 0:
             # Read a mesh file by use of meshio
-            load_meshio_mesh(mesh, file_name, file_type, sort_order)
+            physical_regions = load_meshio_mesh(mesh, file_name, file_type, sort_order)
             simulation.log.info('    Read mesh with %d cells in %.2f seconds'
                                 % (mesh.num_cells(), time.time() - t1))
+        else:
+            physical_regions = None
         
-        # Distribute the mesh (can be sloooow)
+        # Distribute the mesh
         if comm.size > 1:
-            comm.barrier()
+            physical_regions = comm.bcast(physical_regions)
             t1 = time.time()
             simulation.log.info('    Distributing mesh to %d processors' % comm.size)
             build_distributed_mesh(mesh)
             simulation.log.info('    Distributed mesh in %.2f seconds' % (time.time() - t1))
-    
     else:
         ocellaris_error('Unknown mesh type',
                         'Mesh type %r is not supported' % mesh_type)
@@ -317,7 +319,33 @@ def load_mesh(simulation):
         dolfin.ALE.move(mesh, f_move)
         mesh.bounding_box_tree().build(mesh)
     
+    # Update the simulation
     simulation.set_mesh(mesh, mesh_facet_regions)
+    
+    # Load meshio facet regions
+    if mesh_type == 'meshio' and physical_regions:
+        mfr = dolfin.MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
+        conn_FV = simulation.data['connectivity_FV']
+        vcoords = mesh.coordinates()
+        for ifacet in range(mfr.size()):
+            facet_vertices = conn_FV(ifacet)
+            key = [tuple(vcoords[vidx]) for vidx in facet_vertices]
+            key.sort()
+            number = physical_regions.get(tuple(key), 0)
+            mfr[ifacet] = number
+        # Store the loaded regions
+        simulation.data['mesh_facet_regions'] = mfr
+        mesh_facet_regions = mfr
+    
+    # Optionally plot facet regions to file
+    if simulation.input.get_value('output/plot_facet_regions', False, 'bool'):
+        prefix = simulation.input.get_value('output/prefix', '', 'string')
+        pfile = prefix + '_facet_regions.pvd'
+        simulation.log.info('    Plotting boundary regions to file %r' % pfile)
+        if mesh_facet_regions is None:
+            simulation.log.warning('Cannot plot mesh facet regions, no regions found!')
+        else:
+            dolfin.File(pfile) << mesh_facet_regions
 
 
 def mark_boundaries(simulation):
@@ -360,7 +388,7 @@ def mark_boundaries(simulation):
     pf('    Boundary region UNMARKED has size %f' % length0)
     
     # Optionally plot boundary regions to file
-    if simulation.input.get_value('output/plot_bcs', False, 'boolean'):
+    if simulation.input.get_value('output/plot_bcs', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
         pfile = prefix + '_boundary_regions.pvd'
         simulation.log.info('    Plotting boundary regions to file %r' % pfile)
