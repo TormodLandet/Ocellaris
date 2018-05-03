@@ -340,12 +340,14 @@ def load_mesh(simulation):
     # Optionally plot facet regions to file
     if simulation.input.get_value('output/plot_facet_regions', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
-        pfile = prefix + '_facet_regions.pvd'
-        simulation.log.info('    Plotting boundary regions to file %r' % pfile)
+        pfile = prefix + '_input_facet_regions.xdmf'
+        simulation.log.info('    Plotting mesh input boundary facet regions '
+                            'to XDMF file %r' % pfile)
         if mesh_facet_regions is None:
             simulation.log.warning('Cannot plot mesh facet regions, no regions found!')
         else:
-            dolfin.File(pfile) << mesh_facet_regions
+            with dolfin.XDMFFile(comm, pfile) as xdmf:
+                xdmf.write(mesh_facet_regions)
 
 
 def mark_boundaries(simulation):
@@ -390,9 +392,11 @@ def mark_boundaries(simulation):
     # Optionally plot boundary regions to file
     if simulation.input.get_value('output/plot_bcs', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
-        pfile = prefix + '_boundary_regions.pvd'
-        simulation.log.info('    Plotting boundary regions to file %r' % pfile)
-        dolfin.File(pfile) << marker
+        pfile = prefix + '_boundary_conditions.xdmf'
+        simulation.log.info('    Plotting boundary condition regions to '
+                            'XDMF file %r' % pfile)
+        with dolfin.XDMFFile(mesh.mpi_comm(), pfile) as xdmf:
+            xdmf.write(marker)
 
 
 def setup_periodic_domain(simulation):
