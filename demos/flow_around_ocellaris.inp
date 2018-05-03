@@ -14,75 +14,65 @@ physical_properties:
     rho: 1.0
 
 mesh:
-    type: XML
-    mesh_file: datafiles/ocellaris_mesh.xml.gz
-    facet_region_file: datafiles/ocellaris_facet_regions.xml.gz
+    type: meshio
+    # Run "gmsh -2 ocellaris.geo" to generate this file from the geometry descr.
+    mesh_file: datafiles/ocellaris.msh
 
 boundary_conditions:
 -   name: Top and bottom
     selector: mesh_facet_region
-    mesh_facet_regions: [2, 4]
-    u1:
-        type: ConstantValue
-        value: 0
-    p:
-        type: ConstantGradient
-        value: 0
+    mesh_facet_regions: [3, 5]
+    u:
+        type: FreeSlip
 
 -   name: The Ocellaris Clownfish
     selector: mesh_facet_region
-    mesh_facet_regions: [5]
+    mesh_facet_regions: [1]
     u:
         type: ConstantValue
         value: [0, 0]
-    p:
-        type: ConstantGradient
-        value: 0
 
 -   name: Inlet
     selector: mesh_facet_region
-    mesh_facet_regions: [1]
+    mesh_facet_regions: [2]
     u0:
         type: CppCodedValue
         cpp_code: std::min(1.0, t)
     u1:
         type: ConstantValue
         value: 0
-    p:
-        type: ConstantGradient
-        value: 0
 
 -   name: Outlet
     selector: mesh_facet_region
-    mesh_facet_regions: [3]
-    u0:
-        type: ConstantGradient
-        value: 0
-    u1:
-        type: ConstantValue
-        value: 0  
-    p:
-        type: ConstantValue
-        value: 0
+    mesh_facet_regions: [4]
+    u:
+        type: OpenOutletBoundary
 
 time:
-    dt: 0.01
+    dt: 0.001
     tmax: 20.0
 
 output:
-    prefix: output/flow_around_ocellaris_py2
+    prefix: output/flow_around_ocellaris
     dolfin_log_level: warning
     ocellaris_log_level: info
+    
+    # Show the facet regions (defined by gmsh)
+    plot_facet_regions: yes
+    
+    # Show the resulting boundary regions (defined in this file)
+    plot_bcs: yes
 
 solver:
-    type: SIMPLE
-    num_inner_iter: 20
-    allowable_error_inner: 5.0e-3
-    polynomial_degree_pressure: 1
-    polynomial_degree_velocity: 2
-    function_space_pressure: DG
-    function_space_velocity: DG
-    timestepping_method: BDF
+    type: IPCS-A
+    num_inner_iter: py$ 10 if it < 10 else 3
+    allowable_error_inner: 1e-6
+    steady_velocity_stopping_criterion: 1e-6
 
-#console_at_end: true
-console_on_error: true
+hooks:
+    post_simulation:
+    -   name: Plot at end
+        enabled: yes
+        code: |
+            # Write an xdmf file with the resulting flow pattern
+            simulation.io.xdmf.write()
