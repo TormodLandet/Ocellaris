@@ -49,6 +49,9 @@ class BoundaryRegion(object):
             # Find all facets with the given numbers and update the Ocellaris
             # facet marker function. The Ocellaris region number will not in
             # general be the same as the mesh facet region number
+            if mesh_facet_regions is None:
+                ocellaris_error('Cannot use mesh_facet_region selector in %r' % self.name,
+                                'The loaded mesh contains no facet regions')
             array_mesh = mesh_facet_regions.array()
             array_ocellaris = marker.array()
             region_numbers = self.input.get_value('mesh_facet_regions', required_type='list(int)')
