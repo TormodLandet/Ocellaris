@@ -108,12 +108,17 @@ def create_facet_regions(dim, points, cells, cell_data):
     """
     if dim == 2:
         facets = cells.get('line', [])
-        numbers = cell_data.get('line', {}).get('physical', None)
+        num_dict = cell_data.get('line', {})
     else:
         facets = cells.get('triangle', [])
-        numbers = cell_data.get('triangle', {}).get('physical', None)
+        num_dict = cell_data.get('triangle', {})
     
-    if numbers is None:
+    # Account for changing meshio output format
+    for k in ('physical', 'gmsh:physical'):
+        numbers = num_dict.get(k, None)
+        if numbers is not None:
+            break
+    else:
         return {}
     
     facet_regions = {}
