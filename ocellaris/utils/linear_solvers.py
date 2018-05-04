@@ -1,4 +1,5 @@
 import numpy
+import numpy.linalg
 import dolfin
 import contextlib
 from .timer import timeit
@@ -467,6 +468,35 @@ def matmul(A, B, out=None):
         C.apply('insert')
     
     return C
+
+
+def invert_block_diagonal_matrix(V, M, Minv=None):
+    """
+    Given a block diagonal matrix (DG mass matrix or similar), use local
+    dense inverses to compute the  inverse matrix and return it, optionally
+    reusing the given Minv tensor
+    """
+    mesh = V.mesh()
+    dm = V.dofmap()
+    N = dm.cell_dofs(0).shape[0]
+    Mlocal = numpy.zeros((N, N), float)
+    
+    if Minv is None:
+        Minv = dolfin.as_backend_type(M.copy())
+    
+    # Loop over cells and get the block diagonal parts (should be moved to C++)
+    istart = M.local_range(0)[0]
+    for cell in dolfin.cells(mesh, 'regular'):
+        # Get global dofs
+        dofs = dm.cell_dofs(cell.index()) + istart
+        
+        # Get block diagonal part of approx_A, invert it and insert into M⁻¹
+        M.get(Mlocal, dofs, dofs)
+        Mlocal_inv = numpy.linalg.inv(Mlocal)
+        Minv.set(Mlocal_inv, dofs, dofs)
+    
+    Minv.apply('insert')
+    return Minv
 
 
 def condition_number(A, method='simplified'):

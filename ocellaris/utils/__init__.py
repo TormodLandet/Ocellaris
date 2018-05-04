@@ -7,7 +7,8 @@ from .code_runner import RunnablePythonString, CodedExpression
 from .cpp_expression import OcellarisCppExpression, ocellaris_interpolate
 from .dofmap import cell_dofmap, facet_dofmap, get_dof_neighbours
 from .linear_solvers import (linear_solver_from_input, condition_number,
-                             create_block_matrix, matmul)
+                             create_block_matrix, matmul,
+                             invert_block_diagonal_matrix)
 from .mpi import get_root_value, sync_arrays, gather_lines_on_root
 from .taylor_basis import lagrange_to_taylor, taylor_to_lagrange
 from .small_helpers import (create_vector_functions, shift_fields, velocity_change,
