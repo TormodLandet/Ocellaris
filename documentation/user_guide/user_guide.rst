@@ -13,4 +13,5 @@ the configuration (input file) for your own purposes before trusting the results
     install
     run
     input
+    demos
     inspector

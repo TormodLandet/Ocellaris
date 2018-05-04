@@ -67,23 +67,23 @@ Graphical user interface
 ........................
 
 **Preprocessing:**
-There exist a lot of programs to generate meshes that can be used with
-Ocellaris. A Python program, `meshio-convert`_, can convert many formats
-to FEniCS/DOLFIN/Ocellaris compatible XML format. A rather good free graphical
-user interface for mesh generation is `gmsh`_. The latest version (>3) has
-CAD capabilities and is used for several of the Ocellaris demos.
+There are many programs that can generate simplical 2D or 3D meshes that are
+compatible with Ocellaris. All mesh formats supported by `meshio`_, can be read
+by Ocellaris. A rather good free graphical user interface for mesh generation is
+`gmsh`_. The latest version (>3) has CAD capabilities and is used for several of
+the Ocellaris demos.
 
 **Postprocessing**:
 Ocellaris can save results in XDMF_ format. There are several programs that
-can postprocess such files. Paraview_ is a good option.
-A custom post-processor, :ref:`OcellarisInspector`, is included. It can be used
+can postprocess such files. Paraview_ is one good option.
+A custom post-processor, :ref:`OcellarisInspector`, also exist. It can be used
 to plot residuals and other time series produced by the simulator. The 
 inspector is usefull when Ocellaris is running (for plotting log files) and
-after finishing (plotting restart h5 files). All numbers printed on screen and
-in the log file when Ocellaris is running should be accessible in 
+after finishing (plotting restart h5 files). All numbers printed on the screen
+and in the log file when Ocellaris is running should be accessible in 
 :ref:`the Ocellaris Inspector program <OcellarisInspector>`.
 
-.. _meshio-convert: https://github.com/nschloe/meshio
+.. _meshio: https://github.com/nschloe/meshio
 .. _gmsh: http://gmsh.info
 .. _XDMF: http://www.xdmf.org
 .. _Paraview: https://www.paraview.org
