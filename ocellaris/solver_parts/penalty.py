@@ -88,6 +88,8 @@ def navier_stokes_stabilization_penalties(simulation, nu, velocity_continuity_fa
     ndim = simulation.ndim
     mpm = simulation.multi_phase_model
     mesh = simulation.data['mesh']
+    use_const = simulation.input.get_value('solver/spatially_constant_penalty',
+                                           False, 'bool')
     
     if no_coeff:
         mu_min = mu_max = 1.0
@@ -95,7 +97,7 @@ def navier_stokes_stabilization_penalties(simulation, nu, velocity_continuity_fa
         mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
     
     P = simulation.data['Vu'].ufl_element().degree()
-    if False:
+    if use_const:
         simulation.log.info('    Using spatially constant elliptic penalty')
         penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS * 2
