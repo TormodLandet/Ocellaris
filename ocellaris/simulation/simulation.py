@@ -116,12 +116,13 @@ class Simulation(object):
         if 'up0' in self.data:
             shift_fields(self, ['up%d', 'u%d'])
         
+        # Show solution properties without adding to the timestep reports
+        # This should be before write_fields in case plot_divergences is on 
+        self.solution_properties.report(create_report=False)
+        
         # Setup IO and dump initial fields
         self.io.setup()
         self.io.write_fields()
-        
-        # Show solution properties without adding to the timestep reports 
-        self.solution_properties.report(create_report=False)
         
         self.flush(force=True)
     
