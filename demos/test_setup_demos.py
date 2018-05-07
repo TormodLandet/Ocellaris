@@ -21,7 +21,8 @@ def test_setup_demo(demo_inp_file, monkeypatch):
     if demo_inp_file in skip:
         return pytest.skip()
     
-    slow = {'internal_soliton.inp', 'dead_water_2D.inp', 'dead_water_3D.inp'}
+    slow = {'internal_soliton.inp', 'dead_water_2D.inp', 'dead_water_3D.inp',
+            'wave_tank_vof_3D.inp'}
     if demo_inp_file in slow and os.environ.get('OCELLARIS_RUN_SLOW_TEST') != '1':
         raise pytest.skip('Skipping slow test')
     

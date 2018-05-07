@@ -1,8 +1,8 @@
-import numpy.linalg
 import dolfin
 from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
                              create_vector_functions, shift_fields,
-                             velocity_change, matmul, split_form_into_matrix)
+                             velocity_change, matmul, split_form_into_matrix,
+                             invert_block_diagonal_matrix)
 from . import Solver, register_solver, BDM
 from .coupled_equations import define_dg_equations
 from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
@@ -37,6 +37,11 @@ USE_GRAD_P_FORM = False
 USE_GRAD_Q_FORM = True
 HYDROSTATIC_PRESSURE_CALCULATION_EVERY_TIMESTEP = False
 INCOMPRESSIBILITY_FLUX_TYPE = 'central'
+SPLIT_APPROX_MASS_WITH_RHO = 'mass'
+SPLIT_APPROX_MASS_UNSCALED = 'unscaled mass'
+SPLIT_APPROX_MASS_MIN_RHO = 'min rho mass'
+SPLIT_APPROX_BLOCK_DIAG_MA = 'block diagonal'
+SPLIT_APPROX_DEFAULT = SPLIT_APPROX_MASS_WITH_RHO
 
 
 @register_solver('IPCS-A')
@@ -142,7 +147,18 @@ class SolverIPCSA(Solver):
         # Velocity post_processing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing = sim.input.get_value('solver/velocity_postprocessing', default_postprocessing, 'string')
-        verify_key('velocity post processing', self.velocity_postprocessing, ('none', BDM), 'SIMPLE solver')
+        verify_key('velocity post processing', self.velocity_postprocessing, ('none', BDM), 'IPCS-A solver')
+        
+        # What types of mass matrices to produce
+        self.project_initial_velocity = sim.input.get_value('solver/project_initial_velocity', False, 'bool')
+        self.splitting_approximation = sim.input.get_value('solver/splitting_approximation',
+                                                           SPLIT_APPROX_DEFAULT, 'string')
+        verify_key('solver/mass_approximation', self.splitting_approximation,
+                   (SPLIT_APPROX_MASS_WITH_RHO, SPLIT_APPROX_MASS_UNSCALED,
+                    SPLIT_APPROX_MASS_MIN_RHO, SPLIT_APPROX_BLOCK_DIAG_MA),
+                   'IPCS-A solver')
+        self.make_unscaled_M = (self.project_initial_velocity or
+                                self.splitting_approximation  == SPLIT_APPROX_MASS_UNSCALED)
         
         # Quasi-steady simulation input
         self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
@@ -229,12 +245,68 @@ class SolverIPCSA(Solver):
         self.eqE = dolfin.Form(vec[1]) if vec[1] is not None else None
         
         # The mass matrix. Consistent with the implementation in define_dg_equations
-        rho = sim.multi_phase_model.get_density(0)
-        c1 = sim.data['time_coeffs'][0]
-        dt = sim.data['dt']
-        eqM = rho*c1/dt*dolfin.dot(u, v)*dolfin.dx
-        matM, _vecM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)
-        self.eqM = dolfin.Form(matM[0, 0])
+        if self.splitting_approximation == SPLIT_APPROX_MASS_WITH_RHO:
+            rho_for_M = sim.multi_phase_model.get_density(0)
+        elif self.splitting_approximation == SPLIT_APPROX_MASS_MIN_RHO:
+            min_rho, _max_rho = sim.multi_phase_model.get_density_range()
+            rho_for_M = dolfin.Constant(min_rho)
+        else:
+            rho_for_M = None
+        if rho_for_M is not None:
+            c1 = sim.data['time_coeffs'][0]
+            dt = sim.data['dt']
+            eqM = rho_for_M * c1 / dt * dolfin.dot(u, v) * dolfin.dx
+            matM, _vecM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)
+            self.eqM = dolfin.Form(matM[0, 0])
+        
+        # The mass matrix without density
+        if self.make_unscaled_M:
+            u2 = dolfin.as_vector(dolfin.TrialFunction(self.Vuvw)[:])
+            v2 = dolfin.as_vector(dolfin.TestFunction(self.Vuvw)[:])
+            a = dolfin.dot(u2, v2) * dolfin.dx
+            Mus = dolfin.as_backend_type(dolfin.assemble(a))
+            self.M_unscaled_inv = invert_block_diagonal_matrix(self.Vuvw, Mus)
+    
+    @timeit
+    def project_velocity(self, vel, name):
+        """
+        Project the initial conditions to remove any divergence
+        """
+        self.simulation.log.info('Projecting %s to remove divergence' % name)
+        p = self.simulation.data['p'].copy()
+        p.vector().zero()
+        
+        # Assemble tensors
+        self.simulation.log.info('    Assembling projection matrices')
+        self.B = dolfin.as_backend_type(dolfin.assemble(self.eqB, tensor=self.B))
+        self.C = dolfin.as_backend_type(dolfin.assemble(self.eqC, tensor=self.C))    
+        MinvB = matmul(self.M_unscaled_inv, self.B)
+        CMinvB = matmul(self.C, MinvB)
+        
+        lhs = CMinvB
+        rhs = self.C * vel.vector()
+        
+        # If there is no flux (Dirichlet type) across the boundaries then e is None
+        if self.eqE is not None:
+            self.E = dolfin.as_backend_type(dolfin.assemble(self.eqE, tensor=self.E))
+            rhs.axpy(-1.0, self.E)
+        lhs.apply('insert')
+        rhs.apply('insert')
+        p.vector().apply('insert')
+        
+        # Solve
+        self.simulation.log.info('    Divergence norm before %.6e' % rhs.norm('l2'))
+        self.simulation.log.info('    Solving elliptic problem')
+        niter = self.pressure_solver.inner_solve(lhs, p.vector(), rhs, 0, 0)
+        vel.vector.axpy(-1.0, MinvB * p.vector())
+        vel.vector.apply('insert')
+        
+        rhs = self.C * vel.vector()
+        if self.eqE is not None:
+            rhs.axpy(-1.0, self.E)
+            rhs.apply('insert')
+        self.simulation.log.info('    Done in %d iterations' % niter)
+        self.simulation.log.info('    Divergence norm after %.6e' % rhs.norm('l2'))
     
     @timeit
     def momentum_prediction(self):
@@ -287,34 +359,30 @@ class SolverIPCSA(Solver):
     def compute_M_inverse(self):
         """
         Compute the inverse of the block diagonal mass matrix
-        """
-        M = self.M = dolfin.assemble(self.eqM, tensor=self.M)
-        mesh = self.simulation.data['mesh']
-        dm = self.Vuvw.dofmap()
-        N = dm.cell_dofs(0).shape[0]
-        Alocal = numpy.zeros((N, N), float)
         
-        if self.Minv is None:
-            self.Minv = M.copy()
-            
-        # Use mass matrix or block diagonal part of A
-        self.splitting_approximation = 'mass'
-        if self.splitting_approximation == 'mass':
-            approx_A = M
-        elif self.splitting_approximation == 'block_diag':
+        Uses either the mass matrix M or the block diagonal
+        parts of A
+        """
+        # Get the block diagonal matrix
+        if self.splitting_approximation == SPLIT_APPROX_MASS_WITH_RHO:
+            # The standard rho/dt approximation
+            self.M = dolfin.assemble(self.eqM, tensor=self.M)
+            approx_A = self.M
+        if self.splitting_approximation == SPLIT_APPROX_MASS_MIN_RHO:
+            # Use a min(rho)/dt approximation (assumed to not change with time)
+            if self.Minv is not None:
+                return self.Minv
+            self.M = dolfin.assemble(self.eqM, tensor=self.M)
+            approx_A = self.M
+        elif self.splitting_approximation == SPLIT_APPROX_MASS_UNSCALED:
+            # Use the FEM "mass matrix", i.e. no rho or dt inside
+            return self.M_unscaled_inv
+        elif self.splitting_approximation == SPLIT_APPROX_BLOCK_DIAG_MA:
+            # Use the block diagonal part of the velocity matrix
             approx_A = self.MplusA
         
-        # Loop over cells and get the block diagonal parts (should be moved to C++)
-        istart = M.local_range(0)[0]
-        for cell in dolfin.cells(mesh, 'regular'):
-            # Get global dofs
-            dofs = dm.cell_dofs(cell.index()) + istart
-            
-            # Get block diagonal part of approx_A, invert it and insert into M⁻¹
-            approx_A.get(Alocal, dofs, dofs)
-            Alocal_inv = numpy.linalg.inv(Alocal)
-            self.Minv.set(Alocal_inv, dofs, dofs)
-        self.Minv.apply('insert')
+        # Invert the block diagonal matrix
+        self.Minv = invert_block_diagonal_matrix(self.Vuvw, approx_A, self.Minv)
         return self.Minv
     
     @timeit
@@ -430,9 +498,16 @@ class SolverIPCSA(Solver):
         Run the simulation
         """
         sim = self.simulation
-        sim.hooks.simulation_started()
         
-        # Setup timestepping and initial convecting velocity
+        # Remove any divergence from the initial velocity field
+        if self.project_initial_velocity:
+            for name in ('up', 'upp'):
+                self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data[name]))
+                self.project_velocity(sim.data['uvw_star'], 'initial velocity %s' % name)
+                self.assigner_split.assign(list(sim.data[name]), sim.data['uvw_star'])
+        
+        # Setup timestepping and initial convecting velocity 
+        sim.hooks.simulation_started()
         before_simulation(sim)
         
         # Time loop
@@ -479,6 +554,14 @@ class SolverIPCSA(Solver):
                     
                     if err_u < allowable_error_inner:
                         break
+                
+                # DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG
+                # Report total flux in the domain, should be zero
+                n = dolfin.FacetNormal(self.simulation.data['mesh'])
+                flux = sum(n[i] * sim.data['uvw_star'][i]
+                           for i in range(self.simulation.ndim))
+                tflux = dolfin.assemble(flux * dolfin.ds)
+                sim.reporting.report_timestep_value('TotFlux', tflux)
                 
                 # Extract the separate velocity component functions
                 self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
