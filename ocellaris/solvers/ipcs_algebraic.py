@@ -584,7 +584,7 @@ class SolverIPCSA(Solver):
                 
                 # Postprocess and limit velocity outside the inner iteration
                 self.postprocess_velocity()
-                shift_fields(sim, ['up%d', 'up_conv%d'])
+                shift_fields(sim, ['u%d', 'u_conv%d'])
                 if self.using_limiter:
                     self.slope_limit_velocities()
                 
