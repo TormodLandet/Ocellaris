@@ -60,13 +60,13 @@ fields:
     cpp_code: 'x[0] < iz0 ? 1.0 : (x[0] > iz1 ? 0.0 : pow((x[0] - iz1)/(iz0 - iz1), 2))'
 
 forcing_zones:
--   name: wave damping
-    type: MomentumForcing
-    zone: outlet zone/beta
-    #target: still water/u
-    target: waves/u
-    penalty: 10
-    plot: no
+#-   name: wave damping
+#    type: MomentumForcing
+#    zone: outlet zone/beta
+#    #target: still water/u
+#    target: waves/u
+#    penalty: 10
+#    plot: no
 
 -   name: density damping
     type: ScalarForcing
@@ -77,12 +77,12 @@ forcing_zones:
     penalty: 10
     plot: no
 
--   name: wave creation
-    type: MomentumForcing
-    zone: inlet zone/beta
-    target: waves/u
-    penalty: 10
-    plot: no
+#-   name: wave creation
+#    type: MomentumForcing
+#    zone: inlet zone/beta
+#    target: waves/u
+#    penalty: 10
+#    plot: no
 
 -   name: density at inlet
     type: ScalarForcing
@@ -126,6 +126,19 @@ boundary_conditions:
     inside_code: 'on_boundary and x[1] < 1e-5 or x[1] > W - 1e-5'
     u:
         type: FreeSlip
+-   name: valve
+    selector: code
+    inside_code: 'on_boundary and x[2] > H - 1e-5 and x[0] >= 80 and x[0] <= 100'
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantGradient
+        value: 0
+    u2:
+        type: FieldVelocityValve
+        function: waves/u
+        regions: [inlet, outlet]
 
 initial_conditions:
     cp:
@@ -158,7 +171,7 @@ solver:
     num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
     hydrostatic_pressure_calculation_every_timestep: no
     allowable_error_inner: 1e-4
-    project_initial_velocity: no
+    project_initial_velocity: yes
     splitting_approximation: min rho mass
     _num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
     u:

@@ -226,3 +226,60 @@ class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
         self.simulation.log.info('    Field function value for %s' % var_name)
+
+
+@register_boundary_condition('FieldVelocityValve')
+class FieldVelocityValveDirichletBoundary(BoundaryConditionCreator):
+    description = 'A Dirichlet condition that compensates for non-zero total flux of a known velocity field'
+    
+    def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
+        """
+        Dirichlet boundary condition with value from a field function
+        """
+        self.simulation = simulation
+        
+        # A var_name like "u0" should be given. Look up "Vu"
+        self.func_space = simulation.data['V%s' % var_name[:-1]]
+        
+        # Get the field function expression object
+        vardef = inp_dict.get_value('function', required_type='any')
+        description = 'boundary condititon for %s' % var_name
+        self.velocity = verify_field_variable_definition(simulation, vardef, description)
+        field = simulation.fields[vardef.split('/')[0]]
+        
+        # The expression value is updated as the field is changed
+        inp_dict.get_value('function', required_type='any')
+        field.register_dependent_field(self)
+        self.flux = dolfin.Constant(1.0)
+        
+        # Create the 
+        bc = OcellarisDirichletBC(self.simulation, self.func_space, self.flux,
+                                  subdomains, subdomain_id)
+        bcs = self.simulation.data['dirichlet_bcs']
+        bcs.setdefault(var_name, []).append(bc)
+        self.simulation.log.info('    Field velocity valve for %s' % var_name)
+        
+        # Compute the region area, then update the flux
+        mesh = simulation.data['mesh']
+        self.area = dolfin.assemble(self.flux * bc.ds()(domain=mesh))
+        self.region_names = inp_dict.get_value('regions', required_type='list(string)')
+        self.update()
+    
+    def update(self, timestep_number=None, t=None, dt=None):
+        """
+        The main field has changed, update our flux to make the total sum to zero 
+        """
+        regions = self.simulation.data['boundary']
+        mesh = self.simulation.data['mesh']
+        n = dolfin.FacetNormal(mesh)
+        flux = 0
+        count = 0
+        for region in regions:
+            if region.name in self.region_names:
+                f = dolfin.dot(self.velocity, n) * region.ds()
+                flux += dolfin.assemble(f)
+                count += 1
+        assert count == len(self.region_names)
+        # FIXME: assumes n is pointing outwards along the axis in the positive
+        #        direction in this boundary region
+        self.flux.assign(dolfin.Constant(- flux / self.area))

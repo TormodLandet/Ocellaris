@@ -268,45 +268,61 @@ class SolverIPCSA(Solver):
             self.M_unscaled_inv = invert_block_diagonal_matrix(self.Vuvw, Mus)
     
     @timeit
-    def project_velocity(self, vel, name):
+    def project_vector_field(self, vel_split, vel, name):
         """
         Project the initial conditions to remove any divergence
         """
-        self.simulation.log.info('Projecting %s to remove divergence' % name)
-        p = self.simulation.data['p'].copy()
+        sim = self.simulation
+        sim.log.info('Projecting %s to remove divergence' % name)
+        p = sim.data['p'].copy()
         p.vector().zero()
+        self.assigner_merge.assign(vel, list(vel_split))
         
-        # Assemble tensors
-        self.simulation.log.info('    Assembling projection matrices')
+        def mk_rhs():
+            rhs = self.C * vel.vector()
+            # If there is no flux (Dirichlet type) across the boundaries then e is None
+            if self.eqE is not None:
+                self.E = dolfin.as_backend_type(dolfin.assemble(self.eqE, tensor=self.E))
+                rhs.axpy(-1.0, self.E)
+            rhs.apply('insert')
+            return rhs
+        
+        # Assemble RHS
+        sim.log.info('    Assembling projection matrices')
         self.B = dolfin.as_backend_type(dolfin.assemble(self.eqB, tensor=self.B))
         self.C = dolfin.as_backend_type(dolfin.assemble(self.eqC, tensor=self.C))    
         MinvB = matmul(self.M_unscaled_inv, self.B)
+        rhs = mk_rhs()
+        
+        # Check if projection is needed
+        norm_before = rhs.norm('l2')
+        sim.log.info('    Divergence norm before %.6e' % norm_before)
+        if norm_before < 1e-15:
+            sim.log.info('    Skipping this one, there is no divergence')
+            return
+        
+        # Assemble LHS
         CMinvB = matmul(self.C, MinvB)
-        
         lhs = CMinvB
-        rhs = self.C * vel.vector()
         
-        # If there is no flux (Dirichlet type) across the boundaries then e is None
-        if self.eqE is not None:
-            self.E = dolfin.as_backend_type(dolfin.assemble(self.eqE, tensor=self.E))
-            rhs.axpy(-1.0, self.E)
-        lhs.apply('insert')
-        rhs.apply('insert')
-        p.vector().apply('insert')
+        sim.log.info('    Solving elliptic problem')
+        #niter = self.pressure_solver.inner_solve(lhs, p.vector(), rhs, 0, 0)
+        niter = dolfin.solve(lhs, p.vector(), rhs)
+        vel.vector().axpy(-1.0, MinvB * p.vector())
+        vel.vector().apply('insert')
         
-        # Solve
-        self.simulation.log.info('    Divergence norm before %.6e' % rhs.norm('l2'))
-        self.simulation.log.info('    Solving elliptic problem')
-        niter = self.pressure_solver.inner_solve(lhs, p.vector(), rhs, 0, 0)
-        vel.vector.axpy(-1.0, MinvB * p.vector())
-        vel.vector.apply('insert')
+        self.assigner_split.assign(list(vel_split), vel)
+        for d in range(sim.ndim):
+            sim.data['u'][d].assign(vel_split[d])
+        self.velocity_postprocessor.run()
+        for d in range(sim.ndim):
+            vel_split[d].assign(sim.data['u'][d])
+        self.assigner_merge.assign(vel, list(vel_split))
         
-        rhs = self.C * vel.vector()
-        if self.eqE is not None:
-            rhs.axpy(-1.0, self.E)
-            rhs.apply('insert')
-        self.simulation.log.info('    Done in %d iterations' % niter)
-        self.simulation.log.info('    Divergence norm after %.6e' % rhs.norm('l2'))
+        rhs = mk_rhs()
+        norm_after = rhs.norm('l2')
+        sim.log.info('    Done in %d iterations' % niter)
+        sim.log.info('    Divergence norm after %.6e' % norm_after)
     
     @timeit
     def momentum_prediction(self):
@@ -502,9 +518,9 @@ class SolverIPCSA(Solver):
         # Remove any divergence from the initial velocity field
         if self.project_initial_velocity:
             for name in ('up', 'upp'):
-                self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data[name]))
-                self.project_velocity(sim.data['uvw_star'], 'initial velocity %s' % name)
-                self.assigner_split.assign(list(sim.data[name]), sim.data['uvw_star'])
+                self.project_vector_field(sim.data[name], sim.data['uvw_star'], 'initial velocity %s' % name)
+            shift_fields(sim, ['up%d', 'up_conv%d'])
+            shift_fields(sim, ['upp%d', 'upp_conv%d'])
         
         # Setup timestepping and initial convecting velocity 
         sim.hooks.simulation_started()
@@ -568,7 +584,7 @@ class SolverIPCSA(Solver):
                 
                 # Postprocess and limit velocity outside the inner iteration
                 self.postprocess_velocity()
-                shift_fields(sim, ['u%d', 'u_conv%d'])
+                shift_fields(sim, ['up%d', 'up_conv%d'])
                 if self.using_limiter:
                     self.slope_limit_velocities()
                 
