@@ -37,14 +37,16 @@ mesh:
 
 fields:
 -   name: waves
-    type: AiryWaves
+    type: RaschiiWaves
+    wave_model: Fenton
+    air_model: FentonAir
+    model_order: 5
     still_water_position: py$ h
     depth: py$ h
     depth_above: py$ h_above
-    amplitudes: [0.2]
-    wave_lengths: [20.0]
-    #wind_speed: 0.5
-    #current_speed: 0.5
+    blending_height: 2.0
+    wave_height: 0.5
+    wave_length: 20.0
 
 -   name: still water
     type: WaveOutflow
