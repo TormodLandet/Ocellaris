@@ -162,12 +162,23 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
                            'Directory %r\ndoes not exist' % d2)
                 return
             
+            # Find the log file in this directory
             f = os.path.join(d2, 'ocellaris_out.log')
-            if not os.path.isfile(f):
-                self.warning('Missing log file',
-                             'Log file not found:\n' + f)
-            else:
+            if os.path.isfile(f):
                 self.files.append(f)
+            else:
+                logs = []
+                for f in os.listdir(d2):
+                    if f.endswith('.log'):
+                        logs.append(os.path.join(d2, f))
+                if len(logs) > 1:
+                    self.warning('Missing log file',
+                                 'Found multiple log files in\n' + d2)
+                elif len(logs) < 1:
+                    self.warning('Missing log file',
+                                 'Found no log file in\n' + d2)
+                else:
+                    self.files.append(logs[0])
         
         return True
     
