@@ -41,6 +41,7 @@ MAX_INNER_ITER = 10
 MAX_PRESSURE_ITER = 3 
 ALLOWABLE_ERROR_INNER = 1e-10
 SKIP_MOM_PRED = False
+DEBUG_RHS = False
 
 # Relaxation for normal iterations and for the last
 # iteration in each time step
@@ -287,11 +288,14 @@ class SolverPIMPLE(Solver):
         """
         N = self.simulation.input.get_value('solver/num_pressure_corr', MAX_PRESSURE_ITER, 'int')
         for i in range(N):
-            err_p = self.pressure_correction()
-            err_u = self.velocity_update()
+            reassemble = self.inner_iteration == 1 and i == 0
+            err_p, div_err = self.pressure_correction(reassemble)
+            err_u = self.velocity_update(i==N-1)
             if N != 1:
-                self.simulation.log.info('    Pressure correction %2d - err u* %10.3e - err p %10.3e'
-                                         ' - Kry. iters %3d' % (i + 1, err_u, err_p, self.niters_p))
+                txt = ('    Pressure correction %2d - err u* %10.3e - '
+                       'err p %10.3e - div inp %10.3e - Kry. iters %3d' % 
+                       (i + 1, err_u, err_p, div_err, self.niters_p))
+                self.simulation.log.info(txt)
         
         # The change in u_star from before the momentum prediction and up to now
         u_star_old = self.simulation.data['uvw_start']
@@ -301,7 +305,7 @@ class SolverPIMPLE(Solver):
         return err_p, err_u
     
     @timeit
-    def pressure_correction(self):
+    def pressure_correction(self, reassemble):
         """
         PIMPLE pressure correction
         """
@@ -311,7 +315,7 @@ class SolverPIMPLE(Solver):
         minus_p_hat = self.simulation.data['p_hat']
         
         # Assemble only once per time step
-        if self.inner_iteration == 1:
+        if reassemble:
             self.E = dolfin.as_backend_type(self.matrices.assemble_E())
             
             # Compute LHS
@@ -322,10 +326,25 @@ class SolverPIMPLE(Solver):
             self.AtinvA = matmul(self.A_tilde_inv, self.A, self.AtinvA)
             self.CAtinvA = matmul(self.C, self.AtinvA, self.CAtinvA)
         
+        # Compute the residual divergence
+        U = u_star.vector()
+        div = self.C * U - self.E
+        div_err = div.norm('l2')
+        
         # The equation system
         lhs = self.CAtinvB
-        U = u_star.vector()
-        rhs = self.C * U - self.CAtinvA * U + self.C * (self.A_tilde_inv * self.D) - self.E
+        rhs = div - self.CAtinvA * U + self.C * (self.A_tilde_inv * self.D)
+        
+        if DEBUG_RHS:
+            # Quantify RHS contributions
+            c0 = (self.C * U).norm('l2')
+            c1 = (self.E).norm('l2')
+            c2 = (self.CAtinvA * U).norm('l2')
+            c3 = (self.C * (self.A_tilde_inv * self.D)).norm('l2')
+            cT = max([c0, c1, c2, c3])
+            sim.log.info('                              Pressure RHS contributions:'
+                         '  %5.2f  %5.2f  %.2e    %5.2f  %5.2f    %.2e'
+                         % (c0/cT, c1/cT, div_err/cT,   c2/cT, c3/cT,   cT))
         
         # Inform PETSc about the pressure null space
         if self.remove_null_space:
@@ -372,10 +391,10 @@ class SolverPIMPLE(Solver):
             p_star.vector().axpy(1 - alpha, minus_p_hat.vector())
             p_star.vector().apply('insert')
         
-        return minus_p_hat.vector().norm('l2')
+        return minus_p_hat.vector().norm('l2'), div_err
     
     @timeit
-    def velocity_update(self):
+    def velocity_update(self, last):
         """
         Update the velocity predictions with the updated pressure
         field from the pressure correction equation
@@ -383,10 +402,22 @@ class SolverPIMPLE(Solver):
         p = self.simulation.data['p']
         uvw = self.simulation.data['uvw_star']
         
-        minus_u_upd = self.AtinvA * uvw.vector() + self.AtinvB * p.vector() - self.A_tilde_inv * self.D  
-        uvw.vector().axpy(-1.0, minus_u_upd)
-        uvw.vector().apply('insert')
-        
+        for _i in range(1 if last else 10):#<<<<<<<####################################################################################################################################
+            minus_u_upd = self.AtinvA * uvw.vector() + self.AtinvB * p.vector() - self.A_tilde_inv * self.D
+            uvw.vector().axpy(-1.0, minus_u_upd)
+            uvw.vector().apply('insert')
+            
+            self.simulation.log.info('Vel.upd.: %15.2e' % minus_u_upd.norm('l2'))
+            if DEBUG_RHS:
+                # Quantify RHS contributions
+                c0 = (self.AtinvA * uvw.vector()).norm('l2')
+                c1 = (self.AtinvB * p.vector()).norm('l2')
+                c2 = (self.A_tilde_inv * self.D).norm('l2')
+                cT = max([c0, c1, c2])
+                self.simulation.log.info('                              VelUp contributions:'
+                                         '  %5.2f  %5.2f  %5.2f    %.2e'
+                                         % (c0/cT, c1/cT, c2/cT, cT))
+            
         return minus_u_upd.norm('l2')
     
     @timeit
