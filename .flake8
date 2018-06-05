@@ -1,7 +1,6 @@
 [flake8]
 
-# We try to stay below 100, but allow up to 120
-max-line-length = 120
+max-line-length = 100
 
 exclude =
     cases,

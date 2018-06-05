@@ -49,15 +49,16 @@ class VelocitySlopeLimiterBase(object):
 class DoNothingSlopeLimiterVelocity(VelocitySlopeLimiterBase):
     description = 'No limiting'
     active = False
-    
+
     def __init__(self, *argv, **kwargs):
         pass
-    
+
     def run(self):
         pass
 
 
-def SlopeLimiterVelocity(simulation, vel_u, vel_name, default_limiter=LIMITER, vel_w=None, default_use_cpp=USE_CPP):
+def SlopeLimiterVelocity(simulation, vel_u, vel_name, default_limiter=LIMITER,
+                         vel_w=None, default_use_cpp=USE_CPP):
     """
     Limit the slope of the given vector field to obtain boundedness
     """
@@ -66,17 +67,17 @@ def SlopeLimiterVelocity(simulation, vel_u, vel_name, default_limiter=LIMITER, v
     method = inp.get_value('method', default_limiter, 'string')
     use_cpp = inp.get_value('use_cpp', default_use_cpp, 'bool')
     plot_exceedance = inp.get_value('plot', False, 'bool')
-    
+
     # Get the limiter
     simulation.log.info('    Using velocity slope limiter %s for %s' % (method, vel_name))
     limiter_class = get_velocity_slope_limiter(method)
     limiter = limiter_class(simulation, vel_u, vel_name, vel_w, use_cpp)
-    
+
     # Add extra limiter outputs
     if plot_exceedance:
         for func in limiter.additional_plot_funcs:
             simulation.io.add_extra_output_function(func)
-    
+
     return limiter
 
 

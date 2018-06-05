@@ -9,25 +9,32 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         """
         A simple storage class for Dirichlet boundary conditions
         """
-        super(OcellarisDirichletBC, self).__init__(V, value, subdomain_marker, subdomain_id, method='geometric')
+        super(
+            OcellarisDirichletBC,
+            self).__init__(
+            V,
+            value,
+            subdomain_marker,
+            subdomain_id,
+            method='geometric')
         self.simulation = simulation
         self._value = value
         self.subdomain_marker = subdomain_marker
         self.subdomain_id = subdomain_id
         self._updater = updater
-    
+
     def func(self):
         """
         The boundary value derivative function
         """
         return self._value
-    
+
     def ds(self):
         """
         Returns the ds measure of the subdomain
         """
         return self.simulation.data['ds'](self.subdomain_id)
-    
+
     def copy_and_change_function_space(self, V):
         """
         Return a copy with a new function space. Used when converting from
@@ -35,7 +42,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         """
         return OcellarisDirichletBC(self.simulation, V, self._value,
                                     self.subdomain_marker, self.subdomain_id)
-    
+
     def update(self):
         """
         Update the time and other parameters used in the BC.
@@ -45,7 +52,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
             self._updater(self.simulation.timestep,
                           self.simulation.time,
                           self.simulation.dt)
-    
+
     def __repr__(self):
         return '<OcellarisDirichletBC on subdomain %d>' % self.subdomain_id
 
@@ -53,7 +60,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
 @register_boundary_condition('ConstantValue')
 class ConstantDirichletBoundary(BoundaryConditionCreator):
     description = 'A prescribed constant value Dirichlet condition'
-    
+
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """
         Dirichlet condition with constant value
@@ -65,7 +72,7 @@ class ConstantDirichletBoundary(BoundaryConditionCreator):
         else:
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
-        
+
         value = inp_dict.get_value('value', required_type='any')
         if isinstance(value, list):
             assert len(value) == simulation.ndim
@@ -74,7 +81,7 @@ class ConstantDirichletBoundary(BoundaryConditionCreator):
                 self.register_dirichlet_condition(name, value[d], subdomains, subdomain_id)
         else:
             self.register_dirichlet_condition(var_name, value, subdomains, subdomain_id)
-    
+
     def register_dirichlet_condition(self, var_name, value, subdomains, subdomain_id):
         """
         Add a Dirichlet condition to this variable
@@ -83,19 +90,24 @@ class ConstantDirichletBoundary(BoundaryConditionCreator):
             raise OcellarisError('Error in ConstantValue BC for %s' % var_name,
                                  'The value %r is not a number' % value)
         df_value = dolfin.Constant(value)
-        
+
         # Store the boundary condition for use in the solver
-        bc = OcellarisDirichletBC(self.simulation, self.func_space, df_value, subdomains, subdomain_id)
+        bc = OcellarisDirichletBC(
+            self.simulation,
+            self.func_space,
+            df_value,
+            subdomains,
+            subdomain_id)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
-        
+
         self.simulation.log.info('    Constant value %r for %s' % (value, var_name))
 
 
 @register_boundary_condition('CodedValue')
 class CodedDirichletBoundary(BoundaryConditionCreator):
     description = 'A coded Dirichlet condition'
-    
+
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """
         Dirichlet condition with coded value
@@ -107,10 +119,10 @@ class CodedDirichletBoundary(BoundaryConditionCreator):
         else:
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
-        
+
         # Make a dolfin Expression object that runs the code string
         code = inp_dict.get_value('code', required_type='any')
-        
+
         if isinstance(code, list):
             assert len(code) == simulation.ndim
             for d in range(simulation.ndim):
@@ -123,7 +135,7 @@ class CodedDirichletBoundary(BoundaryConditionCreator):
             description = 'coded value boundary condition for %s' % var_name
             expr = CodedExpression(simulation, code, description)
             self.register_dirichlet_condition(var_name, expr, subdomains, subdomain_id)
-    
+
     def register_dirichlet_condition(self, var_name, expr, subdomains, subdomain_id):
         """
         Store the boundary condition for use in the solver
@@ -137,7 +149,7 @@ class CodedDirichletBoundary(BoundaryConditionCreator):
 @register_boundary_condition('CppCodedValue')
 class CppCodedDirichletBoundary(BoundaryConditionCreator):
     description = 'A C++ coded Dirichlet condition'
-    
+
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """
         Dirichlet condition with C++ coded value
@@ -149,10 +161,10 @@ class CppCodedDirichletBoundary(BoundaryConditionCreator):
         else:
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
-        
+
         # Make a dolfin Expression object that runs the code string
         code = inp_dict.get_value('cpp_code', required_type='any')
-        
+
         if isinstance(code, list):
             assert len(code) == simulation.ndim
             for d in range(simulation.ndim):
@@ -161,7 +173,7 @@ class CppCodedDirichletBoundary(BoundaryConditionCreator):
                 self.register_dirichlet_condition(name, sub_code, subdomains, subdomain_id)
         else:
             self.register_dirichlet_condition(var_name, code, subdomains, subdomain_id)
-    
+
     def register_dirichlet_condition(self, var_name, cpp_code, subdomains, subdomain_id):
         """
         Store the boundary condition for use in the solver
@@ -170,7 +182,7 @@ class CppCodedDirichletBoundary(BoundaryConditionCreator):
         P = self.func_space.ufl_element().degree()
         expr, updater = OcellarisCppExpression(self.simulation, cpp_code, description,
                                                P, return_updater=True)
-        
+
         bc = OcellarisDirichletBC(self.simulation, self.func_space, expr,
                                   subdomains, subdomain_id, updater=updater)
         bcs = self.simulation.data['dirichlet_bcs']
@@ -181,7 +193,7 @@ class CppCodedDirichletBoundary(BoundaryConditionCreator):
 @register_boundary_condition('FieldFunction')
 class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
     description = 'A Dirichlet condition with values from a field function'
-    
+
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """
         Dirichlet boundary condition with value from a field function
@@ -193,7 +205,7 @@ class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
         else:
             # A var_name like "u" was given. Look up "Vu"
             self.func_space = simulation.data['V%s' % var_name]
-        
+
         # Get the field function expression object
         vardef = inp_dict.get_value('function', required_type='any')
         description = 'boundary condititon for %s' % var_name
@@ -208,7 +220,7 @@ class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
                 exprs = [expr[d] for d in range(simulation.ndim)]
             else:
                 exprs = [expr]
-        
+
         # Register BCs
         if len(exprs) > 1:
             for d in range(simulation.ndim):
@@ -216,7 +228,7 @@ class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
                 self.register_dirichlet_condition(name, exprs[d], subdomains, subdomain_id)
         else:
             self.register_dirichlet_condition(var_name, exprs[0], subdomains, subdomain_id)
-    
+
     def register_dirichlet_condition(self, var_name, expr, subdomains, subdomain_id):
         """
         Store the boundary condition for use in the solver
@@ -231,43 +243,43 @@ class FieldFunctionDirichletBoundary(BoundaryConditionCreator):
 @register_boundary_condition('FieldVelocityValve')
 class FieldVelocityValveDirichletBoundary(BoundaryConditionCreator):
     description = 'A Dirichlet condition that compensates for non-zero total flux of a known velocity field'
-    
+
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """
         Dirichlet boundary condition with value from a field function
         """
         self.simulation = simulation
-        
+
         # A var_name like "u0" should be given. Look up "Vu"
         self.func_space = simulation.data['V%s' % var_name[:-1]]
-        
+
         # Get the field function expression object
         vardef = inp_dict.get_value('function', required_type='any')
         description = 'boundary condititon for %s' % var_name
         self.velocity = verify_field_variable_definition(simulation, vardef, description)
         field = simulation.fields[vardef.split('/')[0]]
-        
+
         # The expression value is updated as the field is changed
         inp_dict.get_value('function', required_type='any')
         field.register_dependent_field(self)
         self.flux = dolfin.Constant(1.0)
-        
-        # Create the 
+
+        # Create the
         bc = OcellarisDirichletBC(self.simulation, self.func_space, self.flux,
                                   subdomains, subdomain_id)
         bcs = self.simulation.data['dirichlet_bcs']
         bcs.setdefault(var_name, []).append(bc)
         self.simulation.log.info('    Field velocity valve for %s' % var_name)
-        
+
         # Compute the region area, then update the flux
         mesh = simulation.data['mesh']
         self.area = dolfin.assemble(self.flux * bc.ds()(domain=mesh))
         self.region_names = inp_dict.get_value('regions', required_type='list(string)')
         self.update()
-    
+
     def update(self, timestep_number=None, t=None, dt=None):
         """
-        The main field has changed, update our flux to make the total sum to zero 
+        The main field has changed, update our flux to make the total sum to zero
         """
         regions = self.simulation.data['boundary']
         mesh = self.simulation.data['mesh']

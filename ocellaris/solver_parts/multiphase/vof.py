@@ -11,7 +11,7 @@ class VOFMixin(object):
     """
     calculate_mu_directly_from_colour_function = True
     default_polynomial_degree_colour = 0
-    
+
     @classmethod
     def create_function_space(cls, simulation):
         mesh = simulation.data['mesh']
@@ -23,19 +23,19 @@ class VOFMixin(object):
         Vc = FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
         simulation.data['Vc'] = Vc
         simulation.ndofs += Vc.dim()
-    
+
     def get_colour_function(self, k):
         """
         Return the colour function on timestep t^{n+k}
         """
         raise NotImplementedError('The get_colour_function method must be implemented by subclass!')
-    
+
     def get_density(self, k=None, c=None):
         """
         Calculate the blended density function as a weighted sum of
         rho0 and rho1. The colour function is unity when rho=rho0
         and zero when rho=rho1
-        
+
         Return the function as defined on timestep t^{n+k}
         """
         if c is None:
@@ -44,13 +44,13 @@ class VOFMixin(object):
         else:
             assert k is None
         return Constant(self.rho0) * c + Constant(self.rho1) * (1 - c)
-    
+
     def get_laminar_kinematic_viscosity(self, k=None, c=None):
         """
         Calculate the blended kinematic viscosity function as a weighted
         sum of nu0 and nu1. The colour function is unity when nu=nu0 and
         zero when nu=nu1
-        
+
         Return the function as defined on timestep t^{n+k}
         """
         if c is None:
@@ -59,13 +59,13 @@ class VOFMixin(object):
         else:
             assert k is None
         return Constant(self.nu0) * c + Constant(self.nu1) * (1 - c)
-    
+
     def get_laminar_dynamic_viscosity(self, k=None, c=None):
         """
         Calculate the blended dynamic viscosity function as a weighted
         sum of mu0 and mu1. The colour function is unity when mu=mu0 and
         zero when mu=mu1
-        
+
         Return the function as defined on timestep t^{n+k}
         """
         if self.calculate_mu_directly_from_colour_function:
@@ -77,28 +77,28 @@ class VOFMixin(object):
             mu0 = self.nu0 * self.rho0
             mu1 = self.nu1 * self.rho1
             return Constant(mu0) * c + Constant(mu1) * (1 - c)
-        
+
         else:
             nu = self.get_laminar_kinematic_viscosity(k, c)
             rho = self.get_density(k, c)
             return nu * rho
-    
+
     def get_density_range(self):
         """
         Return the maximum and minimum densities, rho
         """
         return min(self.rho0, self.rho1), max(self.rho0, self.rho1)
-               
+
     def get_laminar_kinematic_viscosity_range(self):
         """
         Return the maximum and minimum kinematic viscosities, nu
         """
         return min(self.nu0, self.nu1), max(self.nu0, self.nu1)
-    
+
     def get_laminar_dynamic_viscosity_range(self):
         """
         The minimum and maximum laminar dynamic viscosities, mu.
-        
+
         Mu is either calculated directly from the colour function, in this
         case mu is a linear function, or as a product of nu and rho, where
         it is a quadratic function and can have (in i.e the case of water
@@ -114,4 +114,3 @@ class VOFMixin(object):
             rho = self.rho0 * c + self.rho1 * (1 - c)
             mu = nu * rho
             return mu.min(), mu.max()
-    

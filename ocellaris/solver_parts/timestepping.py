@@ -11,7 +11,7 @@ def before_simulation(simulation, force_steady=False):
     up using first order timestepping
     """
     starting_order = 1
-    
+
     # Check if there are non-zero values in the upp vectors
     maxabs = 0
     for d in range(simulation.ndim):
@@ -20,7 +20,7 @@ def before_simulation(simulation, force_steady=False):
     maxabs = dolfin.MPI.max(dolfin.MPI.comm_world, float(maxabs))
     if maxabs > 0:
         starting_order = 2
-    
+
     if force_steady:
         simulation.log.info('Setting time derivatives to zero')
         simulation.data['time_coeffs'].assign(dolfin.Constant([0.0, 0.0, 0.0]))
@@ -28,14 +28,14 @@ def before_simulation(simulation, force_steady=False):
         # Switch to second order time stepping
         simulation.log.info('Initial values for upp are found and used, '
                             'starting with second order time stepping.')
-        simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2.0, 1/2]))
+        simulation.data['time_coeffs'].assign(dolfin.Constant([3 / 2, -2.0, 1 / 2]))
     else:
         # Standard first order time stepping
         simulation.log.info('Initial values for upp are not found, '
                             'starting with first order time stepping.')
         simulation.data['time_coeffs'].assign(dolfin.Constant([1.0, -1.0, 0.0]))
     update_convection(simulation, starting_order, force_steady=force_steady)
-    
+
     simulation.log.info('\nTime loop is now starting\n', flush='force')
 
 
@@ -43,7 +43,7 @@ def after_timestep(simulation, is_steady, force_steady=False):
     """
     Move u -> up, up -> upp and prepare for the next time step
     """
-    # Stopping criteria for steady state simulations  
+    # Stopping criteria for steady state simulations
     vel_diff = None
     if is_steady:
         vel_diff = 0
@@ -52,19 +52,19 @@ def after_timestep(simulation, is_steady, force_steady=False):
             up = simulation.data['up%d' % d]
             diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
             vel_diff = max(vel_diff, diff)
-    
+
     shift_fields(simulation, ['u%d', 'up%d', 'upp%d'])
     shift_fields(simulation, ['u_conv%d', 'up_conv%d', 'upp_conv%d'])
-    
+
     if force_steady:
         simulation.data['time_coeffs'].assign(dolfin.Constant([0.0, 0.0, 0.0]))
     else:
         # Change time coefficient to second order
-        simulation.data['time_coeffs'].assign(dolfin.Constant([3/2, -2, 1/2]))
-    
+        simulation.data['time_coeffs'].assign(dolfin.Constant([3 / 2, -2, 1 / 2]))
+
     # Extrapolate the convecting velocity to the next step
     update_convection(simulation, force_steady=force_steady)
-    
+
     return vel_diff
 
 
@@ -74,13 +74,13 @@ def update_convection(simulation, order=2, force_steady=False):
     """
     ndim = simulation.ndim
     data = simulation.data
-    
+
     # Update convective velocity field components
     for d in range(ndim):
         uic = data['u_conv%d' % d]
         uip = data['up_conv%d' % d]
         uipp = data['upp_conv%d' % d]
-        
+
         if order == 1 or force_steady:
             uic.assign(uip)
         else:

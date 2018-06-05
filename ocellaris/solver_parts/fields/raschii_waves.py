@@ -8,7 +8,7 @@ from .base_wave_field import BaseWaveField, COLOUR_PROJECTION_DEGREE
 @register_known_field('RaschiiWaves')
 class RaschiiWaveField(BaseWaveField):
     description = 'Nonlinear regular waves'
-    
+
     def __init__(self, simulation, field_inp):
         """
         Nonlinear regular waves using the Raschii Python library
@@ -29,13 +29,13 @@ class RaschiiWaveField(BaseWaveField):
         simulation.log.info('    Raschii wave model: %s' % self.wave_model)
         simulation.log.info('    Raschii air model: %s' % self.air_model)
         self.construct_cpp_code()
-    
+
     def read_input(self, field_inp):
         sim = self.simulation
         self.wave_model = field_inp.get_value('wave_model', 'Fenton', 'string')
         self.air_model = field_inp.get_value('air_model', 'FentonAir', 'string')
         self.order = field_inp.get_value('model_order', 5, 'int')
-        
+
         # Get global physical constants
         g = abs(sim.data['g'].values()[-1])
         if g == 0:
@@ -49,29 +49,30 @@ class RaschiiWaveField(BaseWaveField):
         self.wave_height = field_inp.get_value('wave_height', required_type='float')
         self.stationary = self.wave_height == 0
         self.ramp_time = field_inp.get_value('ramp_time', 0, required_type='float')
-        
+
         self.still_water_pos = field_inp.get_value('still_water_position', required_type='float')
         self.current_speed = field_inp.get_value('current_speed', 0, required_type='float')
         self.wind_speed = field_inp.get_value('wind_speed', 0, required_type='float')
-        self.polydeg = field_inp.get_value('polynomial_degree', DEFAULT_POLYDEG, required_type='int')
+        self.polydeg = field_inp.get_value(
+            'polynomial_degree', DEFAULT_POLYDEG, required_type='int')
         self.g = g
         self.h = h
         h_above = 3 * self.wave_height
         self.h_above = field_inp.get_value('depth_above', h_above, required_type='float')
         self.blending_height = field_inp.get_value('blending_height', None, 'float')
-        
+
         # Project the colour function to DG0 (set degree to -1 to prevent this)
         self.colour_projection_degree = field_inp.get_value('colour_projection_degree',
                                                             COLOUR_PROJECTION_DEGREE, 'int')
         self.colour_projection_form = None
-    
+
     def construct_cpp_code(self):
         """
         This code runs once at setup time and constructs the C++ code that
         defines the analytical Airy wave field below and above the free surface
-        
+
         Above the free surface the velocities are made continuous by reversing
-        the Wheeler streatching a distance h_above up (depth_above input param) 
+        the Wheeler streatching a distance h_above up (depth_above input param)
         """
         # Get the requested classes and set up the required input
         WaveClass, AirClass = get_wave_model(self.wave_model, self.air_model)
@@ -82,7 +83,7 @@ class RaschiiWaveField(BaseWaveField):
             wave_args['air'] = AirClass(self.h_above, self.blending_height)
         if 'N' in WaveClass.required_input:
             wave_args['N'] = self.order
-        
+
         # Initialize the Raschii wave model. This may take som time for stream
         # function waves where an optimalization loop needs to run as a part
         # of the wave initialization process
@@ -96,7 +97,7 @@ class RaschiiWaveField(BaseWaveField):
         sim.log.info('    Wave number: %r' % k)
         sim.log.info('    Phase speed: %r' % c)
         sim.log.info('    Wave period: %r' % (self.wave_length / c))
-        
+
         # Construct the C++ code
         cpp_e = self.raschii_wave.elevation_cpp()
         cpp_u, cpp_w = self.raschii_wave.velocity_cpp(all_points_wet=False)
@@ -104,12 +105,12 @@ class RaschiiWaveField(BaseWaveField):
         self._cpp['uhoriz'] = cpp_u
         self._cpp['uvert'] = cpp_w
         self._cpp['c'] = 'x[2] <= (%s) ? 1.0 : 0.0' % cpp_e
-        
+
         # Adjust the z-coordinate such that the bottom is at z=0
         zdiff = self.still_water_pos - self.h
         for k, v in list(self._cpp.items()):
             self._cpp[k] = v.replace('x[2]', '(x[2] - %r)' % zdiff)
-        
+
         # Adjust the C++ code z-coordinate if the simulation is 2D (then z -> y)
         if self.simulation.ndim == 2:
             for k, v in list(self._cpp.items()):

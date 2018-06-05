@@ -19,7 +19,7 @@ from ocellaris_post import Results
 from wx.lib.pubsub import pub
 
 
-SAVE_WAIT_TIME = 5000 # wait 5 seconds before saving cached state again
+SAVE_WAIT_TIME = 5000  # wait 5 seconds before saving cached state again
 
 
 # PubSub topics
@@ -39,11 +39,11 @@ class InspectorState(object):
         """
         self.results = []
         self.persistence = InspectorPersistence(self)
-        
+
     @property
     def active_results(self):
         return [r for r in self.results if r.active_in_gui]
-    
+
     def open(self, file_name, label=None):
         """
         Open a new result file
@@ -53,16 +53,16 @@ class InspectorState(object):
         self.results.append(r)
         r.active_in_gui = True
         self.persistence.register_opened_file(file_name)
-    
+
     def reload(self, only_active=True):
         """
-        Reload the data. Usefull when plotting log files that are 
+        Reload the data. Usefull when plotting log files that are
         continuously updated
         """
         for r in self.results:
-            if r.active_in_gui or not only_active: 
+            if r.active_in_gui or not only_active:
                 r.reload()
-    
+
     def close(self, idx):
         """
         Close the results file with the given index
@@ -74,26 +74,26 @@ class InspectorPersistence(object):
     def __init__(self, inspector_state):
         """
         Store some data between runs of the inspector so that the
-        user does not have to reconfigure the program each time it 
+        user does not have to reconfigure the program each time it
         is started
         """
         self.istate = inspector_state
-        
+
         # Cache dir per the "XDG Base Directory Specification"
         cache_dir_default = os.path.expanduser('~/.cache')
         cache_dir = os.environ.get('XDG_CACHE_HOME', cache_dir_default)
         self.cache_file_name = os.path.join(cache_dir, 'ocellaris_post_inspector.yaml')
-        
+
         # Automatic saving a while after each metadata update
         pub.subscribe(self.save_soon, TOPIC_METADATA)
         self.timer = None
-        
+
         self.load()
-    
+
     def get_prev_files(self, N=10):
         fns = self._cached_data.setdefault('file_open_history', [])
         return fns[-N:]
-    
+
     def register_opened_file(self, file_name):
         # Make file go to end of list of opened files
         fns = self._cached_data.setdefault('file_open_history', [])
@@ -102,55 +102,55 @@ class InspectorPersistence(object):
             fns.remove(fn)
         fns.append(fn)
         self.save_soon()
-    
+
     def save_soon(self, evt=None):
         if self.timer is not None:
             # Allready going to save
             return
-        
-        # Save after 5 second of inactivity (to avoid slowdowns in case 
+
+        # Save after 5 second of inactivity (to avoid slowdowns in case
         # there are multiple updates in a row, which is likely)
         self.timer = wx.CallLater(SAVE_WAIT_TIME, self.save)
-    
+
     def load(self):
         if not os.path.isfile(self.cache_file_name):
             self._cached_data = {}
             return
-        
+
         with open(self.cache_file_name, 'rb') as f:
             data = yaml.safe_load(f)
         self._cached_data = data if isinstance(data, dict) else {}
-    
+
     def set_label(self, res, label):
         # Use label if provided
         if label is not None:
             res.label = label
             return
-        
+
         # Get persisent label if it exists or default to file name as label
         lables = self._cached_data.setdefault('result_file_lables', {})
         if res.file_name in lables:
             res.label = lables[res.file_name]
         else:
             res.label = os.path.basename(res.file_name)
-    
+
     def save(self, evt=None):
         # Save lables
         lables = self._cached_data.setdefault('result_file_lables', {})
         for res in self.istate.results:
             assert res.label is not None
             lables[res.file_name] = res.label
-        
+
         with open(self.cache_file_name, 'wt') as f:
             yaml.safe_dump(self._cached_data, f,
                            allow_unicode=True)
-        
+
         self.timer = None
 
 
 def setup_yaml():
     """
-    Make PyYaml load and store keys in dictionaries 
+    Make PyYaml load and store keys in dictionaries
     ordered like they were on the input file
     """
     mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
@@ -170,15 +170,15 @@ def show_inspector(file_names, lables):
     Show wxPython window that allows chosing which report to show
     """
     setup_yaml()
-    
+
     app = wx.App()
-    
+
     istate = InspectorState()
     for file_name, label in zip(file_names, lables):
         if not os.path.isfile(file_name):
             raise IOError('The results file %r does not exist' % file_name)
         istate.open(file_name, label)
-    
+
     frame = OcellarisInspector(istate)
     frame.Show()
     app.MainLoop()

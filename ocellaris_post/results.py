@@ -21,14 +21,14 @@ class Results(object):
     def __init__(self, file_name, derived=True, inner_iterations=True):
         """
         Represents the results from an Ocellaris simulation
-        
+
         This is supposed to work as a back end for post processing
         use cases that are not covered by Paraview and similar
         programs and is hence intended for lighter data such as
         time step reports etc
-        
+
         The file name given can be either a simulation log file
-        (for ongoing simulations) or an Ocellaris restart file 
+        (for ongoing simulations) or an Ocellaris restart file
         """
         # Main info
         self.input = None
@@ -37,17 +37,17 @@ class Results(object):
         self.reports_x = None
         self.surfaces = None
         self.input = None
-        
+
         # Auxillary info
         self.ndofs = None
         self.ncpus = None
-        
+
         self.reload(file_name, derived, inner_iterations)
-    
+
     def reload(self, file_name=None, derived=True, inner_iterations=True):
         if file_name is None:
             file_name = self.file_name
-        
+
         self.file_name = os.path.abspath(file_name)
         self.file_type = get_result_file_type(file_name)
         if self.file_type == 'h5':
@@ -56,7 +56,7 @@ class Results(object):
             read_log_data(self)
         else:
             raise IOError('Unknown result file type of file %r' % file_name)
-        
+
         # Add derived reports
         reps = self.reports
         if derived:
@@ -65,26 +65,26 @@ class Results(object):
             if 'mass' in reps:
                 m, t = reps['mass'], reps['timesteps']
                 dm = numpy.zeros_like(m)
-                dm[1:] = (m[1:] - m[:-1])/(t[1:] - t[:-1])
+                dm[1:] = (m[1:] - m[:-1]) / (t[1:] - t[:-1])
                 reps['mass change'] = dm
-        
+
         # Set the time to be on the x axis for the report plots
         self.reports_x = {}
         if self.reports:
             for report_name in reps:
                 self.reports_x[report_name] = reps['timesteps']
             del self.reports['timesteps']
-        
+
         # Add inner iteration reports from the log
         if inner_iterations:
             read_iteration_reports(self)
-        
+
         if self.surfaces is None:
             read_surfaces(self)
         else:
             for surf in self.surfaces.values():
                 surf.reload()
-    
+
     def get_file_path(self, name, check=True):
         """
         Try to get the path of an output file based on
@@ -94,23 +94,23 @@ class Results(object):
         prefix = self.input.get('output', {}).get('prefix', '')
         prefix = self._process_inp(prefix)
         fn = prefix + name
-        
+
         loc = self.file_name.rfind(prefix)
         pth = './' + fn
         if prefix and loc != -1:
             pth = self.file_name[:loc] + fn
-        
+
         if check:
             if not os.path.exists(pth):
                 bd = os.path.split(self.file_name)[0]
                 pth = os.path.join(bd, fn)
-            
+
             if not os.path.exists(pth):
                 raise IOError('Could not find file %r when prefix is %r and result file is %r'
                               % (name, prefix, self.file_name))
-        
+
         return pth
-    
+
     def _process_inp(self, value):
         """
         Simplified handling of Python coded input fields
@@ -120,7 +120,7 @@ class Results(object):
         value = value.strip()
         assert value.startswith('py$')
         return self._eval(value[3:])
-    
+
     def _eval(self, code):
         consts = self.input.get('user_code', {}).get('constants')
         return eval(code, globals(), consts)
@@ -133,22 +133,22 @@ class IsoSurfaces(object):
         self.value = value
         self.file_name = file_name
         self._cache = None
-        
+
     def reload(self):
         self._cache = None
-    
+
     def get_surfaces(self, cache=True):
         if cache and self._cache is not None:
             return self._cache
-        
+
         timesteps = []
         data = []
-        
+
         with open(self.file_name, 'rt') as f:
             description = f.readline()[1:].strip()
             value = float(f.readline().split()[-1])
             dim = int(f.readline().split()[-1])
-            
+
             line = f.readline()
             while line:
                 wds = line.split()
@@ -157,26 +157,26 @@ class IsoSurfaces(object):
                     nsurf = int(wds[3])
                 except Exception:
                     break
-                
+
                 if nsurf == 0:
                     timesteps.append(time)
                     data.append([])
                     line = f.readline()
                     continue
-                
-                datalines = [f.readline() for _ in range(nsurf*3)]
+
+                datalines = [f.readline() for _ in range(nsurf * 3)]
                 if not datalines[-1]:
                     break
                 timesteps.append(time)
                 data.append([])
                 for i in range(nsurf):
-                    xvals = [float(v) for v in datalines[i*3+0].split()]
-                    yvals = [float(v) for v in datalines[i*3+1].split()]
-                    zvals = [float(v) for v in datalines[i*3+2].split()]
+                    xvals = [float(v) for v in datalines[i * 3 + 0].split()]
+                    yvals = [float(v) for v in datalines[i * 3 + 1].split()]
+                    zvals = [float(v) for v in datalines[i * 3 + 2].split()]
                     data[-1].append((xvals, yvals, zvals))
-                    
+
                 line = f.readline()
-        
+
         res = (description, value, dim, numpy.array(timesteps), data)
         if cache:
             self._cache = res
@@ -189,16 +189,16 @@ def read_h5_data(results):
     """
     import h5py
     hdf = h5py.File(results.file_name, 'r')
-    
+
     string_datasets = 'input_file' in hdf['/ocellaris']
-    
+
     # Read the input file
     if string_datasets:
         input_str = hdf['/ocellaris/input_file'].value
     else:
         input_str = hdf['/ocellaris'].attrs['input_file']
     results.input = yaml.load(input_str)
-    
+
     # Read reports
     reps = {}
     N = 1e100
@@ -206,11 +206,11 @@ def read_h5_data(results):
         arr = numpy.array(hdf['/reports'][rep_name])
         reps[rep_name] = arr
         N = min(N, len(arr))
-    
+
     # Ensure equal length arrays
     for key in list(reps.keys()):
         reps[key] = reps[key][:N]
-    
+
     # Read log
     if string_datasets:
         log = hdf['/ocellaris/full_log'].value
@@ -224,7 +224,7 @@ def read_h5_data(results):
                 break
             log.append(hdf['/ocellaris'].attrs[logname])
         log = ''.join(log)
-    
+
     results.reports = reps
     results.log = log
 
@@ -238,7 +238,7 @@ def read_log_data(results):
     in_input_section = False
     input_strs = []
     data = {}
-    
+
     # Read input and timestep reports from log file
     with open(results.file_name, 'rt') as f:
         for line in f:
@@ -256,20 +256,20 @@ def read_log_data(results):
                         key = key.strip()
                         value = float(value)
                         data.setdefault(key, []).append(value)
-                    except:
+                    except Exception:
                         break
         f.seek(0)
         log = f.read()
     if data:
         del data['timestep']
-    
+
     # Read the input section
     if input_strs:
         input_str = ''.join(input_strs)
         results.input = yaml.load(input_str)
     else:
         results.input = {}
-    
+
     reps = {}
     N = 1e100
     for key, values in data.items():
@@ -278,12 +278,12 @@ def read_log_data(results):
             key = 'timesteps'
         reps[key] = arr
         N = min(N, len(arr))
-    
-    # Ensure equal length arrays in case of partially written 
+
+    # Ensure equal length arrays in case of partially written
     # time steps on the log file
     for key in list(reps.keys()):
         reps[key] = reps[key][:N]
-    
+
     results.reports = reps
     results.log = log
 
@@ -312,7 +312,7 @@ def read_iteration_reports(results):
             try:
                 time = line.split(' time = ')[1].split(',')[0]
                 time = float(time)
-            except:
+            except Exception:
                 continue
             for k, v in line_vals.items():
                 final_vals.setdefault(k, []).append(v)
@@ -320,7 +320,7 @@ def read_iteration_reports(results):
             continue
         elif not ('iteration' in line and 'Krylov' in line):
             continue
-        
+
         # Parse the inner iteration line
         try:
             line_vals = {}
@@ -340,33 +340,33 @@ def read_iteration_reports(results):
                     value = float(wds[-1])
                     iter_reps.setdefault(name, []).append(value)
                 line_vals[name] = value
-        
-        except:
+
+        except Exception:
             pass
-    
+
     if not iter_reps:
         return
-    
+
     # Get minimum length
     Nmin = 1e100
     for name, value in iter_reps.items():
         Nmin = min(Nmin, len(value))
-    
+
     # Store reports and crop reports to same length
     xaxis = numpy.arange(Nmin)
     for name, value in iter_reps.items():
         name2 = 'Inner iteration: %s' % name
         results.reports[name2] = numpy.array(value[:Nmin])
         results.reports_x[name2] = xaxis
-    
+
     if not final_vals:
         return
-    
+
     # Get minimum length of the last inner iters
     Nmin = 1e100
     for name, value in final_vals.items():
         Nmin = min(Nmin, len(value))
-    
+
     # Store final iter reports
     xaxis = numpy.array(final_vals.pop('__time__'), dtype=float)
     for name, value in final_vals.items():
@@ -380,7 +380,7 @@ def read_surfaces(res):
     res.surfaces = {}
     if not 'probes' in inp:
         return
-    
+
     for probe in inp['probes']:
         if not (probe.get('enabled', True) and
                 probe.get('type', '') == 'IsoSurface'):
@@ -390,5 +390,5 @@ def read_surfaces(res):
         value = probe['value']
         file_name_postfix = probe['file_name']
         file_name = res.get_file_path(file_name_postfix)
-        isosurf = IsoSurfaces(name, field_name, value, file_name) 
+        isosurf = IsoSurfaces(name, field_name, value, file_name)
         res.surfaces[name] = isosurf

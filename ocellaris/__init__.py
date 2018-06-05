@@ -24,7 +24,8 @@ def get_detailed_version():
     Return the version number of Ocellaris including
     source control commit revision information
     """
-    import os, subprocess
+    import os
+    import subprocess
     this_dir = os.path.dirname(os.path.abspath(__file__))
     proj_dir = os.path.abspath(os.path.join(this_dir, '..'))
     if os.path.isdir(os.path.join(proj_dir, '.git')):

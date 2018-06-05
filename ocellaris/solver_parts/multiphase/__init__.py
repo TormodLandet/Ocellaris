@@ -38,10 +38,10 @@ def get_multi_phase_model(name):
 
 class MultiPhaseModel(object):
     description = 'No description available'
-    
+
     def update(self, it, t, dt):
         pass
-    
+
     @classmethod
     def create_function_space(cls, simulation):
         pass

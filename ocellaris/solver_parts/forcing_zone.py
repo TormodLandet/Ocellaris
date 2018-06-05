@@ -12,21 +12,21 @@ def add_forcing_zone(simulation, fzones, inp):
     zone_vardef = inp.get_value('zone', required_type='string')
     target_vardef = inp.get_value('target', required_type='string')
     plot = inp.get_value('plot', False, required_type='bool')
-    
+
     zone = verify_field_variable_definition(simulation, zone_vardef,
                                             'forcing zone %r zone definition' % name)
     target = verify_field_variable_definition(simulation, target_vardef,
                                               'forcing zone %r target' % name)
-    
+
     verify_key('forcing zone type', ztype, ('MomentumForcing', 'ScalarForcing'),
                'penalty forcing zone %s' % name)
     if ztype == 'MomentumForcing':
         varname = inp.get_value('variable', 'u', required_type='string')
     else:
         varname = inp.get_value('variable', required_type='string')
-    
+
     fzones.setdefault(varname, []).append(ForcingZone(name, zone, target, penalty))
-    
+
     if plot:
         # Save zone blending function to a plot file for easy verification
         prefix = simulation.input.get_value('output/prefix', '', 'string')

@@ -36,14 +36,14 @@ def get_solver(name):
     except KeyError:
         ocellaris_error('Navier-Stokes solver "%s" not found' % name,
                         'Available solvers:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description) 
+                        '\n'.join('  %-20s - %s' % (n, s.description)
                                   for n, s in sorted(_SOLVERS.items())))
         raise
 
 
 class Solver(object):
     description = 'No description available'
-    
+
     @classmethod
     def create_function_spaces(cls, simulation):
         """
@@ -54,20 +54,20 @@ class Solver(object):
                                              DEFAULT_FAMILY_U, 'string')
         Vp_name = simulation.input.get_value('solver/function_space_pressure',
                                              DEFAULT_FAMILY_P, 'string')
-        
+
         # Get function space polynomial degrees
         Pu = simulation.input.get_value('solver/polynomial_degree_velocity',
                                         DEFAULT_DEGREE_U, 'int')
         Pp = simulation.input.get_value('solver/polynomial_degree_pressure',
                                         DEFAULT_DEGREE_P, 'int')
-        
+
         # Get the constrained domain
         cd = simulation.data['constrained_domain']
         if cd is None:
             simulation.log.info('Creating function spaces without periodic boundaries (none found)')
         else:
             simulation.log.info('Creating function spaces with periodic boundaries')
-        
+
         # Create the Navier-Stokes function spaces
         mesh = simulation.data['mesh']
         Vu = dolfin.FunctionSpace(mesh, Vu_name, Pu, constrained_domain=cd)
@@ -80,7 +80,7 @@ class BaseEquation(object):
     # Will be shadowed by object properties after first assemble
     tensor_lhs = None
     tensor_rhs = None
-    
+
     def assemble_lhs(self):
         if self.tensor_lhs is None:
             self.tensor_lhs = dolfin.assemble(self.form_lhs)

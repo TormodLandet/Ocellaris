@@ -7,10 +7,10 @@ class BoundaryRegion(object):
     def __init__(self, simulation, marker, index, mesh_facet_regions):
         """
         Create boundary conditions for the given part
-        
+
         This class reads the input for the boundary part with the given index
         and creates boundary condition objects for each of the listed functions.
-        
+
         Arguments:
             simulation: The simulation object
             marker: a facet function used to mark the boundary
@@ -22,15 +22,17 @@ class BoundaryRegion(object):
         self.marker = marker
         self.index = index
         self.conditions = {}
-        
-        self.input = simulation.input.get_value('boundary_conditions/%d' % index, required_type='Input')
+
+        self.input = simulation.input.get_value(
+            'boundary_conditions/%d' %
+            index, required_type='Input')
         self.name = self.input.get_value('name', required_type='string')
         self.selector_name = self.input.get_value('selector', required_type='string')
-        
+
         # Let the default boundary marking 0 be for unmarked regions
-        # The fact that mark_id == index - 1 is used in other places! 
+        # The fact that mark_id == index - 1 is used in other places!
         self.mark_id = index + 1
-        
+
         # Mark the region of the boundary covered by this boundary condition
         if self.selector_name == 'code':
             self.selector = RegionSelector(simulation)
@@ -44,7 +46,7 @@ class BoundaryRegion(object):
                                 % (self.name, code_string) +
                                 '\n\nThe error was "%s"' % e +
                                 '\n\nDid you remember that x is an array?')
-        
+
         elif self.selector_name == 'mesh_facet_region':
             # Find all facets with the given numbers and update the Ocellaris
             # facet marker function. The Ocellaris region number will not in
@@ -60,7 +62,7 @@ class BoundaryRegion(object):
                                     'facet region number %d' % (self.mark_id, num))
                 array_ocellaris[array_mesh == num] = self.mark_id
             marker.set_values(array_ocellaris)
-        
+
         else:
             ocellaris_error('Error: unknown boundary selector',
                             'Boundary condition for boundary "%s" has '
@@ -69,11 +71,11 @@ class BoundaryRegion(object):
                             ' - code\n'
                             ' - mesh_facet_region'
                             % (self.name, self.selector_name))
-    
+
     def create_periodic_boundary_conditions(self):
         """
         Create periodic boundary conditions for this region
-        
+
         This is separated from the normal boundary conditions
         because Dirichlet boundary conditions depend on having
         function spaces created, while the function spaces themselves
@@ -82,26 +84,26 @@ class BoundaryRegion(object):
         sim = self.simulation
         if 'map_code' in self.input:
             sim.log.info('Applying periodic boundary conditions on %s' % self.name)
-            
+
             if self.simulation.data['constrained_domain'] is not None:
                 ocellaris_error('Error in specification of periodic boundary conditions',
                                 'There can only be one periodic boundary region in the domain. '
                                 'Found more than one periodic region when processing boundary conditions')
-            
+
             self.selector.set_map_code(self.input['map_code'], self.name)
             self.simulation.data['constrained_domain'] = self.selector
-    
+
     def create_boundary_conditions(self):
         """
         Create the Dirichlet and Neumann boundary conditions for this region
         """
         sim = self.simulation
-        
+
         # Get boundary conditions on this boundary
         for key, value in self.input.items():
             if key.startswith('_') or not isinstance(value, dict) or 'type' not in value:
                 continue
-            
+
             inp = self.input.get_value(key, required_type='Input')
             bc_type = inp.get_value('type', required_type='string')
             sim.log.info('Applying %s boundary condition for %s on %s' %
@@ -109,10 +111,10 @@ class BoundaryRegion(object):
             bc_class = get_boundary_condition(bc_type)
             bc = bc_class(sim, key, inp, self.marker, self.mark_id)
             self.conditions[key] = bc
-    
+
     def ds(self):
         """
-        Get a measure to integrate over this boundary region 
+        Get a measure to integrate over this boundary region
         """
         return self.simulation.data['ds'](self.mark_id)
 
@@ -126,36 +128,36 @@ class RegionSelector(dolfin.SubDomain):
         """
         super(RegionSelector, self).__init__()
         self.simulation = simulation
-    
+
     def set_inside_code(self, code_string, region_name):
         """
         Set the code to be used in the .inside() method to define
         the region
-        
+
         It the code contains a newline it must be the core
         of the function and define the inside variable
         """
         self.inside_func = RunnablePythonString(self.simulation, code_string,
                                                 'inside code for %s' % region_name,
                                                 var_name='inside')
-    
+
     def set_map_code(self, code_string, region_name):
         """
         Set the code to be used in the .map() method for periodic
         boundary conditions.
-        
+
         The code must assign to the 'y' variable
         """
         self.map_func = RunnablePythonString(self.simulation, code_string,
                                              'map code for %s' % region_name,
                                              var_name='y')
-    
+
     def inside(self, x, on_boundary):
         """
         Determine whether the point x is in this region
         """
         return self.inside_func.run(x=x, on_boundary=on_boundary)
-    
+
     def map(self, x, y):
         """
         Map from x[i] to y[i] on periodic boundary

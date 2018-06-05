@@ -6,10 +6,10 @@ import dolfin
 def timeit(f):
     """
     Timer decorator
-    
-    This decorator stores the cummulative time spent in each 
+
+    This decorator stores the cummulative time spent in each
     function that is wrapped by the decorator.
-    
+
     Functions are identified by their names
     """
     # Extract name at defition time, not at run time
@@ -19,7 +19,7 @@ def timeit(f):
         timeit.next_name = None
     else:
         timed_task_name = f.__name__
-    
+
     @wraps(f)
     def wrapper(*args, **kwds):
         with dolfin.Timer('Ocellaris %s' % timed_task_name):
@@ -27,10 +27,11 @@ def timeit(f):
             ret = f(*args, **kwds)
             #print('</%s>' % timed_task_name)
         return ret
-    
+
     return wrapper
 
-timeit.next_name = None 
+
+timeit.next_name = None
 
 
 def timeit_named(name):
@@ -41,6 +42,7 @@ def timeit_named(name):
     timeit.next_name = name
     return timeit
 
+
 timeit.named = timeit_named
 
 
@@ -50,16 +52,15 @@ def log_timings(simulation, clear=False):
     """
     # Total time spent in the simulation
     tottime = time.time() - simulation.t_start
-    
+
     # Get timings from FEniCS and sort by total time spent
     tclear = dolfin.TimingClear.clear if clear else dolfin.TimingClear.keep
     timingtypes = [dolfin.TimingType.user, dolfin.TimingType.system, dolfin.TimingType.wall]
     table = dolfin.timings(tclear, timingtypes)
     table_lines = table.str(True).split('\n')
     simulation.log.info('\nFEniCS timings:   %s  wall pst' % table_lines[0][18:])
-    simulation.log.info(table_lines[1] + '-'*10)
+    simulation.log.info(table_lines[1] + '-' * 10)
     tmp = [(float(line.split()[-5]), line) for line in table_lines[2:]]
     tmp.sort(reverse=True)
     for wctime, line in tmp:
-        simulation.log.info('%s    %5.1f%%' % (line, wctime/tottime*100))
-
+        simulation.log.info('%s    %5.1f%%' % (line, wctime / tottime * 100))

@@ -99,9 +99,11 @@ output:
     save_restart_file_at_end: no
 
 solver:
-    type: PIMPLE
+    type: IPCS-A
     num_inner_iter: 10
-    num_pressure_corr: 3
+    num_pressure_corr: 10
+    relaxation_u: 1.0
+    relaxation_p: 1.0
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script

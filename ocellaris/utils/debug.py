@@ -14,7 +14,7 @@ def enable_super_debug():
     """
     rank = dolfin.MPI.rank(dolfin.MPI.comm_world)
     outfile = open('OCELLARISSUPERDEBUG_%d' % rank, 'wt')
-    
+
     def trace_lines(frame, event, arg):
         if event != 'line':
             return
@@ -23,15 +23,15 @@ def enable_super_debug():
         line_no = frame.f_lineno
         outfile.write('   About to run %s line %s\n' % (func_name, line_no))
         outfile.flush()
-    
+
     def trace(frame, event, arg):
         if event != 'call':
             return
-        
+
         func_name = frame.f_code.co_name
         file_name = frame.f_code.co_filename
         line_no = frame.f_lineno
-        
+
         # Ignore deep dives in other libraries
         caller = frame.f_back
         if caller is None:
@@ -43,17 +43,17 @@ def enable_super_debug():
         for interesting in FUNC_TRACE_PATTERNS:
             if interesting in caller_file_name:
                 want_to_know = True
-        
+
         if want_to_know:
             # Must NEVER run when stdout.write() or flush() will trigger this trace
             outfile.write('Call to %s (%s @ %s) from %s (%s @ %s)\n'
                           % (func_name, file_name, line_no,
                              caller_name, caller_file_name, caller_line_no))
             outfile.flush()
-            
+
             for interesting in LINE_TRACE_PATTERNS:
                 if interesting in file_name:
                     return trace_lines
-    
+
     sys.stdout.write('Enabling SUPER DEBUG - logging to OCELLARISSUPERDEBUG\n')
     sys.settrace(trace)

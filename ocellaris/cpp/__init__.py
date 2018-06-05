@@ -20,17 +20,17 @@ def _get_cpp_module(cpp_files, force_recompile=False):
             else:
                 lines.append(line)
         cpp_sources.append(''.join(lines))
-    
+
     # Force recompilation
     if force_recompile:
         cpp_sources.append('// Force recompile, time is %s \n' % time.time())
-    
+
     sep = '\n\n// ' + '$' * 77 + '\n\n'
     cpp_code = sep.join(cpp_sources)
-    
-    module =  compile_cpp_code(cpp_code)
+
+    module = compile_cpp_code(cpp_code)
     assert module is not None
-    
+
     return module
 
 
@@ -41,17 +41,17 @@ class _ModuleCache(object):
         """
         self.available_modules = OrderedDict()
         self.module_cache = {}
-    
+
     def add_module(self, name, cpp_files, test_compile=True):
         """
         Add a module that can be compiled
         """
         self.available_modules[name] = cpp_files
-        
+
         if test_compile:
             # Compile at once to test the code
             self.get_module(name)
-    
+
     def get_module(self, name, force_recompile=False):
         """
         Compile and load a module (first time) or use from cache (subsequent requests)
@@ -60,7 +60,7 @@ class _ModuleCache(object):
             cpp_files = self.available_modules[name]
             mod = _get_cpp_module(cpp_files, force_recompile)
             self.module_cache[name] = mod
-        
+
         return self.module_cache[name]
 
 
@@ -69,7 +69,9 @@ class _ModuleCache(object):
 
 _MODULES = _ModuleCache()
 _MODULES.add_module('naive_nodal', ['slope_limiter/naive_nodal.h'])
-_MODULES.add_module('hierarchical_taylor', ['slope_limiter/limiter_common.h', 'slope_limiter/hierarchical_taylor.h'])
+_MODULES.add_module('hierarchical_taylor',
+                    ['slope_limiter/limiter_common.h',
+                     'slope_limiter/hierarchical_taylor.h'])
 _MODULES.add_module('measure_local_maxima', ['slope_limiter/measure_local_maxima.h'])
 _MODULES.add_module('linear_convection', ['gradient_reconstruction.h', 'linear_convection.h'])
 

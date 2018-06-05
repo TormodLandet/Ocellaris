@@ -7,7 +7,7 @@ from .base_wave_field import BaseWaveField, COLOUR_PROJECTION_DEGREE
 @register_known_field('AiryWaves')
 class AiryWaveField(BaseWaveField):
     description = 'Linear airy waves'
-    
+
     def __init__(self, simulation, field_inp):
         """
         A linear Airy wave field (sum of linear sine wave components)
@@ -28,12 +28,12 @@ class AiryWaveField(BaseWaveField):
         simulation.log.info('    Current speed: %r' % self.current_speed)
         simulation.log.info('    Wind speed: %r' % self.wind_speed)
         simulation.log.info('    Polynomial degree: %r' % self.polydeg)
-        simulation.log.info('    Colour proj. degree: %r' % self.colour_projection_degree)        
+        simulation.log.info('    Colour proj. degree: %r' % self.colour_projection_degree)
         self.construct_cpp_code()
-    
+
     def read_input(self, field_inp):
         sim = self.simulation
-        
+
         # Get global physical constants
         g = abs(sim.data['g'].values()[-1])
         if g == 0:
@@ -43,20 +43,20 @@ class AiryWaveField(BaseWaveField):
         if h <= 0:
             ocellaris_error('Airy waves require a still water depth',
                             'Cannot compute Airy waves when the still water depth is %r' % h)
-        
+
         # Get user specified wave data (user must specify one and only one of these)
         omegas = field_inp.get_value('omegas', None, required_type='list(float)')
         periods = field_inp.get_value('periods', None, required_type='list(float)')
         wave_lengths = field_inp.get_value('wave_lengths', None, required_type='list(float)')
         wave_numbers = field_inp.get_value('wave_numbers', None, required_type='list(float)')
-        
+
         # Compute the missing data
         self.omegas, self.periods, self.wave_lengths, self.wave_numbers = \
             get_airy_wave_specs(g, h, omegas, periods, wave_lengths, wave_numbers)
         Nwave = len(self.omegas)
         self.stationary = Nwave == 0
         self.ramp_time = field_inp.get_value('ramp_time', 0, required_type='float')
-        
+
         self.still_water_pos = field_inp.get_value('still_water_position', required_type='float')
         self.current_speed = field_inp.get_value('current_speed', 0, required_type='float')
         self.wind_speed = field_inp.get_value('wind_speed', 0, required_type='float')
@@ -73,23 +73,23 @@ class AiryWaveField(BaseWaveField):
                             'The length of the wave amplitude list does not match the number '
                             'of waves specified, %d != %d' % (len(self.amplitudes), Nwave))
         max_ampl = sum(abs(a) for a in self.amplitudes)
-        self.h_above = field_inp.get_value('depth_above', 2*max_ampl, required_type='float')
-        
+        self.h_above = field_inp.get_value('depth_above', 2 * max_ampl, required_type='float')
+
         # Project the colour function to DG0 (set degree to -1 to prevent this)
         self.colour_projection_degree = field_inp.get_value('colour_projection_degree',
                                                             COLOUR_PROJECTION_DEGREE, 'int')
         self.colour_projection_form = None
-    
+
     def construct_cpp_code(self):
         """
         This code runs once at setup time and constructs the C++ code that
         defines the analytical Airy wave field below and above the free surface
-        
+
         Above the free surface the velocities are made continuous by reversing
-        the Wheeler streatching a distance h_above up (depth_above input param) 
+        the Wheeler streatching a distance h_above up (depth_above input param)
         """
         rho_min, rho_max = self.simulation.multi_phase_model.get_density_range()
-        
+
         for name in 'elevation c rho uhoriz uvert pdyn pstat ptot'.split():
             # C++ code for still water
             # The fact that the first element of below_cpp is the static
@@ -119,11 +119,11 @@ class AiryWaveField(BaseWaveField):
             elif name in ('pstat', 'ptot'):
                 below_cpp = ['-1 * rho_max * g * D']
                 above_cpp = ['0']
-            
+
             # Construct C++ code to compute the named variable
             Nwave = len(self.omegas)
             for i in range(Nwave):
-                
+
                 params = dict(a='(ramp * %r)' % self.amplitudes[i],
                               w=self.omegas[i],
                               k=self.wave_numbers[i],
@@ -133,21 +133,24 @@ class AiryWaveField(BaseWaveField):
                 if name == 'elevation':
                     cppb = '{a} * sin({w} * t - {k} * X + {theta})'.format(**params)
                 elif name == 'uhoriz':
-                    cppb = '{w} * {a} * cosh({k} * (Zp + h)) / sinh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
+                    cppb = '{w} * {a} * cosh({k} * (Zp + h)) / sinh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(
+                        **params)
                 elif name == 'uvert':
-                    cppb = '{w} * {a} * sinh({k} * (Zp + h)) / sinh({k} * h) * cos({w} * t - {k} * X + {theta})'.format(**params)
+                    cppb = '{w} * {a} * sinh({k} * (Zp + h)) / sinh({k} * h) * cos({w} * t - {k} * X + {theta})'.format(
+                        **params)
                 elif name in ('pdyn', 'ptot'):
-                    cppb = 'rho_max * g * {a} * cosh({k} * (Zp + h)) / cosh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(**params)
-                
+                    cppb = 'rho_max * g * {a} * cosh({k} * (Zp + h)) / cosh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(
+                        **params)
+
                 if cppb is not None:
                     below_cpp.append(cppb)
                 if cppa is not None:
                     above_cpp.append(cppa)
-            
+
             # Wrap the code in a lambda function that is evaluated immediately.
             # (to allow defining helper variables and write cleaner code)
             lamcode = '[&]() {\n  %s;\n}();'
-            
+
             # Lines inside the lambda function. Some will be unused, but
             # the C++ compiler should be able to remove these easily
             lines = ['double val;',
@@ -160,17 +163,17 @@ class AiryWaveField(BaseWaveField):
                      'const double g = %r;' % self.g,
                      'const double rho_min = %r;' % rho_min,
                      'const double rho_max = %r;' % rho_max]
-            
+
             # Ramping up of amplitudes with time
             if self.ramp_time > 0:
-                ramp = float(self.ramp_time);
+                ramp = float(self.ramp_time)
                 lines.append('const double ramp = min(t / %r, 1.0);' % ramp)
             else:
                 lines.append('const double ramp = 1.0;')
-            
+
             if name != 'elevation':
                 # Compute the vertical distance D to the free surface
-                # (negative below the free surface, positive above) 
+                # (negative below the free surface, positive above)
                 elev_cpp = self._cpp['elevation'].replace('  ', '    ')
                 lines.append('const double elev = %s;' % elev_cpp)
                 lines.append('const double D = Z0 - elev;')
@@ -179,7 +182,7 @@ class AiryWaveField(BaseWaveField):
                 # Wheeler stretching below the free surface
                 # Zp is between -h and 0 when Z is between -d and eta
                 lines.append('double Zp = h * (Z + h) / (eta + h) - h;')
-            
+
             full_code_below = ' + '.join(below_cpp)
             if above_cpp is None:
                 # No special treatment of values above the free surface
@@ -224,24 +227,24 @@ def get_airy_wave_specs(g, h, omegas=None, periods=None, wave_lengths=None, wave
     return the lists omegas, periods, wave_lengths or wave_numbers
     which are equal length and correspond to the same waves according
     to linear Airy wave theory
-    
+
     Parameters:
-    
+
     - g is the magnitude of the acceleration of gravity
-    - h is the depth, 
-    
+    - h is the depth,
+
     Linear wave relations:
-    
+
         period = 2 * pi / omega     (omega is the wave frequency in rad/s)
         length = 2 * pi / k         (k is the wave number in m^-1)
         omega²/g = k * tanh(k * h)  (the linear dispersion relation)
-    
+
     """
     def err_inp(name1, name2):
         ocellaris_error('Airy wave input error',
                         'You have given both %s and %s, please specify only one!'
                         % (name1, name2))
-    
+
     # Check input and make sure either omegas or wave_numers is defined
     inp = dict(omegas=omegas, periods=periods, wave_lengths=wave_lengths, wave_numbers=wave_numbers)
     if omegas is not None:
@@ -252,7 +255,7 @@ def get_airy_wave_specs(g, h, omegas=None, periods=None, wave_lengths=None, wave
         for name, val in inp.items():
             if name is not 'periods' and val is not None:
                 err_inp('periods', name)
-        omegas = [2*pi/t for t in periods]
+        omegas = [2 * pi / t for t in periods]
     elif wave_numbers is not None:
         for name, val in inp.items():
             if name is not 'wave_numbers' and val is not None:
@@ -261,18 +264,18 @@ def get_airy_wave_specs(g, h, omegas=None, periods=None, wave_lengths=None, wave
         for name, val in inp.items():
             if name is not 'wave_lengths' and val is not None:
                 err_inp('wave_lengths', name)
-        wave_numbers = [2*pi/lam for lam in wave_lengths]
-        
+        wave_numbers = [2 * pi / lam for lam in wave_lengths]
+
     # Define remaining variables
     if omegas is None:
         omegas = [sqrt(g * k * tanh(k * h)) for k in wave_numbers]
     if periods is None:
-        periods = [2*pi/w for w in omegas]
+        periods = [2 * pi / w for w in omegas]
     if wave_numbers is None:
         wave_numbers = [calc_wave_number(g, h, w) for w in omegas]
     if wave_lengths is None:
-        wave_lengths = [2*pi/k for k in wave_numbers]
-    
+        wave_lengths = [2 * pi / k for k in wave_numbers]
+
     return omegas, periods, wave_lengths, wave_numbers
 
 

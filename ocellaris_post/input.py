@@ -7,50 +7,51 @@ import yaml
 
 def read_yaml_input_file(file_name=None, yaml_string=None, error_func=None):
     """
-    Read the input to an Ocellaris simulation from a YAML formated input file or a 
-    YAML formated string. The user will get an error if the input is malformed 
+    Read the input to an Ocellaris simulation from a YAML formated input file or a
+    YAML formated string. The user will get an error if the input is malformed
     """
     if error_func is None:
         def error_func(header, description):
             raise ValueError('%s\n%s' % (header, description))
     setup_yaml()
-    
+
     def load_ocellaris_input(file_name=None, yaml_string=None):
         if yaml_string is None:
             with open(file_name, 'rt') as inpf:
                 yaml_string = inpf.read()
         else:
             assert file_name is None
-        
+
         try:
             inp = yaml.load(yaml_string)
         except ValueError as e:
             error_func('Error on input file', str(e))
         except yaml.YAMLError as e:
             error_func('Input file "%s" is not a valid YAML file' % file_name, str(e))
-        
+
         assert 'ocellaris' in inp
         assert inp['ocellaris']['type'] == 'input'
         assert inp['ocellaris']['version'] == 1.0
         return inp
-    
+
     inp_dicts = []
     seen_files = set()
+
     def add_input_dictionary_to_list(inp):
         inp_dicts.append(inp)
-        
+
         for base_file_name in inp['ocellaris'].get('bases', []):
             fn = search_for_file(base_file_name, file_name, error_func)
-            
+
             # Make sure there are no circular dependencies
             fn = os.path.abspath(fn)
             assert fn not in seen_files, 'Circular dependency in input file bases'
             seen_files.add(fn)
-            
+
             # Load base input file
             base_inp = load_ocellaris_input(fn)
             add_input_dictionary_to_list(base_inp)
-    
+
     # Read the YAML data, potentially with base input files
     inp = load_ocellaris_input(file_name, yaml_string)
     add_input_dictionary_to_list(inp)
@@ -62,7 +63,7 @@ def read_yaml_input_file(file_name=None, yaml_string=None, error_func=None):
 
 def setup_yaml():
     """
-    Make PyYaml load and store keys in dictionaries 
+    Make PyYaml load and store keys in dictionaries
     ordered like they were on the input file
     """
     _mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
@@ -75,7 +76,7 @@ def setup_yaml():
 
     yaml.add_representer(collections.OrderedDict, dict_representer)
     yaml.add_constructor(_mapping_tag, dict_constructor)
-    
+
     # PyYAML bugfix to be able to read, e.g., 𝜏𝜀𝜁𝜃
     # See https://stackoverflow.com/a/44875714
     yaml.reader.Reader.NON_PRINTABLE = re.compile(
@@ -91,13 +92,13 @@ def search_for_file(file_name, inp_file_name, error_func):
     # working directory
     if os.path.exists(file_name):
         return file_name
-    
+
     # Check if the path is relative to the input file dir
     inp_file_dir = os.path.dirname(inp_file_name)
     pth2 = os.path.join(inp_file_dir, file_name)
     if os.path.exists(pth2):
         return pth2
-    
+
     error_func('File not found', 'The specified file "%s" was not found' % file_name)
 
 
@@ -111,7 +112,7 @@ def merge_nested_dicts(base, child):
     for k, v in child.items():
         if (not k in base or
             not isinstance(base[k], collections.abc.Mapping) or
-            not isinstance(v, collections.abc.Mapping)):
+                not isinstance(v, collections.abc.Mapping)):
             base[k] = v
         else:
             merge_nested_dicts(base[k], v)

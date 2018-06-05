@@ -1,5 +1,5 @@
 """
-A timeout context manager based on SIGALRM, Permits multiple 
+A timeout context manager based on SIGALRM, Permits multiple
 SIGALRM events to be queued.
 
 Uses a `heapq` to store the objects to be called when an alarm signal is
@@ -18,9 +18,15 @@ from time import time
 
 
 alarmlist = []
-__new_alarm = lambda t, f, a, k: (t + time(), f, a, k)
-__next_alarm = lambda: int(round(alarmlist[0][0] - time())) if alarmlist else None
-__set_alarm = lambda: signal.alarm(max(__next_alarm(), 1))
+
+
+def __new_alarm(t, f, a, k): return (t + time(), f, a, k)
+
+
+def __next_alarm(): return int(round(alarmlist[0][0] - time())) if alarmlist else None
+
+
+def __set_alarm(): return signal.alarm(max(__next_alarm(), 1))
 
 
 class AlarmTimeoutError(Exception):
@@ -33,20 +39,21 @@ class AlarmTimeout:
     """
     Context manager for timeouts
     """
+
     def __init__(self, name, seconds=1, error_message='Timeout'):
         self.name = name
         self.seconds = seconds
         self.error_message = error_message
-    
+
     def handle_timeout(self):
         raise AlarmTimeoutError(self.error_message, self.id_)
-    
+
     def __enter__(self):
         self.this_alarm = alarm(self.seconds, self.handle_timeout)
-        
+
     def __exit__(self, type, value, traceback):
         try:
-            cancel(self.this_alarm) 
+            cancel(self.this_alarm)
         except ValueError:
             pass
 

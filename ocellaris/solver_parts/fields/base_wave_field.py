@@ -20,39 +20,39 @@ class BaseWaveField(KnownField):
         self._cpp = {}
         self._expressions = OrderedDict()
         self._functions = OrderedDict()
-        
+
         self.name = field_inp.get_value('name', required_type='string')
         self.polydeg = field_inp.get_value('polynomial_degree', DEFAULT_POLYDEG,
                                            required_type='int')
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
         simulation.hooks.add_pre_timestep_hook(self.update,
                                                'Update wave field %r' % self.name)
-    
+
     def update(self, timestep_number, t, dt):
         """
         Called by simulation.hooks on the start of each time step
         """
         if self.stationary:
             return
-        
+
         # Update C++ expressions
         for name, func in self._functions.items():
             expr, updater = self._expressions[name]
             updater(timestep_number, t, dt)
             self._interp(name, expr, func)
-        
+
         # Update dependent fields
         for f in self._dependent_fields:
             f.update(timestep_number, t, dt)
-    
+
     def register_dependent_field(self, field):
         """
         We may have dependent fields, typically still water outflow
         fields that use our functions in order to compute their own
-        functions 
+        functions
         """
         self._dependent_fields.append(field)
-    
+
     def _get_expression(self, name, quad_degree=None):
         keys = list(self._cpp.keys()) + ['u']
         verify_key('variable', name, keys, 'Raschii wave field %r' % self.name)
@@ -65,13 +65,13 @@ class BaseWaveField(KnownField):
                                                    quad_degree=quad_degree)
             self._expressions[name] = expr, updater
         return self._expressions[name][0]
-    
+
     def _interp(self, name, expr=None, func=None):
         """
         Interpolate the expression into the given function
         """
         sim = self.simulation
-        
+
         # Determine the function space
         V = self.V
         quad_degree = None
@@ -84,17 +84,17 @@ class BaseWaveField(KnownField):
                                 'not used in the multiphase_solver.')
             V = sim.data['Vc']
             quad_degree = self.colour_projection_degree
-        
+
         # Get the expression
         if expr is None:
             expr = self._get_expression(name, quad_degree)
-        
+
         # Get the function
         if func is None:
             if name not in self._functions:
                 self._functions[name] = dolfin.Function(V)
             func = self._functions[name]
-        
+
         if quad_degree is not None:
             if self.colour_projection_form is None:
                 # Ensure that we can use the DG0 trick of dividing by the mass
@@ -105,16 +105,16 @@ class BaseWaveField(KnownField):
                                     'currently only implemented when c is DG0')
                 v = dolfin.TestFunction(V)
                 dx = dolfin.dx(metadata={'quadrature_degree': quad_degree})
-                d = dolfin.CellVolume(V.mesh()) # mass matrix diagonal
+                d = dolfin.CellVolume(V.mesh())  # mass matrix diagonal
                 form = expr * v / d * dx
                 self.colour_projection_form = dolfin.Form(form)
-            
+
             # Perform projection by assembly (DG0 only!)
             dolfin.assemble(self.colour_projection_form, tensor=func.vector())
         else:
             # Perform standard interpolation
             func.interpolate(expr)
-    
+
     def get_variable(self, name):
         """
         Return a dolfin Function or as_vector[Function ...]) representing
@@ -129,7 +129,7 @@ class BaseWaveField(KnownField):
                 return dolfin.as_vector([self.get_variable('uhoriz'),
                                          dolfin.Constant(0.0),
                                          self.get_variable('uvert')])
-        
+
         if name not in self._functions:
             self._interp(name)
         return self._functions[name]

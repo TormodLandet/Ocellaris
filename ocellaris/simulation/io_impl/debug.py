@@ -8,14 +8,14 @@ class DebugIO:
         (and are in general rarely used/tested at all)
         """
         self.simulation = simulation
-    
+
     def save_la_objects(self, file_name, **kwargs):
         """
         Save a dictionary of named PETScMatrix and PETScVector objects
         to a file
         """
         assert self.simulation.ncpu == 1, 'Not supported in parallel'
-        
+
         data = {}
         for key, value in kwargs.items():
             # Vectors
@@ -33,26 +33,26 @@ class DebugIO:
                     cols.extend(indices)
                     values.extend(row_values)
                 data[key] = ('dolfin.PETScMatrix', (N, M), rows, cols, values)
-            
+
             else:
                 raise ValueError('Cannot save object of type %r' % type(value))
-        
+
         import pickle
         with open(file_name, 'wb') as out:
             pickle.dump(data, out, protocol=pickle.HIGHEST_PROTOCOL)
         self.simulation.log.info('Saved LA objects to %r (%r)' % (file_name, kwargs.keys()))
-    
+
     def load_la_objects(self, file_name):
         """
         Load a dictionary of named PETScMatrix and PETScVector objects
         from a file
         """
         assert self.simulation.ncpu == 1, 'Not supported in parallel'
-        
+
         import pickle
         with open(file_name, 'rb') as inp:
             data = pickle.load(inp)
-        
+
         ret = {}
         for key, value in data.items():
             value_type = value[0]
@@ -65,13 +65,13 @@ class DebugIO:
                 ret[key] = dolf_vec
             # Matrices
             elif value_type == 'dolfin.PETScMatrix':
-                shape, rows, cols, values = value[1:]                
+                shape, rows, cols, values = value[1:]
                 from petsc4py import PETSc
                 mat = PETSc.Mat().createAIJ(size=shape, csr=(rows, cols, values))
                 mat.assemble()
                 dolf_mat = dolfin.PETScMatrix(mat)
                 ret[key] = dolf_mat
-            
+
             else:
                 raise ValueError('Cannot save object of type %r' % value_type)
 

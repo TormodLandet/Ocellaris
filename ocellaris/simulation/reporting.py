@@ -12,15 +12,16 @@ class Reporting(object):
         self.simulation = simulation
         self.timesteps = []
         self.timestep_xy_reports = OrderedDict()
-        simulation.hooks.add_pre_simulation_hook(self.setup_report_plotting, 'Reporting - setup plots')
-    
+        simulation.hooks.add_pre_simulation_hook(
+            self.setup_report_plotting, 'Reporting - setup plots')
+
     def setup_report_plotting(self):
         """
         Setup the reports to be shown in plots during the simulation
         """
         if self.simulation.rank != 0:
-            return # Do not plot on non root processes
-        
+            return  # Do not plot on non root processes
+
         reps = self.simulation.input.get_value('reporting/reports_to_show', [], 'list(string)')
         self.figures = {}
         for report_name in reps:
@@ -32,7 +33,7 @@ class Reporting(object):
             ax.set_ylabel(report_name)
             line, = ax.plot([], [])
             self.figures[report_name] = (fig, ax, line)
-    
+
     def report_timestep_value(self, report_name, value):
         """
         Add a timestep to a report
@@ -41,9 +42,9 @@ class Reporting(object):
         if not self.timesteps or not self.timesteps[-1] == time:
             self.timesteps.append(time)
         rep = self.timestep_xy_reports.setdefault(report_name, [])
-        rep.extend([None]*(len(self.timesteps) - len(rep)))
+        rep.extend([None] * (len(self.timesteps) - len(rep)))
         rep[-1] = value
-        
+
     def get_report(self, report_name):
         """
         Get a the time series of a reported value
@@ -51,7 +52,7 @@ class Reporting(object):
         t = self.timesteps
         rep = self.timestep_xy_reports[report_name]
         return t[:len(rep)], rep
-    
+
     @timeit.named('reporting log_timestep_reports')
     def log_timestep_reports(self):
         """
@@ -64,30 +65,30 @@ class Reporting(object):
         it, t = self.simulation.timestep, self.simulation.time
         self.simulation.log.info('Reports for timestep = %5d, time = %10.4f, ' % (it, t) +
                                  ', '.join(info))
-        
+
         # Update interactive report plots
         self._update_plots()
-    
+
     def _update_plots(self):
         """
         Update plots requested in input (reporting/reports_to_show)
         """
         if self.simulation.rank != 0:
-            return # Do not plot on non root processes
-        
+            return  # Do not plot on non root processes
+
         for report_name in self.figures:
             if not report_name in self.timestep_xy_reports:
                 ocellaris_error('Unknown report name: "%s"' % report_name,
                                 'Cannot plot this report, it does not exist')
-            
+
             abscissa = self.timesteps
             ordinate = self.timestep_xy_reports[report_name]
-            
+
             if len(abscissa) != len(ordinate):
                 ocellaris_error('Malformed report data: "%s"' % report_name,
                                 'Length of t is %d while report is %d' %
                                 (len(abscissa), len(ordinate)))
-            
+
             fig, ax, line = self.figures[report_name]
             line.set_xdata(abscissa)
             line.set_ydata(ordinate)

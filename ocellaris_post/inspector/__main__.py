@@ -1,4 +1,5 @@
-import sys, os
+import sys
+import os
 from ..files import get_result_file_name
 from . import show_inspector
 
@@ -16,8 +17,8 @@ def main():
             h5_file_names.append(fn)
         else:
             print('ERROR: not a file %r' % fn)
-            exit(1) 
-    
+            exit(1)
+
     # Get lables from command line arguments
     lables = []
     for i in range(len(h5_file_names)):
@@ -28,7 +29,7 @@ def main():
         else:
             label = None
         lables.append(label)
-    
+
     # Show the Ocellaris Inspector
     show_inspector(h5_file_names, lables)
 
