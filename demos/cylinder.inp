@@ -1,0 +1,304 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+metadata:
+    author: Tormod Landet
+    date: 2018-04-23
+    description: |
+        Surface piercing cylinder with passing waves
+
+user_code:
+    constants:
+        # Geometry. DO NOT CHANGE WITHOUT UPDATING gmesh geo FILE!!
+        H: 1.00      # domain depth
+        R: 0.06      # domain length
+        L: 2.00      # domain length
+        B: 0.50      # domain breadth
+        C: 0.75      # distance from midships to inlet
+        
+        # Parameters not connected to the gmsh input file
+        d: 0.60      # Water depth
+        w: 0.50      # Length of the wave damping zone
+        
+        # Changed in a hook script
+        Uz_top: 0.0  # Vertical speed on top boundary 
+        
+    code: |
+        # Run gmsh if the mesh xml file is missing. Requires gmsh version > 3
+        # with support for the OpenCASCADE geometry engine
+        import os, subprocess, dolfin
+        if dolfin.MPI.comm_world.rank == 0 and not simulation.restarted:
+            mydir = os.path.dirname(os.path.abspath(__file__))
+            geo = os.path.join(mydir, 'datafiles', 'cylinder.geo')
+            msh = os.path.join(mydir, 'datafiles', 'cylinder.msh')
+            assert os.path.isfile(geo)
+            if not os.path.isfile(msh):
+                print('Running gmsh on', geo)
+                subprocess.call(['gmsh', '-3', geo, '-o', msh])
+        dolfin.MPI.comm_world.barrier()
+
+physical_properties:
+    rho0: 1000.0
+    nu0: 1.0e-6
+    rho1: 1.0
+    nu1: 1.5e-5
+    g: [0, 0, -9.81]
+
+mesh:
+    type: meshio
+    mesh_file: datafiles/cylinder.msh
+    meshio_type: gmsh
+    sort_order: [2, 1, 0]
+
+fields:
+-   name: waves
+    type: AiryWaves
+    still_water_position: py$ d
+    depth: py$ d
+    depth_above: py$ H - d
+    amplitudes: [0.24]
+    wave_numbers: [4.431]  # lambda = 1.418
+    ramp_time: 2
+
+-   name: outlet zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: |
+        [&]() {
+            double dz0 = (L - w) - C;
+            double dz1 = (L - 0) - C;
+            if (x[0] < dz0) {
+                return 0.0;
+            } else if (x[0] > dz1) {
+                return 1.0;
+            } else {
+                return pow((x[0] - dz0)/(dz1 - dz0), 2);
+            }
+        }()
+
+-   name: inlet zone
+    type: ScalarField
+    variable_name: beta
+    stationary: yes
+    cpp_code: |
+        [&]() {
+            double dz0 = 0 - C;
+            double dz1 = w - C;
+            if (x[0] < dz0) {
+                return 1.0;
+            } else if (x[0] > dz1) {
+                return 0.0;
+            } else {
+                return pow((x[0] - dz1)/(dz0 - dz1), 2);
+            }
+        }()
+
+forcing_zones:
+-   name: outlet velocity damping
+    type: MomentumForcing
+    zone: outlet zone/beta
+    target: waves/u
+    penalty: 10
+    plot: no
+
+-   name: outlet density damping
+    type: ScalarForcing
+    zone: outlet zone/beta
+    target: waves/c
+    variable: c
+    penalty: 10
+
+-   name: inlet velocity damping
+    type: MomentumForcing
+    zone: inlet zone/beta
+    target: waves/u
+    penalty: 10
+    plot: no
+
+-   name: inlet density damping
+    type: ScalarForcing
+    zone: inlet zone/beta
+    target: waves/c
+    variable: c
+    penalty: 10
+
+initial_conditions:
+    cp:
+        function: waves/c
+    up0:
+        function: waves/uhoriz
+    up2:
+        function: waves/uvert
+
+boundary_conditions:
+
+-   name: Cylinder
+    selector: code
+    inside_code: 'on_boundary'
+    u:
+        type: ConstantValue
+        value: [0, 0, 0]
+
+-   name: Inlet
+    selector: code
+    inside_code: 'on_boundary and x[0] < 0 - C + 1e-5'
+    u:
+        type: FieldFunction
+        function: waves/u
+    c:
+        type: FieldFunction
+        function: waves/c
+
+-   name: Outlet
+    selector: code
+    inside_code: 'on_boundary and x[0] > L - C - 1e-5'
+    u:
+        type: FieldFunction
+        function: waves/u
+    c:
+        type: FieldFunction
+        function: waves/c
+
+-   name: Bottom
+    selector: code
+    inside_code: 'on_boundary and x[2] < 1e-5'
+    u:
+        type: FreeSlip
+
+-   name: Top
+    selector: code
+    inside_code: 'on_boundary and x[2] > H - 1e-5'
+    #u:
+    #    type: OpenOutletBoundary
+    #u0:
+    #    type: ConstantGradient
+    #    value: 0
+    #u1:
+    #    type: ConstantGradient
+    #    value: 0
+    #u2:
+    #    type: CppCodedValue
+    #    cpp_code: 'Uz_top'
+    u:
+        type: FreeSlip
+    c:
+        type: ConstantValue
+        value: 0
+
+-   name: Sides
+    selector: code
+    inside_code: 'on_boundary and (x[1] > B/2 - 1e-5 or x[1] < 1e-5)'
+    u:
+        type: FreeSlip
+
+time:
+    dt: 0.01
+    tmax: 10.0
+
+output:
+    prefix: output/cylinder
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    stdout_enabled: yes # needed for stdout monitoring in orun
+    flush_interval: 60 # interval in seconds for log file and stdout flushing (default 5 sec)
+    #xdmf_write_interval: 200
+    vtk_write_interval: 10 # overridden in hook-script (see below)
+    hdf5_write_interval: 50
+    hdf5_only_store_latest: yes
+    show_memory_usage: no
+
+solver:
+    type: IPCS-A
+    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    allowable_error_inner: 1.0e-4
+    u:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+    p:
+        inner_iter_control: [5, 3]
+        inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
+        inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
+        inner_iter_max_it: [5, 20, 30]
+
+multiphase_solver:
+    type: BlendedAlgebraicVOF
+    function_space_colour: DG
+    polynomial_degree_colour: 0
+    plot_fields: yes
+
+convection:
+    c:
+        convection_scheme: HRIC
+
+slope_limiter:
+    c:
+        enforce_bounds: yes
+    u:
+        method: Componentwise
+        comp_method: HierarchicalTaylor
+
+probes:
+    -   name: cutY_vel
+        enabled: yes
+        type: PlaneProbe
+        plane_point: [0, 0, 0]
+        plane_normal: [0, 1, 0]
+        field: [u0, u2]
+        write_interval: 1
+    
+    -   name: cutY_c
+        enabled: yes
+        type: PlaneProbe
+        plane_point: [0, 0, 0]
+        plane_normal: [0, 1, 0]
+        field: [c]
+        write_interval: 1
+
+    -   name: cutZ_04
+        enabled: yes
+        type: PlaneProbe
+        plane_point: [0, 0, 0.4]
+        plane_normal: [0, 0, 1]
+        field: [u0, u1]
+        write_interval: 1
+        xlim: py$ [-2*R, 2*R]
+        ylim: py$ [-2*R, 2*R]
+
+hooks:
+    pre_simulation:
+    -   name: Setup top BC
+        enabled: yes
+        code: |
+            for region in simulation.data['boundary']:
+                if region.name == 'Top':
+                    top = region
+                elif region.name == 'Inlet':
+                    inlet = region
+                elif region.name == 'Outlet':
+                    outlet = region
+            
+            top_area = dolfin.assemble(1 * top.ds())
+            u = simulation.fields['waves'].get_variable('u')
+            n = FacetNormal(mesh)
+            flux = dolfin.dot(n, u)
+            form = dolfin.Form(flux * inlet.ds() + flux * outlet.ds())
+            
+            class DummyField:
+                def __init__(self, simulation, flux_form, top_area):
+                    self.simulation = simulation
+                    self.form = flux_form
+                    self.area = top_area
+                
+                def update(self, timestep_number, t, dt):
+                    tot_flux = dolfin.assemble(self.form)
+                    Uz_avg = tot_flux / self.area
+                    print('Total flux:', tot_flux, 'Uz_avg', Uz_avg, 't', t)
+                    self.simulation.input.set_value('user_code/constants/Uz_top', Uz_avg)
+            
+            f = DummyField(simulation, form, top_area)
+            f.update(0, 0, 1)
+            simulation.fields['waves'].register_dependent_field(f)
