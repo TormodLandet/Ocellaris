@@ -1,7 +1,8 @@
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 from codecs import open
-import os, sys
+import os
+import sys
 
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -10,7 +11,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 # Get the long description from the README file
 with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
-    
+
 
 # Get the version
 for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8'):
@@ -20,7 +21,7 @@ for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8
 
 # List packages we depend on
 FENICS_VERSION = ">=2018.1.0.dev0,<2018.2"
-dependencies = ['PyYAML', 'h5py', 'numpy', 'raschii']
+dependencies = ['PyYAML', 'h5py', 'numpy', 'raschii', 'yschema']
 dependencies.append('fenics-dolfin%s' % FENICS_VERSION)
 
 
@@ -35,29 +36,29 @@ class PyTest(TestCommand):
     user_options = [('skip-unit-tests=', 'u', "Skip unit tests"),
                     ('skip-regression-tests=', 'r', "Skip regression tests"),
                     ('skip-demo-tests=', 'd', "Skip demo tests")]
-    
+
     def initialize_options(self):
         TestCommand.initialize_options(self)
         self.skip_unit_tests = False
         self.skip_regression_tests = False
         self.skip_demo_tests = False
-    
+
     def finalize_options(self):
         TestCommand.finalize_options(self)
-    
+
     def run_tests(self):
         import pytest
         args = ['-v', '--durations=10']
         if self.verbose:
             args.append('-s')
-        
+
         if not self.skip_unit_tests:
             args.append(os.path.join(here, 'tests/'))
         if not self.skip_regression_tests:
             args.append(os.path.join(here, 'cases/regression_tests.py'))
         if not self.skip_demo_tests:
             args.append(os.path.join(here, 'demos/'))
-        
+
         if (self.skip_unit_tests and self.skip_regression_tests and self.skip_demo_tests):
             print('WARNING: You skipped all tests!')
             sys.exit(0)
@@ -124,7 +125,7 @@ setup(
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={
-        'ocellaris': ['cpp/*.h', 'cpp/*/*.h'],
+        'ocellaris': ['cpp/*.h', 'cpp/*/*.h', 'input_file_schema.yml'],
     },
     zip_safe=False,
 
@@ -138,8 +139,8 @@ setup(
             'ocellaris_logstats=ocellaris_post.logstats:main',
         ],
     },
-    
+
     # Configure the "test" command
     tests_require=['pytest'],
-    cmdclass = {'test': PyTest},
+    cmdclass={'test': PyTest},
 )

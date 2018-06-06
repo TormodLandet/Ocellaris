@@ -1,0 +1,82 @@
+# This is a YSchema definition file for Ocellaris input files. This can
+# be used to validate the structure of the input file without running
+# Ocellaris setup(),  which can take a long time for big meshes.
+#
+# Input file validation will never be 100% for Ocellaris. The structure
+# of the files is too dynamic and arbitrary Python code is allowed to 
+# run when an input file is read. This Python code can completely alter
+# the structure of the file. Validation happens without running any 
+# Python code from the input file being validated. Still, it can catch
+# some misspellings and other annoyances
+ 
+alias Float: one_of(types=(float, str(prefix='py$')))
+alias Integer: one_of(types=(int, str(prefix='py$')))
+
+type OcellarisVersion:
+    required type: str(equals='input')
+    required version: float(equals=1.0)
+    optional bases: list(type=str)
+required ocellaris: OcellarisVersion
+
+type Metadata:
+    optional author: str
+    optional date: Any
+    optional description: str
+optional metadata: Metadata
+
+type UserCode:
+    type Constants:
+        optional *: Any
+    optional constants: Constants
+    optional code: str
+optional user_code: UserCode
+
+type PhysicalPropertiesSinglePhase:
+    optional rho: Float
+    optional nu: Float
+    optional g: list(type=Float)
+type PhysicalPropertiesVOF:
+    optional rho0: Float
+    optional rho1: Float
+    optional nu0: Float
+    optional nu1: Float
+    optional g: list(type=Float)
+type PhysicalPropertiesVardens:
+    optional rho_min: Float
+    optional rho_max: Float
+    optional nu: Float
+    optional g: list(type=Float)
+optional physical_properties: |
+    one_of(types=(PhysicalPropertiesVOF, PhysicalPropertiesVardens,
+                  PhysicalPropertiesSinglePhase))
+
+type MeshBase:
+    required type: str
+    optional move: list(type=str)
+    optional sort_order: list(type=Integer)
+type MeshDolfinGeom:
+    inherit: MeshBase
+    required type: str(equals=('Rectangle', 'Box', 'UnitDisc'))
+    optional Nx: Integer
+    optional Ny: Integer
+    optional Nz: Integer
+    optional startx: Float
+    optional starty: Float
+    optional startz: Float
+    optional endx: Float
+    optional endy: Float
+    optional endz: Float
+    optional diagonal: str
+type MeshDolfinFile:
+    inherit: MeshBase
+    required type: str(equals=('XML', 'XDMF', 'HDF5'))
+    optional mesh_file: str
+    optional facet_region_file: str
+type MeshMeshio:
+    inherit: MeshBase
+    required type: str(equals='meshio')
+    optional mesh_file: str
+    optional meshio_type: str
+required mesh: one_of(types=(MeshDolfinGeom, MeshMeshio, MeshDolfinFile))
+
+optional *: Any
