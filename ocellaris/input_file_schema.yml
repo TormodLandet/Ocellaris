@@ -8,9 +8,22 @@
 # the structure of the file. Validation happens without running any 
 # Python code from the input file being validated. Still, it can catch
 # some misspellings and other annoyances
+
+# Skip keys starting with '_', this makes it possible to comment out large
+# parts of the config three with just one character
+config skip_key_prefix: '_'
  
-alias Float: one_of(types=(float, str(prefix='py$')))
+# Some type aliases to take into account the 'py$' code cunctionality
+alias Float: one_of(types=(float, str(prefix='py$'), str(prefix='1e')))
 alias Integer: one_of(types=(int, str(prefix='py$')))
+
+# Convenience aliases
+alias FloatOrList: one_of(types=(Float, list(type=Float)))
+alias StrOrList: one_of(types=(str, list(type=str)))
+alias StrOrFloat: one_of(types=(str, float))
+
+
+# -- Header --------------------------------------------------------------
 
 type OcellarisVersion:
     required type: str(equals='input')
@@ -31,6 +44,9 @@ type UserCode:
     optional code: str
 optional user_code: UserCode
 
+
+# -- Basic properties ----------------------------------------------------
+
 type PhysicalPropertiesSinglePhase:
     optional rho: Float
     optional nu: Float
@@ -49,6 +65,9 @@ type PhysicalPropertiesVardens:
 optional physical_properties: |
     one_of(types=(PhysicalPropertiesVOF, PhysicalPropertiesVardens,
                   PhysicalPropertiesSinglePhase))
+
+
+# -- Mesh ----------------------------------------------------------------
 
 type MeshBase:
     required type: str
@@ -79,4 +98,153 @@ type MeshMeshio:
     optional meshio_type: str
 required mesh: one_of(types=(MeshDolfinGeom, MeshMeshio, MeshDolfinFile))
 
+type Time:
+    required dt: Float
+    required tmax: Float
+optional time: Time
+
+
+# -- Known fields and zones ----------------------------------------------
+
+type Field:
+    required type: str
+    optional *: Any  # TODO: further specify fields
+optional fields: list(type=Field)
+
+optional forcing_zones: Any  # TODO: further specify forcing zones
+
+# -- Initial and boundary conditions -------------------------------------
+
+type InitialCondition:
+    optional function: str
+    optional cpp_code: StrOrFloat  # anything that is valid C++ after %s format
+type InitialConditions:
+    optional *: InitialCondition
+optional initial_conditions: InitialConditions
+
+type BoundaryCondition:
+    required type: str
+    optional value: FloatOrList
+    optional cpp_code: StrOrList
+    optional code: StrOrList
+    optional function: str
+type BoundaryRegion:
+    required name: str
+    required selector: str
+    optional inside_code: str
+    optional mesh_facet_regions: list(type=Integer)
+    optional *: BoundaryCondition
+optional boundary_conditions: list(type=BoundaryRegion)
+
+
+# -- Solver --------------------------------------------------------------
+
+type LinearSolverKSP:
+    optional use_ksp: bool(equals=True)
+    optional inner_iter_control: list(type=Integer)
+    optional inner_iter_atol: list(type=Float)
+    optional inner_iter_rtol: list(type=Float)
+    optional inner_iter_max_it: list(type=Integer)
+    optional petsc_*: Any
+type LinearSolverDolfin:
+    optional use_ksp: bool(equals=False)
+    optional solver: str
+    optional preconditioner: str
+    optional lu_method: str
+    optional parameters: Any
+alias LinearSolver: one_of(types=(LinearSolverKSP,LinearSolverDolfin))
+type Solver:
+    # Common settings
+    required type: str
+    optional num_inner_iter: Integer
+    optional *: LinearSolver
+
+    optional relaxation_u: Float
+    optional relaxation_p: Float
+    optional allowable_error_inner: Float
+    optional steady_velocity_stopping_criterion: Float
+    optional force_steady: bool
+
+    # Less common settings
+    optional polynomial_degree_velocity: Integer
+    optional polynomial_degree_pressure: Integer
+    optional hydrostatic_pressure_calculation_every_timestep: bool
+    optional function_space_velocity: str
+    optional function_space_pressure: str
+    optional num_elements_in_A_tilde_block: Integer
+
+    # Rare settings, may not be super well tested
+    optional timestepping_method: str
+    optional use_stress_divergence_form: bool
+    optional velocity_postprocessing: str
+optional solver: Solver
+
+type MultiphaseSolver:
+    required type: str
+    optional function_space_colour: str
+    optional function_space_rho: str
+    optional polynomial_degree_colour: Integer
+    optional polynomial_degree_rho: Integer
+    optional plot_fields: bool
+    optional continuous_fields: bool
+    optional height_function_mean: Float
+    optional height_function_cpp: str
+    optional sky_location: Float  # Is this still implemented (not removed)??
+    optional explicit_rk_method: bool
+optional multiphase_solver: MultiphaseSolver
+
+type ConvDef:
+    required convection_scheme: str
+type Convection:
+    optional *: ConvDef
+optional convection: Convection
+
+type SlopeLimiter:
+    optional method: str
+    optional comp_method: str
+    optional limit_conv: bool
+    optional skip_boundary: bool
+    optional enforce_bounds: bool
+    optional enforce_bcs: bool
+    optional plot: bool
+    optional use_cpp: bool
+type SlopeLimiters:
+    optional *: SlopeLimiter
+optional slope_limiter: SlopeLimiters
+
+
+# -- Output --------------------------------------------------------------
+
+alias LogLevel: |
+    str(equals=('all', 'critical', 'error', 'warning', 'info', 'progress', 'debug'))
+type Output:
+    optional prefix: str
+    optional dolfin_log_level: LogLevel
+    optional ocellaris_log_level: LogLevel
+    optional stdout_enabled: bool
+    optional flush_interval: Integer
+
+    optional hdf5_write_interval: Integer
+    optional xdmf_write_interval: Integer
+    optional vtk_write_interval: Integer
+    optional hdf5_only_store_latest: bool
+
+    optional divergence_method: str
+    optional plot_divergences: bool
+    optional plot_facet_regions: bool
+    optional plot_bcs: bool
+
+    optional show_memory_usage: bool
+optional output: Output
+
+
+# -- Odds and ends -------------------------------------------------------
+
+optional console_at_end: bool
+optional console_on_error: bool
+
+# Less important to the problem setup
+optional probes: Any  # TODO: further specify probes
+optional hooks: Any  # TODO: further specify probes
+optional reporting: Any  # TODO: further specify reporting (?)
 optional *: Any
