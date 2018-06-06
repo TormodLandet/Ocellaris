@@ -26,7 +26,7 @@ def test_setup_demo(demo_inp_file, monkeypatch):
         return pytest.skip()
 
     need_gmsh = {'cylinder.inp'}
-    if need_gmsh:
+    if demo_inp_file in need_gmsh:
         return pytest.skip()
 
     slow = {'internal_soliton.inp', 'dead_water_2D.inp', 'dead_water_3D.inp',
