@@ -198,6 +198,7 @@ slope_limiter:
         method: Componentwise
         comp_method: HierarchicalTaylor
         limit_conv: no
+        skip_boundary: True
 
 probes:
     -   name: cutY_c
