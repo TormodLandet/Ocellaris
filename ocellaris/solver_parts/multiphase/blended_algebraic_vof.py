@@ -3,6 +3,7 @@ from dolfin import Function, Constant
 from ocellaris.solver_parts import SlopeLimiter
 from . import register_multi_phase_model, MultiPhaseModel
 from ..convection import get_convection_scheme, StaticScheme, VelocityDGT0Projector
+from ocellaris.utils import linear_solver_from_input
 from .vof import VOFMixin
 from .advection_equation import AdvectionEquation
 
@@ -15,6 +16,14 @@ FORCE_STATIC = False
 FORCE_BOUNDED = False
 FORCE_SHARP = False
 PLOT_FIELDS = False
+
+
+# Default values, can be changed in the input file
+SOLVER = 'gmres'
+PRECONDITIONER = 'default'
+KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
+                     'relative_tolerance': 1e-15,
+                     'absolute_tolerance': 1e-15}
 
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
@@ -62,9 +71,10 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             'multiphase_solver/force_sharp', FORCE_SHARP, 'bool')
 
         # Calculate mu from rho and nu (i.e mu is quadratic in c) or directly from c (linear in c)
-        self.calculate_mu_directly_from_colour_function = \
-            simulation.input.get_value('multiphase_solver/calculate_mu_directly_from_colour_function',
-                                       CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION, 'bool')
+        self.calculate_mu_directly_from_colour_function = simulation.input.get_value(
+            'multiphase_solver/calculate_mu_directly_from_colour_function',
+            CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION,
+            'bool')
 
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value(
@@ -91,6 +101,10 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         simulation.hooks.add_pre_timestep_hook(
             self.update, 'BlendedAlgebraicVofModel - update colour field')
         simulation.hooks.register_custom_hook_point('MultiPhaseModelUpdated')
+
+        # Linear solver
+        self.solver = linear_solver_from_input(simulation, 'solver/c', SOLVER,
+                                               PRECONDITIONER, None, KRYLOV_PARAMETERS)
 
         # Plot density and viscosity fields for visualization
         self.plot_fields = simulation.input.get_value(
@@ -253,7 +267,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         else:
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
-            dolfin.solve(A, c.vector(), b)
+            self.solver.solve(A, c.vector(), b)
             self.slope_limiter.run()
 
         # Optionally use a continuous predicted colour field
