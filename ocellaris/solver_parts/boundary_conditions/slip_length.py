@@ -136,7 +136,7 @@ class SlipFactorUpdater():
         self.slip_factor_name = inp_dict.get_value(
             'slip_factor_name', 'slip_factor', required_type='string')
         self.scalar_field_level_set = inp_dict.get_value(
-            'scalar_field_level_set', 0.5, required_type='string')
+            'scalar_field_level_set', 0.5, required_type='float')
         self.scalar_field_name = inp_dict.get_value('scalar_field', 'c', required_type='string')
         self.custom_hook_point = inp_dict.get_value(
             'custom_hook', 'MultiPhaseModelUpdated', required_type='string')

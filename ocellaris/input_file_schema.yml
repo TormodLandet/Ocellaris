@@ -141,6 +141,18 @@ type BoundaryCondition:
     optional cpp_code: StrOrList
     optional code: StrOrList
     optional function: StringMin1
+    optional regions: list(type=str)
+    optional hydrostatic: Boolean
+    optional blend: FloatOrList
+    optional dval: FloatOrList
+    optional nval: FloatOrList
+    optional slip_length: FloatOrList
+    optional scalar_field: StringMin1
+    optional scalar_field_level_set: Float
+    optional slip_factor_name: StringMin1
+    optional slip_factor_distance: Float
+    optional slip_factor_degree: IntegerMin1
+    optional custom_hook: StringMin1
 type BoundaryRegion:
     required name: StringMin1
     required selector: StringMin1
@@ -209,6 +221,9 @@ optional multiphase_solver: MultiphaseSolver
 
 type ConvDef:
     required convection_scheme: StringMin1
+    optional use_cpp: Boolean
+    optional use_cpp_gradient: Boolean
+    optional HRIC_version: str
 type Convection:
     optional *: ConvDef
 optional convection: Convection
@@ -268,9 +283,11 @@ type Output:
     optional xdmf_flush: Boolean
     optional vtk_binary_format: Boolean
     optional save_restart_file_at_end: Boolean
-
+    
+    optional solution_properties: Boolean
     optional divergence_method: StringMin1
     optional plot_divergences: bool
+    optional Co_lim: Float
     optional plot_facet_regions: bool
     optional plot_bcs: bool
 optional output: Output
@@ -342,6 +359,4 @@ optional console_on_error: Boolean
 optional clear_timings_at_end: Boolean
 
 # Less important to the problem setup
-optional hooks: Any  # TODO: further specify hooks
-optional reporting: Any  # TODO: further specify reporting (?)
 optional *: Any
