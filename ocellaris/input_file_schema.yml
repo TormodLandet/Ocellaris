@@ -78,6 +78,7 @@ type MeshBase:
     required type: StringMin1
     optional move: list(type=str)
     optional sort_order: list(type=Integer)
+    optional mpi_comm: str(equals=('WORLD', 'SELF'))
 type MeshDolfinGeom:
     inherit: MeshBase
     required type: str(equals=('Rectangle', 'Box', 'UnitDisc'))
@@ -90,6 +91,8 @@ type MeshDolfinGeom:
     optional endx: Float
     optional endy: Float
     optional endz: Float
+    optional degree: IntegerMin1
+    optional gdim: IntegerMin1
     optional diagonal: |
         str(equals=('right', 'left', 'crossed', 'right/left', 'left/right'))
 type MeshDolfinFile:
@@ -118,14 +121,17 @@ type Field:
     optional *: Any  # TODO: further specify fields
 optional fields: list(type=Field)
 
-optional forcing_zones: Any  # TODO: further specify forcing zones
 
 # -- Initial and boundary conditions -------------------------------------
 
 type InitialCondition:
     optional function: StringMin1
     optional cpp_code: StrOrFloat  # anything that is valid C++ after %s format
+type InitialConditionFile:
+    required h5_file: StringMin1
+    optional same_mesh: Boolean
 type InitialConditions:
+    optional file: InitialConditionFile
     optional *: InitialCondition
 optional initial_conditions: InitialConditions
 
@@ -173,6 +179,7 @@ type Solver:
     optional force_steady: bool
 
     # Less common settings
+    optional form_compiler: StringMin1
     optional polynomial_degree_velocity: Integer
     optional polynomial_degree_pressure: Integer
     optional hydrostatic_pressure_calculation_every_timestep: bool
@@ -219,6 +226,22 @@ type SlopeLimiters:
     optional *: SlopeLimiter
 optional slope_limiter: SlopeLimiters
 
+type MomentumSource:
+    required type: str
+    required degree: Integer
+    required cpp_code: list(type=str)
+optional momentum_sources: list(type=MomentumSource)
+
+type ForcingZone:
+    required name: StringMin1
+    required type: str(equals=('MomentumForcing', 'ScalarForcing'))
+    required zone: StringMin1
+    required penalty: Float
+    required target: StringMin1
+    optional plot: Boolean
+    optional variable: StringMin1
+optional forcing_zones: list(type=ForcingZone)
+
 
 # -- Output --------------------------------------------------------------
 
@@ -228,21 +251,33 @@ type Output:
     optional prefix: str
     optional dolfin_log_level: LogLevel
     optional ocellaris_log_level: LogLevel
-    optional stdout_enabled: bool
+
+    optional stdout_enabled: Boolean
     optional flush_interval: Integer
+    optional log_on_all_ranks: Boolean
+    optional stdout_on_all_ranks: Boolean
+    optional log_enabled: Boolean
+    optional log_append_to_existing_file: Boolean
+    optional show_memory_usage: Boolean
 
     optional hdf5_write_interval: Integer
     optional xdmf_write_interval: Integer
     optional vtk_write_interval: Integer
+
     optional hdf5_only_store_latest: bool
+    optional xdmf_flush: Boolean
+    optional vtk_binary_format: Boolean
+    optional save_restart_file_at_end: Boolean
 
     optional divergence_method: StringMin1
     optional plot_divergences: bool
     optional plot_facet_regions: bool
     optional plot_bcs: bool
-
-    optional show_memory_usage: bool
 optional output: Output
+
+type Reporting:
+    optional reports_to_show: list(type=str)
+optional reporting: Reporting
 
 
 # -- Probes ------------------------------------------------------------
@@ -263,6 +298,7 @@ type ProbeIsoSurface:
     required field: StringMin1
     required value: Float
     optional show_interval: Integer
+    optional include_boundary: Boolean
 type ProbeLine:
     inherit: ProbeBase
     required type: str(equals='LineProbe')
@@ -284,10 +320,26 @@ alias Probe: one_of(types=(ProbeIsoSurface, ProbeLine, ProbePlane))
 optional probes: list(type=Probe)
 
 
+# -- Hooks -------------------------------------------------------------
+
+type Hook:
+    optional name: str
+    optional enabled: Boolean
+    optional code: str
+type Hooks:
+    optional pre_simulation: list(type=Hook)
+    optional post_simulation: list(type=Hook)
+    optional pre_timestep: list(type=Hook)
+    optional post_timestep: list(type=Hook)
+    optional matrix_ready: list(type=Hook)
+optional hooks: Hooks
+
+
 # -- Odds and ends -------------------------------------------------------
 
-optional console_at_end: bool
-optional console_on_error: bool
+optional console_at_end: Boolean
+optional console_on_error: Boolean
+optional clear_timings_at_end: Boolean
 
 # Less important to the problem setup
 optional hooks: Any  # TODO: further specify hooks
