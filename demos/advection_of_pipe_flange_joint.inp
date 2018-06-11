@@ -71,7 +71,7 @@ slope_limiter:
         method: HierarchicalTaylor
         use_cpp: yes
         plot: yes
-        skip_boundary: no
+        skip_boundaries: []
 
 hooks:
     post_simulation:

@@ -68,7 +68,7 @@ type PhysicalPropertiesVardens:
     optional nu: Float
     optional g: FloatList
 optional physical_properties: |
-    one_of(types=(PhysicalPropertiesVOF, PhysicalPropertiesVardens,
+    any_of(types=(PhysicalPropertiesVOF, PhysicalPropertiesVardens,
                   PhysicalPropertiesSinglePhase))
 
 
@@ -203,7 +203,7 @@ type Solver:
     optional timestepping_method: str(equals='BDF')
     optional use_stress_divergence_form: bool
     optional velocity_postprocessing: StringMin1
-optional solver: Solver
+required solver: Solver
 
 type MultiphaseSolver:
     required type: StringMin1
@@ -232,7 +232,7 @@ type SlopeLimiter:
     optional method: StringMin1
     optional comp_method: StringMin1
     optional limit_conv: bool
-    optional skip_boundary: bool
+    optional skip_boundaries: list(type=str)
     optional enforce_bounds: bool
     optional enforce_bcs: bool
     optional plot: bool

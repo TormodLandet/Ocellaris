@@ -81,7 +81,7 @@ slope_limiter:
     c:
         method: None # HierarchicalTaylor
         plot: yes
-        skip_boundary: no
+        skip_boundaries: []
         enforce_bounds: yes
 
 probes:

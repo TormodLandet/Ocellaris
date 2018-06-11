@@ -213,7 +213,7 @@ multiphase_solver:
 slope_limiter:
     rho:
         method: HierarchicalTaylor
-        skip_boundary: no
+        skip_boundaries: []
         enforce_bounds: yes
         enforce_bcs: no
     u:
