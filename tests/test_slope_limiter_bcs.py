@@ -2,7 +2,7 @@ import dolfin
 from ocellaris import Simulation, setup_simulation
 from ocellaris.solver_parts.boundary_conditions import \
     get_dof_region_marks, mark_cell_layers
-from helpers import skip_in_parallel
+
 
 BASE_INPUT = """
 ocellaris:
@@ -45,7 +45,6 @@ physical_properties:
 """
 
 
-@skip_in_parallel
 def test_get_dof_region_marks():
     sim = Simulation()
     sim.input.read_yaml(yaml_string=BASE_INPUT)
@@ -67,7 +66,6 @@ def test_get_dof_region_marks():
     assert mpi_int_sum(num_in_region[1]) == 30
 
 
-@skip_in_parallel
 def test_mark_cell_layers():
     sim = Simulation()
     sim.input.read_yaml(yaml_string=BASE_INPUT)

@@ -1,4 +1,3 @@
-from copy import deepcopy
 import numpy
 import dolfin
 from ocellaris.utils import timeit, OcellarisError
@@ -55,6 +54,11 @@ def get_dof_region_marks(simulation, V):
             for mark in regions:
                 if mark not in dof_region_marks[dof2]:
                     dof_region_marks[dof2].append(mark)
+
+    # Order must be the same on all ranks independent of iteration order
+    # of the dof_region_marks dictionary in the above loop
+    for marks in dof_region_marks.values():
+        marks.sort()
 
     return dof_region_marks
 
