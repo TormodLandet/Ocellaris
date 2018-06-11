@@ -64,8 +64,8 @@ def test_get_dof_region_marks():
         for mark in marks:
             num_in_region[mark] += 1
 
-    assert num_in_region[0] == 30 + 29 * 2
-    assert num_in_region[1] == 30
+    assert mpi_int_sum(num_in_region[0]) == 30 + 29 * 2
+    assert mpi_int_sum(num_in_region[1]) == 30
 
 
 def test_mark_cell_layers():
@@ -81,7 +81,7 @@ def test_mark_cell_layers():
         cell = dolfin.Cell(mesh, cid)
         mp = cell.midpoint()[:]
         assert mp[0] < 0.1 or mp[0] > 0.9 or mp[1] < 0.1 or mp[1] > 0.9
-    assert len(cells) == 20 * 2 + 16 * 2
+    assert mpi_int_sum(len(cells)) == 20 * 2 + 16 * 2
 
     # Test all
     cells = mark_cell_layers(sim, Vp, named_boundaries=['all'])
@@ -89,19 +89,27 @@ def test_mark_cell_layers():
         cell = dolfin.Cell(mesh, cid)
         mp = cell.midpoint()[:]
         assert mp[0] < 0.1 or mp[0] > 0.9 or mp[1] < 0.1 or mp[1] > 0.9
-    assert len(cells) == 20 * 2 + 16 * 2
+    assert mpi_int_sum(len(cells)) * 2 + 16 * 2
 
     # Test only left side
     cells = mark_cell_layers(sim, Vp, named_boundaries=['left'])
     for cid in cells:
         cell = dolfin.Cell(mesh, cid)
         mp = cell.midpoint()[:]
-        print(mp)
         assert mp[0] < 0.1
-    assert len(cells) == 20
+    assert mpi_int_sum(len(cells)) == 20
 
     cells = mark_cell_layers(sim, Vp, named_boundaries=['not left'])
-    assert len(cells) == 20 * 1 + 18 * 2
+    for cid in cells:
+        cell = dolfin.Cell(mesh, cid)
+        mp = cell.midpoint()[:]
+        assert mp[0] > 0.9 or mp[1] < 0.1 or mp[1] > 0.9
+    assert mpi_int_sum(len(cells)) == 20 * 1 + 18 * 2
 
     cells = mark_cell_layers(sim, Vp, named_boundaries=['left', 'not left'])
-    assert len(cells) == 20 * 2 + 16 * 2
+    assert mpi_int_sum(len(cells)) == 20 * 2 + 16 * 2
+
+
+def mpi_int_sum(value):
+    v = dolfin.MPI.sum(dolfin.MPI.comm_world, float(value))
+    return int(v)
