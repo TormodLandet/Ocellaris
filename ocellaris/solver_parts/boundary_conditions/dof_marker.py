@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy
 import dolfin
 from ocellaris.utils import timeit, OcellarisError
@@ -6,11 +7,14 @@ from ocellaris.utils import timeit, OcellarisError
 @timeit
 def get_dof_region_marks(simulation, V):
     """
-    Given a function space, return a dictionary mapping dof number to
-    region number. Many dofs will not be included in the mapping since
-    they are not inside a boundary region (not on a boundary facet).
-    This property is used elsewhere to identify boundary dofs, in
-    mark_cell_layers() and in SlopeLimiterBoundaryConditions
+    Given a function space, return a dictionary mapping dof number to a
+    list of region number (indexed from 0, same as region list from the
+    input file).
+
+    Many dofs will not be included in the mapping since they are not
+    inside a boundary region (not on a boundary facet). This property is
+    used elsewhere to identify boundary dofs, in mark_cell_layers() and
+    in SlopeLimiterBoundaryConditions
     """
     # This function only supports a small subset of function spaces
     family = V.ufl_element().family()
@@ -47,6 +51,10 @@ def get_dof_region_marks(simulation, V):
         for dof2 in same_loc_dofs[fdof]:
             if dof2 not in dof_region_marks:
                 dof_region_marks[dof2] = regions
+                continue
+            for mark in regions:
+                if mark not in dof_region_marks[dof2]:
+                    dof_region_marks[dof2].append(mark)
 
     return dof_region_marks
 
@@ -121,22 +129,59 @@ def get_same_loc_dofs(V):
     return same_loc_dofs
 
 
-def mark_cell_layers(simulation, V, layers=1, dof_region_marks=None):
+def mark_cell_layers(simulation, V, layers=0, dof_region_marks=None,
+                     named_boundaries=None):
     """
     Return all cells on the boundary and all connected cells in a given
     number of layers surrounding the boundary cells. Vertex neighbours
     are used to determine a cells neighbours.
 
-    The initial list of cells is taken from an iterable of dofs. All
-    cells containing these dofs are taken as the zeroth layer. If no
-    such iterable is provided the keys from the dictionary returned by
+    The initial list of cells is taken from a dictionary mapping dof to
+    boundary region number. All cells containing these dofs are taken as
+    the zeroth layer. If no such dictionary is provided then
     get_dof_region_marks(simulation, V) is used, hence the cells
     containing the boundary facing facet are used as the zeroth level.
 
+    If named_boundaries is given then only cells on the given named
+    boundaries are included in the zeroth layer. The special name 'all'
+    will include all boundary regions.
+
     @return: set of the cell numbers of marked cells
     """
+    if named_boundaries is None:
+        named_boundaries = ['all']
+    if not named_boundaries:
+        return set()
     if dof_region_marks is None:
         dof_region_marks = get_dof_region_marks(simulation, V)
+
+    # Get all regions with names
+    all_regions = {region.name: region.index
+                   for region in simulation.data['boundary']}
+    all_idxs = {region.index: region.name
+                for region in simulation.data['boundary']}
+
+    # Verify that the boundary names are unique
+    assert len(all_regions) == len(simulation.data['boundary'])
+    assert len(all_regions) == len(all_idxs)
+
+    # Check that all named regions correspond to boundary regions
+    for rname in named_boundaries:
+        if rname != 'all' and rname not in all_regions:
+            raise OcellarisError('Unknown boundary region in input',
+                                 '%r is not a boundary region' % rname)
+
+    # Names of all boundary regions
+    if 'all' not in named_boundaries:
+        to_keep = [mark for mark, name in all_idxs.items()
+                   if name in named_boundaries]
+
+        # Remove marks to unwanted bounbdary regions
+        drm = {dof: [mark for mark in dof_marks if mark in to_keep]
+               for dof, dof_marks in dof_region_marks.items()}
+
+        # Remove dofs wih empty region mark list
+        dof_region_marks = {k: v for k, v in drm.items() if v}
 
     # Mark initial zeroth layer cells
     mesh = simulation.data['mesh']

@@ -96,7 +96,7 @@ slope_limiter:
         
         plot: yes
         use_cpp: yes
-        skip_boundary: no
+        skip_boundaries: []
         #limit_no_cells: yes
         #max_cost: 0.1
         #surface_probe: free_surface

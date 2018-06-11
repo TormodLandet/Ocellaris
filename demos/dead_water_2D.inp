@@ -171,7 +171,7 @@ slope_limiter:
     rho:
         method: HierarchicalTaylor
         plot: yes
-        skip_boundary: no
+        skip_boundaries: []
         enforce_bounds: yes
         enforce_bcs: no
 

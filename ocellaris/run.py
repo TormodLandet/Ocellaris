@@ -1,4 +1,5 @@
 import sys
+import os
 import traceback
 import time
 from .utils import OcellarisError, run_debug_console
@@ -20,6 +21,10 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
         if setup_logging:
             simulation.log.setup()
 
+        # Validate the input file format - try to catch any misspellings
+        validate_input_file(simulation)
+
+        # Run the setup routines - can take a while on large meshes
         simulation.setup()
         success = True
 
@@ -124,6 +129,37 @@ def run_simulation(simulation, catch_exceptions=False):
         run_debug_console(simulation)
 
     return success
+
+
+def validate_input_file(simulation):
+    """
+    Use YSchema to validate the input file
+    """
+    simulation.log.info('Validating input using YSchema')
+    try:
+        import yschema
+    except ImportError:
+        simulation.log.warning('Could not import the "yschema" Python library')
+        return
+
+    mydir = os.path.abspath(os.path.dirname(__file__))
+    schemafile = os.path.join(mydir, 'input_file_schema.yml')
+    with open(schemafile, 'rt') as yml:
+        schema = yschema.yaml_ordered_load(yml)
+
+    # Run the validation routines
+    errors = yschema.validate(simulation.input, schema, return_errors=True)
+    if not errors:
+        simulation.log.info('    Validation status OK')
+        return
+
+    simulation.log.error('    The input file is not valid! Ocellaris will still'
+                         ' continue since this may be a false negative (the'
+                         ' validation schema is not perfect), but beware!')
+    prefix1 = '    ERROR: '
+    prefix2 = ' ' * len(prefix1)
+    for error in errors:
+        simulation.log.warning(prefix1 + error.replace('\n', '\n' + prefix2))
 
 
 def plot_at_end(simulation):

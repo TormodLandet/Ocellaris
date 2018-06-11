@@ -122,10 +122,12 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
         method = inp.get_value('method', DEFAULT_LIMITER, 'string')
     use_cpp = inp.get_value('use_cpp', DEFAULT_USE_CPP, 'bool')
     plot_exceedance = inp.get_value('plot', False, 'bool')
-    skip_boundary = inp.get_value('skip_boundary', False, 'bool')
+    skip_boundaries = inp.get_value('skip_boundaries', [], 'list(string)')
     enforce_bounds = inp.get_value('enforce_bounds', False, 'bool')
     enforce_bcs = inp.get_value('enforce_bcs', True, 'bool')
+
     name = phi_name if output_name is None else output_name
+    simulation.log.info('    Using slope limiter %s for field %s' % (method, name))
 
     # Find degree
     V = phi.function_space()
@@ -142,17 +144,16 @@ def SlopeLimiter(simulation, phi_name, phi, output_name=None, method=None):
     drm = get_dof_region_marks(simulation, V)
     bcs = SlopeLimiterBoundaryConditions(simulation, phi_name, output_name, drm, V)
 
-    if skip_boundary:
-        # Mark boundary cells for skipping (cells containing dofs with region marks)
-        skip_cells = mark_cell_layers(simulation, V, layers=0, dof_region_marks=drm)
-    else:
-        skip_cells = ()
+    # Mark boundary cells for skipping (cells containing dofs with region marks)
+    skip_cells = mark_cell_layers(simulation, V, layers=0,
+                                  dof_region_marks=drm,
+                                  named_boundaries=skip_boundaries)
+    if 'all' not in skip_boundaries:
         bcs.activate()
 
     # Construct the limiter
-    simulation.log.info('    Using slope limiter %s for field %s' % (method, name))
     simulation.log.info('        Enforcing BCs: %r' % enforce_bcs)
-    simulation.log.info('        Skip boundary: %r' % skip_boundary)
+    simulation.log.info('        Skip boundaries: %r' % skip_boundaries)
     simulation.log.info('        Enforce global bounds: %r' % enforce_bounds)
     limiter_class = get_slope_limiter(method)
     limiter = limiter_class(phi_name=phi_name, phi=phi, skip_cells=skip_cells,

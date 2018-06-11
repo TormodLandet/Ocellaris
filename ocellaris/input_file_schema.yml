@@ -14,13 +14,18 @@
 config skip_key_prefix: '_'
  
 # Some type aliases to take into account the 'py$' code cunctionality
-alias Float: one_of(types=(float, str(prefix='py$'), str(prefix='1e')))
-alias Integer: one_of(types=(int, str(prefix='py$')))
+alias PyCode: str(prefix='py$')
+alias Float: any_of(types=(float, PyCode, str(prefix='1e')))
+alias Integer: any_of(types=(int, PyCode))
+alias IntegerMin1: any_of(types=(int(min_val=1), PyCode))
+alias StringMin1: str(min_len=1)
+alias Boolean: any_of(types=(bool, PyCode))
+alias FloatList: any_of(types=(PyCode, list(type=Float)))
 
 # Convenience aliases
-alias FloatOrList: one_of(types=(Float, list(type=Float)))
-alias StrOrList: one_of(types=(str, list(type=str)))
-alias StrOrFloat: one_of(types=(str, float))
+alias FloatOrList: any_of(types=(Float, FloatList))
+alias StrOrList: any_of(types=(str, list(type=str)))
+alias StrOrFloat: any_of(types=(str, float))
 
 
 # -- Header --------------------------------------------------------------
@@ -50,56 +55,61 @@ optional user_code: UserCode
 type PhysicalPropertiesSinglePhase:
     optional rho: Float
     optional nu: Float
-    optional g: list(type=Float)
+    optional g: FloatList
 type PhysicalPropertiesVOF:
     optional rho0: Float
     optional rho1: Float
     optional nu0: Float
     optional nu1: Float
-    optional g: list(type=Float)
+    optional g: FloatList
 type PhysicalPropertiesVardens:
     optional rho_min: Float
     optional rho_max: Float
     optional nu: Float
-    optional g: list(type=Float)
+    optional g: FloatList
 optional physical_properties: |
-    one_of(types=(PhysicalPropertiesVOF, PhysicalPropertiesVardens,
+    any_of(types=(PhysicalPropertiesVOF, PhysicalPropertiesVardens,
                   PhysicalPropertiesSinglePhase))
 
 
 # -- Mesh ----------------------------------------------------------------
 
 type MeshBase:
-    required type: str
+    required type: StringMin1
     optional move: list(type=str)
     optional sort_order: list(type=Integer)
+    optional mpi_comm: str(equals=('WORLD', 'SELF'))
 type MeshDolfinGeom:
     inherit: MeshBase
     required type: str(equals=('Rectangle', 'Box', 'UnitDisc'))
-    optional Nx: Integer
-    optional Ny: Integer
-    optional Nz: Integer
+    optional Nx: IntegerMin1
+    optional Ny: IntegerMin1
+    optional Nz: IntegerMin1
     optional startx: Float
     optional starty: Float
     optional startz: Float
     optional endx: Float
     optional endy: Float
     optional endz: Float
-    optional diagonal: str
+    optional degree: IntegerMin1
+    optional gdim: IntegerMin1
+    optional diagonal: |
+        str(equals=('right', 'left', 'crossed', 'right/left', 'left/right'))
 type MeshDolfinFile:
     inherit: MeshBase
     required type: str(equals=('XML', 'XDMF', 'HDF5'))
-    optional mesh_file: str
-    optional facet_region_file: str
+    optional mesh_file: StringMin1
+    optional facet_region_file: StringMin1
 type MeshMeshio:
     inherit: MeshBase
     required type: str(equals='meshio')
-    optional mesh_file: str
-    optional meshio_type: str
+    optional mesh_file: StringMin1
+    optional meshio_type: StringMin1
 required mesh: one_of(types=(MeshDolfinGeom, MeshMeshio, MeshDolfinFile))
 
 type Time:
     required dt: Float
+    optional tstart: Float
     required tmax: Float
 optional time: Time
 
@@ -107,31 +117,46 @@ optional time: Time
 # -- Known fields and zones ----------------------------------------------
 
 type Field:
-    required type: str
+    required type: StringMin1
     optional *: Any  # TODO: further specify fields
 optional fields: list(type=Field)
 
-optional forcing_zones: Any  # TODO: further specify forcing zones
 
 # -- Initial and boundary conditions -------------------------------------
 
 type InitialCondition:
-    optional function: str
+    optional function: StringMin1
     optional cpp_code: StrOrFloat  # anything that is valid C++ after %s format
+type InitialConditionFile:
+    required h5_file: StringMin1
+    optional same_mesh: Boolean
 type InitialConditions:
+    optional file: InitialConditionFile
     optional *: InitialCondition
 optional initial_conditions: InitialConditions
 
 type BoundaryCondition:
-    required type: str
+    required type: StringMin1
     optional value: FloatOrList
     optional cpp_code: StrOrList
     optional code: StrOrList
-    optional function: str
+    optional function: StringMin1
+    optional regions: list(type=str)
+    optional hydrostatic: Boolean
+    optional blend: FloatOrList
+    optional dval: FloatOrList
+    optional nval: FloatOrList
+    optional slip_length: FloatOrList
+    optional scalar_field: StringMin1
+    optional scalar_field_level_set: Float
+    optional slip_factor_name: StringMin1
+    optional slip_factor_distance: Float
+    optional slip_factor_degree: IntegerMin1
+    optional custom_hook: StringMin1
 type BoundaryRegion:
-    required name: str
-    required selector: str
-    optional inside_code: str
+    required name: StringMin1
+    required selector: StringMin1
+    optional inside_code: StringMin1
     optional mesh_facet_regions: list(type=Integer)
     optional *: BoundaryCondition
 optional boundary_conditions: list(type=BoundaryRegion)
@@ -142,20 +167,20 @@ optional boundary_conditions: list(type=BoundaryRegion)
 type LinearSolverKSP:
     optional use_ksp: bool(equals=True)
     optional inner_iter_control: list(type=Integer)
-    optional inner_iter_atol: list(type=Float)
-    optional inner_iter_rtol: list(type=Float)
+    optional inner_iter_atol: FloatList
+    optional inner_iter_rtol: FloatList
     optional inner_iter_max_it: list(type=Integer)
     optional petsc_*: Any
 type LinearSolverDolfin:
     optional use_ksp: bool(equals=False)
-    optional solver: str
-    optional preconditioner: str
-    optional lu_method: str
+    optional solver: StringMin1
+    optional preconditioner: StringMin1
+    optional lu_method: StringMin1
     optional parameters: Any
 alias LinearSolver: one_of(types=(LinearSolverKSP,LinearSolverDolfin))
 type Solver:
     # Common settings
-    required type: str
+    required type: StringMin1
     optional num_inner_iter: Integer
     optional *: LinearSolver
 
@@ -166,44 +191,48 @@ type Solver:
     optional force_steady: bool
 
     # Less common settings
+    optional form_compiler: StringMin1
     optional polynomial_degree_velocity: Integer
     optional polynomial_degree_pressure: Integer
     optional hydrostatic_pressure_calculation_every_timestep: bool
-    optional function_space_velocity: str
-    optional function_space_pressure: str
+    optional function_space_velocity: StringMin1
+    optional function_space_pressure: StringMin1
     optional num_elements_in_A_tilde_block: Integer
 
     # Rare settings, may not be super well tested
-    optional timestepping_method: str
+    optional timestepping_method: str(equals='BDF')
     optional use_stress_divergence_form: bool
-    optional velocity_postprocessing: str
-optional solver: Solver
+    optional velocity_postprocessing: StringMin1
+required solver: Solver
 
 type MultiphaseSolver:
-    required type: str
-    optional function_space_colour: str
-    optional function_space_rho: str
+    required type: StringMin1
+    optional function_space_colour: StringMin1
+    optional function_space_rho: StringMin1
     optional polynomial_degree_colour: Integer
     optional polynomial_degree_rho: Integer
     optional plot_fields: bool
     optional continuous_fields: bool
     optional height_function_mean: Float
-    optional height_function_cpp: str
+    optional height_function_cpp: StringMin1
     optional sky_location: Float  # Is this still implemented (not removed)??
     optional explicit_rk_method: bool
 optional multiphase_solver: MultiphaseSolver
 
 type ConvDef:
-    required convection_scheme: str
+    required convection_scheme: StringMin1
+    optional use_cpp: Boolean
+    optional use_cpp_gradient: Boolean
+    optional HRIC_version: str
 type Convection:
     optional *: ConvDef
 optional convection: Convection
 
 type SlopeLimiter:
-    optional method: str
-    optional comp_method: str
+    optional method: StringMin1
+    optional comp_method: StringMin1
     optional limit_conv: bool
-    optional skip_boundary: bool
+    optional skip_boundaries: list(type=str)
     optional enforce_bounds: bool
     optional enforce_bcs: bool
     optional plot: bool
@@ -211,6 +240,22 @@ type SlopeLimiter:
 type SlopeLimiters:
     optional *: SlopeLimiter
 optional slope_limiter: SlopeLimiters
+
+type MomentumSource:
+    required type: str
+    required degree: Integer
+    required cpp_code: list(type=str)
+optional momentum_sources: list(type=MomentumSource)
+
+type ForcingZone:
+    required name: StringMin1
+    required type: str(equals=('MomentumForcing', 'ScalarForcing'))
+    required zone: StringMin1
+    required penalty: Float
+    required target: StringMin1
+    optional plot: Boolean
+    optional variable: StringMin1
+optional forcing_zones: list(type=ForcingZone)
 
 
 # -- Output --------------------------------------------------------------
@@ -221,30 +266,97 @@ type Output:
     optional prefix: str
     optional dolfin_log_level: LogLevel
     optional ocellaris_log_level: LogLevel
-    optional stdout_enabled: bool
+
+    optional stdout_enabled: Boolean
     optional flush_interval: Integer
+    optional log_on_all_ranks: Boolean
+    optional stdout_on_all_ranks: Boolean
+    optional log_enabled: Boolean
+    optional log_append_to_existing_file: Boolean
+    optional show_memory_usage: Boolean
 
     optional hdf5_write_interval: Integer
     optional xdmf_write_interval: Integer
     optional vtk_write_interval: Integer
-    optional hdf5_only_store_latest: bool
 
-    optional divergence_method: str
+    optional hdf5_only_store_latest: bool
+    optional xdmf_flush: Boolean
+    optional vtk_binary_format: Boolean
+    optional save_restart_file_at_end: Boolean
+    
+    optional solution_properties: Boolean
+    optional divergence_method: StringMin1
     optional plot_divergences: bool
+    optional Co_lim: Float
     optional plot_facet_regions: bool
     optional plot_bcs: bool
-
-    optional show_memory_usage: bool
 optional output: Output
+
+type Reporting:
+    optional reports_to_show: list(type=str)
+optional reporting: Reporting
+
+
+# -- Probes ------------------------------------------------------------
+
+type ProbeBase:
+    required type: StringMin1
+    required name: StringMin1
+    optional enabled: Boolean
+    optional file_name: StringMin1
+    optional write_interval: Integer
+    optional custom_hook: StringMin1
+    optional xlim: FloatList
+    optional ylim: FloatList
+    optional zlim: FloatList
+type ProbeIsoSurface:
+    inherit: ProbeBase
+    required type: str(equals='IsoSurface')
+    required field: StringMin1
+    required value: Float
+    optional show_interval: Integer
+    optional include_boundary: Boolean
+type ProbeLine:
+    inherit: ProbeBase
+    required type: str(equals='LineProbe')
+    required field: StringMin1
+    required startpos: FloatList
+    required endpos: FloatList
+    required Npoints: Integer
+    optional show_interval: Integer
+    optional target_name: str
+    optional target_abcissa: FloatList
+    optional target_ordinate: FloatList
+type ProbePlane:
+    inherit: ProbeBase
+    required type: str(equals='PlaneProbe')
+    required field: StrOrList
+    required plane_point: FloatList
+    required plane_normal: FloatList
+alias Probe: one_of(types=(ProbeIsoSurface, ProbeLine, ProbePlane))
+optional probes: list(type=Probe)
+
+
+# -- Hooks -------------------------------------------------------------
+
+type Hook:
+    optional name: str
+    optional enabled: Boolean
+    optional code: str
+type Hooks:
+    optional pre_simulation: list(type=Hook)
+    optional post_simulation: list(type=Hook)
+    optional pre_timestep: list(type=Hook)
+    optional post_timestep: list(type=Hook)
+    optional matrix_ready: list(type=Hook)
+optional hooks: Hooks
 
 
 # -- Odds and ends -------------------------------------------------------
 
-optional console_at_end: bool
-optional console_on_error: bool
+optional console_at_end: Boolean
+optional console_on_error: Boolean
+optional clear_timings_at_end: Boolean
 
 # Less important to the problem setup
-optional probes: Any  # TODO: further specify probes
-optional hooks: Any  # TODO: further specify probes
-optional reporting: Any  # TODO: further specify reporting (?)
 optional *: Any
