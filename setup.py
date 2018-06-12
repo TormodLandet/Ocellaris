@@ -21,7 +21,12 @@ for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8
 
 # List packages we depend on
 FENICS_VERSION = ">=2018.1.0.dev0,<2018.2"
-dependencies = ['PyYAML', 'h5py', 'numpy', 'meshio', 'raschii', 'yschema>=1.0.2']
+dependencies = ['PyYAML',
+                'h5py',
+                'numpy',
+                'meshio>=2.0.0',
+                'raschii>=1.0.2',
+                'yschema>=1.0.2']
 dependencies.append('fenics-dolfin%s' % FENICS_VERSION)
 
 

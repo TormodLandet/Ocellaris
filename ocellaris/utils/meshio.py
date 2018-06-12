@@ -39,8 +39,9 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
                         'The meshio library is missing. Run something like '
                         '"python3 -m pip install --user meshio" to install it.')
 
-    points, cells, _point_data, cell_data, _field_data = \
-        meshio.read(file_name, meshio_file_type)
+    # Read from file into a meshio mesh object
+    mm = meshio.read(file_name, meshio_file_type)
+    points, cells, cell_data = mm.points, mm.cells, mm.cell_data
 
     if 'tetra' in cells:
         # There should be only tetras and possibly facet triangles
