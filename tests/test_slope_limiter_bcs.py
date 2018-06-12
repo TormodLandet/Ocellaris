@@ -2,6 +2,7 @@ import dolfin
 from ocellaris import Simulation, setup_simulation
 from ocellaris.solver_parts.boundary_conditions import \
     get_dof_region_marks, mark_cell_layers
+from helpers import all_ok, mpi_print, mpi_int_sum
 
 
 BASE_INPUT = """
@@ -54,14 +55,22 @@ def test_get_dof_region_marks():
 
     drm = get_dof_region_marks(sim, Vp)
     num_in_region = [0, 0]
+    ok = True
     for dof, marks in drm.items():
         x, y = dofs_x[dof]
-        assert x == 0 or x == 1 or y == 0 or y == 1
-        assert (0 in marks) == (x == 1 or y == 0 or y == 1)
-        assert (1 in marks) == (x == 0)
+        if not (x == 0 or x == 1 or y == 0 or y == 1):
+            mpi_print('Got unexpected dof coords', x, y)
+            ok = False
+        if (0 in marks) != (x == 1 or y == 0 or y == 1):
+            mpi_print('Got unexpected dof coords in region 0', x, y)
+            ok = False
+        if (1 in marks) != (x == 0):
+            mpi_print('Got unexpected dof coords in region 0', x, y)
+            ok = False
         for mark in marks:
             num_in_region[mark] += 1
 
+    assert(all_ok(ok))
     assert mpi_int_sum(num_in_region[0]) == 30 + 29 * 2
     assert mpi_int_sum(num_in_region[1]) == 30
 
@@ -106,8 +115,3 @@ def test_mark_cell_layers():
 
     cells = mark_cell_layers(sim, Vp, named_boundaries=['left', 'not left'])
     assert mpi_int_sum(len(cells)) == 20 * 2 + 16 * 2
-
-
-def mpi_int_sum(value):
-    v = dolfin.MPI.sum(dolfin.MPI.comm_world, float(value))
-    return int(round(v))
