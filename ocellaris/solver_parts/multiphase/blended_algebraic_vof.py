@@ -102,9 +102,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             self.update, 'BlendedAlgebraicVofModel - update colour field')
         simulation.hooks.register_custom_hook_point('MultiPhaseModelUpdated')
 
-        # Linear solver
-        self.solver = linear_solver_from_input(simulation, 'solver/c', SOLVER,
-                                               PRECONDITIONER, None, KRYLOV_PARAMETERS)
+        # Linear solver - this causes the MPI unit tests to fail in "random" places for some reason???
+        # self.solver = linear_solver_from_input(simulation, 'solver/c', SOLVER,
+        #                                       PRECONDITIONER, None, KRYLOV_PARAMETERS)
 
         # Plot density and viscosity fields for visualization
         self.plot_fields = simulation.input.get_value(
@@ -267,7 +267,8 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         else:
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
-            self.solver.solve(A, c.vector(), b)
+            # self.solver.solve(A, c.vector(), b)
+            dolfin.solve(A, c.vector(), b)
             self.slope_limiter.run()
 
         # Optionally use a continuous predicted colour field

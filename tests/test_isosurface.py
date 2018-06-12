@@ -32,10 +32,6 @@ output: {log_enabled: no}
 """
 
 
-# Fails in parallel with degree = 1 on CircleCI, but not locally. This code is
-# only for 2D, so parallel support is not super important. Disabling for now
-# TODO: figure out why this hangs on CircleCI
-@skip_in_parallel
 @pytest.mark.parametrize("degree", [0, 1, 2])
 def test_isoline_horizontal(degree):
     sim = Simulation()
