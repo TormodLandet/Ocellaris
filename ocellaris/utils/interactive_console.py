@@ -180,7 +180,8 @@ def read_stdin_and_cmdfile(command_file):
     # Check if we can read from stdin without blocking
     import select
 
-    def has_input(): return sys.stdin in select.select([sys.stdin], [], [], 0)[0]
+    def has_input():
+        return sys.stdin in select.select([sys.stdin], [], [], 0)[0]
 
     # Check if there is input on stdin and read it if it exists
     while has_input():
