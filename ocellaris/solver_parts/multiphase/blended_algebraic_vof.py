@@ -19,11 +19,14 @@ PLOT_FIELDS = False
 
 
 # Default values, can be changed in the input file
-SOLVER = 'gmres'
-PRECONDITIONER = 'default'
-KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'relative_tolerance': 1e-15,
-                     'absolute_tolerance': 1e-15}
+SOLVER_OPTIONS = {'use_ksp': True,
+                  'petsc_ksp_type': 'gmres',
+                  'petsc_pc_type': 'asm',
+                  'petsc_ksp_initial_guess_nonzero': True,
+                  'petsc_ksp_view': 'DISABLED',
+                  'inner_iter_rtol': [1e-10] * 3,
+                  'inner_iter_atol': [1e-15] * 3,
+                  'inner_iter_max_it': [1000] * 3}
 
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
@@ -102,9 +105,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             self.update, 'BlendedAlgebraicVofModel - update colour field')
         simulation.hooks.register_custom_hook_point('MultiPhaseModelUpdated')
 
-        # Linear solver - this causes the MPI unit tests to fail in "random" places for some reason???
-        # self.solver = linear_solver_from_input(simulation, 'solver/c', SOLVER,
-        #                                       PRECONDITIONER, None, KRYLOV_PARAMETERS)
+        # Linear solver
+        self.solver = linear_solver_from_input(
+            self.simulation, 'solver/c', default_parameters=SOLVER_OPTIONS)
 
         # Plot density and viscosity fields for visualization
         self.plot_fields = simulation.input.get_value(
@@ -267,8 +270,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         else:
             A = self.eq.assemble_lhs()
             b = self.eq.assemble_rhs()
-            # self.solver.solve(A, c.vector(), b)
-            dolfin.solve(A, c.vector(), b)
+            self.solver.inner_solve(A, c.vector(), b, 1, 0)
             self.slope_limiter.run()
 
         # Optionally use a continuous predicted colour field
