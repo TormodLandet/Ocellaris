@@ -125,7 +125,6 @@ BDM = 'BDM'
 from . import analytical_solution
 from . import coupled
 from . import coupled_ldg
-from . import fsvd
 from . import ipcs
 from . import ipcs_algebraic
 from . import simple
