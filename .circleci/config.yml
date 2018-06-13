@@ -9,16 +9,16 @@ jobs:
       - run:
           name: Install/update dependencies
           command: |
-            sudo pip3 install pip --upgrade
-            sudo pip3 install pytest pytest-timeout pytest-instafail --upgrade
-            #sudo pip3 install flake8 --upgrade
-            sudo pip3 install meshio raschii PyYAML yschema --upgrade
+                sudo pip3 install pip --upgrade
+                sudo pip3 install pytest pytest-timeout pytest-instafail --upgrade
+                #sudo pip3 install flake8 --upgrade
+                sudo pip3 install meshio raschii PyYAML yschema --upgrade
       - run:
           name: Environment and FEniCS version info
           command: |
-            echo $USER $HOME $PWD $PATH $LD_LIBRARY_PATH $CMAKE_PREFIX_PATH
-            python3 -c 'import ffc; print(ffc.git_commit_hash(), ffc.ufc_signature())'
-            python3 -c 'import dolfin; print(dolfin.git_commit_hash())'
+                echo $USER $HOME $PWD $PATH $LD_LIBRARY_PATH $CMAKE_PREFIX_PATH
+                python3 -c 'import ffc; print(ffc.git_commit_hash(), ffc.ufc_signature())'
+                python3 -c 'import dolfin; print(dolfin.git_commit_hash())'
       - run:
           name: Install Ocellaris
           command: sudo pip3 install .
@@ -43,10 +43,20 @@ jobs:
                     --junitxml=/reports/pytest/MPI.xml
       - run:
           name: Run regression tests
-          command: python3 -m pytest -vs cases/regression_tests.py --junitxml=/reports/pytest/regressions_serial.xml --durations=0
+          command: |
+                python3 -m pytest -v cases/regression_tests.py \
+                    --instafail \
+                    --timeout=300 \
+                    --durations=0 \
+                    --junitxml=/reports/pytest/regressions_serial.xml
       - run:
           name: Run demo tests
-          command: python3 -m pytest -vs demos/ --junitxml=/reports/pytest/demos_serial.xml --durations=0
+          command: |
+                python3 -m pytest -v demos/ \
+                    --instafail \
+                    --timeout=300 \
+                    --durations=0 \
+                    --junitxml=/reports/pytest/demos_serial.xml
 #      - run:
 #          name: Run flake8
 #          command: python3 -m flake8 ocellaris*
