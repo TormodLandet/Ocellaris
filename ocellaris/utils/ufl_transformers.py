@@ -2,8 +2,13 @@ import numpy
 import dolfin
 from ufl import as_vector, Form
 from ufl.classes import FixedIndex, Indexed, ListTensor, MultiIndex, Zero
-from ufl.algorithms import (expand_indices, expand_compounds, expand_derivatives,
-                            compute_form_lhs, compute_form_rhs)
+from ufl.algorithms import (
+    expand_indices,
+    expand_compounds,
+    expand_derivatives,
+    compute_form_lhs,
+    compute_form_rhs,
+)
 from ufl.corealg.multifunction import MultiFunction
 from ufl.corealg.map_dag import map_expr_dag
 
@@ -12,8 +17,9 @@ from ufl.corealg.map_dag import map_expr_dag
 # Utility functions:
 
 
-def split_form_into_matrix(full_form, Wv, Wu, Sv=None, Su=None,
-                           empty_cell_value=None, check_zeros=True):
+def split_form_into_matrix(
+    full_form, Wv, Wu, Sv=None, Su=None, empty_cell_value=None, check_zeros=True
+):
     """
     Split a form into subforms which correspond to separate
     test and trial functions. Given a full form with multiple
@@ -87,6 +93,7 @@ class FormPruner(MultiFunction):
 
     You can use the "prune" method to create a pruned form
     """
+
     expr = MultiFunction.reuse_if_untouched
 
     def visit(self, expr):
@@ -153,6 +160,7 @@ class IndexSimplificator(MultiFunction):
     Simplifies indexing into ListTensors with fixed indices.
     from https://github.com/firedrakeproject/tsfc/compare/index-simplificator?expand=1#diff-a766247c71abcaca1251147d24ca9b63
     """
+
     expr = MultiFunction.reuse_if_untouched
 
     def visit(self, expr):
@@ -160,7 +168,11 @@ class IndexSimplificator(MultiFunction):
 
     def indexed(self, o, expr, multiindex):
         indices = list(multiindex)
-        while indices and isinstance(expr, ListTensor) and isinstance(indices[0], FixedIndex):
+        while (
+            indices
+            and isinstance(expr, ListTensor)
+            and isinstance(indices[0], FixedIndex)
+        ):
             index = indices.pop(0)
             expr = expr.ufl_operands[int(index)]
 
@@ -220,6 +232,7 @@ class EstimateZeroForms(MultiFunction):
             return as_vector([as_vector([1] * shape[1]) for _ in range(shape[0])])
         else:
             raise NotImplementedError()
+
     constant = coefficient = scalar_value = argument
 
     def multi_index(self, o):
@@ -304,17 +317,20 @@ class EstimateZeroForms(MultiFunction):
     # Functions of one scalar argument that are zero for zero arguments
     def sqrt(self, o, f):
         return self.visit(f)
+
     sin = tan = errf = sqrt
     sinh = tanh = asin = atan = sqrt
 
     # Functions of one scalar argument that are non-zero for zero arguments
     def cos(self, o, f):
         return 1
+
     ln = exp = cosh = acos = cos
 
     # Functions of two scalar arguments
     def atan2(self, o, f1, f2):
         return 1
+
     bessel_j = bessel_y = bessel_i = bessel_K = atan2
 
     def power(self, o, a, b):
@@ -358,8 +374,12 @@ class EstimateZeroForms(MultiFunction):
         if len(shape) == 1:
             return as_vector([self.visit(op) for op in o.ufl_operands])
         elif len(shape) == 2:
-            return as_vector([as_vector([self.visit(op) for op in row.ufl_operands])
-                              for row in o.ufl_operands])
+            return as_vector(
+                [
+                    as_vector([self.visit(op) for op in row.ufl_operands])
+                    for row in o.ufl_operands
+                ]
+            )
         else:
             raise NotImplementedError()
 
@@ -378,6 +398,7 @@ class EstimateZeroForms(MultiFunction):
 
     def not_condition(self, o, a):
         raise 1
+
     ne = le = ge = lt = and_condition = or_condition = eq
 
     def conditional(self, o, c, t, f):

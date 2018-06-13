@@ -9,8 +9,15 @@ from . import register_slope_limiter, SlopeLimiterBase
 class NaiveNodalSlopeLimiter(SlopeLimiterBase):
     description = 'Ensures dof node values are not themselves a local extrema'
 
-    def __init__(self, phi_name, phi, boundary_condition,
-                 output_name=None, use_cpp=True, enforce_bounds=False):
+    def __init__(
+        self,
+        phi_name,
+        phi,
+        boundary_condition,
+        output_name=None,
+        use_cpp=True,
+        enforce_bounds=False,
+    ):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -94,30 +101,36 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
             if self.degree in (1,):
                 limiter = self.cpp_mod.naive_nodal_slope_limiter_dg1
             else:
-                ocellaris_error('NaiveNodal slope limiter error',
-                                'C++ slope limiter does not support degree %d' % self.degree)
+                ocellaris_error(
+                    'NaiveNodal slope limiter error',
+                    'C++ slope limiter does not support degree %d' % self.degree,
+                )
         else:
             if self.degree in (1, 2):
                 limiter = slope_limiter_nodal_dg
             else:
-                ocellaris_error('NaiveNodal slope limiter error',
-                                'Python slope limiter does not support degree %d' % self.degree)
+                ocellaris_error(
+                    'NaiveNodal slope limiter error',
+                    'Python slope limiter does not support degree %d' % self.degree,
+                )
 
         num_cells_all = self.mesh.num_cells()
         tdim = self.mesh.topology().dim()
         num_cells_owned = self.mesh.topology().ghost_offset(tdim)
         exceedances = self.exceedance.vector().get_local()
 
-        limiter(self.num_neighbours,
-                num_cells_all,
-                num_cells_owned,
-                self.num_cell_dofs,
-                self.max_neighbours,
-                self.flat_neighbours,
-                self.flat_cell_dofs,
-                self.flat_cell_dofs_dg0,
-                exceedances,
-                results)
+        limiter(
+            self.num_neighbours,
+            num_cells_all,
+            num_cells_owned,
+            self.num_cell_dofs,
+            self.max_neighbours,
+            self.flat_neighbours,
+            self.flat_cell_dofs,
+            self.flat_cell_dofs_dg0,
+            exceedances,
+            results,
+        )
 
         self.exceedance.vector().set_local(exceedances)
         self.exceedance.vector().apply('insert')
@@ -139,9 +152,18 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
 # implementations are meant to be prototypes and QA of the C++ implementations
 
 
-def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_cell_dofs,
-                           max_neighbours, flat_neighbours, flat_cell_dofs, flat_cell_dofs_dg0,
-                           exceedances, results):
+def slope_limiter_nodal_dg(
+    num_neighbours,
+    num_cells_all,
+    num_cells_owned,
+    num_cell_dofs,
+    max_neighbours,
+    flat_neighbours,
+    flat_cell_dofs,
+    flat_cell_dofs_dg0,
+    exceedances,
+    results,
+):
     """
     Perform nodal slope limiting of a DG1 function. Also works for DG2
     functions, but since the local minimum or maximum may be in between
@@ -153,7 +175,7 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
     # Compute cell averages before any modification
     averages = numpy.zeros(num_cells_all, float)
     for ic in range(num_cells_all):
-        dofs = flat_cell_dofs[ic * C: (ic + 1) * C]
+        dofs = flat_cell_dofs[ic * C : (ic + 1) * C]
         vals = [results[dof] for dof in dofs]
         averages[ic] = sum(vals[-3:]) / 3
 
@@ -161,7 +183,7 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
     dof_range = list(range(C))
     dof_range_modable = dof_range[-3:]
     for ic in range(num_cells_owned):
-        dofs = flat_cell_dofs[ic * C: (ic + 1) * C]
+        dofs = flat_cell_dofs[ic * C : (ic + 1) * C]
         vals = [results[dof] for dof in dofs]
         avg = averages[ic]
 
@@ -176,7 +198,7 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
                 cell_on_boundary = True
                 break
 
-            nbs = flat_neighbours[dof * max_neighbours: dof * max_neighbours + n_nbs]
+            nbs = flat_neighbours[dof * max_neighbours : dof * max_neighbours + n_nbs]
             nb_vals = [averages[nb] for nb in nbs]
 
             # Find highest and lowest value in the connected cells
@@ -251,7 +273,9 @@ def slope_limiter_nodal_dg(num_neighbours, num_cells_all, num_cells_owned, num_c
             print(new_vals)
             print([results[dof] for dof in dofs])
             print(repr(averages[ic] - sum(new_vals) / 3))
-            print('--------------------------------------------------------------------------')
+            print(
+                '--------------------------------------------------------------------------'
+            )
             exit()
         assert error < 1e-12, 'Got large difference in old and new average: %r' % error
 

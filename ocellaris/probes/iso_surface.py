@@ -17,15 +17,21 @@ class IsoSurface(Probe):
         self.cells_with_surface = None
         inp = probe_input
 
-        assert self.simulation.ndim == 2, 'IsoSurface only implemented in 2D (contour line)'
+        assert (
+            self.simulation.ndim == 2
+        ), 'IsoSurface only implemented in 2D (contour line)'
 
         # Read input
         self.name = inp.get_value('name', required_type='string')
         self.field_name = inp.get_value('field', required_type='string')
         self.value = inp.get_value('value', required_type='float')
-        self.custom_hook_point = inp.get_value('custom_hook', None, required_type='string')
+        self.custom_hook_point = inp.get_value(
+            'custom_hook', None, required_type='string'
+        )
         self.field = simulation.data[self.field_name]
-        self.include_boundary = inp.get_value('include_boundary', INCLUDE_BOUNDARY, 'bool')
+        self.include_boundary = inp.get_value(
+            'include_boundary', INCLUDE_BOUNDARY, 'bool'
+        )
 
         # Should we write the data to a file
         prefix = simulation.input.get_value('output/prefix', None, 'string')
@@ -44,15 +50,21 @@ class IsoSurface(Probe):
         self.xlim = inp.get_value('xlim', (None, None), 'list(float)')
         self.ylim = inp.get_value('ylim', (None, None), 'list(float)')
         if not len(self.xlim) == 2:
-            ocellaris_error('Plot xlim must be two numbers',
-                            'IsoSurface probe "%s" contains invalid xlim specification' % self.name)
+            ocellaris_error(
+                'Plot xlim must be two numbers',
+                'IsoSurface probe "%s" contains invalid xlim specification' % self.name,
+            )
         if not len(self.ylim) == 2:
-            ocellaris_error('Plot ylim must be two numbers',
-                            'IsoSurface probe "%s" contains invalid ylim specification' % self.name)
+            ocellaris_error(
+                'Plot ylim must be two numbers',
+                'IsoSurface probe "%s" contains invalid ylim specification' % self.name,
+            )
 
         if self.write_file and simulation.rank == 0:
             self.output_file = open(self.file_name, 'wt')
-            self.output_file.write('# Ocellaris iso surface of the %s field\n' % self.field_name)
+            self.output_file.write(
+                '# Ocellaris iso surface of the %s field\n' % self.field_name
+            )
             self.output_file.write('# value = %15.5e\n' % self.value)
             self.output_file.write('# dim = %d\n' % self.simulation.ndim)
 
@@ -70,10 +82,8 @@ class IsoSurface(Probe):
 
         if self.custom_hook_point is not None:
             simulation.hooks.add_custom_hook(
-                self.custom_hook_point,
-                self.run,
-                'Probe "%s"' %
-                self.name)
+                self.custom_hook_point, self.run, 'Probe "%s"' % self.name
+            )
         else:
             self.end_of_timestep = self.run
 
@@ -119,7 +129,9 @@ class IsoSurface(Probe):
         gather_lines_on_root(lines)
 
         if update_file and self.simulation.rank == 0:
-            self.output_file.write('Time %10.5f nsurf %d\n' % (self.simulation.time, len(lines)))
+            self.output_file.write(
+                'Time %10.5f nsurf %d\n' % (self.simulation.time, len(lines))
+            )
             for x, y in lines:
                 self.output_file.write(' '.join('%10.5f' % v for v in x) + '\n')
                 self.output_file.write(' '.join('%10.5f' % v for v in y) + '\n')
@@ -145,7 +157,11 @@ class IsoSurface(Probe):
         return lines
 
     def flush(self):
-        if self.write_file and self.simulation.rank == 0 and not self.output_file.closed:
+        if (
+            self.write_file
+            and self.simulation.rank == 0
+            and not self.output_file.closed
+        ):
             self.output_file.flush()
 
     def end_of_simulation(self):
@@ -196,7 +212,9 @@ class HeightFunctionLocator:
         """
         sim = self.simulation
         xpos = sim.data['height_function_x']
-        ypos = sim.data['height_function'].vector().get_local()  # only needs the first elements
+        ypos = (
+            sim.data['height_function'].vector().get_local()
+        )  # only needs the first elements
         line = [(x, h) for x, h in zip(xpos, ypos)]
         return [line], None
 
@@ -255,18 +273,26 @@ def get_iso_surfaces(simulation, field, value):
         connections[facet_id] = []
         for cell_id in conFC(facet_id):
             for facet_neighbour_id in conCF(cell_id):
-                if facet_neighbour_id != facet_id and facet_neighbour_id in crossing_points:
+                if (
+                    facet_neighbour_id != facet_id
+                    and facet_neighbour_id in crossing_points
+                ):
                     connections[facet_id].append(facet_neighbour_id)
 
     # Make continous contour lines
     # Find end points of contour lines and start with these
-    end_points = [facet_id for facet_id, neighbours in connections.items() if len(neighbours) == 1]
-    contours_from_endpoints = contour_lines_from_endpoints(end_points, crossing_points, connections)
+    end_points = [
+        facet_id for facet_id, neighbours in connections.items() if len(neighbours) == 1
+    ]
+    contours_from_endpoints = contour_lines_from_endpoints(
+        end_points, crossing_points, connections
+    )
 
     # Include crossing points without neighbours or joined circles without end points
     other_points = crossing_points.keys()
     contours_from_singles_and_loops = contour_lines_from_endpoints(
-        other_points, crossing_points, connections)
+        other_points, crossing_points, connections
+    )
 
     assert len(crossing_points) == 0
     return contours_from_endpoints + contours_from_singles_and_loops, cells_with_surface
@@ -335,7 +361,9 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
         # Find the location where the contour line crosses the LCCM
         v1, v2 = vertex_values
         fac = (v1 - value) / (v1 - v2)
-        crossing_points[fid] = tuple((1 - fac) * vertex_coords[0] + fac * vertex_coords[1])
+        crossing_points[fid] = tuple(
+            (1 - fac) * vertex_coords[0] + fac * vertex_coords[1]
+        )
 
         # Find the cell containing the contour line
         surf_cid = cell_ids[0] if fac <= 0.5 else cell_ids[1]
@@ -347,18 +375,26 @@ def get_iso_surfaces_picewice_constants(simulation, field, value):
         connections[facet_id] = []
         for vertex_id in conFV(facet_id):
             for facet_neighbour_id in conVF(vertex_id):
-                if facet_neighbour_id != facet_id and facet_neighbour_id in crossing_points:
+                if (
+                    facet_neighbour_id != facet_id
+                    and facet_neighbour_id in crossing_points
+                ):
                     connections[facet_id].append(facet_neighbour_id)
 
     # Make continous contour lines
     # Find end points of contour lines and start with these
-    end_points = [facet_id for facet_id, neighbours in connections.items() if len(neighbours) == 1]
-    contours_from_endpoints = contour_lines_from_endpoints(end_points, crossing_points, connections)
+    end_points = [
+        facet_id for facet_id, neighbours in connections.items() if len(neighbours) == 1
+    ]
+    contours_from_endpoints = contour_lines_from_endpoints(
+        end_points, crossing_points, connections
+    )
 
     # Include crossing points without neighbours or joined circles without end points
     other_points = crossing_points.keys()
     contours_from_singles_and_loops = contour_lines_from_endpoints(
-        other_points, crossing_points, connections)
+        other_points, crossing_points, connections
+    )
 
     assert len(crossing_points) == 0
     return contours_from_endpoints + contours_from_singles_and_loops, cells_with_surface
@@ -505,8 +541,8 @@ def get_iso_surface_DG1_DG2(simulation, cache, field, value):
         v0 = all_values[dof]
         for n in nbs:
             v1 = all_values[n]
-            b0 = (v0 <= value and v1 >= value)
-            b1 = (v0 >= value and v1 <= value)
+            b0 = v0 <= value and v1 >= value
+            b1 = v0 >= value and v1 <= value
             if not (b0 or b1):
                 continue
             p1 = tuple(cache.dofs_x[n])
@@ -523,8 +559,7 @@ def get_iso_surface_DG1_DG2(simulation, cache, field, value):
             # Check for surface crossing a facet
             elif b0:
                 fac = (v0 - value) / (v0 - v1)
-                cp = ((1 - fac) * p0[0] + fac * p1[0],
-                      (1 - fac) * p0[1] + fac * p1[1])
+                cp = ((1 - fac) * p0[0] + fac * p1[0], (1 - fac) * p0[1] + fac * p1[1])
 
                 # Select the dof with the fewest connections to avoid
                 # the iso surface line crossing a facet (the dof with
@@ -549,16 +584,21 @@ def get_iso_surface_DG1_DG2(simulation, cache, field, value):
             if n not in crossing_points:
                 continue
             p2 = crossing_points[n]
-            d = (pos[0] - p2[0])**2 + (pos[1] - p2[1])**2
+            d = (pos[0] - p2[0]) ** 2 + (pos[1] - p2[1]) ** 2
             tmp.append((d, n))
         tmp.sort(reverse=True)
         connections[dof] = [n for _, n in tmp]
 
     # Make continous contour lines
     possible_starting_points = crossing_points.keys()
-    contours = contour_lines_from_endpoints(possible_starting_points, crossing_points,
-                                            connections, min_length=3 * cache.degree,
-                                            backtrack_from_end=True, extend_endpoints=False)
+    contours = contour_lines_from_endpoints(
+        possible_starting_points,
+        crossing_points,
+        connections,
+        min_length=3 * cache.degree,
+        backtrack_from_end=True,
+        extend_endpoints=False,
+    )
 
     return contours, cells_with_surface
 
@@ -610,19 +650,27 @@ def get_boundary_surface(simulation, field, value):
     # Find end points of contour lines and start with these
     end_points = [vc for vc, neighbours in connections.items() if len(neighbours) < 2]
     contours_from_endpoints = contour_lines_from_endpoints(
-        end_points, available_coords, connections)
+        end_points, available_coords, connections
+    )
 
     # Include crossing points without neighbours or joined circles without end points
     other_points = available_coords.keys()
     contours_from_singles_and_loops = contour_lines_from_endpoints(
-        other_points, available_coords, connections)
+        other_points, available_coords, connections
+    )
 
     assert len(available_coords) == 0
     return contours_from_endpoints + contours_from_singles_and_loops
 
 
-def contour_lines_from_endpoints(endpoints, crossing_points, connections, min_length=3,
-                                 backtrack_from_end=False, extend_endpoints=True):
+def contour_lines_from_endpoints(
+    endpoints,
+    crossing_points,
+    connections,
+    min_length=3,
+    backtrack_from_end=False,
+    extend_endpoints=True,
+):
     """
     Follow contour lines and create contours
 
@@ -666,8 +714,12 @@ def contour_lines_from_endpoints(endpoints, crossing_points, connections, min_le
                 prev = nb_id
 
             # Is this the end of a loop?
-            if (nb_id == end_id and prev in connections[end_id] and
-                    len(contour) > min_length - 1 and not has_backtracked):
+            if (
+                nb_id == end_id
+                and prev in connections[end_id]
+                and len(contour) > min_length - 1
+                and not has_backtracked
+            ):
                 contour.append(contour[0])
                 break
 

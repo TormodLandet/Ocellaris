@@ -6,21 +6,17 @@ from ocellaris.utils import linear_solver_from_input
 
 DEFAULT_SOLVER_CONFIGURATION = {
     'use_ksp': True,
-
     # Set PETSc solve type (conjugate gradient) and preconditioner
     # (algebraic multigrid)
     'petsc_ksp_type': 'cg',
     'petsc_pc_type': 'gamg',
-
     # Since we have a singular problem, use SVD solver on the multigrid
     # 'coarse grid'
     'petsc_mg_coarse_ksp_type': 'preonly',
     'petsc_mg_coarse_pc_type': 'svd',
-
     # Set the solver tolerance and allow starting from previous solution
     'petsc_ksp_rtol': 1e-10,
     'petsc_ksp_initial_guess_nonzero': True,
-
     # Verbosity
     'petsc_ksp_view': 'DISABLED',
     'petsc_ksp_monitor': 'DISABLED',
@@ -50,8 +46,11 @@ class HydrostaticPressure:
         self.tensor_lhs = assemble(a)
         self.form_rhs = Form(L)
         self.null_space = None
-        self.solver = linear_solver_from_input(simulation, 'solver/p_hydrostatic',
-                                               default_parameters=DEFAULT_SOLVER_CONFIGURATION)
+        self.solver = linear_solver_from_input(
+            simulation,
+            'solver/p_hydrostatic',
+            default_parameters=DEFAULT_SOLVER_CONFIGURATION,
+        )
 
     def update(self):
         if not self.active:
@@ -78,7 +77,9 @@ class HydrostaticPressure:
             sim = self.simulation
             p = sim.data['p']
             if p.vector().max() == p.vector().min() == 0.0:
-                sim.log.info('Initial pressure field is identically zero, initializing to hydrostatic')
+                sim.log.info(
+                    'Initial pressure field is identically zero, initializing to hydrostatic'
+                )
                 p.interpolate(self.func)
 
             # Disable further hydrostatic pressure calculations
@@ -95,7 +96,9 @@ class NoHydrostaticPressure:
         pass
 
 
-def setup_hydrostatic_pressure(simulation, needs_initial_value, default_every_timestep=False):
+def setup_hydrostatic_pressure(
+    simulation, needs_initial_value, default_every_timestep=False
+):
     """
     We can calculate the hydrostatic pressure as its own pressure field every
     time step such that the we only solves for the dynamic pressure. For
@@ -107,8 +110,11 @@ def setup_hydrostatic_pressure(simulation, needs_initial_value, default_every_ti
         return NoHydrostaticPressure()
 
     # We only calculate the hydrostatic pressure every time step if asked
-    ph_every_timestep = simulation.input.get_value('solver/hydrostatic_pressure_calculation_every_timestep',
-                                                   default_every_timestep, required_type='bool')
+    ph_every_timestep = simulation.input.get_value(
+        'solver/hydrostatic_pressure_calculation_every_timestep',
+        default_every_timestep,
+        required_type='bool',
+    )
 
     if not (needs_initial_value or ph_every_timestep):
         return NoHydrostaticPressure()

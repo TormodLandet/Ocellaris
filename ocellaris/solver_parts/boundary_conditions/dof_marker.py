@@ -98,9 +98,11 @@ def get_facet_dof_indices(V):
         facet_dof_indices[2, :] = (0, 1, 3, 5, 7, 9)
         facet_dof_indices[3, :] = (0, 1, 2, 6, 8, 9)
     else:
-        raise OcellarisError('Unsupported element ndim=%d degree=%d' % ndim_deg,
-                             'The boundary condition get_dof_region_marks '
-                             'code does not support this element')
+        raise OcellarisError(
+            'Unsupported element ndim=%d degree=%d' % ndim_deg,
+            'The boundary condition get_dof_region_marks '
+            'code does not support this element',
+        )
 
     return facet_dof_indices
 
@@ -133,8 +135,9 @@ def get_same_loc_dofs(V):
     return same_loc_dofs
 
 
-def mark_cell_layers(simulation, V, layers=0, dof_region_marks=None,
-                     named_boundaries=None):
+def mark_cell_layers(
+    simulation, V, layers=0, dof_region_marks=None, named_boundaries=None
+):
     """
     Return all cells on the boundary and all connected cells in a given
     number of layers surrounding the boundary cells. Vertex neighbours
@@ -160,10 +163,8 @@ def mark_cell_layers(simulation, V, layers=0, dof_region_marks=None,
         dof_region_marks = get_dof_region_marks(simulation, V)
 
     # Get all regions with names
-    all_regions = {region.name: region.index
-                   for region in simulation.data['boundary']}
-    all_idxs = {region.index: region.name
-                for region in simulation.data['boundary']}
+    all_regions = {region.name: region.index for region in simulation.data['boundary']}
+    all_idxs = {region.index: region.name for region in simulation.data['boundary']}
 
     # Verify that the boundary names are unique
     assert len(all_regions) == len(simulation.data['boundary'])
@@ -172,17 +173,20 @@ def mark_cell_layers(simulation, V, layers=0, dof_region_marks=None,
     # Check that all named regions correspond to boundary regions
     for rname in named_boundaries:
         if rname != 'all' and rname not in all_regions:
-            raise OcellarisError('Unknown boundary region in input',
-                                 '%r is not a boundary region' % rname)
+            raise OcellarisError(
+                'Unknown boundary region in input',
+                '%r is not a boundary region' % rname,
+            )
 
     # Names of all boundary regions
     if 'all' not in named_boundaries:
-        to_keep = [mark for mark, name in all_idxs.items()
-                   if name in named_boundaries]
+        to_keep = [mark for mark, name in all_idxs.items() if name in named_boundaries]
 
         # Remove marks to unwanted bounbdary regions
-        drm = {dof: [mark for mark in dof_marks if mark in to_keep]
-               for dof, dof_marks in dof_region_marks.items()}
+        drm = {
+            dof: [mark for mark in dof_marks if mark in to_keep]
+            for dof, dof_marks in dof_region_marks.items()
+        }
 
         # Remove dofs wih empty region mark list
         dof_region_marks = {k: v for k, v in drm.items() if v}

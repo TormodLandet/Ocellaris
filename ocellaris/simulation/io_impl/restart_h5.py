@@ -6,7 +6,7 @@ import dolfin
 from ocellaris.utils import ocellaris_error
 
 
-class RestartFileIO():
+class RestartFileIO:
     def __init__(self, simulation, persisted_python_data):
         """
         This class handles reading and writing the simulation state such as
@@ -39,7 +39,8 @@ class RestartFileIO():
 
         if h5_file_name is None:
             h5_file_name = sim.input.get_output_file_path(
-                'output/hdf5_file_name', '_savepoint_%08d.h5')
+                'output/hdf5_file_name', '_savepoint_%08d.h5'
+            )
             h5_file_name = h5_file_name % sim.timestep
 
         # Write dolfin objects using dolfin.HDF5File
@@ -56,7 +57,7 @@ class RestartFileIO():
 
             # Write functions, sorted to ensure deterministic output order
             funcnames = []
-            skip = {'coupled', }  # Skip these functions
+            skip = {'coupled'}  # Skip these functions
             funcs = sorted(sim.data.items())
             for name, value in funcs:
                 if isinstance(value, dolfin.Function) and name not in skip:
@@ -88,7 +89,9 @@ class RestartFileIO():
                 root.create_dataset(name, data=np_data, dtype=string_dt)
 
             def np_stringlist(root, name, strlist):
-                np_list = numpy.array([str(s).encode('utf8') for s in strlist], dtype=object)
+                np_list = numpy.array(
+                    [str(s).encode('utf8') for s in strlist], dtype=object
+                )
                 root.create_dataset(name, data=np_list, dtype=string_dt)
 
             # List of names
@@ -138,16 +141,21 @@ class RestartFileIO():
         # Check file format and read metadata
         with h5py.File(h5_file_name, 'r') as hdf:
             if not 'ocellaris' in hdf:
-                ocellaris_error('Error reading restart file',
-                                'Restart file %r does not contain Ocellaris meta data'
-                                % h5_file_name)
+                ocellaris_error(
+                    'Error reading restart file',
+                    'Restart file %r does not contain Ocellaris meta data'
+                    % h5_file_name,
+                )
 
             meta = hdf['ocellaris']
             restart_file_version = meta.attrs['restart_file_format']
             if restart_file_version != 2:
-                ocellaris_error('Error reading restart file',
-                                'Restart file version is %d, this version of Ocellaris only ' %
-                                restart_file_version + 'supports version 2')
+                ocellaris_error(
+                    'Error reading restart file',
+                    'Restart file version is %d, this version of Ocellaris only '
+                    % restart_file_version
+                    + 'supports version 2',
+                )
 
             t = float(meta.attrs['time'])
             it = int(meta.attrs['iteration'])
@@ -246,8 +254,10 @@ class RestartFileIO():
             family = m.group('family')
             degree = int(m.group('degree'))
 
-            self.simulation.log.info('        Found function %s of family %r '
-                                     'and degree %d' % (name, family, degree))
+            self.simulation.log.info(
+                '        Found function %s of family %r '
+                'and degree %d' % (name, family, degree)
+            )
             V = dolfin.FunctionSpace(mesh, family, degree)
             return dolfin.Function(V)
 
@@ -275,5 +285,7 @@ def is_basic_datatype(value):
     elif isinstance(value, (list, tuple, set)):
         return all(is_basic_datatype(v) for v in value)
     elif isinstance(value, dict):
-        return all(is_basic_datatype(k) and is_basic_datatype(v) for k, v in value.items())
+        return all(
+            is_basic_datatype(k) and is_basic_datatype(v) for k, v in value.items()
+        )
     return False

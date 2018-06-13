@@ -34,9 +34,11 @@ class LineProbe(Probe):
         if 'target_abcissa' in self.input:
             self.has_target = True
             self.target_abcissa = self.input.get_value(
-                'target_abcissa', required_type='list(float)')
+                'target_abcissa', required_type='list(float)'
+            )
             self.target_ordinate = self.input.get_value(
-                'target_ordinate', required_type='list(float)')
+                'target_ordinate', required_type='list(float)'
+            )
             self.target_name = self.input.get_value('target_name', 'Target', 'string')
 
         # Handle 2D positions
@@ -51,10 +53,18 @@ class LineProbe(Probe):
 
         if self.write_file:
             self.output_file = open(self.file_name, 'wt')
-            self.output_file.write('# Ocellaris line probe of the %s field\n' % self.field_name)
-            self.output_file.write('# X = %s\n' % ' '.join('%15.5e' % x for x in self.xvec))
-            self.output_file.write('# Y = %s\n' % ' '.join('%15.5e' % y for y in self.yvec))
-            self.output_file.write('# Z = %s\n' % ' '.join('%15.5e' % z for z in self.zvec))
+            self.output_file.write(
+                '# Ocellaris line probe of the %s field\n' % self.field_name
+            )
+            self.output_file.write(
+                '# X = %s\n' % ' '.join('%15.5e' % x for x in self.xvec)
+            )
+            self.output_file.write(
+                '# Y = %s\n' % ' '.join('%15.5e' % y for y in self.yvec)
+            )
+            self.output_file.write(
+                '# Z = %s\n' % ' '.join('%15.5e' % z for z in self.zvec)
+            )
             self.output_file.write('#     time |-- probe values --> \n')
 
         if self.show:
@@ -66,7 +76,9 @@ class LineProbe(Probe):
             self.line, = self.ax.plot([], [])
 
             if self.has_target:
-                self.target_line, = self.ax.plot(self.target_abcissa, self.target_ordinate, 'kv')
+                self.target_line, = self.ax.plot(
+                    self.target_abcissa, self.target_ordinate, 'kv'
+                )
                 self.ax.legend(['Ocellaris', self.target_name], loc='best')
 
     def end_of_timestep(self):
@@ -110,8 +122,10 @@ class LineProbe(Probe):
             abcissa_label = 'z-pos'
 
         if update_file:
-            self.output_file.write('%10.5f %s\n' % (self.simulation.time,
-                                                    ' '.join('%15.5e' % v for v in probe_values)))
+            self.output_file.write(
+                '%10.5f %s\n'
+                % (self.simulation.time, ' '.join('%15.5e' % v for v in probe_values))
+            )
 
         if update_plot:
             self.line.set_data(abcissa, probe_values)

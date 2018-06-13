@@ -13,7 +13,9 @@ from .panel_surfaces import OcellarisSurfacesPanel
 
 class OcellarisInspector(wx.Frame):
     def __init__(self, inspector_state):
-        super(OcellarisInspector, self).__init__(None, title='Ocellaris Report Inspector')
+        super(OcellarisInspector, self).__init__(
+            None, title='Ocellaris Report Inspector'
+        )
         self.istate = inspector_state
 
         # Keyboard shortcuts

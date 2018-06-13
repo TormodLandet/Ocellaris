@@ -20,13 +20,16 @@ from time import time
 alarmlist = []
 
 
-def __new_alarm(t, f, a, k): return (t + time(), f, a, k)
+def __new_alarm(t, f, a, k):
+    return (t + time(), f, a, k)
 
 
-def __next_alarm(): return int(round(alarmlist[0][0] - time())) if alarmlist else None
+def __next_alarm():
+    return int(round(alarmlist[0][0] - time())) if alarmlist else None
 
 
-def __set_alarm(): return signal.alarm(max(__next_alarm(), 1))
+def __set_alarm():
+    return signal.alarm(max(__next_alarm(), 1))
 
 
 class AlarmTimeoutError(Exception):

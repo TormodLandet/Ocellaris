@@ -1,5 +1,6 @@
 # Check for presence of FEniCS etc
 from .verify_environment import verify_env
+
 verify_env()
 
 
@@ -8,6 +9,7 @@ __version__ = '2018.1.0.dev0'
 
 # This should potentially be made local to the mesh creation routines
 import dolfin
+
 dolfin.parameters['ghost_mode'] = 'shared_vertex'
 del dolfin
 
@@ -26,6 +28,7 @@ def get_detailed_version():
     """
     import os
     import subprocess
+
     this_dir = os.path.dirname(os.path.abspath(__file__))
     proj_dir = os.path.abspath(os.path.join(this_dir, '..'))
     if os.path.isdir(os.path.join(proj_dir, '.git')):

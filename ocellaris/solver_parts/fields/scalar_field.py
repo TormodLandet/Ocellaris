@@ -24,14 +24,19 @@ class ScalarField(KnownField):
         self.func = None
         self.updater = None
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
-        simulation.hooks.add_pre_timestep_hook(self.update, 'Update scalar field %r' % self.name)
+        simulation.hooks.add_pre_timestep_hook(
+            self.update, 'Update scalar field %r' % self.name
+        )
 
     def read_input(self, field_inp):
         self.name = field_inp.get_value('name', required_type='string')
-        self.var_name = field_inp.get_value('variable_name', 'phi', required_type='string')
+        self.var_name = field_inp.get_value(
+            'variable_name', 'phi', required_type='string'
+        )
         self.stationary = field_inp.get_value('stationary', False, required_type='bool')
         self.polydeg = field_inp.get_value(
-            'polynomial_degree', DEFAULT_POLYDEG, required_type='int')
+            'polynomial_degree', DEFAULT_POLYDEG, required_type='int'
+        )
         self.cpp_code = field_inp.get_value('cpp_code', required_type='string')
 
     def update(self, timestep_number, t, dt):
@@ -46,18 +51,24 @@ class ScalarField(KnownField):
 
     def _get_expression(self):
         if self.expr is None:
-            expr, updater = OcellarisCppExpression(self.simulation, self.cpp_code,
-                                                   'Scalar field %r' % self.name,
-                                                   self.polydeg, update=False,
-                                                   return_updater=True)
+            expr, updater = OcellarisCppExpression(
+                self.simulation,
+                self.cpp_code,
+                'Scalar field %r' % self.name,
+                self.polydeg,
+                update=False,
+                return_updater=True,
+            )
             self.expr = expr
             self.updater = updater
         return self.expr
 
     def get_variable(self, name):
         if not name == self.var_name:
-            ocellaris_error('Scalar field does not define %r' % name,
-                            'This scalar field defines %r' % self.var_name)
+            ocellaris_error(
+                'Scalar field does not define %r' % name,
+                'This scalar field defines %r' % self.var_name,
+            )
         if self.func is None:
             expr = self._get_expression()
             func = dolfin.Function(self.V)

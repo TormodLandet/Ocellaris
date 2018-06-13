@@ -13,7 +13,8 @@ class Reporting(object):
         self.timesteps = []
         self.timestep_xy_reports = OrderedDict()
         simulation.hooks.add_pre_simulation_hook(
-            self.setup_report_plotting, 'Reporting - setup plots')
+            self.setup_report_plotting, 'Reporting - setup plots'
+        )
 
     def setup_report_plotting(self):
         """
@@ -22,7 +23,9 @@ class Reporting(object):
         if self.simulation.rank != 0:
             return  # Do not plot on non root processes
 
-        reps = self.simulation.input.get_value('reporting/reports_to_show', [], 'list(string)')
+        reps = self.simulation.input.get_value(
+            'reporting/reports_to_show', [], 'list(string)'
+        )
         self.figures = {}
         for report_name in reps:
             pyplot.ion()
@@ -51,7 +54,7 @@ class Reporting(object):
         """
         t = self.timesteps
         rep = self.timestep_xy_reports[report_name]
-        return t[:len(rep)], rep
+        return t[: len(rep)], rep
 
     @timeit.named('reporting log_timestep_reports')
     def log_timestep_reports(self):
@@ -63,8 +66,9 @@ class Reporting(object):
             value = self.timestep_xy_reports[report_name][-1]
             info.append('%s = %10g' % (report_name, value))
         it, t = self.simulation.timestep, self.simulation.time
-        self.simulation.log.info('Reports for timestep = %5d, time = %10.4f, ' % (it, t) +
-                                 ', '.join(info))
+        self.simulation.log.info(
+            'Reports for timestep = %5d, time = %10.4f, ' % (it, t) + ', '.join(info)
+        )
 
         # Update interactive report plots
         self._update_plots()
@@ -78,16 +82,20 @@ class Reporting(object):
 
         for report_name in self.figures:
             if not report_name in self.timestep_xy_reports:
-                ocellaris_error('Unknown report name: "%s"' % report_name,
-                                'Cannot plot this report, it does not exist')
+                ocellaris_error(
+                    'Unknown report name: "%s"' % report_name,
+                    'Cannot plot this report, it does not exist',
+                )
 
             abscissa = self.timesteps
             ordinate = self.timestep_xy_reports[report_name]
 
             if len(abscissa) != len(ordinate):
-                ocellaris_error('Malformed report data: "%s"' % report_name,
-                                'Length of t is %d while report is %d' %
-                                (len(abscissa), len(ordinate)))
+                ocellaris_error(
+                    'Malformed report data: "%s"' % report_name,
+                    'Length of t is %d while report is %d'
+                    % (len(abscissa), len(ordinate)),
+                )
 
             fig, ax, line = self.figures[report_name]
             line.set_xdata(abscissa)

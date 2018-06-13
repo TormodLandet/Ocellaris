@@ -22,11 +22,13 @@ class BaseWaveField(KnownField):
         self._functions = OrderedDict()
 
         self.name = field_inp.get_value('name', required_type='string')
-        self.polydeg = field_inp.get_value('polynomial_degree', DEFAULT_POLYDEG,
-                                           required_type='int')
+        self.polydeg = field_inp.get_value(
+            'polynomial_degree', DEFAULT_POLYDEG, required_type='int'
+        )
         self.V = dolfin.FunctionSpace(simulation.data['mesh'], 'CG', self.polydeg)
-        simulation.hooks.add_pre_timestep_hook(self.update,
-                                               'Update wave field %r' % self.name)
+        simulation.hooks.add_pre_timestep_hook(
+            self.update, 'Update wave field %r' % self.name
+        )
 
     def update(self, timestep_number, t, dt):
         """
@@ -58,11 +60,15 @@ class BaseWaveField(KnownField):
         verify_key('variable', name, keys, 'Raschii wave field %r' % self.name)
         if name not in self._expressions:
             degree = self.polydeg if quad_degree is None else None
-            expr, updater = OcellarisCppExpression(self.simulation, self._cpp[name],
-                                                   'Raschii wave field %r' % name,
-                                                   degree, update=False,
-                                                   return_updater=True,
-                                                   quad_degree=quad_degree)
+            expr, updater = OcellarisCppExpression(
+                self.simulation,
+                self._cpp[name],
+                'Raschii wave field %r' % name,
+                degree,
+                update=False,
+                return_updater=True,
+                quad_degree=quad_degree,
+            )
             self._expressions[name] = expr, updater
         return self._expressions[name][0]
 
@@ -79,9 +85,11 @@ class BaseWaveField(KnownField):
             # Perform projection for c instead of interpolation to better
             # capture the discontinuous nature of the colour field
             if not 'Vc' in sim.data:
-                ocellaris_error('Error in wave field %r input' % self.name,
-                                'Cannot specify colour_to_dg_degree when c is '
-                                'not used in the multiphase_solver.')
+                ocellaris_error(
+                    'Error in wave field %r input' % self.name,
+                    'Cannot specify colour_to_dg_degree when c is '
+                    'not used in the multiphase_solver.',
+                )
             V = sim.data['Vc']
             quad_degree = self.colour_projection_degree
 
@@ -100,9 +108,11 @@ class BaseWaveField(KnownField):
                 # Ensure that we can use the DG0 trick of dividing by the mass
                 # matrix diagonal to get the projected value
                 if V.ufl_element().degree() != 0:
-                    ocellaris_error('Error in wave field %r input' % self.name,
-                                    'The colour_to_dg_degree projection is '
-                                    'currently only implemented when c is DG0')
+                    ocellaris_error(
+                        'Error in wave field %r input' % self.name,
+                        'The colour_to_dg_degree projection is '
+                        'currently only implemented when c is DG0',
+                    )
                 v = dolfin.TestFunction(V)
                 dx = dolfin.dx(metadata={'quadrature_degree': quad_degree})
                 d = dolfin.CellVolume(V.mesh())  # mass matrix diagonal
@@ -123,12 +133,17 @@ class BaseWaveField(KnownField):
         if name == 'u':
             # Assume uhoriz == u0 and uvert = uD where D is 2 or 3
             if self.simulation.ndim == 2:
-                return dolfin.as_vector([self.get_variable('uhoriz'),
-                                         self.get_variable('uvert')])
+                return dolfin.as_vector(
+                    [self.get_variable('uhoriz'), self.get_variable('uvert')]
+                )
             else:
-                return dolfin.as_vector([self.get_variable('uhoriz'),
-                                         dolfin.Constant(0.0),
-                                         self.get_variable('uvert')])
+                return dolfin.as_vector(
+                    [
+                        self.get_variable('uhoriz'),
+                        dolfin.Constant(0.0),
+                        self.get_variable('uvert'),
+                    ]
+                )
 
         if name not in self._functions:
             self._interp(name)

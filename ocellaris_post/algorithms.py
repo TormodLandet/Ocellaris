@@ -36,7 +36,11 @@ def get_stairs(all_results, report_name, min_length=50):
                 this_res.append([ts[i], i, None])
                 all_vals.add(ts[i])
                 continue
-            elif not start and N - 1 > i > 1 and ts[i - 2] == ts[i - 1] == ts[i] != ts[i + 1]:
+            elif (
+                not start
+                and N - 1 > i > 1
+                and ts[i - 2] == ts[i - 1] == ts[i] != ts[i + 1]
+            ):
                 start = True
                 this_res[-1][-1] = i
 

@@ -1,32 +1,45 @@
 import dolfin
-from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
-                             create_vector_functions, shift_fields,
-                             velocity_change)
+from ocellaris.utils import (
+    verify_key,
+    timeit,
+    linear_solver_from_input,
+    create_vector_functions,
+    shift_fields,
+    velocity_change,
+)
 from . import Solver, register_solver, BDM
-from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
-                            SlopeLimiterVelocity, before_simulation,
-                            after_timestep)
+from ..solver_parts import (
+    VelocityBDMProjection,
+    setup_hydrostatic_pressure,
+    SlopeLimiterVelocity,
+    before_simulation,
+    after_timestep,
+)
 from .ipcs_equations import EQUATION_SUBTYPES
 
 
 # Solvers - default values, can be changed in the input file
-SOLVER_U_OPTIONS = {'use_ksp': True,
-                    'petsc_ksp_type': 'gmres',
-                    'petsc_pc_type': 'asm',
-                    'petsc_ksp_initial_guess_nonzero': True,
-                    'petsc_ksp_view': 'DISABLED',
-                    'inner_iter_rtol': [1e-10] * 3,
-                    'inner_iter_atol': [1e-15] * 3,
-                    'inner_iter_max_it': [100] * 3}
-SOLVER_P_OPTIONS = {'use_ksp': True,
-                    'petsc_ksp_type': 'gmres',
-                    'petsc_pc_type': 'hypre',
-                    'petsc_pc_hypre_type': 'boomeramg',
-                    'petsc_ksp_initial_guess_nonzero': True,
-                    'petsc_ksp_view': 'DISABLED',
-                    'inner_iter_rtol': [1e-10] * 3,
-                    'inner_iter_atol': [1e-15] * 3,
-                    'inner_iter_max_it': [100] * 3}
+SOLVER_U_OPTIONS = {
+    'use_ksp': True,
+    'petsc_ksp_type': 'gmres',
+    'petsc_pc_type': 'asm',
+    'petsc_ksp_initial_guess_nonzero': True,
+    'petsc_ksp_view': 'DISABLED',
+    'inner_iter_rtol': [1e-10] * 3,
+    'inner_iter_atol': [1e-15] * 3,
+    'inner_iter_max_it': [100] * 3,
+}
+SOLVER_P_OPTIONS = {
+    'use_ksp': True,
+    'petsc_ksp_type': 'gmres',
+    'petsc_pc_type': 'hypre',
+    'petsc_pc_hypre_type': 'boomeramg',
+    'petsc_ksp_initial_guess_nonzero': True,
+    'petsc_ksp_view': 'DISABLED',
+    'inner_iter_rtol': [1e-10] * 3,
+    'inner_iter_atol': [1e-15] * 3,
+    'inner_iter_max_it': [100] * 3,
+}
 MAX_INNER_ITER = 10
 ALLOWABLE_ERROR_INNER = 1e-10
 
@@ -53,7 +66,9 @@ class SolverIPCS(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
-        self.hydrostatic_pressure = setup_hydrostatic_pressure(simulation, needs_initial_value=True)
+        self.hydrostatic_pressure = setup_hydrostatic_pressure(
+            simulation, needs_initial_value=True
+        )
 
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -62,20 +77,25 @@ class SolverIPCS(Solver):
         sim.data['dt'] = dolfin.Constant(simulation.dt)
 
         # Get equations
-        MomentumPredictionEquation, PressureCorrectionEquation, \
-            VelocityUpdateEquation = EQUATION_SUBTYPES[self.equation_subtype]
+        MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation = EQUATION_SUBTYPES[
+            self.equation_subtype
+        ]
 
         # Define the momentum prediction equations
         self.eqs_mom_pred = []
-        self.eqs_mom_pred = MomentumPredictionEquation(simulation,
-                                                       use_stress_divergence_form=self.use_stress_divergence_form,
-                                                       use_grad_p_form=self.use_grad_p_form,
-                                                       include_hydrostatic_pressure=self.hydrostatic_pressure.every_timestep)
+        self.eqs_mom_pred = MomentumPredictionEquation(
+            simulation,
+            use_stress_divergence_form=self.use_stress_divergence_form,
+            use_grad_p_form=self.use_grad_p_form,
+            include_hydrostatic_pressure=self.hydrostatic_pressure.every_timestep,
+        )
 
         # Define the pressure correction equation
-        self.eq_pressure = PressureCorrectionEquation(simulation,
-                                                      use_lagrange_multiplicator=self.use_lagrange_multiplicator,
-                                                      incompressibility_flux_type=self.incompressibility_flux_type)
+        self.eq_pressure = PressureCorrectionEquation(
+            simulation,
+            use_lagrange_multiplicator=self.use_lagrange_multiplicator,
+            incompressibility_flux_type=self.incompressibility_flux_type,
+        )
 
         # Define the velocity update equations
         self.eqs_vel_upd = []
@@ -84,14 +104,19 @@ class SolverIPCS(Solver):
             self.eqs_vel_upd.append(eq)
 
         # Slope limiter for the momentum equation velocity components
-        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
+        self.slope_limiter = SlopeLimiterVelocity(
+            sim, sim.data['u'], 'u', vel_w=sim.data['u_conv']
+        )
         self.using_limiter = self.slope_limiter.active
 
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
-            self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
-                                                                incompressibility_flux_type=self.incompressibility_flux_type)
+            self.velocity_postprocessor = VelocityBDMProjection(
+                sim,
+                sim.data['u'],
+                incompressibility_flux_type=self.incompressibility_flux_type,
+            )
 
         # Storage for preassembled matrices
         self.Au = None
@@ -114,34 +139,44 @@ class SolverIPCS(Solver):
 
         # Representation of velocity
         Vu_family = sim.data['Vu'].ufl_element().family()
-        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
+        self.vel_is_discontinuous = Vu_family == 'Discontinuous Lagrange'
 
         # Create linear solvers
-        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u',
-                                                        default_parameters=SOLVER_U_OPTIONS)
-        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p',
-                                                        default_parameters=SOLVER_P_OPTIONS)
+        self.velocity_solver = linear_solver_from_input(
+            self.simulation, 'solver/u', default_parameters=SOLVER_U_OPTIONS
+        )
+        self.pressure_solver = linear_solver_from_input(
+            self.simulation, 'solver/p', default_parameters=SOLVER_P_OPTIONS
+        )
 
         # Velocity update can be performed with local solver for DG velocities
-        self.use_local_solver_for_update = sim.input.get_value('solver/u_upd_local',
-                                                               self.vel_is_discontinuous, 'bool')
+        self.use_local_solver_for_update = sim.input.get_value(
+            'solver/u_upd_local', self.vel_is_discontinuous, 'bool'
+        )
         if self.use_local_solver_for_update:
             self.u_upd_solver = None  # Will be set when LHS is ready
         else:
-            self.u_upd_solver = linear_solver_from_input(self.simulation, 'solver/u_upd',
-                                                         default_parameters=SOLVER_U_OPTIONS)
+            self.u_upd_solver = linear_solver_from_input(
+                self.simulation, 'solver/u_upd', default_parameters=SOLVER_U_OPTIONS
+            )
 
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value(
-            'solver/equation_subtype', EQUATION_SUBTYPE, 'string')
-        verify_key('equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'ipcs solver')
+            'solver/equation_subtype', EQUATION_SUBTYPE, 'string'
+        )
+        verify_key(
+            'equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'ipcs solver'
+        )
 
         # Lagrange multiplicator or remove null space via PETSc
         self.remove_null_space = True
         self.pressure_null_space = None
-        self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
-                                                              USE_LAGRANGE_MULTIPLICATOR, 'bool')
-        has_dirichlet = self.simulation.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']
+        self.use_lagrange_multiplicator = sim.input.get_value(
+            'solver/use_lagrange_multiplicator', USE_LAGRANGE_MULTIPLICATOR, 'bool'
+        )
+        has_dirichlet = (
+            self.simulation.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']
+        )
         if self.use_lagrange_multiplicator or has_dirichlet:
             self.remove_null_space = False
 
@@ -151,27 +186,32 @@ class SolverIPCS(Solver):
             self.remove_null_space = False
 
         # Control the form of the governing equations
-        self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
-                                                              USE_STRESS_DIVERGENCE, 'bool')
+        self.use_stress_divergence_form = sim.input.get_value(
+            'solver/use_stress_divergence_form', USE_STRESS_DIVERGENCE, 'bool'
+        )
         self.use_grad_p_form = sim.input.get_value(
-            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
-        self.incompressibility_flux_type = sim.input.get_value('solver/incompressibility_flux_type',
-                                                               INCOMPRESSIBILITY_FLUX_TYPE, 'string')
+            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool'
+        )
+        self.incompressibility_flux_type = sim.input.get_value(
+            'solver/incompressibility_flux_type', INCOMPRESSIBILITY_FLUX_TYPE, 'string'
+        )
 
         # Velocity post_processing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
         self.velocity_postprocessing = sim.input.get_value(
-            'solver/velocity_postprocessing', default_postprocessing, 'string')
+            'solver/velocity_postprocessing', default_postprocessing, 'string'
+        )
         verify_key(
             'velocity post processing',
             self.velocity_postprocessing,
-            (None,
-             BDM),
-            'ipcs solver')
+            (None, BDM),
+            'ipcs solver',
+        )
 
         # Quasi-steady simulation input
-        self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
-                                                       None, 'float')
+        self.steady_velocity_eps = sim.input.get_value(
+            'solver/steady_velocity_stopping_criterion', None, 'float'
+        )
         self.is_steady = self.steady_velocity_eps is not None
 
     def create_functions(self):
@@ -230,9 +270,13 @@ class SolverIPCS(Solver):
         A = self.Au
         b = dolfin.as_backend_type(eq.assemble_rhs())
         self.assigner_merge.assign(uvw_star, list(sim.data['u']))
-        self.niters_u = self.velocity_solver.inner_solve(A, uvw_star.vector(), b,
-                                                         in_iter=self.inner_iteration,
-                                                         co_iter=self.co_inner_iter)
+        self.niters_u = self.velocity_solver.inner_solve(
+            A,
+            uvw_star.vector(),
+            b,
+            in_iter=self.inner_iteration,
+            co_iter=self.co_inner_iter,
+        )
         self.assigner_split.assign(list(sim.data['u']), uvw_star)
 
         # Compute change from last iteration
@@ -281,9 +325,9 @@ class SolverIPCS(Solver):
             self.pressure_null_space.orthogonalize(b)
 
         # Solve for the new pressure correction
-        self.niters_p = self.pressure_solver.inner_solve(A, p.vector(), b,
-                                                         in_iter=self.inner_iteration,
-                                                         co_iter=self.co_inner_iter)
+        self.niters_p = self.pressure_solver.inner_solve(
+            A, p.vector(), b, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
+        )
 
         # Removing the null space of the matrix system is not strictly the same as removing
         # the null space of the equation, so we correct for this here
@@ -353,9 +397,11 @@ class SolverIPCS(Solver):
         self.slope_limiter.run()
 
         # Measure the change in the field after limiting (l2 norm)
-        change = velocity_change(u1=self.simulation.data['u'],
-                                 u2=self.simulation.data['u_unlim'],
-                                 ui_tmp=self.simulation.data['ui_tmp'])
+        change = velocity_change(
+            u1=self.simulation.data['u'],
+            u2=self.simulation.data['u_unlim'],
+            ui_tmp=self.simulation.data['ui_tmp'],
+        )
 
         return change
 
@@ -377,10 +423,12 @@ class SolverIPCS(Solver):
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
             tmax = sim.input.get_value('time/tmax', required_type='float')
-            num_inner_iter = sim.input.get_value('solver/num_inner_iter',
-                                                 MAX_INNER_ITER, 'int')
-            allowable_error_inner = sim.input.get_value('solver/allowable_error_inner',
-                                                        ALLOWABLE_ERROR_INNER, 'float')
+            num_inner_iter = sim.input.get_value(
+                'solver/num_inner_iter', MAX_INNER_ITER, 'int'
+            )
+            allowable_error_inner = sim.input.get_value(
+                'solver/allowable_error_inner', ALLOWABLE_ERROR_INNER, 'float'
+            )
 
             # Check if the simulation is done
             if t + dt > tmax + 1e-6:
@@ -402,9 +450,11 @@ class SolverIPCS(Solver):
                 err_u = self.momentum_prediction()
                 err_p = self.pressure_correction()
                 self.velocity_update()
-                sim.log.info('  IPCS-D iteration %3d - err u* %10.3e - err p %10.3e'
-                             ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
-                                                                      err_u, err_p, self.niters_u, self.niters_p))
+                sim.log.info(
+                    '  IPCS-D iteration %3d - err u* %10.3e - err p %10.3e'
+                    ' - Num Krylov iters - u %3d - p %3d'
+                    % (self.inner_iteration, err_u, err_p, self.niters_u, self.niters_p)
+                )
                 self.inner_iteration += 1
 
                 if err_u < allowable_error_inner:

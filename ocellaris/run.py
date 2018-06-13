@@ -37,18 +37,24 @@ def setup_simulation(simulation, setup_logging=True, catch_exceptions=False):
         tb, err = sys.exc_info()[2], e
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
-        simulation.log.error('You pressed Ctrl+C or setup got a SIGINT/SIGTERM∕SIGQUIT signal')
+        simulation.log.error(
+            'You pressed Ctrl+C or setup got a SIGINT/SIGTERM∕SIGQUIT signal'
+        )
     except BaseException as e:
         simulation.log.error('=== EXCEPTION ==' * 5)
         tb, err = sys.exc_info()[2], e
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         e_type = type(e).__name__
-        simulation.log.error('Got %s exception when running setup:\n%s' % (e_type, str(e)))
+        simulation.log.error(
+            'Got %s exception when running setup:\n%s' % (e_type, str(e))
+        )
 
     # Check if the setup ran without problems
     if not success and not catch_exceptions:
-        raise err.with_traceback(tb)  # Re-raise the exception gotten from running the setup
+        raise err.with_traceback(
+            tb
+        )  # Re-raise the exception gotten from running the setup
 
     return success
 
@@ -69,9 +75,14 @@ def run_simulation(simulation, catch_exceptions=False):
     simulation.log.info(str(simulation.input))
     simulation.log.info('{:-^80}'.format(' configuration end '))
     simulation.log.info("\nCurrent time: %s" % time.strftime('%Y-%m-%d %H:%M:%S'))
-    simulation.log.info("Degrees of freedom: %d" % simulation.ndofs +
-                        ('' if simulation.ncpu == 1 else ' (%d per process)' %
-                         (simulation.ndofs / simulation.ncpu)))
+    simulation.log.info(
+        "Degrees of freedom: %d" % simulation.ndofs
+        + (
+            ''
+            if simulation.ncpu == 1
+            else ' (%d per process)' % (simulation.ndofs / simulation.ncpu)
+        )
+    )
     simulation.log.info("\nRunning simulation on %d CPUs...\n" % simulation.ncpu)
     simulation.t_start = time.time()
 
@@ -92,12 +103,16 @@ def run_simulation(simulation, catch_exceptions=False):
         tb, err = sys.exc_info()[2], e
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
-        simulation.log.error('You pressed Ctrl+C or the solver got a SIGINT/SIGTERM∕SIGQUIT signal')
+        simulation.log.error(
+            'You pressed Ctrl+C or the solver got a SIGINT/SIGTERM∕SIGQUIT signal'
+        )
         if simulation.input.get_value('output/save_restart_file_at_end', True, 'bool'):
             simulation.io.last_savepoint_is_checkpoint = True
             simulation.hooks.simulation_ended(success)
     except SystemExit as e:
-        simulation.success = False  # this is just used for debugging, no fancy summary needed
+        simulation.success = (
+            False
+        )  # this is just used for debugging, no fancy summary needed
         simulation.log.error('========== SystemExit - exit() was called ==========')
         tb, err = sys.exc_info()[2], e
     except BaseException as e:
@@ -106,13 +121,17 @@ def run_simulation(simulation, catch_exceptions=False):
         tb_msg = traceback.format_tb(tb)
         simulation.log.error('Traceback:\n\n%s\n' % ''.join(tb_msg))
         e_type = type(e).__name__
-        simulation.log.error('Got %s exception when running solver:\n%s' % (e_type, str(e)))
+        simulation.log.error(
+            'Got %s exception when running solver:\n%s' % (e_type, str(e))
+        )
         simulation.hooks.simulation_ended(success)
     simulation.flush()
 
     # Check if the solver ran without problems
     if not success and not catch_exceptions:
-        raise err.with_traceback(tb)  # Re-raise the exception gotten from running the solver
+        raise err.with_traceback(
+            tb
+        )  # Re-raise the exception gotten from running the solver
 
     ##############################################################################################
     # Limited support for postprocessing implemented below. It is generally better to use Paraview
@@ -153,9 +172,11 @@ def validate_input_file(simulation):
         simulation.log.info('    Validation status OK')
         return
 
-    simulation.log.error('    The input file is not valid! Ocellaris will still'
-                         ' continue since this may be a false negative (the'
-                         ' validation schema is not perfect), but beware!')
+    simulation.log.error(
+        '    The input file is not valid! Ocellaris will still'
+        ' continue since this may be a false negative (the'
+        ' validation schema is not perfect), but beware!'
+    )
     prefix1 = '    ERROR: '
     prefix2 = ' ' * len(prefix1)
     for error in errors:
@@ -186,4 +207,5 @@ def plot_at_end(simulation):
     dolfin.plot(simulation.data['boundary_marker'], title='boundary_marker')
 
     from matplotlib import pyplot
+
     pyplot.show()

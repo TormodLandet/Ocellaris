@@ -13,13 +13,19 @@ def add_forcing_zone(simulation, fzones, inp):
     target_vardef = inp.get_value('target', required_type='string')
     plot = inp.get_value('plot', False, required_type='bool')
 
-    zone = verify_field_variable_definition(simulation, zone_vardef,
-                                            'forcing zone %r zone definition' % name)
-    target = verify_field_variable_definition(simulation, target_vardef,
-                                              'forcing zone %r target' % name)
+    zone = verify_field_variable_definition(
+        simulation, zone_vardef, 'forcing zone %r zone definition' % name
+    )
+    target = verify_field_variable_definition(
+        simulation, target_vardef, 'forcing zone %r target' % name
+    )
 
-    verify_key('forcing zone type', ztype, ('MomentumForcing', 'ScalarForcing'),
-               'penalty forcing zone %s' % name)
+    verify_key(
+        'forcing zone type',
+        ztype,
+        ('MomentumForcing', 'ScalarForcing'),
+        'penalty forcing zone %s' % name,
+    )
     if ztype == 'MomentumForcing':
         varname = inp.get_value('variable', 'u', required_type='string')
     else:

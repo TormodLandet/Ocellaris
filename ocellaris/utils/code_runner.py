@@ -54,9 +54,10 @@ class RunnablePythonString(object):
         needs_exec = multiline or has_vardef
 
         if needs_exec and self.var_name is not None and not has_vardef:
-            ocellaris_error('Invalid: %s' % self.description,
-                            'Multi line expression must define the variable "%s"'
-                            % self.var_name)
+            ocellaris_error(
+                'Invalid: %s' % self.description,
+                'Multi line expression must define the variable "%s"' % self.var_name,
+            )
 
         return needs_exec
 
@@ -79,7 +80,9 @@ class RunnablePythonString(object):
         code_locals.update(kwargs)
 
         # Make sure the user constants are accessible
-        user_constants = simulation.input.get_value('user_code/constants', {}, 'dict(string:basic)')
+        user_constants = simulation.input.get_value(
+            'user_code/constants', {}, 'dict(string:basic)'
+        )
         constants = {}
         for name, value in user_constants.items():
             constants[name] = value
@@ -129,6 +132,7 @@ def CodedExpression(simulation, code_string, description, value_shape=()):
 
 ################################################################################
 # We need to subclass once per value_shape() for some reason
+
 
 class CodedExpression0(dolfin.UserExpression):
     def eval_cell(self, value, x, ufc_cell):

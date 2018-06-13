@@ -41,7 +41,7 @@ class SlopeLimiterBoundaryConditions(object):
         """
 
         self.dof_region_marks = {}  # Map from dof to ONE region
-        self.region_dofs = {}       # Map from region number to list of dofs
+        self.region_dofs = {}  # Map from region number to list of dofs
 
         for dof, regions in dof_region_marks.items():
             region = regions[-1]  # in case of multiple regions pick the last
@@ -119,8 +119,10 @@ class SlopeLimiterBoundaryConditions(object):
                     boundary_dof_type[dof] = self.BC_TYPE_OTHER
                 continue
             else:
-                self._warn('WARNING: Slope limiter found no BC for field %s '
-                           'in region %s' % (fname, boundary_region.name))
+                self._warn(
+                    'WARNING: Slope limiter found no BC for field %s '
+                    'in region %s' % (fname, boundary_region.name)
+                )
                 continue
 
             if bc_type == self.BC_TYPE_DIRICHLET and weak_dof_values is not None:
@@ -152,8 +154,10 @@ class SlopeLimiterBoundaryConditions(object):
                     boundary_dof_value[dof] = val[0]
 
             else:
-                self._warn('WARNING: Field %s has unsupported limiter BC %r in '
-                           'region %s' % (fname, type(value), boundary_region.name))
+                self._warn(
+                    'WARNING: Field %s has unsupported limiter BC %r in '
+                    'region %s' % (fname, type(value), boundary_region.name)
+                )
 
         timer.stop()
         return boundary_dof_type, boundary_dof_value

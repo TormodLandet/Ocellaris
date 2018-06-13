@@ -38,7 +38,8 @@ SYMBOLS = ' .:!||||++++'
 INFINITY = '#'
 
 
-def count_2_char(v): return SYMBOLS[v] if v < len(SYMBOLS) else INFINITY
+def count_2_char(v):
+    return SYMBOLS[v] if v < len(SYMBOLS) else INFINITY
 
 
 def translate_line(vals):

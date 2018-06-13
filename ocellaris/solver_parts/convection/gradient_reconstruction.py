@@ -63,7 +63,9 @@ class GradientReconstructor(object):
             facets_or_vertices = con1(idx)
             for ifv in facets_or_vertices:
                 cell_neighbours = con2(ifv)
-                new_nbs = [ci for ci in cell_neighbours if ci != idx and ci not in neighbours]
+                new_nbs = [
+                    ci for ci in cell_neighbours if ci != idx and ci not in neighbours
+                ]
                 neighbours.extend(new_nbs)
 
             # Get the centroid of the cell neighbours
@@ -83,7 +85,8 @@ class GradientReconstructor(object):
 
         # Turn the lists into numpy arrays for ease of communication with C++
         self.num_neighbours = numpy.array(
-            [len(nbs) for nbs in everyones_neighbours], dtype='i', order='C')
+            [len(nbs) for nbs in everyones_neighbours], dtype='i', order='C'
+        )
         NBmax = self.num_neighbours.max()
         self.neighbours = numpy.zeros((ncells, NBmax), dtype='i', order='C')
         self.lstsq_matrices = numpy.zeros((ncells, ndim, NBmax), float, order='C')
@@ -122,16 +125,24 @@ class GradientReconstructor(object):
             reconstructor = cpp_mod.reconstruct_gradient
 
         # Run the gradient reconstruction
-        reconstructor(self.alpha_function._cpp_object,
-                      self.num_neighbours,
-                      self.neighbours,
-                      self.lstsq_matrices,
-                      self.lstsq_inv_matrices,
-                      [gi._cpp_object for gi in self.gradient])
+        reconstructor(
+            self.alpha_function._cpp_object,
+            self.num_neighbours,
+            self.neighbours,
+            self.lstsq_matrices,
+            self.lstsq_inv_matrices,
+            [gi._cpp_object for gi in self.gradient],
+        )
 
 
-def _reconstruct_gradient(alpha_function, num_neighbours, neighbours,
-                          lstsq_matrices, lstsq_inv_matrices, gradient):
+def _reconstruct_gradient(
+    alpha_function,
+    num_neighbours,
+    neighbours,
+    lstsq_matrices,
+    lstsq_inv_matrices,
+    gradient,
+):
     """
     Reconstruct the gradient, Python version of the code
 

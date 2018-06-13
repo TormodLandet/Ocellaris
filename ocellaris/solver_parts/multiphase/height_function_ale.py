@@ -31,27 +31,38 @@ class HeightFunctionALE(VOFMixin, MultiPhaseModel):
         simulation.mesh_morpher.setup()
 
         # Calculate mu from rho and nu (i.e mu is quadratic in c) or directly from c (linear in c)
-        self.calculate_mu_directly_from_colour_function = \
-            simulation.input.get_value('multiphase_solver/calculate_mu_directly_from_colour_function',
-                                       CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION, 'bool')
+        self.calculate_mu_directly_from_colour_function = simulation.input.get_value(
+            'multiphase_solver/calculate_mu_directly_from_colour_function',
+            CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION,
+            'bool',
+        )
 
         # The mean free surface height
         height_function_mean = simulation.input.get_value(
-            'multiphase_solver/height_function_mean', required_type='float')
+            'multiphase_solver/height_function_mean', required_type='float'
+        )
 
         # The C++ code for the free surface height (final_height =
         # height_function_mean + height_function_cpp)
         height_function_cpp = simulation.input.get_value(
-            'multiphase_solver/height_function_cpp', required_type='string')
+            'multiphase_solver/height_function_cpp', required_type='string'
+        )
         assert 'x[1]' not in height_function_cpp and 'x[2]' not in height_function_cpp
 
         # What is the minimum width of a vertex column
-        self.minimum_diameter_of_vertex_column = simulation.input.get_value('multiphase_solver/minimum_diameter_of_vertex_column',
-                                                                            MINIMUM_DIAMETER_OF_VERTEX_COLUMN, required_type='float')
+        self.minimum_diameter_of_vertex_column = simulation.input.get_value(
+            'multiphase_solver/minimum_diameter_of_vertex_column',
+            MINIMUM_DIAMETER_OF_VERTEX_COLUMN,
+            required_type='float',
+        )
 
         # Morph the mesh to match the initial configuration of the free surface
-        columns = initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
-                                        eps=self.minimum_diameter_of_vertex_column)
+        columns = initial_mesh_morphing(
+            simulation,
+            height_function_cpp,
+            height_function_mean,
+            eps=self.minimum_diameter_of_vertex_column,
+        )
         self.vertex_columns = columns
 
         # Show some information about the columns
@@ -61,14 +72,22 @@ class HeightFunctionALE(VOFMixin, MultiPhaseModel):
 
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value(
-            'physical_properties/rho0', required_type='float')
+            'physical_properties/rho0', required_type='float'
+        )
         self.rho1 = self.simulation.input.get_value(
-            'physical_properties/rho1', required_type='float')
-        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
-        self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
+            'physical_properties/rho1', required_type='float'
+        )
+        self.nu0 = self.simulation.input.get_value(
+            'physical_properties/nu0', required_type='float'
+        )
+        self.nu1 = self.simulation.input.get_value(
+            'physical_properties/nu1', required_type='float'
+        )
 
         # Update the rho and nu fields after each time step
-        simulation.hooks.add_post_timestep_hook(self.update, 'HeightFunctionALE - update mesh')
+        simulation.hooks.add_post_timestep_hook(
+            self.update, 'HeightFunctionALE - update mesh'
+        )
 
     def get_colour_function(self, k):
         """
@@ -122,10 +141,19 @@ class MeshColumn(object):
         self.bottom = None
 
     def __repr__(self, *args, **kwargs):
-        return ('<MeshColumn: x in %r to %r y in %r to %r fs_vtx %r fs_pos %r vel_dof %r '
-                'contains %d vertices') % (self.start_pos, self.end_pos, self.bottom, self.top,
-                                           self.free_surface_vertex, self.free_surface_pos,
-                                           self.velocity_dof, len(self.vertices))
+        return (
+            '<MeshColumn: x in %r to %r y in %r to %r fs_vtx %r fs_pos %r vel_dof %r '
+            'contains %d vertices'
+        ) % (
+            self.start_pos,
+            self.end_pos,
+            self.bottom,
+            self.top,
+            self.free_surface_vertex,
+            self.free_surface_pos,
+            self.velocity_dof,
+            len(self.vertices),
+        )
 
 
 def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean, eps):
@@ -147,7 +175,9 @@ def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
     assert D == 2
 
     def get_height_func():
-        height = ocellaris_interpolate(simulation, height_function_cpp, 'Height function', Vmesh)
+        height = ocellaris_interpolate(
+            simulation, height_function_cpp, 'Height function', Vmesh
+        )
         height.vector()[:] += height_function_mean
         return height
 
@@ -189,7 +219,7 @@ def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
                 vertex_dofs[vid] = dof
                 vertex_fluid_vel_dofs[vid] = dofs_fluid[i]
 
-            #h = vertex_heights[vid]
+            # h = vertex_heights[vid]
             h = height_function_mean
             above.append(vertex_coords[vid][1] >= h - 1e6)
             below.append(vertex_coords[vid][1] <= h + 1e6)
@@ -203,7 +233,9 @@ def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
         vertices_to_move.update(vertices)
 
     # Find x-positions of the vertices near the free surface
-    xpos = [(vertex_coords[vid][0], vertex_coords[vid][1], vid) for vid in vertices_to_move]
+    xpos = [
+        (vertex_coords[vid][0], vertex_coords[vid][1], vid) for vid in vertices_to_move
+    ]
     assert len(xpos) > 1
     xpos.append((-1e10, None, None))
     xpos.append((1e10, None, None))
@@ -223,8 +255,14 @@ def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
 
         # Get column start and end position
         if len(in_col) == 1:
-            startpos = (x + xpos[i - 1][0]) / 2 if xpos[i - 1][2] is not None else x - eps / 100
-        endpos = (x + xpos[i + 1][0]) / 2 if xpos[i + 1][2] is not None else x + eps / 100
+            startpos = (
+                (x + xpos[i - 1][0]) / 2
+                if xpos[i - 1][2] is not None
+                else x - eps / 100
+            )
+        endpos = (
+            (x + xpos[i + 1][0]) / 2 if xpos[i + 1][2] is not None else x + eps / 100
+        )
 
         # print 'x', x, 'xi-1', xpos[i-1][0], 'xi+1', xpos[i+1][0], 'y',
         # xpos[i][1], 'vid', xpos[i][2]
@@ -237,7 +275,7 @@ def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
         for p in in_col:
             x, y, vid = p
             dof = vertex_dofs[vid]
-            #h = vertex_heights[vid]
+            # h = vertex_heights[vid]
             h = height_function_mean
             diff_y = abs(y - h)
             if diff_y < min_diff_y[3]:
@@ -263,8 +301,11 @@ def initial_mesh_morphing(simulation, height_function_cpp, height_function_mean,
                 col.vertices.append((vid, coords, vertex_dofs[vid]))
                 break
         else:
-            ocellaris_error('HeightFunctionALE setup error',
-                            'Vertex at x=%f does not belong to any vertical free surface column' % coords[0])
+            ocellaris_error(
+                'HeightFunctionALE setup error',
+                'Vertex at x=%f does not belong to any vertical free surface column'
+                % coords[0],
+            )
 
     # Find top and bottomn of each column
     for col in columns:
@@ -339,7 +380,9 @@ def morph_mesh(simulation, columns, fs_vert_velocity):
         col.free_surface_pos = y_fs + vel * dt
 
         if col.free_surface_pos >= col.top:
-            ocellaris_error('HeightFunctionALE morphing error',
-                            'Free surface is above top of column in column %r' % col)
+            ocellaris_error(
+                'HeightFunctionALE morphing error',
+                'Free surface is above top of column in column %r' % col,
+            )
 
     simulation.mesh_morpher.morph_mesh()

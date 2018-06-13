@@ -32,19 +32,17 @@ class BlendedField(KnownField):
             'blending field0',
             field_name0,
             self.simulation.fields,
-            'BlendedField %s' %
-            self.name)
+            'BlendedField %s' % self.name,
+        )
         verify_key(
             'blending field1',
             field_name1,
             self.simulation.fields,
-            'BlendedField %s' %
-            self.name)
+            'BlendedField %s' % self.name,
+        )
         blend = verify_field_variable_definition(
-            self.simulation,
-            blend_def,
-            'BlendedField %s' %
-            self.name)
+            self.simulation, blend_def, 'BlendedField %s' % self.name
+        )
 
         self.field0 = self.simulation.fields[field_name0]
         self.field1 = self.simulation.fields[field_name1]

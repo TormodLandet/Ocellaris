@@ -38,9 +38,12 @@ class DebugIO:
                 raise ValueError('Cannot save object of type %r' % type(value))
 
         import pickle
+
         with open(file_name, 'wb') as out:
             pickle.dump(data, out, protocol=pickle.HIGHEST_PROTOCOL)
-        self.simulation.log.info('Saved LA objects to %r (%r)' % (file_name, kwargs.keys()))
+        self.simulation.log.info(
+            'Saved LA objects to %r (%r)' % (file_name, kwargs.keys())
+        )
 
     def load_la_objects(self, file_name):
         """
@@ -50,6 +53,7 @@ class DebugIO:
         assert self.simulation.ncpu == 1, 'Not supported in parallel'
 
         import pickle
+
         with open(file_name, 'rb') as inp:
             data = pickle.load(inp)
 
@@ -67,6 +71,7 @@ class DebugIO:
             elif value_type == 'dolfin.PETScMatrix':
                 shape, rows, cols, values = value[1:]
                 from petsc4py import PETSc
+
                 mat = PETSc.Mat().createAIJ(size=shape, csr=(rows, cols, values))
                 mat.assemble()
                 dolf_mat = dolfin.PETScMatrix(mat)
@@ -75,5 +80,7 @@ class DebugIO:
             else:
                 raise ValueError('Cannot save object of type %r' % value_type)
 
-        self.simulation.log.info('Loaded LA objects from %r (%r)' % (file_name, data.keys()))
+        self.simulation.log.info(
+            'Loaded LA objects from %r (%r)' % (file_name, data.keys())
+        )
         return ret

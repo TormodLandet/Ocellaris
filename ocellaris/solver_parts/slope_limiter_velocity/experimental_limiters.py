@@ -3,7 +3,9 @@ import dolfin as df
 from dolfin import dot, ds, dS, dx
 from ocellaris.utils import verify_key, get_dof_neighbours
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange
-from ocellaris.solver_parts.slope_limiter.hierarchical_taylor import HierarchicalTaylorSlopeLimiter
+from ocellaris.solver_parts.slope_limiter.hierarchical_taylor import (
+    HierarchicalTaylorSlopeLimiter
+)
 from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
 
 
@@ -37,15 +39,11 @@ class LeastSquaresSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         # Create slope limiters for the velocity components
         self.temp_vels = [df.Function(V), df.Function(V)]
         sl0 = HierarchicalTaylorSlopeLimiter(
-            vel_name,
-            self.temp_vels[0],
-            use_cpp=use_cpp,
-            output_name=vel_name + '0')
+            vel_name, self.temp_vels[0], use_cpp=use_cpp, output_name=vel_name + '0'
+        )
         sl1 = HierarchicalTaylorSlopeLimiter(
-            vel_name,
-            self.temp_vels[1],
-            use_cpp=use_cpp,
-            output_name=vel_name + '1')
+            vel_name, self.temp_vels[1], use_cpp=use_cpp, output_name=vel_name + '1'
+        )
         self.slope_limiters = [sl0, sl1]
 
         # Fast access to cell dofs
@@ -54,7 +52,8 @@ class LeastSquaresSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         self.cell_dofs = [dm.cell_dofs(i) for i in indices]
 
         self.additional_plot_funcs = sum(
-            (sl.additional_plot_funcs for sl in self.slope_limiters), [])
+            (sl.additional_plot_funcs for sl in self.slope_limiters), []
+        )
 
         # Define the over determined form of the projection
         self._define_form()
@@ -225,18 +224,29 @@ class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
 
             # vertex coordinates and the cell center
             cell_vertices = [self.vertex_coordinates[iv] for iv in self.vertices[icell]]
-            center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
-            center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]) / 3
+            center_pos_x = (
+                cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]
+            ) / 3
+            center_pos_y = (
+                cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]
+            ) / 3
 
             # Find the minimum slope limiter coefficients alpha for each velocity component
             alpha_u0 = [1.0] * 3
             alpha_u1 = [1.0] * 3
-            for taylor_vals, alpha in zip((taylor_vals_u0, taylor_vals_u1),
-                                          (alpha_u0, alpha_u1)):
+            for taylor_vals, alpha in zip(
+                (taylor_vals_u0, taylor_vals_u1), (alpha_u0, alpha_u1)
+            ):
 
                 center_values = [taylor_vals[dof] for dof in dofs]
-                (center_phi, center_phix, center_phiy, center_phixx,
-                    center_phiyy, center_phixy) = center_values
+                (
+                    center_phi,
+                    center_phix,
+                    center_phiy,
+                    center_phixx,
+                    center_phiyy,
+                    center_phixy,
+                ) = center_values
 
                 for taylor_dof in (0, 1, 2):
                     for ivert in range(3):
@@ -256,13 +266,19 @@ class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
                         # Compute vertex value
                         if taylor_dof == 0:
                             # Function value at the vertex (linear reconstruction)
-                            vertex_value = center_phi + center_phix * dx + center_phiy * dy
+                            vertex_value = (
+                                center_phi + center_phix * dx + center_phiy * dy
+                            )
                         elif taylor_dof == 1:
                             # Derivative in x direction at the vertex  (linear reconstruction)
-                            vertex_value = center_phix + center_phixx * dx + center_phixy * dy
+                            vertex_value = (
+                                center_phix + center_phixx * dx + center_phixy * dy
+                            )
                         else:
                             # Derivative in y direction at the vertex  (linear reconstruction)
-                            vertex_value = center_phiy + center_phiyy * dy + center_phixy * dx
+                            vertex_value = (
+                                center_phiy + center_phiyy * dy + center_phixy * dx
+                            )
 
                         # Compute the slope limiter coefficient alpha
                         if vertex_value > base_value:
@@ -271,10 +287,8 @@ class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
                             a = (minval - base_value) / (vertex_value - base_value)
                         alpha[taylor_dof] = min(alpha[taylor_dof], a)
 
-            alpha2 = min(min(alpha_u0[1], alpha_u0[2]),
-                         min(alpha_u1[1], alpha_u1[2]))
-            alpha1 = min(max(alpha_u0[0], alpha2),
-                         max(alpha_u1[0], alpha2))
+            alpha2 = min(min(alpha_u0[1], alpha_u0[2]), min(alpha_u1[1], alpha_u1[2]))
+            alpha1 = min(max(alpha_u0[0], alpha2), max(alpha_u1[0], alpha2))
 
             dof_dg0 = self.cell_dofs_V0[icell]
             alphas1[dof_dg0] = alpha1
@@ -288,8 +302,9 @@ class HierarchicalTaylorSlopeLimiterVelocity(VelocitySlopeLimiterBase):
                 taylor_vals[dofs[5]] *= alpha2
 
         # Update the DG Lagrange functions with the limited DG Taylor values
-        for taylor_vals, taylor, vel in zip((taylor_vals_u0, taylor_vals_u1),
-                                            self.taylor, self.vel):
+        for taylor_vals, taylor, vel in zip(
+            (taylor_vals_u0, taylor_vals_u1), self.taylor, self.vel
+        ):
             taylor.vector().set_local(taylor_vals)
             taylor.vector().apply('insert')
             taylor_to_lagrange(taylor, vel)

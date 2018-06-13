@@ -39,7 +39,9 @@ def sync_arrays(array_list, sync_all=False, comm=None):
     if rank == 0:
         # Loop through non-root processes and get their lines
         for proc in range(1, ncpu):
-            _sync_array_list_one_way(comm, rank, array_list, from_rank=proc, to_rank=rank)
+            _sync_array_list_one_way(
+                comm, rank, array_list, from_rank=proc, to_rank=rank
+            )
     else:
         _sync_array_list_one_way(comm, rank, array_list, from_rank=rank, to_rank=0)
 
@@ -53,7 +55,9 @@ def sync_arrays(array_list, sync_all=False, comm=None):
     if rank == 0:
         # Loop through non-root processes and send the result to them
         for proc in range(1, ncpu):
-            _sync_array_list_one_way(comm, rank, array_list, from_rank=rank, to_rank=proc)
+            _sync_array_list_one_way(
+                comm, rank, array_list, from_rank=rank, to_rank=proc
+            )
     else:
         del array_list[:]
         _sync_array_list_one_way(comm, rank, array_list, from_rank=0, to_rank=rank)

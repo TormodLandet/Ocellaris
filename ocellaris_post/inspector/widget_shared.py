@@ -80,7 +80,10 @@ class PlotCustomLine(wx.Panel):
         self.SetSizer(fgs)
 
         self.ctrls = []
-        for label, value in (('Function', '2*x**2'), ('Name', 'Custom function y=2*x^2')):
+        for label, value in (
+            ('Function', '2*x**2'),
+            ('Name', 'Custom function y=2*x^2'),
+        ):
             fgs.Add(wx.StaticText(self, label=label), flag=wx.ALIGN_CENTER_VERTICAL)
             ctrl = wx.TextCtrl(self, size=(20, -1), value=value)
             ctrl.Bind(wx.EVT_TEXT, self.callback_soon)

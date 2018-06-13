@@ -19,7 +19,9 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
         """
         self.simulation = simulation
         simulation.log.info('Creating height function multiphase model')
-        assert simulation.ncpu == 1, 'HeightFunctionMultiphaseModel does not run in parallel'
+        assert (
+            simulation.ncpu == 1
+        ), 'HeightFunctionMultiphaseModel does not run in parallel'
 
         # Define colour function
         V = simulation.data['Vc']
@@ -27,38 +29,34 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
 
         # The free surface mesh
         xmin = simulation.input.get_value(
-            'multiphase_solver/height_function_xmin',
-            required_type='float')
+            'multiphase_solver/height_function_xmin', required_type='float'
+        )
         xmax = simulation.input.get_value(
-            'multiphase_solver/height_function_xmax',
-            required_type='float')
+            'multiphase_solver/height_function_xmax', required_type='float'
+        )
         Nx = simulation.input.get_value(
-            'multiphase_solver/height_function_Nx',
-            required_type='float')
+            'multiphase_solver/height_function_Nx', required_type='float'
+        )
         hinit = simulation.input.get_value(
-            'multiphase_solver/height_initial_h',
-            required_type='float')
+            'multiphase_solver/height_initial_h', required_type='float'
+        )
         self.eps = simulation.input.get_value(
-            'multiphase_solver/surface_thickness',
-            required_type='float')
+            'multiphase_solver/surface_thickness', required_type='float'
+        )
         hmin_code = simulation.input.get_value(
-            'multiphase_solver/height_min_code',
-            required_type='string')
+            'multiphase_solver/height_min_code', required_type='string'
+        )
         hmax_code = simulation.input.get_value(
-            'multiphase_solver/height_max_code',
-            required_type='string')
+            'multiphase_solver/height_max_code', required_type='string'
+        )
 
         # Runnable code, must define 'hmin' or 'hmax' arrays given input xpos array
         self.hmin = RunnablePythonString(
-            simulation,
-            hmin_code,
-            'multiphase_solver/height_min_code',
-            'hmin')
+            simulation, hmin_code, 'multiphase_solver/height_min_code', 'hmin'
+        )
         self.hmax = RunnablePythonString(
-            simulation,
-            hmax_code,
-            'multiphase_solver/height_max_code',
-            'hmax')
+            simulation, hmax_code, 'multiphase_solver/height_max_code', 'hmax'
+        )
 
         # Store colour function dof coordinates
         mesh = simulation.data['mesh']
@@ -67,8 +65,10 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
 
         # Create dummy dolfin Function to hold the height function (for restart file support)
         if Nx > V.dim():
-            raise OcellarisError('height_function_Nx too large',
-                                 'Maximum Nx for this colour function is %d' % V.dim())
+            raise OcellarisError(
+                'height_function_Nx too large',
+                'Maximum Nx for this colour function is %d' % V.dim(),
+            )
         simulation.data['height_function'] = hfunc = dolfin.Function(V)
         hfunc.vector()[:] = hinit
         hfunc.vector().apply('insert')
@@ -78,15 +78,22 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
 
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value(
-            'physical_properties/rho0', required_type='float')
+            'physical_properties/rho0', required_type='float'
+        )
         self.rho1 = self.simulation.input.get_value(
-            'physical_properties/rho1', required_type='float')
-        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
-        self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
+            'physical_properties/rho1', required_type='float'
+        )
+        self.nu0 = self.simulation.input.get_value(
+            'physical_properties/nu0', required_type='float'
+        )
+        self.nu1 = self.simulation.input.get_value(
+            'physical_properties/nu1', required_type='float'
+        )
 
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(
-            self.update, 'HeightFunctionMultiphaseModel.update()')
+            self.update, 'HeightFunctionMultiphaseModel.update()'
+        )
         simulation.hooks.register_custom_hook_point('MultiPhaseModelUpdated')
 
     def get_colour_function(self, k):
@@ -136,8 +143,10 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
                 try:
                     uvert.eval(vel, pos)
                 except Exception:
-                    raise OcellarisError('Error in u1 eval in height function',
-                                         'Position %r outside the domain?' % (pos,))
+                    raise OcellarisError(
+                        'Error in u1 eval in height function',
+                        'Position %r outside the domain?' % (pos,),
+                    )
                 all_vel[i] = vel[0]
 
             # Get height function max and min

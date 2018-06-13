@@ -16,9 +16,11 @@ def register_multi_phase_model(name):
     """
     A class decorator to register multi phase schemes
     """
+
     def register(multi_phase_model_class):
         add_multi_phase_model(name, multi_phase_model_class)
         return multi_phase_model_class
+
     return register
 
 
@@ -29,10 +31,14 @@ def get_multi_phase_model(name):
     try:
         return _MULTI_PHASE_MODELS[name]
     except KeyError:
-        ocellaris_error('Multi phase model "%s" not found' % name,
-                        'Available models:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description)
-                                  for n, s in sorted(_MULTI_PHASE_MODELS.items())))
+        ocellaris_error(
+            'Multi phase model "%s" not found' % name,
+            'Available models:\n'
+            + '\n'.join(
+                '  %-20s - %s' % (n, s.description)
+                for n, s in sorted(_MULTI_PHASE_MODELS.items())
+            ),
+        )
         raise
 
 

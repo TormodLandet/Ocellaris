@@ -35,9 +35,11 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
     try:
         import meshio
     except ImportError:
-        ocellaris_error('Please install meshio',
-                        'The meshio library is missing. Run something like '
-                        '"python3 -m pip install --user meshio" to install it.')
+        ocellaris_error(
+            'Please install meshio',
+            'The meshio library is missing. Run something like '
+            '"python3 -m pip install --user meshio" to install it.',
+        )
 
     # Read from file into a meshio mesh object
     mm = meshio.read(file_name, meshio_file_type)
@@ -45,22 +47,26 @@ def load_meshio_mesh(mesh, file_name, meshio_file_type=None, sort_order=None):
 
     if 'tetra' in cells:
         # There should be only tetras and possibly facet triangles
-        assert len(cells) == 1 or len(cells) == 2 and 'triangle' in cells, \
-            'Mixed element meshes is not supported'
+        assert (
+            len(cells) == 1 or len(cells) == 2 and 'triangle' in cells
+        ), 'Mixed element meshes is not supported'
         dim = 3
         connectivity = cells['tetra']
 
     elif 'triangle' in cells:
         # There should be only triangles and possibly facet lines
-        assert len(cells) == 1 or len(cells) == 2 and 'line' in cells, \
-            'Mixed element meshes is not supported'
+        assert (
+            len(cells) == 1 or len(cells) == 2 and 'line' in cells
+        ), 'Mixed element meshes is not supported'
         dim = 2
         connectivity = cells['triangle']
 
     else:
-        ocellaris_error('Mesh loaded by meshio contains unsupported cells',
-                        'Expected to find tetrahedra or triangles, found %r'
-                        % (tuple(cells.keys()), ))
+        ocellaris_error(
+            'Mesh loaded by meshio contains unsupported cells',
+            'Expected to find tetrahedra or triangles, found %r'
+            % (tuple(cells.keys()),),
+        )
 
     # Order elements by location of the first vertex
     if sort_order is not None:

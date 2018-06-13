@@ -46,9 +46,17 @@ def enable_super_debug():
 
         if want_to_know:
             # Must NEVER run when stdout.write() or flush() will trigger this trace
-            outfile.write('Call to %s (%s @ %s) from %s (%s @ %s)\n'
-                          % (func_name, file_name, line_no,
-                             caller_name, caller_file_name, caller_line_no))
+            outfile.write(
+                'Call to %s (%s @ %s) from %s (%s @ %s)\n'
+                % (
+                    func_name,
+                    file_name,
+                    line_no,
+                    caller_name,
+                    caller_file_name,
+                    caller_line_no,
+                )
+            )
             outfile.flush()
 
             for interesting in LINE_TRACE_PATTERNS:

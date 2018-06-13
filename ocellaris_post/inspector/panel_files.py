@@ -43,14 +43,18 @@ class OcellarisFilesPanel(wx.Panel):
         st = wx.StaticText(self, label='Input:')
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
-        self.input_file = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+        self.input_file = wx.TextCtrl(
+            self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP
+        )
         self.input_file.SetFont(font)
         v.Add(self.input_file, flag=wx.ALL | wx.EXPAND, proportion=1, border=10)
 
         st = wx.StaticText(self, label='Log:')
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
-        self.log_file = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+        self.log_file = wx.TextCtrl(
+            self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP
+        )
         self.log_file.SetFont(font)
         v.Add(self.log_file, flag=wx.ALL | wx.EXPAND, proportion=2, border=10)
 
@@ -75,9 +79,11 @@ class OcellarisFilesPanel(wx.Panel):
         log = results.log
 
         if len(log) > 40000:
-            log = (log[:20000] +
-                   '\n\n...\n... MIDDLE SECTION SKIPPED ...\n...\n\n' +
-                   log[-20000:])
+            log = (
+                log[:20000]
+                + '\n\n...\n... MIDDLE SECTION SKIPPED ...\n...\n\n'
+                + log[-20000:]
+            )
 
         self.input_file.SetValue(inp)
         self.log_file.SetValue(log)

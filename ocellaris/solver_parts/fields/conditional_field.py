@@ -22,8 +22,12 @@ class MaxField(KnownField):
         field_name0 = field_inp.get_value('field0', required_type='string')
         field_name1 = field_inp.get_value('field1', required_type='string')
 
-        verify_key('field0', field_name0, self.simulation.fields, 'MaxField %s' % self.name)
-        verify_key('field1', field_name1, self.simulation.fields, 'MaxField %s' % self.name)
+        verify_key(
+            'field0', field_name0, self.simulation.fields, 'MaxField %s' % self.name
+        )
+        verify_key(
+            'field1', field_name1, self.simulation.fields, 'MaxField %s' % self.name
+        )
         self.field0 = self.simulation.fields[field_name0]
         self.field1 = self.simulation.fields[field_name1]
 
@@ -52,8 +56,12 @@ class MinField(KnownField):
         field_name0 = field_inp.get_value('field0', required_type='string')
         field_name1 = field_inp.get_value('field1', required_type='string')
 
-        verify_key('field0', field_name0, self.simulation.fields, 'MinField %s' % self.name)
-        verify_key('field1', field_name1, self.simulation.fields, 'MinField %s' % self.name)
+        verify_key(
+            'field0', field_name0, self.simulation.fields, 'MinField %s' % self.name
+        )
+        verify_key(
+            'field1', field_name1, self.simulation.fields, 'MinField %s' % self.name
+        )
         self.field0 = self.simulation.fields[field_name0]
         self.field1 = self.simulation.fields[field_name1]
 
