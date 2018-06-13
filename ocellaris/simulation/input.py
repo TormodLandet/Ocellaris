@@ -1,6 +1,6 @@
 import os
 import collections
-from ocellaris.utils import ocellaris_error, get_root_value
+from ocellaris.utils import ocellaris_error, OcellarisError, get_root_value
 from ocellaris_post import read_yaml_input_file
 import yaml
 
@@ -11,7 +11,20 @@ class UndefinedParameter(object):
         return '<UNDEFINED>'
 
 
+class KeyNotFound(OcellarisError):
+    pass
+
+
 UNDEFINED = UndefinedParameter()
+
+
+# Some things that could be better in this implementation
+# TODO: do not subclass OrderedDict! This makes it hard to get read/write
+#       sub-Input views of a part of the input tree
+# TODO: get_value should have required_type as the second argument. This
+#       would shorten the standard get-key-that-must-exist use case and
+#       passing 'any' would be a good documentation if the type can really
+#       be anything
 
 
 class Input(collections.OrderedDict):
@@ -103,7 +116,7 @@ class Input(collections.OrderedDict):
             elif d is None or p not in d:
                 # This is an empty dict or a dict missing the key "p"
                 if default_value is UNDEFINED:
-                    ocellaris_error(
+                    raise KeyNotFound(
                         'Missing parameter on input file',
                         'Missing required input parameter:\n  %s' % pathstr,
                     )
@@ -112,7 +125,7 @@ class Input(collections.OrderedDict):
                         pathstr,
                         default_value,
                     )
-                    if not msg in self._already_logged:
+                    if msg not in self._already_logged:
                         self.simulation.log.debug(msg)
                         self._already_logged.add(msg)
                     if required_type == 'Input':
@@ -131,7 +144,7 @@ class Input(collections.OrderedDict):
 
         # Show what input values we use
         msg = '    Input value "%s" set to %r' % (pathstr, d)
-        if not msg in self._already_logged:
+        if msg not in self._already_logged:
             self.simulation.log.debug(msg)
             self._already_logged.add(msg)
 
@@ -319,13 +332,41 @@ class Input(collections.OrderedDict):
                 try:
                     p = int(p)
                 except ValueError:
-                    ocellaris_error(
+                    raise KeyNotFound(
                         'List index not integer', 'Not a valid list index:  %s' % p
                     )
             elif p not in d:
-                d[p] = {}
+                d[p] = collections.OrderedDict()
             d = d[p]
         d[path[-1]] = value
+
+    def has_path(self, path):
+        """
+        Checks if there is something (terminal or nested dict) at path
+        """
+        try:
+            self.get_value(path)
+            return True
+        except KeyNotFound:
+            return False
+
+    def ensure_path(self, path):
+        """
+        Ensures that get_value(path) will succeed.
+
+        Returns the object at the given path.
+        """
+        # Allow path to be a list or a "/" separated string
+        if isinstance(path, str):
+            path = path.split('/')
+
+        # Return early if the the path already exists
+        if self.has_path(path):
+            return self.get_value(path)
+
+        # Create the path and return the created object
+        self.set_value(path, collections.OrderedDict())
+        return self.get_value(path)
 
     def get_output_file_path(self, path, default_value=UNDEFINED):
         """
