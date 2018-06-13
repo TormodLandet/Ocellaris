@@ -95,6 +95,5 @@ def SlopeLimiterVelocity(
     return limiter
 
 
-from . import experimental_limiters
 from . import solenoidal_limiter
 from . import componentwise_limiter
