@@ -2,6 +2,7 @@ import numpy
 from ocellaris.utils import ocellaris_error, verify_key
 from ocellaris.solver_parts.slope_limiter import SlopeLimiter
 from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
+from .velocity_limiter_helpers import create_component_limiters
 
 
 @register_velocity_slope_limiter('Componentwise')
@@ -28,19 +29,19 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
 
         # Create slope limiters
         dim, = vel_u.ufl_shape
-        self.limiters = []
-        for d in range(dim):
-            name = '%s%d' % (vel_name, d)
-            lim = SlopeLimiter(simulation, vel_name, vel_u[d], name, method=comp_method)
-            self.limiters.append(lim)
+        self.limiters = create_component_limiters(
+            simulation, vel_name, vel_u, comp_method
+        )
 
         # Check that we can limit only certain cells
-        if self.limit_selected_cells_only and not hasattr(lim, 'limit_cell'):
-            ocellaris_error(
-                'Cannot limit only selected cells for %s' % vel_name,
-                'Limiter %r does not support limiting only selected cells'
-                % comp_method,
-            )
+        if self.limit_selected_cells_only:
+            for lim in self.limiters:
+                if not hasattr(lim, 'limit_cell'):
+                    ocellaris_error(
+                        'Cannot limit only selected cells for %s' % vel_name,
+                        'Limiter %r does not support limiting only selected cells'
+                        % type(lim).__name__,
+                    )
 
         simulation.hooks.add_pre_simulation_hook(
             self.setup, 'ComponentwiseSlopeLimiterVelocity - setup'

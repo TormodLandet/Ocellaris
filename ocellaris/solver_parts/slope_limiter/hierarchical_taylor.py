@@ -8,7 +8,7 @@ from .limiter_cpp_utils import SlopeLimiterInput
 
 @register_slope_limiter('HierarchicalTaylor')
 class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
-    description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices in a hierarchical manner'
+    description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices'
 
     def __init__(
         self,
@@ -16,7 +16,6 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         phi,
         skip_cells,
         boundary_conditions,
-        output_name=None,
         use_cpp=True,
         enforce_bounds=False,
         enforce_bcs=True,
@@ -36,9 +35,10 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         verify_key('slope limited degree', degree, (0, 1, 2), loc)
         verify_key('function shape', phi.ufl_shape, [()], loc)
         verify_key('topological dimension', mesh.topology().dim(), [2, 3], loc)
-        assert (
-            gdim == tdim
-        ), "HierarchalTaylor slope limiter requires that topological and geometrical dimensions are identical"
+        assert gdim == tdim, (
+            'HierarchalTaylor slope limiter requires that '
+            'topological and geometrical dimensions are identical'
+        )
 
         # Store input
         self.phi_name = phi_name
@@ -58,15 +58,12 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             self.additional_plot_funcs = []
             return
 
-        if output_name is None:
-            output_name = phi_name
-
         # Alpha factors are secondary outputs
         V0 = df.FunctionSpace(self.mesh, 'DG', 0)
         self.alpha_funcs = []
         for i in range(degree):
             func = df.Function(V0)
-            name = 'SlopeLimiterAlpha%d_%s' % (i + 1, output_name)
+            name = 'SlopeLimiterAlpha%d_%s' % (i + 1, phi_name)
             func.rename(name, name)
             self.alpha_funcs.append(func)
         self.additional_plot_funcs = self.alpha_funcs
@@ -198,7 +195,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             (3, 2): self.cpp_mod.hierarchical_taylor_slope_limiter_dg2_3D,
         }
         key = (self.ndim, self.degree)
-        if not key in funcs:
+        if key not in funcs:
             raise OcellarisError(
                 'Unsupported dimension %d with degree %d' % key,
                 'Not supported in C++ version of the HierarchalTaylor limiter',

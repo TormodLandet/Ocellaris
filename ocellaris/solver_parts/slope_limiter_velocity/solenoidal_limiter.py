@@ -4,6 +4,7 @@ from ocellaris.utils import verify_key
 from ocellaris.solver_parts.boundary_conditions import mark_cell_layers
 from ocellaris.solver_parts.slope_limiter import SlopeLimiter
 from . import register_velocity_slope_limiter, VelocitySlopeLimiterBase
+from .velocity_limiter_helpers import create_component_limiters
 
 
 DEFAULT_LIMITER_U = 'HierarchicalTaylor'
@@ -63,13 +64,9 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
             '        Using prelimiter %r for %s and for solenoidal targets'
             % (prelimiter_method, vel_name)
         )
-        self.prelimiters = []
-        for d in range(dim):
-            name = '%s%d' % (vel_name, d)
-            lim = SlopeLimiter(
-                simulation, vel_name, vel_u[d], name, method=prelimiter_method
-            )
-            self.prelimiters.append(lim)
+        self.prelimiters = create_component_limiters(
+            simulation, vel_name, vel_u, prelimiter_method
+        )
 
         # Cost function options
         cf_options = {}

@@ -10,13 +10,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
     description = 'Ensures dof node values are not themselves a local extrema'
 
     def __init__(
-        self,
-        phi_name,
-        phi,
-        boundary_condition,
-        output_name=None,
-        use_cpp=True,
-        enforce_bounds=False,
+        self, phi_name, phi, boundary_condition, use_cpp=True, enforce_bounds=False
     ):
         """
         Limit the slope of the given scalar to obtain boundedness
@@ -40,14 +34,11 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         self.use_cpp = use_cpp
         self.enforce_global_bounds = enforce_bounds
 
-        if output_name is None:
-            output_name = phi_name
-
         # Exceedance is a secondary output of the limiter and is calculated
         # as the maximum correction performed for each cell
         V0 = df.FunctionSpace(self.mesh, 'DG', 0)
         self.exceedance = df.Function(V0)
-        name = 'SlopeLimiterExceedance_%s' % output_name
+        name = 'SlopeLimiterExceedance_%s' % phi_name
         self.exceedance.rename(name, name)
         self.additional_plot_funcs = [self.exceedance]
 
