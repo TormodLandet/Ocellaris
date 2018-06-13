@@ -22,7 +22,9 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         """
         from solenoidal import SolenoidalLimiter, COST_FUNCTIONS
 
-        inp = simulation.input.get_value('slope_limiter/%s' % vel_name, required_type='Input')
+        inp = simulation.input.get_value(
+            'slope_limiter/%s' % vel_name, required_type='Input'
+        )
         self.additional_plot_funcs = []
 
         # Verify input
@@ -32,7 +34,8 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         degree = V.ufl_element().degree()
         dim, = vel_u.ufl_shape
         cost_func = simulation.input.get_value(
-            'slope_limiter/cost_function', DEFAULT_LIMITER_W, 'string')
+            'slope_limiter/cost_function', DEFAULT_LIMITER_W, 'string'
+        )
         loc = 'SolenoidalSlopeLimiterVelocity'
         verify_key('slope limited function', family, ['Discontinuous Lagrange'], loc)
         verify_key('slope limited degree', degree, (2,), loc)
@@ -56,12 +59,16 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         # limiting the convected velocity u. This is not treated with the solenoidal limiter
         # since we cannot guarantee that all Gibbs oscillations are removed
         prelimiter_method = inp.get_value('prelimiter', DEFAULT_LIMITER_U, 'string')
-        simulation.log.info('        Using prelimiter %r for %s and for solenoidal targets'
-                            % (prelimiter_method, vel_name))
+        simulation.log.info(
+            '        Using prelimiter %r for %s and for solenoidal targets'
+            % (prelimiter_method, vel_name)
+        )
         self.prelimiters = []
         for d in range(dim):
             name = '%s%d' % (vel_name, d)
-            lim = SlopeLimiter(simulation, vel_name, vel_u[d], name, method=prelimiter_method)
+            lim = SlopeLimiter(
+                simulation, vel_name, vel_u[d], name, method=prelimiter_method
+            )
             self.prelimiters.append(lim)
 
         # Cost function options
@@ -93,10 +100,8 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
 
         # Create slope limiter
         self.sollim = SolenoidalLimiter(
-            V,
-            cost_function=cost_func,
-            use_cpp=use_cpp,
-            cf_options=cf_options)
+            V, cost_function=cost_func, use_cpp=use_cpp, cf_options=cf_options
+        )
         self.limit_cell = self.sollim.limit_cell
 
         # Create plot output functions
@@ -119,27 +124,38 @@ class SolenoidalSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         tdim = self.mesh.topology().dim()
         Ncells = self.mesh.topology().ghost_offset(tdim)
         dm0 = V0.dofmap()
-        self.cell_dofs_V0 = numpy.array([int(dm0.cell_dofs(i)) for i in range(Ncells)], int)
+        self.cell_dofs_V0 = numpy.array(
+            [int(dm0.cell_dofs(i)) for i in range(Ncells)], int
+        )
 
         # Boundary cells where we do not fully trust the prelimiter targets (we trust BCs more)
         self.skip_target_cells = mark_cell_layers(simulation, V, layers=0)
 
         simulation.hooks.add_pre_simulation_hook(
-            self.setup, 'SolenoidalSlopeLimiterVelocity - setup')
+            self.setup, 'SolenoidalSlopeLimiterVelocity - setup'
+        )
 
     def setup(self):
         """
         Deferred setup tasks that are run after the Navier-Stokes solver has finished its setup
         """
         if self.probe_name is not None:
-            verify_key('surface_probe', self.probe_name, self.simulation.probes,
-                       'solenoidal slope limiter for %s' % self.vel_name)
+            verify_key(
+                'surface_probe',
+                self.probe_name,
+                self.simulation.probes,
+                'solenoidal slope limiter for %s' % self.vel_name,
+            )
             self.surface_probe = self.simulation.probes[self.probe_name]
-            self.simulation.log.info('Marking cells for limiting based on probe "%s" for %s'
-                                     % (self.surface_probe.name, self.vel_name))
+            self.simulation.log.info(
+                'Marking cells for limiting based on probe "%s" for %s'
+                % (self.surface_probe.name, self.vel_name)
+            )
 
         if self.limit_none:
-            self.simulation.log.info('Marking no cells for limiting of %s' % self.vel_name)
+            self.simulation.log.info(
+                'Marking no cells for limiting of %s' % self.vel_name
+            )
             self.limit_cell[:] = False
             self.surface_probe = None
             self.limit_selected_cells_only = False

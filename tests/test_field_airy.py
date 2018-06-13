@@ -6,7 +6,7 @@ def test_get_airy_wave_specs():
     rt = lambda q: tuple(round(v, 7) for v in q)
     # Run rt() on all items in an iterable and return a tuple
     tt = lambda q: tuple(rt(v) for v in q)
-    
+
     omegas = [0.2, 0.0209439510239, 1.7340744614782326, 17.1551741466]
     periods = [31.4159265359, 300, 3.623365343736975, 0.366255990962]
     wave_lengths = [259.096496708, 2485.89122837, 20, 0.209439510239]

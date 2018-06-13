@@ -3,7 +3,9 @@ import numpy
 
 
 class FieldInspector(object):
-    def __init__(self, xdmf_file_name, V, startpos=(-1e100, -1e100), endpos=(1e100, 1e100)):
+    def __init__(
+        self, xdmf_file_name, V, startpos=(-1e100, -1e100), endpos=(1e100, 1e100)
+    ):
         """
         This class is meant for producing visualisations of DG fields,
         most notably DG2 fields. We subdevide each cell to be able to
@@ -35,8 +37,11 @@ class FieldInspector(object):
 
         self.selected_cells = get_selected_cells(self.mesh, startpos, endpos)
         self.subdivided_mesh, self.parent_cell = create_subdivided_mesh(
-            self.mesh, self.selected_cells, self.degree)
-        self.subdivided_function_space = dolfin.FunctionSpace(self.subdivided_mesh, 'CG', 1)
+            self.mesh, self.selected_cells, self.degree
+        )
+        self.subdivided_function_space = dolfin.FunctionSpace(
+            self.subdivided_mesh, 'CG', 1
+        )
         self.subdivided_function = dolfin.Function(self.subdivided_function_space)
 
         self.xdmf = dolfin.XDMFFile(dolfin.MPI.comm_world, xdmf_file_name)
@@ -171,18 +176,15 @@ def subdivide_cell(n, x0, x1, x2):
         return [(x0, x1, x2)]
     else:
         # Divide the cell such that the longest facet is halfed
-        l0 = (x1[0] - x2[0])**2 + (x1[1] - x2[1])**2
-        l1 = (x0[0] - x2[0])**2 + (x0[1] - x2[1])**2
-        l2 = (x0[0] - x1[0])**2 + (x0[1] - x1[1])**2
+        l0 = (x1[0] - x2[0]) ** 2 + (x1[1] - x2[1]) ** 2
+        l1 = (x0[0] - x2[0]) ** 2 + (x0[1] - x2[1]) ** 2
+        l2 = (x0[0] - x1[0]) ** 2 + (x0[1] - x1[1]) ** 2
         if l0 > max(l1, l2):
             xF = ((x1[0] + x2[0]) / 2, (x1[1] + x2[1]) / 2)
-            return (subdivide_cell(n - 1, x0, x1, xF) +
-                    subdivide_cell(n - 1, x0, xF, x2))
+            return subdivide_cell(n - 1, x0, x1, xF) + subdivide_cell(n - 1, x0, xF, x2)
         elif l1 > max(l0, l2):
             xF = ((x0[0] + x2[0]) / 2, (x0[1] + x2[1]) / 2)
-            return (subdivide_cell(n - 1, x1, x2, xF) +
-                    subdivide_cell(n - 1, x1, xF, x0))
+            return subdivide_cell(n - 1, x1, x2, xF) + subdivide_cell(n - 1, x1, xF, x0)
         else:
             xF = ((x0[0] + x1[0]) / 2, (x0[1] + x1[1]) / 2)
-            return (subdivide_cell(n - 1, x2, x0, xF) +
-                    subdivide_cell(n - 1, x2, xF, x1))
+            return subdivide_cell(n - 1, x2, x0, xF) + subdivide_cell(n - 1, x2, xF, x1)

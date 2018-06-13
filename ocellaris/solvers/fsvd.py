@@ -1,6 +1,11 @@
 import numpy
 import dolfin
-from ocellaris.utils import verify_key, timeit, linear_solver_from_input, ocellaris_error
+from ocellaris.utils import (
+    verify_key,
+    timeit,
+    linear_solver_from_input,
+    ocellaris_error,
+)
 from . import Solver, register_solver
 from ..solver_parts import VelocityBDMProjection, SlopeLimiter
 from .fsvd_equations import EQUATION_SUBTYPES
@@ -11,9 +16,11 @@ SOLVER_U = 'gmres'
 PRECONDITIONER_U = 'additive_schwarz'
 SOLVER_P = 'gmres'
 PRECONDITIONER_P = 'hypre_amg'
-KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'relative_tolerance': 1e-10,
-                     'absolute_tolerance': 1e-15}
+KRYLOV_PARAMETERS = {
+    'nonzero_initial_guess': True,
+    'relative_tolerance': 1e-10,
+    'absolute_tolerance': 1e-15,
+}
 EQUATION_SUBTYPE = 'Default'
 USE_GRAD_P_FORM = False
 FIX_PRESSURE_DOF = False
@@ -37,8 +44,9 @@ class SolverFSVD(Solver):
         sim.data['dt'] = dolfin.Constant(simulation.dt)
 
         # Get equations
-        MomentumPredictionEquation, PressureCorrectionEquation, \
-            VelocityUpdateEquation = EQUATION_SUBTYPES[self.equation_subtype]
+        MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation = EQUATION_SUBTYPES[
+            self.equation_subtype
+        ]
 
         # Equations to solve
         self.eqs_mom_pred = []
@@ -53,8 +61,12 @@ class SolverFSVD(Solver):
         self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'])
 
         # Slope limiter for the momenum equation velocity components
-        self.slope_limiters = [SlopeLimiter(sim, 'u', sim.data['u%d' % d], 'u%d' % d, old_value=sim.data['up%d' % d])
-                               for d in range(sim.ndim)]
+        self.slope_limiters = [
+            SlopeLimiter(
+                sim, 'u', sim.data['u%d' % d], 'u%d' % d, old_value=sim.data['up%d' % d]
+            )
+            for d in range(sim.ndim)
+        ]
 
         # Pre assembled matrices
         self.Au = [None] * sim.ndim
@@ -75,31 +87,56 @@ class SolverFSVD(Solver):
         # Check the representation of velocity
         Vu_family = sim.data['Vu'].ufl_element().family()
         Vp_family = sim.data['Vp'].ufl_element().family()
-        verify_key('finite element family', Vu_family,
-                   ('Discontinuous Lagrange',), 'FSCD velocity solver')
-        verify_key('finite element family', Vp_family,
-                   ('Discontinuous Lagrange',), 'FSCD pressure solver')
+        verify_key(
+            'finite element family',
+            Vu_family,
+            ('Discontinuous Lagrange',),
+            'FSCD velocity solver',
+        )
+        verify_key(
+            'finite element family',
+            Vp_family,
+            ('Discontinuous Lagrange',),
+            'FSCD pressure solver',
+        )
 
         # Create linear solvers
-        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u', SOLVER_U,
-                                                        PRECONDITIONER_U, None, KRYLOV_PARAMETERS)
-        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p', SOLVER_P,
-                                                        PRECONDITIONER_P, None, KRYLOV_PARAMETERS)
+        self.velocity_solver = linear_solver_from_input(
+            self.simulation,
+            'solver/u',
+            SOLVER_U,
+            PRECONDITIONER_U,
+            None,
+            KRYLOV_PARAMETERS,
+        )
+        self.pressure_solver = linear_solver_from_input(
+            self.simulation,
+            'solver/p',
+            SOLVER_P,
+            PRECONDITIONER_P,
+            None,
+            KRYLOV_PARAMETERS,
+        )
         self.u_upd_solver = None
 
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value(
-            'solver/equation_subtype', EQUATION_SUBTYPE, 'string')
-        verify_key('equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'fsvd solver')
+            'solver/equation_subtype', EQUATION_SUBTYPE, 'string'
+        )
+        verify_key(
+            'equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'fsvd solver'
+        )
 
         # No need for special treatment if the pressure is set via Dirichlet conditions somewhere
         self.remove_null_space = len(sim.data['dirichlet_bcs'].get('p', [])) == 0
 
         # Control the form of the governing equations
         self.use_grad_p_form = sim.input.get_value(
-            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool'
+        )
         self.fix_pressure_dof = sim.input.get_value(
-            'solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool')
+            'solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool'
+        )
 
     def create_functions(self):
         """
@@ -281,14 +318,18 @@ class SolverFSVD(Solver):
         if has_upp_start_values:
             sim.log.info('Initial values for upp are found and used')
             self.is_first_timestep = False
-            self.simulation.data['time_coeffs'].assign(dolfin.Constant([3 / 2, -2, 1 / 2]))
+            self.simulation.data['time_coeffs'].assign(
+                dolfin.Constant([3 / 2, -2, 1 / 2])
+            )
 
         while True:
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
             tmax = sim.input.get_value('time/tmax', required_type='float')
             num_inner_iter = sim.input.get_value('solver/num_inner_iter', 100, 'int')
-            allowable_div_inner = sim.input.get_value('solver/allowable_div_inner', 1e-6, 'float')
+            allowable_div_inner = sim.input.get_value(
+                'solver/allowable_div_inner', 1e-6, 'float'
+            )
 
             # Check if the simulation is done
             if t + dt > tmax + 1e-6:
@@ -326,9 +367,11 @@ class SolverFSVD(Solver):
                 umax = dolfin.MPI.max(dolfin.MPI.comm_world, float(umax))
 
                 # Convergence estimates
-                sim.log.info('  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
-                             % (self.inner_iteration, err_u_star, err_p, solver_info, umax)
-                             + ' err div %10.3e' % err_div)
+                sim.log.info(
+                    '  Inner iteration %3d - err u* %10.3e - err p %10.3e%s  ui*max %10.3e'
+                    % (self.inner_iteration, err_u_star, err_p, solver_info, umax)
+                    + ' err div %10.3e' % err_div
+                )
 
                 if err_div < allowable_div_inner:
                     break

@@ -28,9 +28,12 @@ class SharpField(KnownField):
 
         if self.local_projection:
             # Represent the jump using a quadrature element
-            quad_elem = dolfin.FiniteElement('Quadrature', mesh.ufl_cell(),
-                                             self.projection_degree,
-                                             quad_scheme="default")
+            quad_elem = dolfin.FiniteElement(
+                'Quadrature',
+                mesh.ufl_cell(),
+                self.projection_degree,
+                quad_scheme="default",
+            )
             xpos, ypos, zpos = self.xpos, self.ypos, self.zpos
             if simulation.ndim == 2:
                 cpp0 = 'x[0] < %r and x[1] < %r' % (xpos, ypos)
@@ -64,8 +67,11 @@ class SharpField(KnownField):
             for cell in dolfin.cells(simulation.data['mesh']):
                 mp = cell.midpoint()[:]
                 dof, = dm.cell_dofs(cell.index())
-                if (mp[0] < xpos and mp[1] < ypos and
-                        (simulation.ndim == 2 or mp[2] < zpos)):
+                if (
+                    mp[0] < xpos
+                    and mp[1] < ypos
+                    and (simulation.ndim == 2 or mp[2] < zpos)
+                ):
                     arr[dof] = below
                 else:
                     arr[dof] = above
@@ -74,7 +80,9 @@ class SharpField(KnownField):
 
     def read_input(self, field_inp):
         self.name = field_inp.get_value('name', required_type='string')
-        self.var_name = field_inp.get_value('variable_name', 'phi', required_type='string')
+        self.var_name = field_inp.get_value(
+            'variable_name', 'phi', required_type='string'
+        )
         self.val_above = field_inp.get_value('value_above', required_type='float')
         self.val_below = field_inp.get_value('value_below', required_type='float')
         self.xpos = field_inp.get_value('x', 1e100, required_type='float')
@@ -86,6 +94,8 @@ class SharpField(KnownField):
 
     def get_variable(self, name):
         if not name == self.var_name:
-            ocellaris_error('Sharp field does not define %r' % name,
-                            'This sharp field defines %r' % self.var_name)
+            ocellaris_error(
+                'Sharp field does not define %r' % name,
+                'This sharp field defines %r' % self.var_name,
+            )
         return self.func

@@ -26,8 +26,13 @@ class BaseEquation(object):
 
 
 class MomentumPredictionEquation(BaseEquation):
-    def __init__(self, simulation, use_stress_divergence_form, use_grad_p_form,
-                 include_hydrostatic_pressure):
+    def __init__(
+        self,
+        simulation,
+        use_stress_divergence_form,
+        use_grad_p_form,
+        include_hydrostatic_pressure,
+    ):
         """
         This class assembles the standard Navier-Stokes momentum equation
         with an explicit pressure. It uses the coupled form, with ufl Zero
@@ -58,22 +63,33 @@ class MomentumPredictionEquation(BaseEquation):
         class MyZero(Zero):
             def ufl_domains(self):
                 return p.ufl_domains()
+
         q = MyZero()
 
         lm_trial = lm_test = None
 
         # Define the momentum equation weak form
-        eq = define_dg_equations(u, v, p, q, lm_trial, lm_test, self.simulation,
-                                 include_hydrostatic_pressure=self.include_hydrostatic_pressure,
-                                 incompressibility_flux_type='central',  # Only used with q
-                                 use_grad_q_form=False,  # Only used with q
-                                 use_grad_p_form=self.use_grad_p_form,
-                                 use_stress_divergence_form=self.use_stress_divergence_form)
+        eq = define_dg_equations(
+            u,
+            v,
+            p,
+            q,
+            lm_trial,
+            lm_test,
+            self.simulation,
+            include_hydrostatic_pressure=self.include_hydrostatic_pressure,
+            incompressibility_flux_type='central',  # Only used with q
+            use_grad_q_form=False,  # Only used with q
+            use_grad_p_form=self.use_grad_p_form,
+            use_stress_divergence_form=self.use_stress_divergence_form,
+        )
         self.form_lhs, self.form_rhs = dolfin.system(eq)
 
 
 class PressureCorrectionEquation(BaseEquation):
-    def __init__(self, simulation, use_lagrange_multiplicator, incompressibility_flux_type):
+    def __init__(
+        self, simulation, use_lagrange_multiplicator, incompressibility_flux_type
+    ):
         """
         This class assembles the pressure Poisson equation, both CG and DG
         """
@@ -94,8 +110,8 @@ class PressureCorrectionEquation(BaseEquation):
         penalty_dS = define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS * 2
         self.simulation.log.info(
-            '    DG SIP penalty pressure:  dS %.1f  ds %.1f' %
-            (penalty_dS, penalty_ds))
+            '    DG SIP penalty pressure:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds)
+        )
 
         return Constant(penalty_dS), Constant(penalty_ds)
 
@@ -138,7 +154,9 @@ class PressureCorrectionEquation(BaseEquation):
         if self.incompressibility_flux_type == 'central':
             u_flux = avg(u_star)
         elif self.incompressibility_flux_type == 'upwind':
-            switch = dolfin.conditional(dolfin.gt(abs(dot(u_star, n))('+'), 0.0), 1.0, 0.0)
+            switch = dolfin.conditional(
+                dolfin.gt(abs(dot(u_star, n))('+'), 0.0), 1.0, 0.0
+            )
             u_flux = switch * u_star('+') + (1 - switch) * u_star('-')
         L += c1 / dt * dot(u_star, grad(q)) * dx
         L -= c1 / dt * dot(u_flux, n('+')) * jump(q) * dS
@@ -156,7 +174,7 @@ class PressureCorrectionEquation(BaseEquation):
 
         # Symmetric Interior Penalty coercivity term
         a += penalty_dS * jump(p) * jump(q) * dS
-        #L += penalty_dS*jump(p_star)*jump(q)*dS
+        # L += penalty_dS*jump(p_star)*jump(q)*dS
 
         # Collect Dirichlet and outlet boundary values
         dirichlet_vals_and_ds = []
@@ -182,14 +200,14 @@ class PressureCorrectionEquation(BaseEquation):
             L += penalty_ds * p_bc * q * dds
 
             # Weak Dirichlet for p^*
-            #L += penalty_ds*p_star*q*dds
-            #L -= penalty_ds*p_bc*q*dds
+            # L += penalty_ds*p_star*q*dds
+            # L -= penalty_ds*p_bc*q*dds
 
         # Neumann boundary conditions
         neumann_bcs = sim.data['neumann_bcs'].get('p', [])
         for nbc in neumann_bcs:
             # Neumann boundary conditions on p and p_star cancel
-            #L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
+            # L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
             pass
 
         # Use boundary conditions for the velocity for the
@@ -238,9 +256,15 @@ class VelocityUpdateEquation(BaseEquation):
         v = dolfin.TestFunction(Vu)
 
         self.form_lhs = u * v * dx
-        self.form_rhs = us * v * dx - dt / (c1 * rho) * p_hat.dx(self.component) * v * dx
+        self.form_rhs = (
+            us * v * dx - dt / (c1 * rho) * p_hat.dx(self.component) * v * dx
+        )
 
 
 EQUATION_SUBTYPES = {
-    'Default': (MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation),
+    'Default': (
+        MomentumPredictionEquation,
+        PressureCorrectionEquation,
+        VelocityUpdateEquation,
+    )
 }

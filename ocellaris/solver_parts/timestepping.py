@@ -26,13 +26,17 @@ def before_simulation(simulation, force_steady=False):
         simulation.data['time_coeffs'].assign(dolfin.Constant([0.0, 0.0, 0.0]))
     elif starting_order == 2:
         # Switch to second order time stepping
-        simulation.log.info('Initial values for upp are found and used, '
-                            'starting with second order time stepping.')
+        simulation.log.info(
+            'Initial values for upp are found and used, '
+            'starting with second order time stepping.'
+        )
         simulation.data['time_coeffs'].assign(dolfin.Constant([3 / 2, -2.0, 1 / 2]))
     else:
         # Standard first order time stepping
-        simulation.log.info('Initial values for upp are not found, '
-                            'starting with first order time stepping.')
+        simulation.log.info(
+            'Initial values for upp are not found, '
+            'starting with first order time stepping.'
+        )
         simulation.data['time_coeffs'].assign(dolfin.Constant([1.0, -1.0, 0.0]))
     update_convection(simulation, starting_order, force_steady=force_steady)
 

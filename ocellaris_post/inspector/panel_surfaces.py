@@ -1,8 +1,12 @@
 import numpy
 import matplotlib
+
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
+from matplotlib.backends.backend_wxagg import (
+    FigureCanvasWxAgg as FigureCanvas,
+    NavigationToolbar2WxAgg as NavigationToolbar,
+)
 import wx
 from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 
@@ -54,7 +58,8 @@ class OcellarisSurfacesPanel(wx.Panel):
         self.axes = self.fig.add_subplot(111)
         toolbar = NavigationToolbar(self.canvas)
         self.plot_cursor_position_info = wx.StaticText(
-            self, style=wx.ALIGN_RIGHT, size=(250, -1), label='')
+            self, style=wx.ALIGN_RIGHT, size=(250, -1), label=''
+        )
         self.canvas.mpl_connect('motion_notify_event', self.mouse_position_on_plot)
         v.Add(self.canvas, proportion=1, flag=wx.EXPAND)
         h = wx.BoxSizer(wx.HORIZONTAL)
@@ -84,7 +89,9 @@ class OcellarisSurfacesPanel(wx.Panel):
         h.AddSpacer(5)
         self.time_selector = wx.Slider(self)
 
-        def lam(evt): return setattr(self, 'need_update', True)
+        def lam(evt):
+            return setattr(self, 'need_update', True)
+
         self.time_selector.Bind(wx.EVT_SLIDER, lam)
         h.Add(self.time_selector, proportion=1)
 
@@ -112,7 +119,9 @@ class OcellarisSurfacesPanel(wx.Panel):
         fgs.Add(self.ylabel, flag=wx.EXPAND)
 
         # Plot ylabel
-        fgs.Add(wx.StaticText(self, label='Aspect ratio:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        fgs.Add(
+            wx.StaticText(self, label='Aspect ratio:'), flag=wx.ALIGN_CENTER_VERTICAL
+        )
         self.aspect = wx.Choice(self)
         self.aspect.Set(['equal', 'auto'])
         self.aspect.Select(0)
@@ -145,7 +154,9 @@ class OcellarisSurfacesPanel(wx.Panel):
 
                 with wx.BusyCursor():
                     try:
-                        _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
+                        _description, _value, _dim, timesteps, data = surf.get_surfaces(
+                            cache=True
+                        )
                     except BaseException:
                         continue
 
@@ -210,7 +221,9 @@ class OcellarisSurfacesPanel(wx.Panel):
                 surf = results.surfaces[surface_name]
                 with wx.BusyCursor():
                     try:
-                        _description, _value, _dim, timesteps, data = surf.get_surfaces(cache=True)
+                        _description, _value, _dim, timesteps, data = surf.get_surfaces(
+                            cache=True
+                        )
                     except Exception:
                         continue
 

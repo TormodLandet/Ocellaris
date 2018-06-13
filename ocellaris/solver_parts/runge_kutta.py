@@ -3,8 +3,18 @@ from ocellaris.solver_parts import SlopeLimiter
 
 
 class RungeKuttaDGTimestepping(object):
-    def __init__(self, simulation, a, L, u, up, func_name,
-                 order=None, explicit_funcs=None, bcs=None):
+    def __init__(
+        self,
+        simulation,
+        a,
+        L,
+        u,
+        up,
+        func_name,
+        order=None,
+        explicit_funcs=None,
+        bcs=None,
+    ):
         """
         RKDG timestepping. A is a block diagonal mass matrix form (u*v*dx),
         L is the form of the right hand side of du/dt = L. The functions
@@ -37,7 +47,9 @@ class RungeKuttaDGTimestepping(object):
         else:
             self.A, self.B, _C = get_ssp_rk_coefficients(order)
             S = len(self.A)
-        simulation.log.info('    Preparing SSP RK method of order %d with %d stages' % (order, S))
+        simulation.log.info(
+            '    Preparing SSP RK method of order %d with %d stages' % (order, S)
+        )
 
         self.funcs_to_extrapolate = explicit_funcs
         self.bcs = bcs
@@ -47,7 +59,9 @@ class RungeKuttaDGTimestepping(object):
         self.dus = [Function(V) for _ in range(S)]
         self.solver = LocalSolver(a, L)
         self.solver.factorize()
-        self.slope_limiters = {du: SlopeLimiter(simulation, func_name, du) for du in self.dus}
+        self.slope_limiters = {
+            du: SlopeLimiter(simulation, func_name, du) for du in self.dus
+        }
 
         if self.order > 3:
             # Need one extra function storage when running the generic code
@@ -83,13 +97,14 @@ class RungeKuttaDGTimestepping(object):
 
             elif len(ups) == 3:
                 old1, old2, old3 = ups
-                ux.vector().axpy(fdt**2 / 2 + 3 * fdt / 2 + 1, old1.vector())
-                ux.vector().axpy(-fdt**2 - 2 * fdt, old2.vector())
-                ux.vector().axpy(fdt**2 / 2 + fdt / 2, old3.vector())
+                ux.vector().axpy(fdt ** 2 / 2 + 3 * fdt / 2 + 1, old1.vector())
+                ux.vector().axpy(-fdt ** 2 - 2 * fdt, old2.vector())
+                ux.vector().axpy(fdt ** 2 / 2 + fdt / 2, old3.vector())
 
             else:
-                raise NotImplementedError('Extrapolation of degree %d not implemented'
-                                          % (len(ups) - 1))
+                raise NotImplementedError(
+                    'Extrapolation of degree %d not implemented' % (len(ups) - 1)
+                )
 
         # Update time dependent BCs in L to the RK sub time step
         for bc in self.bcs:
@@ -197,13 +212,20 @@ def get_ssp_rk_coefficients(K):
         B = [[1], [0, 1 / 4], [0, 0, 2 / 3]]
     elif K == 4:
         # SSP(5,4): five stage RK4 SSP scheme
-        A = [[1.0], [0.444370493651235, 0.555629506348765],
-             [0.620101851488403, 0, 0.379898148511597],
-             [0.178079954393132, 0, 0, 0.821920045606868],
-             [0, 0, 0.517231671970585, 0.096059710526147, 0.386708617503269]]
-        B = [[0.391752226571890], [0, 0.368410593050371],
-             [0, 0, 0.251891774271694], [0, 0, 0, 0.544974750228521],
-             [0, 0, 0, 0.063692468666290, 0.226007483236906]]
+        A = [
+            [1.0],
+            [0.444370493651235, 0.555629506348765],
+            [0.620101851488403, 0, 0.379898148511597],
+            [0.178079954393132, 0, 0, 0.821920045606868],
+            [0, 0, 0.517231671970585, 0.096059710526147, 0.386708617503269],
+        ]
+        B = [
+            [0.391752226571890],
+            [0, 0.368410593050371],
+            [0, 0, 0.251891774271694],
+            [0, 0, 0, 0.544974750228521],
+            [0, 0, 0, 0.063692468666290, 0.226007483236906],
+        ]
         C = 1.50818004918983
     else:
         raise NotImplementedError('No SSP RK method of order %d implemented' % K)

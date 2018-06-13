@@ -16,9 +16,11 @@ def register_probe(name):
     """
     A class decorator to register postprocessing probes
     """
+
     def register(probe_class):
         add_probe(name, probe_class)
         return probe_class
+
     return register
 
 
@@ -29,10 +31,13 @@ def get_probe(name):
     try:
         return _PROBES[name]
     except KeyError:
-        ocellaris_error('Postprocessing probe "%s" not found' % name,
-                        'Available probe:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description)
-                                  for n, s in sorted(_PROBES.items())))
+        ocellaris_error(
+            'Postprocessing probe "%s" not found' % name,
+            'Available probe:\n'
+            + '\n'.join(
+                '  %-20s - %s' % (n, s.description) for n, s in sorted(_PROBES.items())
+            ),
+        )
         raise
 
 
@@ -40,6 +45,7 @@ def setup_probes(simulation):
     """
     Install probes from a simulation input
     """
+
     def hook_start(probe):
         return lambda: probe.new_simulation()
 
@@ -77,28 +83,31 @@ def setup_probes(simulation):
         # Store for access from other parts of the code
         if probe_name in simulation.probes:
             simulation.log.warning(
-                '    Probe name "%s" used for multiple probes. Names should be unique!')
+                '    Probe name "%s" used for multiple probes. Names should be unique!'
+            )
         simulation.probes[probe_name] = probe
 
         # Register callbacks
         if probe.new_simulation is not None:
-            simulation.hooks.add_pre_simulation_hook(hook_start(probe), 'Probe "%s"' % probe_name)
+            simulation.hooks.add_pre_simulation_hook(
+                hook_start(probe), 'Probe "%s"' % probe_name
+            )
         if probe.new_timestep is not None:
             simulation.hooks.add_pre_timestep_hook(
-                hook_pre_timestep(probe),
-                'Probe "%s"' %
-                probe_name)
+                hook_pre_timestep(probe), 'Probe "%s"' % probe_name
+            )
         if probe.end_of_timestep is not None:
             simulation.hooks.add_post_timestep_hook(
-                hook_post_timestep(probe),
-                'Probe "%s"' %
-                probe_name)
+                hook_post_timestep(probe), 'Probe "%s"' % probe_name
+            )
         if probe.end_of_simulation is not None:
-            simulation.hooks.add_post_simulation_hook(hook_final(probe), 'Probe "%s"' % probe_name)
+            simulation.hooks.add_post_simulation_hook(
+                hook_final(probe), 'Probe "%s"' % probe_name
+            )
 
         simulation.log.info(
-            '    Probe %s set-up done in %.1f seconds' %
-            (probe_name, time.time() - t1))
+            '    Probe %s set-up done in %.1f seconds' % (probe_name, time.time() - t1)
+        )
 
 
 class Probe(object):

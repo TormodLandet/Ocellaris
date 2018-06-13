@@ -16,9 +16,11 @@ def register_boundary_condition(name):
     """
     A class decorator to register boundary conditions
     """
+
     def register(boundary_condition_class):
         add_boundary_condition(name, boundary_condition_class)
         return boundary_condition_class
+
     return register
 
 
@@ -29,10 +31,14 @@ def get_boundary_condition(name):
     try:
         return _BOUNDARY_CONDITIONS[name]
     except KeyError:
-        ocellaris_error('Boundary condition "%s" not found' % name,
-                        'Available boundary conditions:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description)
-                                  for n, s in sorted(_BOUNDARY_CONDITIONS.items())))
+        ocellaris_error(
+            'Boundary condition "%s" not found' % name,
+            'Available boundary conditions:\n'
+            + '\n'.join(
+                '  %-20s - %s' % (n, s.description)
+                for n, s in sorted(_BOUNDARY_CONDITIONS.items())
+            ),
+        )
         raise
 
 

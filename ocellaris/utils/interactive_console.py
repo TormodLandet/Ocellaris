@@ -32,7 +32,9 @@ def interactive_console_hook(simulation):
     or during non-interactive (queue system/batch) use
     """
     # Command file - used in addition to stdin if it exits
-    command_file = simulation.input.get_output_file_path('command_control_file', '.COMMANDS')
+    command_file = simulation.input.get_output_file_path(
+        'command_control_file', '.COMMANDS'
+    )
 
     # Check if the user has written something on stdin for us
     if simulation.rank == 0:
@@ -72,8 +74,10 @@ def interactive_console_hook(simulation):
 
         elif command == 's':
             # s == "stop" -> stop the simulation
-            simulation.log.info('\nCommand line action:\n  Setting simulation '
-                                'control parameter tmax to %r\n' % simulation.time)
+            simulation.log.info(
+                '\nCommand line action:\n  Setting simulation '
+                'control parameter tmax to %r\n' % simulation.time
+            )
             simulation.input['time']['tmax'] = simulation.time
 
         elif command == 't':
@@ -89,14 +93,15 @@ def interactive_console_hook(simulation):
         elif cwords[0] == 'i':
             # i == "input" -> set input variable, e.g., "i time/dt = 0.04"
             assignment = ' '.join(cwords[1:])
-            simulation.log.info('\nCommand line action:\n  Input modification: %s'
-                                % assignment)
+            simulation.log.info(
+                '\nCommand line action:\n  Input modification: %s' % assignment
+            )
             i = assignment.find('=')
             if i == -1:
                 simulation.log.warning('Malformed input, no "=" found')
                 continue
             path = assignment[:i].strip()
-            value = assignment[i + 1:].strip()
+            value = assignment[i + 1 :].strip()
             try:
                 py_value = eval(value)
             except Exception:
@@ -108,8 +113,9 @@ def interactive_console_hook(simulation):
         elif cwords[0] == 'w':
             # w == "write" -> write output file (restart files use "r" command)
             file_format = cwords[1]
-            simulation.log.info('\nCommand line action:\n  Writing %s file'
-                                % file_format)
+            simulation.log.info(
+                '\nCommand line action:\n  Writing %s file' % file_format
+            )
             if file_format == 'vtk':
                 simulation.io.lvtk.write()
             elif file_format == 'xdmf':
@@ -122,7 +128,9 @@ def interactive_console_hook(simulation):
             try:
                 num_timesteps = int(cwords[1])
             except Exception:
-                simulation.log.warning('Did not understand requested number of profile time steps')
+                simulation.log.warning(
+                    'Did not understand requested number of profile time steps'
+                )
                 return
             simulation._profile_after_n_timesteps = num_timesteps + 1
             simulation._profile_object = cProfile.Profile()
@@ -133,8 +141,9 @@ def interactive_console_hook(simulation):
     if hasattr(simulation, '_profile_after_n_timesteps'):
         simulation._profile_after_n_timesteps -= 1
         simulation.log.info(
-            'Profile will end after %d time steps' %
-            simulation._profile_after_n_timesteps)
+            'Profile will end after %d time steps'
+            % simulation._profile_after_n_timesteps
+        )
         if simulation._profile_after_n_timesteps == 0:
             simulation._profile_object.disable()
             stats = pstats.Stats(simulation._profile_object)
@@ -200,6 +209,7 @@ def run_debug_console(simulation, show_banner=True):
 
     # Everything from dolfin should be available
     import dolfin
+
     debug_locals = dict(**dolfin.__dict__)
 
     # All variables in the data dict should be available
@@ -215,8 +225,10 @@ def run_debug_console(simulation, show_banner=True):
         if i % 4 == 0:
             banner[-1] += '\n'
         banner[-1] += '  %-18s' % name
-    banner.append('\n\nPress Ctrl+D to continue running the simulation.'
-                  '\nRunning exit() or quit() will stop Ocellaris.')
+    banner.append(
+        '\n\nPress Ctrl+D to continue running the simulation.'
+        '\nRunning exit() or quit() will stop Ocellaris.'
+    )
 
     # Add some convenience functions
     funcs, info = define_convenience_functions(simulation)
@@ -247,7 +259,9 @@ def define_convenience_functions(simulation):
     funcs = {}
 
     # Convenience plotting function
-    fields = [name for name in ('u', 'p', 'c', 'p_hydrostatic') if name in simulation.data]
+    fields = [
+        name for name in ('u', 'p', 'c', 'p_hydrostatic') if name in simulation.data
+    ]
     info.append('Running plot_all() will plot %s' % ' & '.join(fields))
 
     def plot_all():
@@ -255,6 +269,7 @@ def define_convenience_functions(simulation):
             field = simulation.data[name]
             dolfin.plot(field, title=name, tag=name)
         pyplot.show()
+
     funcs['plot_all'] = plot_all
     funcs['pyplot'] = pyplot
 

@@ -1,32 +1,46 @@
 import dolfin
-from ocellaris.utils import (verify_key, timeit, linear_solver_from_input,
-                             create_vector_functions, shift_fields,
-                             velocity_change, matmul)
+from ocellaris.utils import (
+    verify_key,
+    timeit,
+    linear_solver_from_input,
+    create_vector_functions,
+    shift_fields,
+    velocity_change,
+    matmul,
+)
 from . import Solver, register_solver, BDM
 from .simple_equations import SimpleEquations
-from ..solver_parts import (VelocityBDMProjection, setup_hydrostatic_pressure,
-                            SlopeLimiterVelocity, before_simulation,
-                            after_timestep)
+from ..solver_parts import (
+    VelocityBDMProjection,
+    setup_hydrostatic_pressure,
+    SlopeLimiterVelocity,
+    before_simulation,
+    after_timestep,
+)
 
 
 # Solvers - default values, can be changed in the input file
-SOLVER_U_OPTIONS = {'use_ksp': True,
-                    'petsc_ksp_type': 'gmres',
-                    'petsc_pc_type': 'asm',
-                    'petsc_ksp_initial_guess_nonzero': True,
-                    'petsc_ksp_view': 'DISABLED',
-                    'inner_iter_rtol': [1e-10] * 3,
-                    'inner_iter_atol': [1e-15] * 3,
-                    'inner_iter_max_it': [100] * 3}
-SOLVER_P_OPTIONS = {'use_ksp': True,
-                    'petsc_ksp_type': 'gmres',
-                    'petsc_pc_type': 'hypre',
-                    'petsc_pc_hypre_type': 'boomeramg',
-                    'petsc_ksp_initial_guess_nonzero': True,
-                    'petsc_ksp_view': 'DISABLED',
-                    'inner_iter_rtol': [1e-10] * 3,
-                    'inner_iter_atol': [1e-15] * 3,
-                    'inner_iter_max_it': [100] * 3}
+SOLVER_U_OPTIONS = {
+    'use_ksp': True,
+    'petsc_ksp_type': 'gmres',
+    'petsc_pc_type': 'asm',
+    'petsc_ksp_initial_guess_nonzero': True,
+    'petsc_ksp_view': 'DISABLED',
+    'inner_iter_rtol': [1e-10] * 3,
+    'inner_iter_atol': [1e-15] * 3,
+    'inner_iter_max_it': [100] * 3,
+}
+SOLVER_P_OPTIONS = {
+    'use_ksp': True,
+    'petsc_ksp_type': 'gmres',
+    'petsc_pc_type': 'hypre',
+    'petsc_pc_hypre_type': 'boomeramg',
+    'petsc_ksp_initial_guess_nonzero': True,
+    'petsc_ksp_view': 'DISABLED',
+    'inner_iter_rtol': [1e-10] * 3,
+    'inner_iter_atol': [1e-15] * 3,
+    'inner_iter_max_it': [100] * 3,
+}
 
 # Equations - default values, can be changed in the input file
 USE_STRESS_DIVERGENCE = False
@@ -106,7 +120,9 @@ class SolverPIMPLE(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
-        self.hydrostatic_pressure = setup_hydrostatic_pressure(simulation, needs_initial_value=True)
+        self.hydrostatic_pressure = setup_hydrostatic_pressure(
+            simulation, needs_initial_value=True
+        )
         ph_every_timestep = 'p_hydrostatic' in sim.data
 
         # First time step timestepping coefficients
@@ -116,27 +132,34 @@ class SolverPIMPLE(Solver):
         sim.data['dt'] = dolfin.Constant(simulation.dt)
 
         # Define weak forms
-        matrices = SimpleEquations(simulation,
-                                   use_stress_divergence_form=self.use_stress_divergence_form,
-                                   use_grad_p_form=self.use_grad_p_form,
-                                   use_grad_q_form=self.use_grad_q_form,
-                                   use_lagrange_multiplicator=self.use_lagrange_multiplicator,
-                                   include_hydrostatic_pressure=ph_every_timestep,
-                                   incompressibility_flux_type=self.incompressibility_flux_type,
-                                   num_elements_in_block=self.num_elements_in_block,
-                                   lump_diagonal=self.lump_diagonal,
-                                   a_tilde_is_mass=self.mass_only_A_tilde)
+        matrices = SimpleEquations(
+            simulation,
+            use_stress_divergence_form=self.use_stress_divergence_form,
+            use_grad_p_form=self.use_grad_p_form,
+            use_grad_q_form=self.use_grad_q_form,
+            use_lagrange_multiplicator=self.use_lagrange_multiplicator,
+            include_hydrostatic_pressure=ph_every_timestep,
+            incompressibility_flux_type=self.incompressibility_flux_type,
+            num_elements_in_block=self.num_elements_in_block,
+            lump_diagonal=self.lump_diagonal,
+            a_tilde_is_mass=self.mass_only_A_tilde,
+        )
         self.matrices = matrices
 
         # Slope limiter for the momentum equation velocity components
-        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
+        self.slope_limiter = SlopeLimiterVelocity(
+            sim, sim.data['u'], 'u', vel_w=sim.data['u_conv']
+        )
         self.using_limiter = self.slope_limiter.active
 
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
-            self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
-                                                                incompressibility_flux_type=self.incompressibility_flux_type)
+            self.velocity_postprocessor = VelocityBDMProjection(
+                sim,
+                sim.data['u'],
+                incompressibility_flux_type=self.incompressibility_flux_type,
+            )
 
         # Matrix and vector storage
         self.A = self.B = self.C = self.At = self.Atinv = self.D = self.E = None
@@ -153,16 +176,19 @@ class SolverPIMPLE(Solver):
         sim = self.simulation
 
         # Create linear solvers
-        self.velocity_solver = linear_solver_from_input(self.simulation, 'solver/u',
-                                                        default_parameters=SOLVER_U_OPTIONS)
-        self.pressure_solver = linear_solver_from_input(self.simulation, 'solver/p',
-                                                        default_parameters=SOLVER_P_OPTIONS)
+        self.velocity_solver = linear_solver_from_input(
+            self.simulation, 'solver/u', default_parameters=SOLVER_U_OPTIONS
+        )
+        self.pressure_solver = linear_solver_from_input(
+            self.simulation, 'solver/p', default_parameters=SOLVER_P_OPTIONS
+        )
 
         # Lagrange multiplicator or remove null space via PETSc
         self.remove_null_space = True
         self.pressure_null_space = None
-        self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
-                                                              USE_LAGRANGE_MULTIPLICATOR, 'bool')
+        self.use_lagrange_multiplicator = sim.input.get_value(
+            'solver/use_lagrange_multiplicator', USE_LAGRANGE_MULTIPLICATOR, 'bool'
+        )
         if self.use_lagrange_multiplicator:
             self.remove_null_space = False
 
@@ -172,38 +198,47 @@ class SolverPIMPLE(Solver):
             self.use_lagrange_multiplicator = False
 
         # Control the form of the governing equations
-        self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
-                                                              USE_STRESS_DIVERGENCE, 'bool')
+        self.use_stress_divergence_form = sim.input.get_value(
+            'solver/use_stress_divergence_form', USE_STRESS_DIVERGENCE, 'bool'
+        )
         self.use_grad_p_form = sim.input.get_value(
-            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool'
+        )
         self.use_grad_q_form = sim.input.get_value(
-            'solver/use_grad_q_form', USE_GRAD_Q_FORM, 'bool')
-        self.incompressibility_flux_type = sim.input.get_value('solver/incompressibility_flux_type',
-                                                               INCOMPRESSIBILITY_FLUX_TYPE, 'string')
+            'solver/use_grad_q_form', USE_GRAD_Q_FORM, 'bool'
+        )
+        self.incompressibility_flux_type = sim.input.get_value(
+            'solver/incompressibility_flux_type', INCOMPRESSIBILITY_FLUX_TYPE, 'string'
+        )
         assert sim.data['Vu'].ufl_element().family() == 'Discontinuous Lagrange'
 
         # Velocity post_processing
         self.velocity_postprocessing = sim.input.get_value(
-            'solver/velocity_postprocessing', BDM, 'string')
+            'solver/velocity_postprocessing', BDM, 'string'
+        )
         verify_key(
             'velocity post processing',
             self.velocity_postprocessing,
-            ('none',
-             BDM),
-            'SIMPLE solver')
+            ('none', BDM),
+            'SIMPLE solver',
+        )
 
         # Quasi-steady simulation input
-        self.steady_velocity_eps = sim.input.get_value('solver/steady_velocity_stopping_criterion',
-                                                       None, 'float')
+        self.steady_velocity_eps = sim.input.get_value(
+            'solver/steady_velocity_stopping_criterion', None, 'float'
+        )
         self.is_steady = self.steady_velocity_eps is not None
 
         # How to approximate A_tilde
         self.num_elements_in_block = sim.input.get_value(
-            'solver/num_elements_in_A_tilde_block', NUM_ELEMENTS_IN_BLOCK, 'int')
+            'solver/num_elements_in_A_tilde_block', NUM_ELEMENTS_IN_BLOCK, 'int'
+        )
         self.lump_diagonal = sim.input.get_value(
-            'solver/lump_A_tilde_diagonal', LUMP_DIAGONAL, 'bool')
+            'solver/lump_A_tilde_diagonal', LUMP_DIAGONAL, 'bool'
+        )
         self.mass_only_A_tilde = sim.input.get_value(
-            'solver/A_tilde_is_mass_only', MASS_ONLY_A_TILDE, 'bool')
+            'solver/A_tilde_is_mass_only', MASS_ONLY_A_TILDE, 'bool'
+        )
 
     def create_functions(self):
         """
@@ -275,7 +310,9 @@ class SolverPIMPLE(Solver):
 
         # Add optional under relaxation
         if self.last_inner_iter:
-            alpha = sim.input.get_value('solver/relaxation_u_last_iter', ALPHA_U_LAST, 'float')
+            alpha = sim.input.get_value(
+                'solver/relaxation_u_last_iter', ALPHA_U_LAST, 'float'
+            )
         else:
             alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
         if alpha != 1.0:
@@ -288,24 +325,32 @@ class SolverPIMPLE(Solver):
             rhs.apply('insert')
 
         # Solve the linearised convection-diffusion system
-        self.niters_u = self.velocity_solver.inner_solve(lhs, u_star.vector(), rhs,
-                                                         in_iter=self.inner_iteration,
-                                                         co_iter=self.co_inner_iter)
+        self.niters_u = self.velocity_solver.inner_solve(
+            lhs,
+            u_star.vector(),
+            rhs,
+            in_iter=self.inner_iteration,
+            co_iter=self.co_inner_iter,
+        )
 
     def piso_loop(self):
         """
         Perform pressure correction and velocity update iteratively.
         This is the "PISO" part of the PIMPLE algorithm
         """
-        N = self.simulation.input.get_value('solver/num_pressure_corr', MAX_PRESSURE_ITER, 'int')
+        N = self.simulation.input.get_value(
+            'solver/num_pressure_corr', MAX_PRESSURE_ITER, 'int'
+        )
         for i in range(N):
             reassemble = self.inner_iteration == 1 and i == 0
             err_p, div_err = self.pressure_correction(reassemble)
             err_u = self.velocity_update(i == N - 1)
             if N != 1:
-                txt = ('    Pressure correction %2d - err u* %10.3e - '
-                       'err p %10.3e - div inp %10.3e - Kry. iters %3d' %
-                       (i + 1, err_u, err_p, div_err, self.niters_p))
+                txt = (
+                    '    Pressure correction %2d - err u* %10.3e - '
+                    'err p %10.3e - div inp %10.3e - Kry. iters %3d'
+                    % (i + 1, err_u, err_p, div_err, self.niters_p)
+                )
                 self.simulation.log.info(txt)
 
         # The change in u_star from before the momentum prediction and up to now
@@ -353,9 +398,11 @@ class SolverPIMPLE(Solver):
             c2 = (self.CAtinvA * U).norm('l2')
             c3 = (self.C * (self.A_tilde_inv * self.D)).norm('l2')
             cT = max([c0, c1, c2, c3])
-            sim.log.info('                              Pressure RHS contributions:'
-                         '  %5.2f  %5.2f  %.2e    %5.2f  %5.2f    %.2e'
-                         % (c0 / cT, c1 / cT, div_err / cT, c2 / cT, c3 / cT, cT))
+            sim.log.info(
+                '                              Pressure RHS contributions:'
+                '  %5.2f  %5.2f  %.2e    %5.2f  %5.2f    %.2e'
+                % (c0 / cT, c1 / cT, div_err / cT, c2 / cT, c3 / cT, cT)
+            )
 
         # Inform PETSc about the pressure null space
         if self.remove_null_space:
@@ -377,9 +424,13 @@ class SolverPIMPLE(Solver):
 
         # Solve for the new pressure correction
         minus_p_hat.assign(p_star)
-        self.niters_p = self.pressure_solver.inner_solve(lhs, p_star.vector(), rhs,
-                                                         in_iter=self.inner_iteration,
-                                                         co_iter=self.co_inner_iter)
+        self.niters_p = self.pressure_solver.inner_solve(
+            lhs,
+            p_star.vector(),
+            rhs,
+            in_iter=self.inner_iteration,
+            co_iter=self.co_inner_iter,
+        )
 
         # Compute change from last iteration
         minus_p_hat.vector().axpy(-1.0, p_star.vector())
@@ -395,7 +446,9 @@ class SolverPIMPLE(Solver):
 
         # Explicit relaxation
         if self.last_inner_iter:
-            alpha = sim.input.get_value('solver/relaxation_p_last_iter', ALPHA_P_LAST, 'float')
+            alpha = sim.input.get_value(
+                'solver/relaxation_p_last_iter', ALPHA_P_LAST, 'float'
+            )
         else:
             alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
         if alpha != 1:
@@ -415,7 +468,11 @@ class SolverPIMPLE(Solver):
 
         # <<<<<<<####################################################################################################################################
         for _i in range(1 if last else 10):
-            minus_u_upd = self.AtinvA * uvw.vector() + self.AtinvB * p.vector() - self.A_tilde_inv * self.D
+            minus_u_upd = (
+                self.AtinvA * uvw.vector()
+                + self.AtinvB * p.vector()
+                - self.A_tilde_inv * self.D
+            )
             uvw.vector().axpy(-1.0, minus_u_upd)
             uvw.vector().apply('insert')
 
@@ -426,9 +483,10 @@ class SolverPIMPLE(Solver):
                 c1 = (self.AtinvB * p.vector()).norm('l2')
                 c2 = (self.A_tilde_inv * self.D).norm('l2')
                 cT = max([c0, c1, c2])
-                self.simulation.log.info('                              VelUp contributions:'
-                                         '  %5.2f  %5.2f  %5.2f    %.2e'
-                                         % (c0 / cT, c1 / cT, c2 / cT, cT))
+                self.simulation.log.info(
+                    '                              VelUp contributions:'
+                    '  %5.2f  %5.2f  %5.2f    %.2e' % (c0 / cT, c1 / cT, c2 / cT, cT)
+                )
 
         return minus_u_upd.norm('l2')
 
@@ -453,9 +511,11 @@ class SolverPIMPLE(Solver):
         self.slope_limiter.run()
 
         # Measure the change in the field after limiting (l2 norm)
-        change = velocity_change(u1=self.simulation.data['u'],
-                                 u2=self.simulation.data['u_unlim'],
-                                 ui_tmp=self.simulation.data['ui_tmp'])
+        change = velocity_change(
+            u1=self.simulation.data['u'],
+            u2=self.simulation.data['u_unlim'],
+            ui_tmp=self.simulation.data['ui_tmp'],
+        )
 
         return change
 
@@ -478,10 +538,12 @@ class SolverPIMPLE(Solver):
                 # Get input values, these can possibly change over time
                 dt = sim.input.get_value('time/dt', required_type='float')
                 tmax = sim.input.get_value('time/tmax', required_type='float')
-                num_inner_iter = sim.input.get_value('solver/num_inner_iter',
-                                                     MAX_INNER_ITER, 'int')
-                allowable_error_inner = sim.input.get_value('solver/allowable_error_inner',
-                                                            ALLOWABLE_ERROR_INNER, 'float')
+                num_inner_iter = sim.input.get_value(
+                    'solver/num_inner_iter', MAX_INNER_ITER, 'int'
+                )
+                allowable_error_inner = sim.input.get_value(
+                    'solver/allowable_error_inner', ALLOWABLE_ERROR_INNER, 'float'
+                )
 
                 # Check if the simulation is done
                 if t + dt > tmax + 1e-6:
@@ -509,9 +571,17 @@ class SolverPIMPLE(Solver):
                     self.co_inner_iter = num_inner_iter - self.inner_iteration
                     self.momentum_prediction()
                     err_p, err_u = self.piso_loop()
-                    sim.log.info('  PIMPLE iteration %3d - err u* %10.3e - err p %10.3e'
-                                 ' - Num Krylov iters - u %3d - p %3d' % (self.inner_iteration,
-                                                                          err_u, err_p, self.niters_u, self.niters_p))
+                    sim.log.info(
+                        '  PIMPLE iteration %3d - err u* %10.3e - err p %10.3e'
+                        ' - Num Krylov iters - u %3d - p %3d'
+                        % (
+                            self.inner_iteration,
+                            err_u,
+                            err_p,
+                            self.niters_u,
+                            self.niters_p,
+                        )
+                    )
                     self.inner_iteration += 1
 
                     if self.last_inner_iter:

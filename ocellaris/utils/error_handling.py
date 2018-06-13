@@ -31,14 +31,18 @@ def verify_key(name, key, options, loc=None):
             if hasattr(options, 'keys'):
                 options = list(options.keys())
             available_options = '\n'.join(' - %r' % m for m in options)
-            ocellaris_error('Unsupported %s' % name,
-                            'The %s %r is not available%s, please use one of:\n%s' %
-                            (name, key, loc, available_options))
+            ocellaris_error(
+                'Unsupported %s' % name,
+                'The %s %r is not available%s, please use one of:\n%s'
+                % (name, key, loc, available_options),
+            )
         else:
             available_options = ', '.join('%r' % m for m in options)
-            ocellaris_error('Unsupported %s' % name,
-                            'The %s %r is not available%s, only %s is available' %
-                            (name, key, loc, available_options))
+            ocellaris_error(
+                'Unsupported %s' % name,
+                'The %s %r is not available%s, only %s is available'
+                % (name, key, loc, available_options),
+            )
 
 
 def verify_field_variable_definition(simulation, vardef, loc, return_var=True):
@@ -50,8 +54,11 @@ def verify_field_variable_definition(simulation, vardef, loc, return_var=True):
     """
     comps = vardef.strip().split('/')
     if len(comps) != 2:
-        ocellaris_error('Fild variable reference error',
-                        'Field variable should be on format "field name/varname", found %r in %s' % (vardef, loc))
+        ocellaris_error(
+            'Fild variable reference error',
+            'Field variable should be on format "field name/varname", found %r in %s'
+            % (vardef, loc),
+        )
     field_name, var_name = comps
 
     verify_key('field name', field_name, simulation.fields, loc)

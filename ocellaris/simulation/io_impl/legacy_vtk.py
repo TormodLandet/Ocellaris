@@ -16,7 +16,7 @@ UFC2VTK_TET10 = [0, 1, 2, 3, 9, 6, 8, 7, 5, 4]
 UFC2VTK_TRI06 = [0, 1, 2, 5, 3, 4]
 
 
-class LegacyVTKIO():
+class LegacyVTKIO:
     def __init__(self, simulation):
         """
         Output to legacy VTK format - Python implementation,
@@ -35,9 +35,13 @@ class LegacyVTKIO():
         Write a file that can be used for visualization in Paraview
         """
         sim = self.simulation
-        binary_format = sim.input.get_value('output/vtk_binary_format', WRITE_BINARY, 'bool')
+        binary_format = sim.input.get_value(
+            'output/vtk_binary_format', WRITE_BINARY, 'bool'
+        )
         if file_name is None:
-            file_name = sim.input.get_output_file_path('output/vtk_file_name', '_%08d.vtk')
+            file_name = sim.input.get_output_file_path(
+                'output/vtk_file_name', '_%08d.vtk'
+            )
             file_name = file_name % sim.timestep
 
         sim.log.info('    Writing legacy VTK file %s' % file_name)
@@ -46,8 +50,13 @@ class LegacyVTKIO():
 
         return file_name
 
-    def _write_vtk(self, file_name, binary_format=WRITE_BINARY, extra_funcs=(),
-                   include_standard=False):
+    def _write_vtk(
+        self,
+        file_name,
+        binary_format=WRITE_BINARY,
+        extra_funcs=(),
+        include_standard=False,
+    ):
         """
         Write plot file in legacy VTK format
         """
@@ -68,19 +77,28 @@ class LegacyVTKIO():
         results = gather_vtk_info(mesh, funcs)
         if results is not None:
             coords, connectivity, cell_types, func_vals = results
-            write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, func_vals, t)
+            write_vtk_file(
+                file_name, binary_format, coords, connectivity, cell_types, func_vals, t
+            )
 
         mesh.mpi_comm().barrier()
 
 
-def write_vtk_file(file_name, binary_format, coords, connectivity, cell_types, func_vals, t):
+def write_vtk_file(
+    file_name, binary_format, coords, connectivity, cell_types, func_vals, t
+):
     # VTK writer functions
-    def write_ascii(text): return out.write(text.encode('ASCII'))
+    def write_ascii(text):
+        return out.write(text.encode('ASCII'))
+
     if binary_format:
+
         def write_array(data):
             out.write(data.tobytes())
             write_ascii('\n\n')
+
     else:
+
         def write_array(data):
             fmt = '%d' if data.dtype == numpy.intc else '%.5E'
             if len(data.shape) == 1:
@@ -159,7 +177,9 @@ def gather_vtk_info(mesh, funcs):
     """
     # The code below assumes that the first function is DG2 (u0)
     assert funcs[0].function_space().ufl_element().family() in (
-        'Discontinuous Lagrange', 'Lagrange')
+        'Discontinuous Lagrange',
+        'Lagrange',
+    )
     assert funcs[0].function_space().ufl_element().degree() == 2
 
     # The code is currently 3D only
@@ -284,8 +304,10 @@ def _collect_3D(mesh, gdim, dofs_x, func_names, all_vals, dofmaps):
                 cvals = [vals[dofs[0]]] * M
 
             else:
-                ocellaris_error('VTK write error', 'Unsupported geometry dimension / '
-                                'element type for %s' % name)
+                ocellaris_error(
+                    'VTK write error',
+                    'Unsupported geometry dimension / ' 'element type for %s' % name,
+                )
             func_vals[name].extend(cvals)
 
     return coords, connectivity, cell_types, func_vals

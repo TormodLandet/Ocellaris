@@ -23,9 +23,9 @@ def timeit(f):
     @wraps(f)
     def wrapper(*args, **kwds):
         with dolfin.Timer('Ocellaris %s' % timed_task_name):
-            #print('<%s>' % timed_task_name)
+            # print('<%s>' % timed_task_name)
             ret = f(*args, **kwds)
-            #print('</%s>' % timed_task_name)
+            # print('</%s>' % timed_task_name)
         return ret
 
     return wrapper
@@ -55,7 +55,11 @@ def log_timings(simulation, clear=False):
 
     # Get timings from FEniCS and sort by total time spent
     tclear = dolfin.TimingClear.clear if clear else dolfin.TimingClear.keep
-    timingtypes = [dolfin.TimingType.user, dolfin.TimingType.system, dolfin.TimingType.wall]
+    timingtypes = [
+        dolfin.TimingType.user,
+        dolfin.TimingType.system,
+        dolfin.TimingType.wall,
+    ]
     table = dolfin.timings(tclear, timingtypes)
     table_lines = table.str(True).split('\n')
     simulation.log.info('\nFEniCS timings:   %s  wall pst' % table_lines[0][18:])

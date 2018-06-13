@@ -54,11 +54,17 @@ class WaveOutflowField(KnownField):
     def read_input(self, field_inp):
         sim = self.simulation
         self.name = field_inp.get_value('name', required_type='string')
-        self.inflow_region_name = field_inp.get_value('inflow_region', required_type='string')
-        self.outflow_region_name = field_inp.get_value('outflow_region', required_type='string')
+        self.inflow_region_name = field_inp.get_value(
+            'inflow_region', required_type='string'
+        )
+        self.outflow_region_name = field_inp.get_value(
+            'outflow_region', required_type='string'
+        )
 
-        def err(msg): return ocellaris_error('Error in definition of WaveOutflow field %r'
-                                             % self.name, msg)
+        def err(msg):
+            return ocellaris_error(
+                'Error in definition of WaveOutflow field %r' % self.name, msg
+            )
 
         # Boundary conditions have not been constructed yet, so we need to read the input file
         # to get the correct BC input
@@ -83,30 +89,41 @@ class WaveOutflowField(KnownField):
             err('Did not find outflow boundary region %r' % self.outflow_region_name)
 
         # Get the velocity BCs in the inflow region
-        bc_inp = sim.input.get_value('boundary_conditions/%d' % inflow_index, required_type='Input')
+        bc_inp = sim.input.get_value(
+            'boundary_conditions/%d' % inflow_index, required_type='Input'
+        )
         if not 'u' in bc_inp:
             err('Did not find velocity BC in region %r' % self.inflow_bc_name)
 
         # Get the field function used for the velocity BCs in the inflow region
         vel_inp = sim.input.get_value(
-            'boundary_conditions/%d/u' %
-            inflow_index, required_type='Input')
+            'boundary_conditions/%d/u' % inflow_index, required_type='Input'
+        )
         bc_type = vel_inp.get_value('type', '', 'string')
         if not bc_type == 'FieldFunction':
-            err('Velocity BC in region %r is not a FieldFunction!' % self.inflow_bc_name)
+            err(
+                'Velocity BC in region %r is not a FieldFunction!' % self.inflow_bc_name
+            )
         func_vardef = vel_inp.get_value('function', required_type='string')
 
         # Get the name of the incomming wave field
         split_vardef = func_vardef.strip().split('/')
         if not len(split_vardef) == 2:
-            err('Velocity BC function in region %r is not a valid field function specifier!'
-                % self.inflow_bc_name)
+            err(
+                'Velocity BC function in region %r is not a valid field function specifier!'
+                % self.inflow_bc_name
+            )
         self.inflow_field_name = split_vardef[0]
 
         # Get the incomming wave field object
         if self.inflow_field_name not in sim.fields:
-            err(('Inflow field %s is not (yet) defined. It must be defined before this '
-                 'WaveOutflow field') % self.inflow_field_name)
+            err(
+                (
+                    'Inflow field %s is not (yet) defined. It must be defined before this '
+                    'WaveOutflow field'
+                )
+                % self.inflow_field_name
+            )
         self.inflow_field = sim.fields[self.inflow_field_name]
 
     def construct_cpp_code(self):
@@ -119,10 +136,12 @@ class WaveOutflowField(KnownField):
         lamcode = '[&]() {\n  %s;\n}();'
 
         for name in 'uhoriz c'.split():
-            lines = ['double val;',
-                     'double X = x[0];',
-                     'double Z0 = x[%d];' % (self.simulation.ndim - 1),
-                     'double swpos = %r;' % self.still_water_pos]
+            lines = [
+                'double val;',
+                'double X = x[0];',
+                'double Z0 = x[%d];' % (self.simulation.ndim - 1),
+                'double swpos = %r;' % self.still_water_pos,
+            ]
 
             if name == 'uhoriz':
                 lines.append('if (Z0 <= swpos) {')
@@ -167,6 +186,7 @@ class WaveOutflowField(KnownField):
             self.form_outlet_total = dolfin.Form(u_outlet * ds_outlet)
 
         import time
+
         t1 = time.time()
 
         # Compute flux above and below at the inlet
@@ -188,7 +208,7 @@ class WaveOutflowField(KnownField):
                 # Adjust outflow speed above the FS
                 self.const_speed_above.assign(dolfin.Constant(vel_above))
                 outlet_flux_total = dolfin.assemble(self.form_outlet_total)
-                return (outlet_flux_total - inlet_flux_total)**2
+                return (outlet_flux_total - inlet_flux_total) ** 2
 
             # Starting values - use the basic unit fluxes
             x1 = inlet_flux_above / self.uf_above
@@ -205,20 +225,20 @@ class WaveOutflowField(KnownField):
                 'flux_above',
                 inlet_flux_above,
                 outlet_flux_above,
-                outlet_flux_above /
-                inlet_flux_above)
+                outlet_flux_above / inlet_flux_above,
+            )
             print(
                 'flux_below',
                 inlet_flux_below,
                 outlet_flux_below,
-                outlet_flux_below /
-                inlet_flux_below)
+                outlet_flux_below / inlet_flux_below,
+            )
             print(
                 'flux_total',
                 inlet_flux_total,
                 outlet_flux_total,
-                outlet_flux_total /
-                inlet_flux_total)
+                outlet_flux_total / inlet_flux_total,
+            )
             print(xN - x0)
             print(niter)
             print('Took %g seconds' % (time.time() - t1))
@@ -247,14 +267,18 @@ class WaveOutflowField(KnownField):
         keys = list(self._cpp.keys()) + ['u', 'uvert']
         verify_key('variable', name, keys, 'Wave outflow field %r' % self.name)
 
-        params = dict(u_above=self.const_speed_above,
-                      u_below=self.const_speed_below)
+        params = dict(u_above=self.const_speed_above, u_below=self.const_speed_below)
 
         if name not in self._expressions:
-            expr, updater = OcellarisCppExpression(self.simulation, self._cpp[name],
-                                                   'Wave outflow field %r' % name,
-                                                   self.polydeg, update=False,
-                                                   return_updater=True, params=params)
+            expr, updater = OcellarisCppExpression(
+                self.simulation,
+                self._cpp[name],
+                'Wave outflow field %r' % name,
+                self.polydeg,
+                update=False,
+                return_updater=True,
+                params=params,
+            )
             self._expressions[name] = expr, updater
         return self._expressions[name][0]
 

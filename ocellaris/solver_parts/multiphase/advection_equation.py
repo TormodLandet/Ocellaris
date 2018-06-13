@@ -4,8 +4,18 @@ from dolfin import dot, div, grad, jump
 
 
 class AdvectionEquation(object):
-    def __init__(self, simulation, Vc, cp, cpp, u_conv, beta, time_coeffs, dirichlet_bcs,
-                 forcing_zones=()):
+    def __init__(
+        self,
+        simulation,
+        Vc,
+        cp,
+        cpp,
+        u_conv,
+        beta,
+        time_coeffs,
+        dirichlet_bcs,
+        forcing_zones=(),
+    ):
         """
         This class assembles the advection equation for a scalar function c
         """
@@ -21,7 +31,7 @@ class AdvectionEquation(object):
 
         # Discontinuous or continuous elements
         Vc_family = Vc.ufl_element().family()
-        self.colour_is_discontinuous = (Vc_family == 'Discontinuous Lagrange')
+        self.colour_is_discontinuous = Vc_family == 'Discontinuous Lagrange'
 
         if isinstance(u_conv[0], (int, float, dolfin.Constant, Zero)):
             self.velocity_is_trace = False
@@ -30,7 +40,7 @@ class AdvectionEquation(object):
                 Vu_family = u_conv[0].function_space().ufl_element().family()
             except Exception:
                 Vu_family = u_conv.function_space().ufl_element().family()
-            self.velocity_is_trace = (Vu_family == 'Discontinuous Lagrange Trace')
+            self.velocity_is_trace = Vu_family == 'Discontinuous Lagrange Trace'
 
         if self.velocity_is_trace:
             assert self.colour_is_discontinuous
@@ -62,7 +72,9 @@ class AdvectionEquation(object):
         if not self.colour_is_discontinuous:
             # Continous Galerkin implementation of the advection equation
             # FIXME: add stabilization
-            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + div(c * u_conv) * d * dx
+            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + div(
+                c * u_conv
+            ) * d * dx
 
         elif self.velocity_is_trace:
             # Upstream and downstream normal velocities
@@ -78,7 +90,9 @@ class AdvectionEquation(object):
                 flux = jump(c * w_nU)
 
             # Discontinuous Galerkin implementation of the advection equation
-            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + flux * jump(d) * dS
+            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + flux * jump(
+                d
+            ) * dS
 
             # On each facet either w_nD or w_nU will be 0, the other is multiplied
             # with the appropriate flux, either the value c going out of the domain
@@ -101,9 +115,11 @@ class AdvectionEquation(object):
                 flux = jump(c * w_nU)
 
             # Discontinuous Galerkin implementation of the advection equation
-            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx \
-                - dot(c * u_conv, grad(d)) * dx \
+            eq = (
+                (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx
+                - dot(c * u_conv, grad(d)) * dx
                 + flux * jump(d) * dS
+            )
 
             # Enforce Dirichlet BCs weakly
             for dbc in self.dirichlet_bcs:

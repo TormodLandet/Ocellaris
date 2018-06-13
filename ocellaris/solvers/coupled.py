@@ -1,10 +1,21 @@
 import numpy
 import dolfin
 from dolfin import Constant
-from ocellaris.utils import ocellaris_error, timeit, linear_solver_from_input, \
-    create_vector_functions, shift_fields, velocity_change
-from ocellaris.solver_parts import setup_hydrostatic_pressure, VelocityBDMProjection, \
-    SlopeLimiterVelocity, before_simulation, after_timestep
+from ocellaris.utils import (
+    ocellaris_error,
+    timeit,
+    linear_solver_from_input,
+    create_vector_functions,
+    shift_fields,
+    velocity_change,
+)
+from ocellaris.solver_parts import (
+    setup_hydrostatic_pressure,
+    VelocityBDMProjection,
+    SlopeLimiterVelocity,
+    before_simulation,
+    after_timestep,
+)
 from . import Solver, register_solver, BDM, UPWIND
 from .coupled_equations import EQUATION_SUBTYPES
 
@@ -38,7 +49,8 @@ class SolverCoupled(Solver):
         self.read_input()
         self.create_functions()
         self.hydrostatic_pressure = setup_hydrostatic_pressure(
-            simulation, needs_initial_value=False)
+            simulation, needs_initial_value=False
+        )
 
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -50,32 +62,43 @@ class SolverCoupled(Solver):
         CoupledEquations = EQUATION_SUBTYPES[self.equation_subtype]
 
         # Get the BCs for the coupled function space
-        self.dirichlet_bcs = self.coupled_boundary_conditions(CoupledEquations.use_strong_bcs)
+        self.dirichlet_bcs = self.coupled_boundary_conditions(
+            CoupledEquations.use_strong_bcs
+        )
 
         # Create equation
-        self.eqs = CoupledEquations(simulation,
-                                    flux_type=self.flux_type,
-                                    use_stress_divergence_form=self.use_stress_divergence_form,
-                                    use_grad_p_form=self.use_grad_p_form,
-                                    use_grad_q_form=self.use_grad_q_form,
-                                    use_lagrange_multiplicator=self.use_lagrange_multiplicator,
-                                    pressure_continuity_factor=self.pressure_continuity_factor,
-                                    velocity_continuity_factor_D12=self.velocity_continuity_factor_D12,
-                                    include_hydrostatic_pressure=self.hydrostatic_pressure.every_timestep,
-                                    incompressibility_flux_type=self.incompressibility_flux_type)
+        self.eqs = CoupledEquations(
+            simulation,
+            flux_type=self.flux_type,
+            use_stress_divergence_form=self.use_stress_divergence_form,
+            use_grad_p_form=self.use_grad_p_form,
+            use_grad_q_form=self.use_grad_q_form,
+            use_lagrange_multiplicator=self.use_lagrange_multiplicator,
+            pressure_continuity_factor=self.pressure_continuity_factor,
+            velocity_continuity_factor_D12=self.velocity_continuity_factor_D12,
+            include_hydrostatic_pressure=self.hydrostatic_pressure.every_timestep,
+            incompressibility_flux_type=self.incompressibility_flux_type,
+        )
 
-        sim.log.info('    Using velocity postprocessor: %r' % self.velocity_postprocessing_method)
+        sim.log.info(
+            '    Using velocity postprocessor: %r' % self.velocity_postprocessing_method
+        )
         self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
-            self.velocity_postprocessor = VelocityBDMProjection(sim, sim.data['u'],
-                                                                incompressibility_flux_type=self.incompressibility_flux_type, D12=D12)
+            self.velocity_postprocessor = VelocityBDMProjection(
+                sim,
+                sim.data['u'],
+                incompressibility_flux_type=self.incompressibility_flux_type,
+                D12=D12,
+            )
 
         # Velocity slope limiter
         self.using_limiter = False
         if self.vel_is_discontinuous:
             self.slope_limiter = SlopeLimiterVelocity(
-                sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
+                sim, sim.data['u'], 'u', vel_w=sim.data['u_conv']
+            )
             self.using_limiter = self.slope_limiter.active
 
         if self.fix_pressure_dof:
@@ -93,40 +116,51 @@ class SolverCoupled(Solver):
 
         # Solver for the coupled system
         default_lu_solver = LU_SOLVER_1CPU if sim.ncpu == 1 else LU_SOLVER_NCPU
-        self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu',
-                                                       None, default_lu_solver, LU_PARAMETERS)
+        self.coupled_solver = linear_solver_from_input(
+            sim, 'solver/coupled', 'lu', None, default_lu_solver, LU_PARAMETERS
+        )
 
         # Get the class to be used for the equation system assembly
         self.equation_subtype = sim.input.get_value(
-            'solver/equation_subtype', EQUATION_SUBTYPE, 'string')
+            'solver/equation_subtype', EQUATION_SUBTYPE, 'string'
+        )
         if self.equation_subtype not in EQUATION_SUBTYPES:
             available_methods = '\n'.join(' - %s' % m for m in EQUATION_SUBTYPES)
-            ocellaris_error('Unknown equation sub-type',
-                            'Equation sub-type %s not available for coupled solver, please use one of:\n%s' %
-                            (self.equation_subtype, available_methods))
+            ocellaris_error(
+                'Unknown equation sub-type',
+                'Equation sub-type %s not available for coupled solver, please use one of:\n%s'
+                % (self.equation_subtype, available_methods),
+            )
 
         # Give warning if using iterative solver
         if isinstance(self.coupled_solver, dolfin.PETScKrylovSolver):
             sim.log.warning(
-                'WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
+                'WARNING: Using a Krylov solver for the coupled NS equations is not a good idea'
+            )
         else:
             self.coupled_solver.parameters['same_nonzero_pattern'] = True
 
         # Lagrange multiplicator or remove null space via PETSc or just normalize after solving
         self.remove_null_space = True
         self.pressure_null_space = None
-        self.use_lagrange_multiplicator = sim.input.get_value('solver/use_lagrange_multiplicator',
-                                                              USE_LAGRANGE_MULTIPLICATOR, 'bool')
+        self.use_lagrange_multiplicator = sim.input.get_value(
+            'solver/use_lagrange_multiplicator', USE_LAGRANGE_MULTIPLICATOR, 'bool'
+        )
         self.fix_pressure_dof = sim.input.get_value(
-            'solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool')
+            'solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool'
+        )
         if self.use_lagrange_multiplicator or self.fix_pressure_dof:
             self.remove_null_space = False
 
         # Check if the solver supports removing null spaces, otherwise we can enable a hack
         # that works better than nothing, but is most definitely not preferred
         self.normalize_pressure = False
-        does_not_support_null_space = ('mumps', )
-        if self.remove_null_space and self.coupled_solver.created_with_lu_method in does_not_support_null_space:
+        does_not_support_null_space = ('mumps',)
+        if (
+            self.remove_null_space
+            and self.coupled_solver.created_with_lu_method
+            in does_not_support_null_space
+        ):
             self.normalize_pressure = True
             self.remove_null_space = False
 
@@ -138,27 +172,36 @@ class SolverCoupled(Solver):
 
         # Control the form of the governing equations
         self.flux_type = sim.input.get_value('convection/u/flux_type', UPWIND, 'string')
-        self.use_stress_divergence_form = sim.input.get_value('solver/use_stress_divergence_form',
-                                                              USE_STRESS_DIVERGENCE, 'bool')
+        self.use_stress_divergence_form = sim.input.get_value(
+            'solver/use_stress_divergence_form', USE_STRESS_DIVERGENCE, 'bool'
+        )
         self.use_grad_p_form = sim.input.get_value(
-            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool')
+            'solver/use_grad_p_form', USE_GRAD_P_FORM, 'bool'
+        )
         self.use_grad_q_form = sim.input.get_value(
-            'solver/use_grad_q_form', USE_GRAD_Q_FORM, 'bool')
-        self.incompressibility_flux_type = sim.input.get_value('solver/incompressibility_flux_type',
-                                                               INCOMPRESSIBILITY_FLUX_TYPE, 'string')
-        self.pressure_continuity_factor = sim.input.get_value('solver/pressure_continuity_factor',
-                                                              PRESSURE_CONTINUITY_FACTOR, 'float')
-        self.velocity_continuity_factor_D12 = sim.input.get_value('solver/velocity_continuity_factor_D12',
-                                                                  VELOCITY_CONTINUITY_FACTOR_D12, 'float')
+            'solver/use_grad_q_form', USE_GRAD_Q_FORM, 'bool'
+        )
+        self.incompressibility_flux_type = sim.input.get_value(
+            'solver/incompressibility_flux_type', INCOMPRESSIBILITY_FLUX_TYPE, 'string'
+        )
+        self.pressure_continuity_factor = sim.input.get_value(
+            'solver/pressure_continuity_factor', PRESSURE_CONTINUITY_FACTOR, 'float'
+        )
+        self.velocity_continuity_factor_D12 = sim.input.get_value(
+            'solver/velocity_continuity_factor_D12',
+            VELOCITY_CONTINUITY_FACTOR_D12,
+            'float',
+        )
 
         # Representation of velocity
         Vu_family = sim.data['Vu'].ufl_element().family()
-        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
+        self.vel_is_discontinuous = Vu_family == 'Discontinuous Lagrange'
 
         # Local DG velocity postprocessing
         default_postprocessing = BDM if self.vel_is_discontinuous else None
-        self.velocity_postprocessing_method = sim.input.get_value('solver/velocity_postprocessing',
-                                                                  default_postprocessing, 'string')
+        self.velocity_postprocessing_method = sim.input.get_value(
+            'solver/velocity_postprocessing', default_postprocessing, 'string'
+        )
 
     def create_functions(self):
         """
@@ -241,9 +284,11 @@ class SolverCoupled(Solver):
         self.slope_limiter.run()
 
         # Measure the change in the field after limiting (l2 norm)
-        change = velocity_change(u1=self.simulation.data['u'],
-                                 u2=self.simulation.data['u_unlim'],
-                                 ui_tmp=self.simulation.data['ui_tmp'])
+        change = velocity_change(
+            u1=self.simulation.data['u'],
+            u2=self.simulation.data['u_unlim'],
+            ui_tmp=self.simulation.data['ui_tmp'],
+        )
 
         return change
 
@@ -273,11 +318,15 @@ class SolverCoupled(Solver):
                 # Convert null space vector to coupled space
                 null_func2 = dolfin.Function(self.simulation.data['Vcoupled'])
                 ndim = self.simulation.ndim
-                fa = dolfin.FunctionAssigner(self.subspaces[ndim], self.simulation.data['Vp'])
+                fa = dolfin.FunctionAssigner(
+                    self.subspaces[ndim], self.simulation.data['Vp']
+                )
                 fa.assign(null_func2.sub(ndim), null_func)
 
                 # Create the null space basis
-                self.pressure_null_space = dolfin.VectorSpaceBasis([null_func2.vector()])
+                self.pressure_null_space = dolfin.VectorSpaceBasis(
+                    [null_func2.vector()]
+                )
 
             # Make sure the null space is set on the matrix
             dolfin.as_backend_type(A).set_nullspace(self.pressure_null_space)
@@ -329,7 +378,8 @@ class SolverCoupled(Solver):
             dt = sim.input.get_value('time/dt', required_type='float')
             tmax = sim.input.get_value('time/tmax', required_type='float')
             steady_eps = sim.input.get_value(
-                'solver/steady_velocity_stopping_criterion', -1, 'float')
+                'solver/steady_velocity_stopping_criterion', -1, 'float'
+            )
             force_steady = sim.input.get_value('solver/force_steady', False, 'bool')
 
             # Check if the simulation is done

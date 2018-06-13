@@ -36,22 +36,32 @@ class ComponentwiseSlopeLimiterVelocity(VelocitySlopeLimiterBase):
 
         # Check that we can limit only certain cells
         if self.limit_selected_cells_only and not hasattr(lim, 'limit_cell'):
-            ocellaris_error('Cannot limit only selected cells for %s' % vel_name,
-                            'Limiter %r does not support limiting only selected cells' % comp_method)
+            ocellaris_error(
+                'Cannot limit only selected cells for %s' % vel_name,
+                'Limiter %r does not support limiting only selected cells'
+                % comp_method,
+            )
 
         simulation.hooks.add_pre_simulation_hook(
-            self.setup, 'ComponentwiseSlopeLimiterVelocity - setup')
+            self.setup, 'ComponentwiseSlopeLimiterVelocity - setup'
+        )
 
     def setup(self):
         """
         Deferred setup tasks that are run after the Navier-Stokes solver has finished its setup
         """
         if self.probe_name is not None:
-            verify_key('surface_probe', self.probe_name, self.simulation.probes,
-                       'componentwise slope limiter for %s' % self.vel_name)
+            verify_key(
+                'surface_probe',
+                self.probe_name,
+                self.simulation.probes,
+                'componentwise slope limiter for %s' % self.vel_name,
+            )
             self.surface_probe = self.simulation.probes[self.probe_name]
-            self.simulation.log.info('Marking cells for limiting based on probe "%s" for %s'
-                                     % (self.surface_probe.name, self.vel_name))
+            self.simulation.log.info(
+                'Marking cells for limiting based on probe "%s" for %s'
+                % (self.surface_probe.name, self.vel_name)
+            )
 
     def run(self):
         """

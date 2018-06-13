@@ -16,7 +16,9 @@ def plot_matplotlib_dgt(func, **kwargs):
     if not family == 'HDiv Trace':
         raise NotImplementedError('Trace function plotter does not support %r' % family)
     if not ndim == 2:
-        raise NotImplementedError('Trace function plotter only supports 2D, you gave %dD' % ndim)
+        raise NotImplementedError(
+            'Trace function plotter only supports 2D, you gave %dD' % ndim
+        )
 
     # Get dof, area and midpoint for each facet
     facet_dofmap, areas, midpoints = facet_info_and_dofmap(function_space)
@@ -46,7 +48,9 @@ def plot_matplotlib_dgt(func, **kwargs):
     ylim = kwargs.pop('ylim', (coords[:, 1].min(), coords[:, 1].max()))
 
     scalar_locs = numpy.array(midpoints)
-    return plot_triangulation_scatter(verts, scalar_locs, scalars, radius, xlim, ylim, **kwargs)
+    return plot_triangulation_scatter(
+        verts, scalar_locs, scalars, radius, xlim, ylim, **kwargs
+    )
 
 
 def plot_triangulation_scatter(vertices, points, scalars, radius, xlim, ylim, **kwargs):
@@ -55,15 +59,18 @@ def plot_triangulation_scatter(vertices, points, scalars, radius, xlim, ylim, **
     """
     from matplotlib.collections import PolyCollection
     from matplotlib import pyplot as plt
+
     ax = plt.gca()
 
     # Find  the length of the scalar circle radius in pixels
     # We need to have the correct xlim and ylim first!
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
-    ptx, pty = ax.transData.transform([(radius, 0), (0, radius)]) - ax.transData.transform((0, 0))
+    ptx, pty = ax.transData.transform(
+        [(radius, 0), (0, radius)]
+    ) - ax.transData.transform((0, 0))
     rad_px = min(ptx[0], pty[1])
-    area_px = numpy.pi * rad_px**2
+    area_px = numpy.pi * rad_px ** 2
 
     vmin = scalars.min()
     vmax = scalars.max()
@@ -71,11 +78,21 @@ def plot_triangulation_scatter(vertices, points, scalars, radius, xlim, ylim, **
         vmax = 1
 
     # Plot the scalars with colors
-    patches = ax.scatter(points[:, 0], points[:, 1], s=area_px, c=scalars,
-                         vmin=vmin, vmax=vmax, linewidths=0, **kwargs)
+    patches = ax.scatter(
+        points[:, 0],
+        points[:, 1],
+        s=area_px,
+        c=scalars,
+        vmin=vmin,
+        vmax=vmax,
+        linewidths=0,
+        **kwargs
+    )
 
     # Add grid data above the scalars
-    polys = PolyCollection(vertices, facecolors=(1, 1, 1, 0), edgecolors='black', linewidths=0.25)
+    polys = PolyCollection(
+        vertices, facecolors=(1, 1, 1, 0), edgecolors='black', linewidths=0.25
+    )
     ax.add_collection(polys)
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)

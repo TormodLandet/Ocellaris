@@ -20,10 +20,12 @@ class PlaneProbe(Probe):
         # Read input
         inp = probe_input
         self.name = inp.get_value('name', required_type='string')
-        self.plane_point = inp.get_value('plane_point', required_type='list(float)',
-                                         required_length=3)
-        self.plane_normal = inp.get_value('plane_normal', required_type='list(float)',
-                                          required_length=3)
+        self.plane_point = inp.get_value(
+            'plane_point', required_type='list(float)', required_length=3
+        )
+        self.plane_normal = inp.get_value(
+            'plane_normal', required_type='list(float)', required_length=3
+        )
         xlim = inp.get_value('xlim', None, 'list(float)', required_length=2)
         ylim = inp.get_value('ylim', None, 'list(float)', required_length=2)
         zlim = inp.get_value('zlim', None, 'list(float)', required_length=2)
@@ -46,16 +48,18 @@ class PlaneProbe(Probe):
                 self.family = fam
                 self.degree = deg
             elif fam != self.family or deg != self.degree:
-                ocellaris_error('Mismatching function spaces in PlainProbe %s' % self.name,
-                                'All functions must have the same function space. ' +
-                                '%s is %r but %r was expected' % (fn, (fam, deg),
-                                                                  (self.family,
-                                                                   self.degree)))
+                ocellaris_error(
+                    'Mismatching function spaces in PlainProbe %s' % self.name,
+                    'All functions must have the same function space. '
+                    + '%s is %r but %r was expected'
+                    % (fn, (fam, deg), (self.family, self.degree)),
+                )
             self.funcs_3d.append(func_3d)
 
         # Create the slice
-        self.slice = FunctionSlice(self.plane_point, self.plane_normal, V,
-                                   xlim, ylim, zlim)
+        self.slice = FunctionSlice(
+            self.plane_point, self.plane_normal, V, xlim, ylim, zlim
+        )
         prefix = simulation.input.get_value('output/prefix', '', 'string')
 
         # Get the XDMF file name (also ensures it does not exist)
@@ -65,7 +69,9 @@ class PlaneProbe(Probe):
         if simulation.rank == 0:
             V_2d = self.slice.slice_function_space
             mesh_2d = V_2d.mesh()
-            simulation.log.info('        Created 2D mesh with %r cells' % mesh_2d.num_cells())
+            simulation.log.info(
+                '        Created 2D mesh with %r cells' % mesh_2d.num_cells()
+            )
             simulation.log.info('        Creating XDMF file %s' % self.file_name)
             self.xdmf_file = dolfin.XDMFFile(dolfin.MPI.comm_self, self.file_name)
             self.xdmf_file.parameters['flush_output'] = True
@@ -118,8 +124,7 @@ class FunctionSlice:
 
         # Create the 2D mesh
         # The 2D mesh uses MPI_COMM_SELF and lives only on the root process
-        mesh_2d, cell_origins = make_cut_plane_mesh(pt, n, V3d.mesh(),
-                                                    xlim, ylim, zlim)
+        mesh_2d, cell_origins = make_cut_plane_mesh(pt, n, V3d.mesh(), xlim, ylim, zlim)
 
         # Precompute data on root process
         if comm.rank == 0:
@@ -310,12 +315,16 @@ def limit_triangles(triangles, xlim, ylim, zlim, eps=1e-8):
                 # Coordinates of the crossing points
                 f01 = (lim[0] - c0[d]) / (c1[d] - c0[d])
                 f02 = (lim[0] - c0[d]) / (c2[d] - c0[d])
-                c01 = (c0[0] * (1 - f01) + c1[0] * f01,
-                       c0[1] * (1 - f01) + c1[1] * f01,
-                       c0[2] * (1 - f01) + c1[2] * f01)
-                c02 = (c0[0] * (1 - f02) + c2[0] * f02,
-                       c0[1] * (1 - f02) + c2[1] * f02,
-                       c0[2] * (1 - f02) + c2[2] * f02)
+                c01 = (
+                    c0[0] * (1 - f01) + c1[0] * f01,
+                    c0[1] * (1 - f01) + c1[1] * f01,
+                    c0[2] * (1 - f01) + c1[2] * f01,
+                )
+                c02 = (
+                    c0[0] * (1 - f02) + c2[0] * f02,
+                    c0[1] * (1 - f02) + c2[1] * f02,
+                    c0[2] * (1 - f02) + c2[2] * f02,
+                )
 
                 # Create new triangles that are inside the bounds
                 if num_below == 1:
@@ -358,12 +367,16 @@ def limit_triangles(triangles, xlim, ylim, zlim, eps=1e-8):
                 # Coordinates of the crossing points
                 f01 = (lim[1] - c0[d]) / (c1[d] - c0[d])
                 f02 = (lim[1] - c0[d]) / (c2[d] - c0[d])
-                c01 = (c0[0] * (1 - f01) + c1[0] * f01,
-                       c0[1] * (1 - f01) + c1[1] * f01,
-                       c0[2] * (1 - f01) + c1[2] * f01)
-                c02 = (c0[0] * (1 - f02) + c2[0] * f02,
-                       c0[1] * (1 - f02) + c2[1] * f02,
-                       c0[2] * (1 - f02) + c2[2] * f02)
+                c01 = (
+                    c0[0] * (1 - f01) + c1[0] * f01,
+                    c0[1] * (1 - f01) + c1[1] * f01,
+                    c0[2] * (1 - f01) + c1[2] * f01,
+                )
+                c02 = (
+                    c0[0] * (1 - f02) + c2[0] * f02,
+                    c0[1] * (1 - f02) + c2[1] * f02,
+                    c0[2] * (1 - f02) + c2[2] * f02,
+                )
 
                 # Create new triangles that are inside the bounds
                 if num_above == 1:
@@ -383,10 +396,12 @@ def limit_triangles(triangles, xlim, ylim, zlim, eps=1e-8):
         u = (c1[0] - c0[0], c1[1] - c0[1], c1[2] - c0[2])
         v = (c2[0] - c0[0], c2[1] - c0[1], c2[2] - c0[2])
         # Cross product to find area of trapezoid, squared
-        areaish = (u[1] * v[2] - u[2] * v[1])**2 +\
-                  (u[2] * v[0] - u[0] * v[2])**2 +\
-                  (u[0] * v[1] - u[1] * v[0])**2
-        return areaish > eps**2
+        areaish = (
+            (u[1] * v[2] - u[2] * v[1]) ** 2
+            + (u[2] * v[0] - u[0] * v[2]) ** 2
+            + (u[0] * v[1] - u[1] * v[0]) ** 2
+        )
+        return areaish > eps ** 2
 
     return [cell_coords for cell_coords in triangles if has_area(cell_coords)]
 
@@ -403,8 +418,9 @@ def split_cells(unsplit):
         elif N == 3:
             results[cell_id] = [cell_coords]
         else:
-            raise NotImplementedError('Expected elements with 3 or 4 '
-                                      'vertices, not %d' % N)
+            raise NotImplementedError(
+                'Expected elements with 3 or 4 ' 'vertices, not %d' % N
+            )
     return results
 
 
@@ -426,7 +442,9 @@ def get_points_in_plane(pt, n, mesh, eps=1e-8):
     plane_coefficients = get_plane_coefficients(pt, n)
     all_sides = get_point_sides(plane_coefficients, coords)
 
-    def sign(x): return -1 if x < 0 else 1
+    def sign(x):
+        return -1 if x < 0 else 1
+
     n = plane_coefficients[:3]  # normal to the plane
 
     results = OrderedDict()
@@ -487,7 +505,7 @@ def get_plane_normal(p1, p2, p3):
     assert v.dot(v) > 1e-6, 'Points p1 and p3 coincide!'
     assert w.dot(w) > 1e-6, 'Points p1, p2 and p3 fall on the same line!'
 
-    return w / (w.dot(w))**0.5
+    return w / (w.dot(w)) ** 0.5
 
 
 def get_plane_coefficients(pt, n):

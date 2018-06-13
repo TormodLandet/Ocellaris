@@ -19,9 +19,11 @@ def register_convection_scheme(name):
     """
     A class decorator to register convection schemes
     """
+
     def register(scheme_class):
         add_convection_scheme(name, scheme_class)
         return scheme_class
+
     return register
 
 
@@ -32,10 +34,14 @@ def get_convection_scheme(name):
     try:
         return _CONVECTION_SCHEMES[name]
     except KeyError:
-        ocellaris_error('Convection scheme "%s" not found' % name,
-                        'Available convection schemes:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description)
-                                  for n, s in sorted(_CONVECTION_SCHEMES.items())))
+        ocellaris_error(
+            'Convection scheme "%s" not found' % name,
+            'Available convection schemes:\n'
+            + '\n'.join(
+                '  %-20s - %s' % (n, s.description)
+                for n, s in sorted(_CONVECTION_SCHEMES.items())
+            ),
+        )
         raise
 
 
@@ -44,6 +50,7 @@ class ConvectionScheme(object):
     A generic convection scheme, to be subclassed
     for actual usage
     """
+
     description = 'No description available'
 
     def __init__(self, simulation, func_name):
@@ -82,9 +89,9 @@ class ConvectionScheme(object):
         """
         Setup gradient reconstruction code
         """
-        self.gradient_reconstructor = GradientReconstructor(self.simulation,
-                                                            self.alpha_function,
-                                                            self.func_name)
+        self.gradient_reconstructor = GradientReconstructor(
+            self.simulation, self.alpha_function, self.func_name
+        )
 
     def update(self, t, dt, velocity):
         raise NotImplementedError()

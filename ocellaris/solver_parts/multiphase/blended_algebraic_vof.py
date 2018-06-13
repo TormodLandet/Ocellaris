@@ -21,9 +21,11 @@ PLOT_FIELDS = False
 # Default values, can be changed in the input file
 SOLVER = 'gmres'
 PRECONDITIONER = 'default'
-KRYLOV_PARAMETERS = {'nonzero_initial_guess': True,
-                     'relative_tolerance': 1e-15,
-                     'absolute_tolerance': 1e-15}
+KRYLOV_PARAMETERS = {
+    'nonzero_initial_guess': True,
+    'relative_tolerance': 1e-15,
+    'absolute_tolerance': 1e-15,
+}
 
 
 @register_multi_phase_model('BlendedAlgebraicVOF')
@@ -55,8 +57,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         simulation.data['cpp'] = Function(V)
 
         # The projected density and viscosity functions for the new time step can be made continuous
-        self.continuous_fields = simulation.input.get_value('multiphase_solver/continuous_fields',
-                                                            CONTINUOUS_FIELDS, 'bool')
+        self.continuous_fields = simulation.input.get_value(
+            'multiphase_solver/continuous_fields', CONTINUOUS_FIELDS, 'bool'
+        )
         if self.continuous_fields:
             simulation.log.info('    Using continuous rho and nu fields')
             mesh = simulation.data['mesh']
@@ -66,40 +69,53 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             self.continuous_c_oldold = dolfin.Function(V_cont)
 
         self.force_bounded = simulation.input.get_value(
-            'multiphase_solver/force_bounded', FORCE_BOUNDED, 'bool')
+            'multiphase_solver/force_bounded', FORCE_BOUNDED, 'bool'
+        )
         self.force_sharp = simulation.input.get_value(
-            'multiphase_solver/force_sharp', FORCE_SHARP, 'bool')
+            'multiphase_solver/force_sharp', FORCE_SHARP, 'bool'
+        )
 
         # Calculate mu from rho and nu (i.e mu is quadratic in c) or directly from c (linear in c)
         self.calculate_mu_directly_from_colour_function = simulation.input.get_value(
             'multiphase_solver/calculate_mu_directly_from_colour_function',
             CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION,
-            'bool')
+            'bool',
+        )
 
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value(
-            'physical_properties/rho0', required_type='float')
+            'physical_properties/rho0', required_type='float'
+        )
         self.rho1 = self.simulation.input.get_value(
-            'physical_properties/rho1', required_type='float')
-        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
-        self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
+            'physical_properties/rho1', required_type='float'
+        )
+        self.nu0 = self.simulation.input.get_value(
+            'physical_properties/nu0', required_type='float'
+        )
+        self.nu1 = self.simulation.input.get_value(
+            'physical_properties/nu1', required_type='float'
+        )
 
         # The convection blending function that counteracts numerical diffusion
         scheme = simulation.input.get_value(
-            'convection/c/convection_scheme', CONVECTION_SCHEME, 'string')
-        simulation.log.info('    Using convection scheme %s for the colour function' % scheme)
+            'convection/c/convection_scheme', CONVECTION_SCHEME, 'string'
+        )
+        simulation.log.info(
+            '    Using convection scheme %s for the colour function' % scheme
+        )
         scheme_class = get_convection_scheme(scheme)
         self.convection_scheme = scheme_class(simulation, 'c')
         self.need_gradient = scheme_class.need_alpha_gradient
 
         # Create the equations when the simulation starts
         simulation.hooks.add_pre_simulation_hook(
-            self.on_simulation_start,
-            'BlendedAlgebraicVofModel setup equations')
+            self.on_simulation_start, 'BlendedAlgebraicVofModel setup equations'
+        )
 
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(
-            self.update, 'BlendedAlgebraicVofModel - update colour field')
+            self.update, 'BlendedAlgebraicVofModel - update colour field'
+        )
         simulation.hooks.register_custom_hook_point('MultiPhaseModelUpdated')
 
         # Linear solver - this causes the MPI unit tests to fail in "random" places for some reason???
@@ -108,7 +124,8 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
 
         # Plot density and viscosity fields for visualization
         self.plot_fields = simulation.input.get_value(
-            'multiphase_solver/plot_fields', PLOT_FIELDS, 'bool')
+            'multiphase_solver/plot_fields', PLOT_FIELDS, 'bool'
+        )
         if self.plot_fields:
             V_plot = V if not self.continuous_fields else V_cont
             self.rho_for_plot = Function(V_plot)
@@ -120,7 +137,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
 
         # Slope limiter in case we are using DG1, not DG0
         self.slope_limiter = SlopeLimiter(simulation, 'c', simulation.data['c'])
-        simulation.log.info('    Using slope limiter: %s' % self.slope_limiter.limiter_method)
+        simulation.log.info(
+            '    Using slope limiter: %s' % self.slope_limiter.limiter_method
+        )
         self.is_first_timestep = True
 
     def on_simulation_start(self):
@@ -147,7 +166,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         if dolfin.norm(cpp.vector()) > 0:
             # Use BDF2 from the start
             self.time_coeffs.assign(Constant([3 / 2, -2, 1 / 2]))
-            sim.log.info('Using second order timestepping from the start in BlendedAlgebraicVOF')
+            sim.log.info(
+                'Using second order timestepping from the start in BlendedAlgebraicVOF'
+            )
 
         # Make sure the convection scheme has something usefull in the first iteration
         c.assign(cp)
@@ -158,15 +179,26 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # Define equation for advection of the colour function
         #    ∂c/∂t +  ∇⋅(c u) = 0
         Vc = sim.data['Vc']
-        project_dgt0 = sim.input.get_value('multiphase_solver/project_uconv_dgt0', True, 'bool')
+        project_dgt0 = sim.input.get_value(
+            'multiphase_solver/project_uconv_dgt0', True, 'bool'
+        )
         if self.degree == 0 and project_dgt0:
             self.vel_dgt0_projector = VelocityDGT0Projector(sim, sim.data['u_conv'])
             self.u_conv = self.vel_dgt0_projector.velocity
         else:
             self.u_conv = sim.data['u_conv']
         forcing_zones = sim.data['forcing_zones'].get('c', [])
-        self.eq = AdvectionEquation(sim, Vc, cp, cpp, self.u_conv, beta, self.time_coeffs,
-                                    dirichlet_bcs, forcing_zones)
+        self.eq = AdvectionEquation(
+            sim,
+            Vc,
+            cp,
+            cpp,
+            self.u_conv,
+            beta,
+            self.time_coeffs,
+            dirichlet_bcs,
+            forcing_zones,
+        )
 
         if self.need_gradient:
             # Reconstruct the gradient from the colour function DG0 field
@@ -209,7 +241,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             return
         V = self.rho_for_plot.function_space()
         dolfin.project(self.get_density(0), V, function=self.rho_for_plot)
-        dolfin.project(self.get_laminar_kinematic_viscosity(0), V, function=self.nu_for_plot)
+        dolfin.project(
+            self.get_laminar_kinematic_viscosity(0), V, function=self.nu_for_plot
+        )
 
     def update(self, timestep_number, t, dt):
         """
@@ -225,7 +259,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         cpp = sim.data['cpp']
 
         # Stop early if the free surface is forced to stay still
-        force_static = sim.input.get_value('multiphase_solver/force_static', FORCE_STATIC, 'bool')
+        force_static = sim.input.get_value(
+            'multiphase_solver/force_static', FORCE_STATIC, 'bool'
+        )
         if force_static:
             c.assign(cp)
             cpp.assign(cp)
@@ -258,8 +294,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             lo, hi = self.slope_limiter.set_global_bounds(lo=0.0, hi=1.0)
             if self.slope_limiter.has_global_bounds:
                 sim.log.info(
-                    'Setting global bounds [%r, %r] in BlendedAlgebraicVofModel' %
-                    (lo, hi))
+                    'Setting global bounds [%r, %r] in BlendedAlgebraicVofModel'
+                    % (lo, hi)
+                )
 
         # Solve the advection equations for the colour field
         if timestep_number == 1 or is_static:

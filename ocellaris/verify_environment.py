@@ -10,6 +10,7 @@ def verify_env():
 
     # Use non-GUI matplotlib backend if no GUI is available
     import matplotlib
+
     if has_tk():
         matplotlib.use('TkAgg')
     elif has_wx():
@@ -32,14 +33,17 @@ def verify_env():
         print('WARNING: missing h5py. Saving restart files will not work!')
 
     if not has_yaml():
-        print('Missing required yaml module, please install the PyYAML package',
-              file=sys.stderr)
+        print(
+            'Missing required yaml module, please install the PyYAML package',
+            file=sys.stderr,
+        )
         exit()
 
 
 def has_tk():
     try:
         from six.moves import tkinter  # @UnusedImport
+
         return True
     except ImportError:
         return False
@@ -48,6 +52,7 @@ def has_tk():
 def has_wx():
     try:
         import wx  # @UnusedImport
+
         return True
     except ImportError:
         return False
@@ -56,6 +61,7 @@ def has_wx():
 def has_yaml():
     try:
         import yaml  # @UnusedImport
+
         return True
     except ImportError:
         return False
@@ -64,6 +70,7 @@ def has_yaml():
 def has_dolfin():
     try:
         import dolfin  # @UnusedImport
+
         return True
     except ImportError:
         return False

@@ -57,19 +57,22 @@ class SolverCoupledLDG(Solver):
 
         # Solver for the coupled system
         default_lu_solver = LU_SOLVER_1CPU if sim.ncpu == 1 else LU_SOLVER_NCPU
-        self.coupled_solver = linear_solver_from_input(sim, 'solver/coupled', 'lu',
-                                                       None, default_lu_solver, LU_PARAMETERS)
+        self.coupled_solver = linear_solver_from_input(
+            sim, 'solver/coupled', 'lu', None, default_lu_solver, LU_PARAMETERS
+        )
 
         # Give warning if using iterative solver
         if isinstance(self.coupled_solver, dolfin.PETScKrylovSolver):
             sim.log.warning(
-                'WARNING: Using a Krylov solver for the coupled NS equations is not a good idea')
+                'WARNING: Using a Krylov solver for the coupled NS equations is not a good idea'
+            )
         else:
             self.coupled_solver.parameters['same_nonzero_pattern'] = True
 
         # Deal with pressure null space
         self.fix_pressure_dof = sim.input.get_value(
-            'solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool')
+            'solver/fix_pressure_dof', FIX_PRESSURE_DOF, 'bool'
+        )
         # No need for any tricks if the pressure is set via Dirichlet conditions somewhere
         if self.simulation.data['dirichlet_bcs'].get('p', []):
             self.fix_pressure_dof = False
@@ -78,16 +81,20 @@ class SolverCoupledLDG(Solver):
         Vu_family = sim.data['Vu'].ufl_element().family()
         Vp_family = sim.data['Vp'].ufl_element().family()
         if not Vu_family == Vp_family == 'Discontinuous Lagrange':
-            ocellaris_error('Must use DG function spaces',
-                            'LDG solver requires DG spaces for velocity and pressure')
+            ocellaris_error(
+                'Must use DG function spaces',
+                'LDG solver requires DG spaces for velocity and pressure',
+            )
 
         # Local DG velocity postprocessing
         self.velocity_postprocessing_method = sim.input.get_value(
-            'solver/velocity_postprocessing', BDM, 'string')
+            'solver/velocity_postprocessing', BDM, 'string'
+        )
 
         # Quasi-steady simulation input
         self.steady_velocity_eps = sim.input.get_value(
-            'solver/steady_velocity_stopping_criterion', None, 'float')
+            'solver/steady_velocity_stopping_criterion', None, 'float'
+        )
         self.is_steady = self.steady_velocity_eps is not None
 
     def create_functions(self):
@@ -108,7 +115,7 @@ class SolverCoupledLDG(Solver):
         # Create stress tensor space
         P = Vu.ufl_element().degree()
         Vs = dolfin.FunctionSpace(sim.data['mesh'], 'DG', P, constrained_domain=cd)
-        for i in range(sim.ndim**2):
+        for i in range(sim.ndim ** 2):
             stress_name = 'stress_%d' % i
             sim.data[stress_name] = dolfin.Function(Vs)
             func_spaces.append(Vs)
@@ -208,11 +215,15 @@ class SolverCoupledLDG(Solver):
                 # Convert null space vector to coupled space
                 null_func2 = dolfin.Function(self.simulation.data['Vcoupled'])
                 ndim = self.simulation.ndim
-                fa = dolfin.FunctionAssigner(self.subspaces[ndim], self.simulation.data['Vp'])
+                fa = dolfin.FunctionAssigner(
+                    self.subspaces[ndim], self.simulation.data['Vp']
+                )
                 fa.assign(null_func2.sub(ndim), null_func)
 
                 # Create the null space basis
-                self.pressure_null_space = dolfin.VectorSpaceBasis([null_func2.vector()])
+                self.pressure_null_space = dolfin.VectorSpaceBasis(
+                    [null_func2.vector()]
+                )
 
             # Make sure the null space is set on the matrix
             dolfin.as_backend_type(A).set_nullspace(self.pressure_null_space)
@@ -297,7 +308,9 @@ class SolverCoupledLDG(Solver):
                 upp = self.simulation.data['upp%d' % d]
 
                 if self.is_steady:
-                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
+                    diff = abs(
+                        u_new.vector().get_local() - up.vector().get_local()
+                    ).max()
                     vel_diff = max(vel_diff, diff)
 
                 upp.assign(up)
@@ -568,19 +581,20 @@ class CoupledEquationsLDG2(object):
         u_uw = u_uw_s * u('+') + (1 - u_uw_s) * u('-')
 
         # LDG penalties
-        #kappa_0 = Constant(4.0)
-        #kappa = mu*kappa_0/h
+        # kappa_0 = Constant(4.0)
+        # kappa = mu*kappa_0/h
         C11 = avg(mu / h)
         D11 = avg(h / mu)
         C12 = 0.2 * n('+')
         D12 = 0.2 * n('+')
 
-        def ojump(v, n): return outer(v, n)('+') + outer(v, n)('-')
+        def ojump(v, n):
+            return outer(v, n)('+') + outer(v, n)('-')
 
         # Interior facet fluxes
-        #u_hat_dS = avg(u)
-        #sigma_hat_dS = avg(sigma) - avg(kappa)*ojump(u, n)
-        #p_hat_dS = avg(p)
+        # u_hat_dS = avg(u)
+        # sigma_hat_dS = avg(sigma) - avg(kappa)*ojump(u, n)
+        # p_hat_dS = avg(p)
         u_hat_s_dS = avg(u) + dot(ojump(u, n), C12)
         u_hat_p_dS = avg(u) + D11 * jump(p, n) + D12 * jump(u, n)
         sigma_hat_dS = avg(sigma) - C11 * ojump(u, n) - outer(jump(sigma, n), C12)
@@ -612,7 +626,7 @@ class CoupledEquationsLDG2(object):
         # Dirichlet boundary
         dirichlet_bcs = get_collected_velocity_bcs(sim, 'dirichlet_bcs')
         for ds, u_bc in dirichlet_bcs.items():
-            #sigma_hat_ds = sigma - kappa*outer(u, n)
+            # sigma_hat_ds = sigma - kappa*outer(u, n)
             sigma_hat_ds = sigma - C11 * outer(u - u_bc, n)
             u_hat_ds = u_bc
             p_hat_ds = p

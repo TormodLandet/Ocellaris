@@ -8,9 +8,18 @@ DEFAULT_NVAL = 0.0
 DEFAULT_NSCALE = 1.0
 
 
-class OcellarisRobinBC():
-    def __init__(self, simulation, V, blend, dirichlet_value, neumann_value,
-                 subdomain_marker, subdomain_id, updater=None):
+class OcellarisRobinBC:
+    def __init__(
+        self,
+        simulation,
+        V,
+        blend,
+        dirichlet_value,
+        neumann_value,
+        subdomain_marker,
+        subdomain_id,
+        updater=None,
+    ):
         """
         A storage class for a Robin boundary conditions on the form
 
@@ -48,9 +57,9 @@ class OcellarisRobinBC():
         This is used every timestep and for all RK substeps
         """
         if self._updater:
-            self._updater(self.simulation.timestep,
-                          self.simulation.time,
-                          self.simulation.dt)
+            self._updater(
+                self.simulation.timestep, self.simulation.time, self.simulation.dt
+            )
 
     def __repr__(self):
         return '<OcellarisRobinBC on subdomain %d>' % self.subdomain_id
@@ -81,13 +90,17 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
             assert len(nval) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
-                self.register_robin_condition(name, blend[d], dval[d], nval[d],
-                                              subdomains, subdomain_id)
+                self.register_robin_condition(
+                    name, blend[d], dval[d], nval[d], subdomains, subdomain_id
+                )
         else:
-            self.register_robin_condition(var_name, blend, dval, nval,
-                                          subdomains, subdomain_id)
+            self.register_robin_condition(
+                var_name, blend, dval, nval, subdomains, subdomain_id
+            )
 
-    def register_robin_condition(self, var_name, blend, dval, nval, subdomains, subdomain_id):
+    def register_robin_condition(
+        self, var_name, blend, dval, nval, subdomains, subdomain_id
+    ):
         """
         Add a Dirichlet condition to this variable
         """
@@ -99,10 +112,19 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
         df_nval = dolfin.Constant(nval)
 
         # Store the boundary condition for use in the solver
-        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend,
-                              df_dval, df_nval, subdomains, subdomain_id)
+        bc = OcellarisRobinBC(
+            self.simulation,
+            self.func_space,
+            df_blend,
+            df_dval,
+            df_nval,
+            subdomains,
+            subdomain_id,
+        )
         bcs = self.simulation.data['robin_bcs']
         bcs.setdefault(var_name, []).append(bc)
 
-        self.simulation.log.info('    Constant Robin BC "dX/dn = 1/%r (%r - X) + %r" for X = %s'
-                                 % (blend, dval, nval, var_name))
+        self.simulation.log.info(
+            '    Constant Robin BC "dX/dn = 1/%r (%r - X) + %r" for X = %s'
+            % (blend, dval, nval, var_name)
+        )

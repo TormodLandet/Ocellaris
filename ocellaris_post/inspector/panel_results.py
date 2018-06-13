@@ -1,8 +1,12 @@
 import numpy
 import matplotlib
+
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
+from matplotlib.backends.backend_wxagg import (
+    FigureCanvasWxAgg as FigureCanvas,
+    NavigationToolbar2WxAgg as NavigationToolbar,
+)
 import wx
 from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 from .widget_shared import PlotLimSelectors, PlotCustomLine
@@ -41,7 +45,8 @@ class OcellarisReportsPanel(wx.Panel):
         self.axes = self.fig.add_subplot(111)
         toolbar = NavigationToolbar(self.canvas)
         self.plot_cursor_position_info = wx.StaticText(
-            self, style=wx.ALIGN_RIGHT, size=(250, -1), label='')
+            self, style=wx.ALIGN_RIGHT, size=(250, -1), label=''
+        )
         self.canvas.mpl_connect('motion_notify_event', self.mouse_position_on_plot)
         v.Add(self.canvas, proportion=1, flag=wx.EXPAND)
         h = wx.BoxSizer(wx.HORIZONTAL)
@@ -57,43 +62,53 @@ class OcellarisReportsPanel(wx.Panel):
 
         L = 0
         gbs.Add(
-            wx.StaticText(
-                self, label='Report:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Report:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.report_selector = wx.Choice(self)
         self.report_selector.Bind(wx.EVT_CHOICE, self.report_selected)
         gbs.Add(
             self.report_selector,
             flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(
-                L,
-                1),
-            span=(
-                1,
-                2))
+            pos=(L, 1),
+            span=(1, 2),
+        )
 
         # Plot title
         L += 1
         gbs.Add(
-            wx.StaticText(
-                self, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Plot title:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.title = wx.TextCtrl(self)
         self.title.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(self.title, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2))
+        gbs.Add(
+            self.title,
+            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 1),
+            span=(1, 2),
+        )
 
         # Plot xlabel / log x axis
         L += 1
         gbs.Add(
-            wx.StaticText(
-                self, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Label X:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.xlabel = wx.TextCtrl(self)
         self.xlabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(self.xlabel, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 1))
+        gbs.Add(
+            self.xlabel,
+            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 1),
+            span=(1, 1),
+        )
         self.xlog = wx.CheckBox(self, label='X as log axis')
         self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         gbs.Add(self.xlog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))
@@ -101,13 +116,19 @@ class OcellarisReportsPanel(wx.Panel):
         # Plot ylabel
         L += 1
         gbs.Add(
-            wx.StaticText(
-                self, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Label Y:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.ylabel = wx.TextCtrl(self)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(self.ylabel, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 1))
+        gbs.Add(
+            self.ylabel,
+            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 1),
+            span=(1, 1),
+        )
         self.ylog = wx.CheckBox(self, label='Y as log axis')
         self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         gbs.Add(self.ylog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))
@@ -143,10 +164,13 @@ class OcellarisReportsPanel(wx.Panel):
             rep_names = list(res.reports.keys())
             all_rep_names.update(rep_names)
             for rep_name in rep_names:
-                all_rep_lengths[rep_name] = max(all_rep_lengths.get(rep_name, 0),
-                                                len(res.reports[rep_name]))
+                all_rep_lengths[rep_name] = max(
+                    all_rep_lengths.get(rep_name, 0), len(res.reports[rep_name])
+                )
 
-        def sort_key(rep_name): return (all_rep_lengths[rep_name], rep_name)
+        def sort_key(rep_name):
+            return (all_rep_lengths[rep_name], rep_name)
+
         self.report_names = sorted(all_rep_names, key=sort_key)
 
         self.report_selector.Set(self.report_names)
@@ -267,7 +291,7 @@ def compute_new_lim(lim1, lim2, arrs1, arrs2, locator):
             I1 = (abs(x - lim1[1])).argmin()
 
         # Compute data range
-        selected = y[I0:I1 + 1]
+        selected = y[I0 : I1 + 1]
         if len(selected):
             minval = min(minval, selected.min())
             maxval = max(maxval, selected.max())

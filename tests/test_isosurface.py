@@ -78,8 +78,10 @@ def test_isoline_circle(degree):
     sim.input.set_value('multiphase_solver/polynomial_degree_colour', degree)
     sim.input.set_value('mesh/Nx', 10)
     sim.input.set_value('mesh/Ny', 10)
-    sim.input.set_value('initial_conditions/cp/cpp_code',
-                        '1.1*pow(pow(x[0] - 0.5, 2) + pow(x[1] - 0.5, 2), 0.5)')
+    sim.input.set_value(
+        'initial_conditions/cp/cpp_code',
+        '1.1*pow(pow(x[0] - 0.5, 2) + pow(x[1] - 0.5, 2), 0.5)',
+    )
     setup_simulation(sim)
 
     sim.data['c'].assign(sim.data['cp'])
@@ -88,6 +90,7 @@ def test_isoline_circle(degree):
 
     if False:
         from matplotlib import pyplot
+
         c = dolfin.plot(sim.data['c'])
         pyplot.colorbar(c)
         for x, y in lines:
@@ -99,7 +102,7 @@ def test_isoline_circle(degree):
     print(len(lines))
     for x, y in lines:
         # Check that the radius is constant
-        r = ((x - 0.5)**2 + (y - 0.5)**2)**0.5
+        r = ((x - 0.5) ** 2 + (y - 0.5) ** 2) ** 0.5
         print('x', x)
         print('y', y)
         print('dr', r - 0.5 / 1.1)

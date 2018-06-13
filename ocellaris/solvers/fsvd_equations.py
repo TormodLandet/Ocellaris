@@ -23,11 +23,13 @@ class MomentumPredictionEquation(BaseEquation):
 
         mu_min, mu_max = mpm.get_laminar_dynamic_viscosity_range()
         P = self.simulation.data['Vu'].ufl_element().degree()
-        penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
+        penalty_dS = define_penalty(
+            mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0
+        )
         penalty_ds = penalty_dS * 2
         self.simulation.log.info(
-            '    DG SIP penalty viscosity:  dS %.1f  ds %.1f' %
-            (penalty_dS, penalty_ds))
+            '    DG SIP penalty viscosity:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds)
+        )
 
         D12 = Constant([0, 0])
 
@@ -161,8 +163,8 @@ class PressureCorrectionEquation(BaseEquation):
         penalty_dS = define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1.0)
         penalty_ds = penalty_dS * 2
         self.simulation.log.info(
-            '    DG SIP penalty pressure:  dS %.1f  ds %.1f' %
-            (penalty_dS, penalty_ds))
+            '    DG SIP penalty pressure:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds)
+        )
 
         return Constant(penalty_dS), Constant(penalty_ds)
 
@@ -215,7 +217,7 @@ class PressureCorrectionEquation(BaseEquation):
 
         # Symmetric Interior Penalty coercivity term
         a += penalty_dS * jump(p) * jump(q) * dS
-        #L += penalty_dS*jump(p_star)*jump(q)*dS
+        # L += penalty_dS*jump(p_star)*jump(q)*dS
 
         # Collect Dirichlet and outlet boundary values
         dirichlet_vals_and_ds = []
@@ -241,11 +243,11 @@ class PressureCorrectionEquation(BaseEquation):
             L += penalty_ds * p_bc * q * dds
 
             # Weak Dirichlet for p^*
-            #L += penalty_ds*p_star*q*dds
-            #L -= penalty_ds*p_bc*q*dds
+            # L += penalty_ds*p_star*q*dds
+            # L -= penalty_ds*p_bc*q*dds
 
         # Neumann boundary conditions on p and p_star cancel
-        #neumann_bcs = sim.data['neumann_bcs'].get('p', [])
+        # neumann_bcs = sim.data['neumann_bcs'].get('p', [])
         # for nbc in neumann_bcs:
         #    L += (nbc.func() - dot(n, grad(p_star)))*q*nbc.ds()
 
@@ -274,7 +276,7 @@ class VelocityUpdateEquation(BaseEquation):
 
         # Discontinuous or continuous elements
         Vu_family = simulation.data['Vu'].ufl_element().family()
-        self.vel_is_discontinuous = (Vu_family == 'Discontinuous Lagrange')
+        self.vel_is_discontinuous = Vu_family == 'Discontinuous Lagrange'
 
         # Create UFL forms
         self.define_update_equation()
@@ -292,9 +294,15 @@ class VelocityUpdateEquation(BaseEquation):
         v = dolfin.TestFunction(Vu)
 
         self.form_lhs = u * v * dx
-        self.form_rhs = u_star * v * dx - dt / (c1 * rho_min) * p_hat.dx(self.component) * v * dx
+        self.form_rhs = (
+            u_star * v * dx - dt / (c1 * rho_min) * p_hat.dx(self.component) * v * dx
+        )
 
 
 EQUATION_SUBTYPES = {
-    'Default': (MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation),
+    'Default': (
+        MomentumPredictionEquation,
+        PressureCorrectionEquation,
+        VelocityUpdateEquation,
+    )
 }

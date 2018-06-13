@@ -34,26 +34,38 @@ class LagrangianMeshMorpher(VOFMixin, MultiPhaseModel):
         V = simulation.data['Vc']
         c = dolfin.Function(V)
         simulation.data['c'] = c
-        simulation.data['cp'] = c  # Initial conditions are specified for cp, so we need this alias
+        simulation.data[
+            'cp'
+        ] = c  # Initial conditions are specified for cp, so we need this alias
 
         # Setup the mesh morpher
         simulation.mesh_morpher.setup()
 
         # Calculate mu from rho and nu (i.e mu is quadratic in c) or directly from c (linear in c)
-        self.calculate_mu_directly_from_colour_function = \
-            simulation.input.get_value('multiphase_solver/calculate_mu_directly_from_colour_function',
-                                       CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION, 'bool')
+        self.calculate_mu_directly_from_colour_function = simulation.input.get_value(
+            'multiphase_solver/calculate_mu_directly_from_colour_function',
+            CALCULATE_MU_DIRECTLY_FROM_COLOUR_FUNCTION,
+            'bool',
+        )
 
         # Get the physical properties
         self.rho0 = self.simulation.input.get_value(
-            'physical_properties/rho0', required_type='float')
+            'physical_properties/rho0', required_type='float'
+        )
         self.rho1 = self.simulation.input.get_value(
-            'physical_properties/rho1', required_type='float')
-        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
-        self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
+            'physical_properties/rho1', required_type='float'
+        )
+        self.nu0 = self.simulation.input.get_value(
+            'physical_properties/nu0', required_type='float'
+        )
+        self.nu1 = self.simulation.input.get_value(
+            'physical_properties/nu1', required_type='float'
+        )
 
         # Update the rho and nu fields after each time step
-        simulation.hooks.add_post_timestep_hook(self.update, 'LagrangianMeshMorpher - update mesh')
+        simulation.hooks.add_post_timestep_hook(
+            self.update, 'LagrangianMeshMorpher - update mesh'
+        )
 
         simulation.log.info('Creating Lagrangian mesh morphing multiphase model')
 

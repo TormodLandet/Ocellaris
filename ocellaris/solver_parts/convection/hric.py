@@ -9,7 +9,9 @@ from . import ConvectionScheme, register_convection_scheme
 
 @register_convection_scheme('HRIC')
 class ConvectionSchemeHric2D(ConvectionScheme):
-    description = 'High Resolution Interface Capturing (HRIC, Modified HRIC and Refined HRIC)'
+    description = (
+        'High Resolution Interface Capturing (HRIC, Modified HRIC and Refined HRIC)'
+    )
     need_alpha_gradient = True
 
     def __init__(self, simulation, func_name):
@@ -34,9 +36,11 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         """
         super(ConvectionSchemeHric2D, self).__init__(simulation, func_name)
         self.variant = simulation.input.get_value(
-            'convection/%s/HRIC_version' %
-            func_name, 'HRIC', 'string')
-        self.use_cpp = simulation.input.get_value('convection/%s/use_cpp' % func_name, True, 'bool')
+            'convection/%s/HRIC_version' % func_name, 'HRIC', 'string'
+        )
+        self.use_cpp = simulation.input.get_value(
+            'convection/%s/use_cpp' % func_name, True, 'bool'
+        )
 
     def update(self, dt, velocity):
         """
@@ -46,14 +50,21 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         """
         degree_b = self.blending_function.ufl_element().degree()
         degree_u = velocity[0].ufl_element().degree()
-        assert degree_b == 0, 'Only facetwise constant blending factors are supported! Got order %d' % degree_b
-        assert degree_u == 0, 'VelocityDGT0Projector must be enabled! Got order %d' % degree_u
+        assert degree_b == 0, (
+            'Only facetwise constant blending factors are supported! Got order %d'
+            % degree_b
+        )
+        assert degree_u == 0, (
+            'VelocityDGT0Projector must be enabled! Got order %d' % degree_u
+        )
 
         # Check that the input is supported by the C++ code
         degree_a = self.alpha_function.ufl_element().degree()
         if degree_a != 0:
-            ocellaris_error('HRIC scalar field order must be 0',
-                            'HRIC implementation does not support order %d fields' % degree_a)
+            ocellaris_error(
+                'HRIC scalar field order must be 0',
+                'HRIC implementation does not support order %d fields' % degree_a,
+            )
 
         with dolfin.Timer('Ocellaris update HRIC'):
             if self.use_cpp:
@@ -73,12 +84,11 @@ class ConvectionSchemeHric2D(ConvectionScheme):
         v_vecs = numpy.array(velocity, dtype=float)
         assert g_vecs.shape[0] == g_vecs.shape[0] == self.simulation.ndim
 
-        hric_funcs = {2: self.cpp_mod.hric_2D,
-                      3: self.cpp_mod.hric_3D}
+        hric_funcs = {2: self.cpp_mod.hric_2D, 3: self.cpp_mod.hric_3D}
         hric_func = hric_funcs[self.simulation.ndim]
-        Co_max = hric_func(self.cpp_inp, self.mesh, alpha,
-                           g_vecs, v_vecs, beta,
-                           dt, self.variant)
+        Co_max = hric_func(
+            self.cpp_inp, self.mesh, alpha, g_vecs, v_vecs, beta, dt, self.variant
+        )
         set_local(self.blending_function, beta, apply='insert')
         return Co_max
 
@@ -135,12 +145,12 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 iaC = ic0
                 iaD = ic1
                 vec_to_downstream = mp_dist
-                #nminC, nmaxC = nmin0, nmax0
+                # nminC, nmaxC = nmin0, nmax0
             else:
                 iaC = ic1
                 iaD = ic0
                 vec_to_downstream = -mp_dist
-                #nminC, nmaxC = nmin1, nmax1
+                # nminC, nmaxC = nmin1, nmax1
 
             # Find alpha in D and C cells
             if polydeg == 0:
@@ -182,7 +192,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
 
             # Angle between face normal and surface normal
             len_normal2 = numpy.dot(normal, normal)
-            cos_theta = numpy.dot(normal, gC) / (len_normal2 * len_gC2)**0.5
+            cos_theta = numpy.dot(normal, gC) / (len_normal2 * len_gC2) ** 0.5
 
             # Introduce normalized variables
             tilde_aC = (aC - aU) / (aD - aU)
@@ -197,15 +207,16 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 tilde_aF = 2 * tilde_aC if 0 <= tilde_aC <= 0.5 else 1
 
                 # Correct tilde_aF to avoid aligning with interfaces
-                t = abs(cos_theta)**0.5
+                t = abs(cos_theta) ** 0.5
                 tilde_aF_star = tilde_aF * t + tilde_aC * (1 - t)
 
                 # Correct tilde_af_star for high Courant numbers
                 if Co < 0.4:
                     tilde_aF_final = tilde_aF_star
                 elif Co < 0.75:
-                    tilde_aF_final = tilde_aC + \
-                        (tilde_aF_star - tilde_aC) * (0.75 - Co) / (0.75 - 0.4)
+                    tilde_aF_final = tilde_aC + (tilde_aF_star - tilde_aC) * (
+                        0.75 - Co
+                    ) / (0.75 - 0.4)
                 else:
                     tilde_aF_final = tilde_aC
 
@@ -217,7 +228,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 tilde_aF_ultimate_quickest = min((6 * tilde_aC + 3) / 8, tilde_aF)
 
                 # Correct tilde_aF to avoid aligning with interfaces
-                t = abs(cos_theta)**0.5
+                t = abs(cos_theta) ** 0.5
                 tilde_aF_final = tilde_aF * t + tilde_aF_ultimate_quickest * (1 - t)
 
             elif self.variant == 'RHRIC':
@@ -225,10 +236,12 @@ class ConvectionSchemeHric2D(ConvectionScheme):
                 tilde_aF_hyperc = min(tilde_aC / Co, 1)
 
                 # Less compressive scheme
-                tilde_aF_hric = min(tilde_aC * Co + 2 * tilde_aC * (1 - Co), tilde_aF_hyperc)
+                tilde_aF_hric = min(
+                    tilde_aC * Co + 2 * tilde_aC * (1 - Co), tilde_aF_hyperc
+                )
 
                 # Correct tilde_aF to avoid aligning with interfaces
-                t = cos_theta**4
+                t = cos_theta ** 4
                 tilde_aF_final = tilde_aF_hyperc * t + tilde_aF_hric * (1 - t)
 
             # Avoid tilde_aF being slightly lower that tilde_aC due to

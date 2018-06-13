@@ -12,11 +12,14 @@ DEFAULT_ATOL = [1e-8, 1e-10, 1e-15]
 DEFAULT_NITK = [10, 40, 100]
 
 
-def linear_solver_from_input(simulation, path,
-                             default_solver='default',
-                             default_preconditioner='default',
-                             default_lu_method='default',
-                             default_parameters=None):
+def linear_solver_from_input(
+    simulation,
+    path,
+    default_solver='default',
+    default_preconditioner='default',
+    default_lu_method='default',
+    default_parameters=None,
+):
     """
     Create a linear equation solver from specifications in the input at the
     given path and the Ocellaris defaults for the given solver, passed as
@@ -63,9 +66,13 @@ def linear_solver_from_input(simulation, path,
     simulation.log.info('    Creating linear equation solver from input "%s"' % path)
 
     # Check if we are using the simplified DOLFIN solver wrappers or full PETSc solver setup
-    use_ksp = default_parameters is not None and default_parameters.get('use_ksp', False)
+    use_ksp = default_parameters is not None and default_parameters.get(
+        'use_ksp', False
+    )
     use_ksp = simulation.input.get_value('%s/use_ksp' % path, use_ksp, 'bool')
-    simulation.log.info('        Advanced KSP configuration is %s' % ('ON' if use_ksp else 'OFF'))
+    simulation.log.info(
+        '        Advanced KSP configuration is %s' % ('ON' if use_ksp else 'OFF')
+    )
 
     inp_data = simulation.input.get_value(path, {}, 'Input')
 
@@ -73,7 +80,9 @@ def linear_solver_from_input(simulation, path,
         # Use standard simplified DOLFIN solver wrappers
         # Get values from input dictionary
         solver_method = inp_data.get_value('solver', default_solver, 'string')
-        preconditioner = inp_data.get_value('preconditioner', default_preconditioner, 'string')
+        preconditioner = inp_data.get_value(
+            'preconditioner', default_preconditioner, 'string'
+        )
         lu_method = inp_data.get_value('lu_method', default_lu_method, 'string')
         solver_parameters = inp_data.get_value('parameters', {}, 'dict(string:any)')
 
@@ -86,7 +95,9 @@ def linear_solver_from_input(simulation, path,
         for key in inp_data:
             if key.startswith('petsc_') or key.startswith('inner_iter_'):
                 pth = '%s/%s' % (path, key)
-                simulation.log.warning('Found input %s which is IGNORED since use_ksp=False' % pth)
+                simulation.log.warning(
+                    'Found input %s which is IGNORED since use_ksp=False' % pth
+                )
 
         simulation.log.info('        Method:         %s' % solver_method)
         simulation.log.info('        Preconditioner: %s' % preconditioner)
@@ -103,18 +114,24 @@ def linear_solver_from_input(simulation, path,
         for unwanted in 'solver preconditioner lu_method parameters'.split():
             if unwanted in inp_data:
                 pth = '%s/%s' % (path, unwanted)
-                simulation.log.warning('Found input %s which is IGNORED since use_ksp=True' % pth)
+                simulation.log.warning(
+                    'Found input %s which is IGNORED since use_ksp=True' % pth
+                )
 
         # Create the PETScKrylovSolver and show some info
         solver = KSPLinearSolverWrapper(simulation, path, params)
         simulation.log.info('        Method:         %s' % solver.ksp().getType())
         simulation.log.info('        Preconditioner: %s' % solver.ksp().pc.getType())
-        simulation.log.info('        Options prefix: %s' % solver.ksp().getOptionsPrefix())
+        simulation.log.info(
+            '        Options prefix: %s' % solver.ksp().getOptionsPrefix()
+        )
         return solver
 
 
 class LinearSolverWrapper(object):
-    def __init__(self, solver_method, preconditioner=None, lu_method=None, parameters=None):
+    def __init__(
+        self, solver_method, preconditioner=None, lu_method=None, parameters=None
+    ):
         """
         Wrap a DOLFIN PETScKrylovSolver or PETScLUSolver
 
@@ -185,12 +202,14 @@ class LinearSolverWrapper(object):
         return self._solver.ksp()
 
     def __repr__(self):
-        return ('<LinearSolverWrapper iterative=%r ' % self.is_iterative +
-                'direct=%r ' % self.is_direct +
-                'method=%r ' % self.solver_method +
-                'preconditioner=%r ' % self.preconditioner +
-                'LU-method=%r ' % self.lu_method +
-                'parameters=%r>' % self.input_parameters)
+        return (
+            '<LinearSolverWrapper iterative=%r ' % self.is_iterative
+            + 'direct=%r ' % self.is_direct
+            + 'method=%r ' % self.solver_method
+            + 'preconditioner=%r ' % self.preconditioner
+            + 'LU-method=%r ' % self.lu_method
+            + 'parameters=%r>' % self.input_parameters
+        )
 
 
 class KSPLinearSolverWrapper(object):
@@ -306,9 +325,15 @@ class KSPLinearSolverWrapper(object):
             return inp.get_value(key, prev, required_type)
 
         firstN, lastN = get_updated('inner_iter_control', DEFAULT_ITR_CTRL, 'list(int)')
-        rtol_beg, rtol_mid, rtol_end = get_updated('inner_iter_rtol', DEFAULT_RTOL, 'list(float)')
-        atol_beg, atol_mid, atol_end = get_updated('inner_iter_atol', DEFAULT_ATOL, 'list(float)')
-        nitk_beg, nitk_mid, nitk_end = get_updated('inner_iter_max_it', DEFAULT_NITK, 'list(int)')
+        rtol_beg, rtol_mid, rtol_end = get_updated(
+            'inner_iter_rtol', DEFAULT_RTOL, 'list(float)'
+        )
+        atol_beg, atol_mid, atol_end = get_updated(
+            'inner_iter_atol', DEFAULT_ATOL, 'list(float)'
+        )
+        nitk_beg, nitk_mid, nitk_end = get_updated(
+            'inner_iter_max_it', DEFAULT_NITK, 'list(int)'
+        )
 
         # Solver setup with petsc4py
         ksp = self._solver.ksp()
@@ -371,9 +396,9 @@ def apply_settings(solver_method, parameters, new_values):
     """
     skip = set()
     if solver_method == 'lu':
-        skip.update(['nonzero_initial_guess',
-                     'relative_tolerance',
-                     'absolute_tolerance'])
+        skip.update(
+            ['nonzero_initial_guess', 'relative_tolerance', 'absolute_tolerance']
+        )
 
     for key, value in new_values.items():
         if key in skip:
@@ -391,6 +416,7 @@ def petsc_options(opts):
     The parameter opts is a dictionary of PETSc/SLEPc options
     """
     from petsc4py import PETSc
+
     orig_opts = PETSc.Options().getAll()
     for key, val in opts.items():
         PETSc.Options().setValue(key, val)
@@ -519,6 +545,7 @@ def condition_number(A, method='simplified'):
 
     elif method == 'numpy':
         from numpy.linalg import cond
+
         A = mat_to_scipy_csr(A).todense()
         return cond(A)
 
@@ -533,7 +560,7 @@ def condition_number(A, method='simplified'):
         opts = {
             'svd_type': 'cross',
             'svd_eps_type': 'gd',
-            #'help': 'svd_type'
+            # 'help': 'svd_type'
         }
         with petsc_options(opts):
             S = SLEPc.SVD()
@@ -546,8 +573,10 @@ def condition_number(A, method='simplified'):
             if S.getConverged() == 1:
                 sigma_1 = S.getSingularTriplet(0)
             else:
-                raise ValueError('Could not find the highest singular value (%d)'
-                                 % S.getConvergedReason())
+                raise ValueError(
+                    'Could not find the highest singular value (%d)'
+                    % S.getConvergedReason()
+                )
             print('Highest singular value:', sigma_1)
 
             S.setWhichSingularTriplets(SLEPc.SVD.Which.SMALLEST)
@@ -555,8 +584,10 @@ def condition_number(A, method='simplified'):
             if S.getConverged() == 1:
                 sigma_n = S.getSingularTriplet(0)
             else:
-                raise ValueError('Could not find the lowest singular value (%d)'
-                                 % S.getConvergedReason())
+                raise ValueError(
+                    'Could not find the lowest singular value (%d)'
+                    % S.getConvergedReason()
+                )
             print('Lowest singular value:', sigma_n)
             print(PETSc.Options().getAll())
         print(PETSc.Options().getAll())
@@ -569,7 +600,9 @@ def mat_to_scipy_csr(dolfin_matrix):
     Convert any dolfin.Matrix to csr matrix in scipy.
     Based on code by Miroslav Kuchta
     """
-    assert dolfin.MPI.size(dolfin.MPI.comm_world) == 1, 'mat_to_csr assumes single process'
+    assert (
+        dolfin.MPI.size(dolfin.MPI.comm_world) == 1
+    ), 'mat_to_csr assumes single process'
     import scipy.sparse
 
     rows = [0]
@@ -583,7 +616,11 @@ def mat_to_scipy_csr(dolfin_matrix):
 
     shape = dolfin_matrix.size(0), dolfin_matrix.size(1)
 
-    return scipy.sparse.csr_matrix((numpy.array(values, dtype='float'),
-                                    numpy.array(cols, dtype='int'),
-                                    numpy.array(rows, dtype='int')),
-                                   shape)
+    return scipy.sparse.csr_matrix(
+        (
+            numpy.array(values, dtype='float'),
+            numpy.array(cols, dtype='int'),
+            numpy.array(rows, dtype='int'),
+        ),
+        shape,
+    )

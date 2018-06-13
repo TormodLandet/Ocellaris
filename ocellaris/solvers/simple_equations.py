@@ -6,10 +6,19 @@ from .coupled_equations import define_dg_equations
 
 
 class SimpleEquations(object):
-    def __init__(self, simulation, use_stress_divergence_form, use_grad_p_form,
-                 use_grad_q_form, use_lagrange_multiplicator,
-                 include_hydrostatic_pressure, incompressibility_flux_type,
-                 num_elements_in_block, lump_diagonal, a_tilde_is_mass=False):
+    def __init__(
+        self,
+        simulation,
+        use_stress_divergence_form,
+        use_grad_p_form,
+        use_grad_q_form,
+        use_lagrange_multiplicator,
+        include_hydrostatic_pressure,
+        incompressibility_flux_type,
+        num_elements_in_block,
+        lump_diagonal,
+        a_tilde_is_mass=False,
+    ):
         """
         This class assembles the coupled Navier-Stokes equations as a set of
         matrices and vectors
@@ -76,18 +85,28 @@ class SimpleEquations(object):
 
         # Define the full coupled form and split it into subforms depending
         # on the test and trial functions
-        eq = define_dg_equations(u, v, p, q, lm_trial, lm_test, self.simulation,
-                                 include_hydrostatic_pressure=self.include_hydrostatic_pressure,
-                                 incompressibility_flux_type=self.incompressibility_flux_type,
-                                 use_grad_q_form=self.use_grad_q_form,
-                                 use_grad_p_form=self.use_grad_p_form,
-                                 use_stress_divergence_form=self.use_stress_divergence_form)
+        eq = define_dg_equations(
+            u,
+            v,
+            p,
+            q,
+            lm_trial,
+            lm_test,
+            self.simulation,
+            include_hydrostatic_pressure=self.include_hydrostatic_pressure,
+            incompressibility_flux_type=self.incompressibility_flux_type,
+            use_grad_q_form=self.use_grad_q_form,
+            use_grad_p_form=self.use_grad_p_form,
+            use_stress_divergence_form=self.use_stress_divergence_form,
+        )
         mat, vec = split_form_into_matrix(eq, Vcoupled, Vcoupled, check_zeros=True)
 
         # Check matrix and vector shapes and that the matrix is a saddle point matrix
         assert mat.shape == (2, 2)
         assert vec.shape == (2,)
-        assert mat[-1, -1] is None, 'Found p-q coupling, this is not a saddle point system!'
+        assert (
+            mat[-1, -1] is None
+        ), 'Found p-q coupling, this is not a saddle point system!'
 
         # Store the forms
         self.eqA = mat[0, 0]
@@ -105,7 +124,9 @@ class SimpleEquations(object):
             c1 = sim.data['time_coeffs'][0]
             dt = sim.data['dt']
             eqM = rho * c1 / dt * dolfin.dot(u, v) * dolfin.dx
-            matM, _vecM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)
+            matM, _vecM = split_form_into_matrix(
+                eqM, Vcoupled, Vcoupled, check_zeros=True
+            )
             self.eqM = dolfin.Form(matM[0, 0])
             self.M = None
 
@@ -218,9 +239,13 @@ class SimpleEquations(object):
         are the dofs of N elememts a single element
         """
         if self.block_partitions is None:
-            self.block_partitions = create_block_partitions(self.simulation, self.Vuvw, Nelem)
-            self.simulation.log.info('SIMPLE solver with %d cell blocks found %d blocks in total'
-                                     % (Nelem, len(self.block_partitions)))
+            self.block_partitions = create_block_partitions(
+                self.simulation, self.Vuvw, Nelem
+            )
+            self.simulation.log.info(
+                'SIMPLE solver with %d cell blocks found %d blocks in total'
+                % (Nelem, len(self.block_partitions))
+            )
 
         Aglobal = self.M if self.a_tilde_is_mass else self.A
         if self.A_tilde is None:
@@ -331,6 +356,4 @@ def create_block_partitions(simulation, V, Ncells):
     return partitions
 
 
-EQUATION_SUBTYPES = {
-    'Default': SimpleEquations,
-}
+EQUATION_SUBTYPES = {'Default': SimpleEquations}

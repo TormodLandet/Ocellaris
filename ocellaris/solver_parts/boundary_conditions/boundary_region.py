@@ -24,8 +24,8 @@ class BoundaryRegion(object):
         self.conditions = {}
 
         self.input = simulation.input.get_value(
-            'boundary_conditions/%d' %
-            index, required_type='Input')
+            'boundary_conditions/%d' % index, required_type='Input'
+        )
         self.name = self.input.get_value('name', required_type='string')
         self.selector_name = self.input.get_value('selector', required_type='string')
 
@@ -41,36 +41,45 @@ class BoundaryRegion(object):
             try:
                 self.selector.mark(marker, self.mark_id)
             except Exception as e:
-                ocellaris_error('Error in boundary condition',
-                                'Marking boundary "%s" with region_code="%s" failed. '
-                                % (self.name, code_string) +
-                                '\n\nThe error was "%s"' % e +
-                                '\n\nDid you remember that x is an array?')
+                ocellaris_error(
+                    'Error in boundary condition',
+                    'Marking boundary "%s" with region_code="%s" failed. '
+                    % (self.name, code_string)
+                    + '\n\nThe error was "%s"' % e
+                    + '\n\nDid you remember that x is an array?',
+                )
 
         elif self.selector_name == 'mesh_facet_region':
             # Find all facets with the given numbers and update the Ocellaris
             # facet marker function. The Ocellaris region number will not in
             # general be the same as the mesh facet region number
             if mesh_facet_regions is None:
-                ocellaris_error('Cannot use mesh_facet_region selector in %r' % self.name,
-                                'The loaded mesh contains no facet regions')
+                ocellaris_error(
+                    'Cannot use mesh_facet_region selector in %r' % self.name,
+                    'The loaded mesh contains no facet regions',
+                )
             array_mesh = mesh_facet_regions.array()
             array_ocellaris = marker.array()
-            region_numbers = self.input.get_value('mesh_facet_regions', required_type='list(int)')
+            region_numbers = self.input.get_value(
+                'mesh_facet_regions', required_type='list(int)'
+            )
             for num in region_numbers:
-                simulation.log.info('Applying boundary region number %d to mesh '
-                                    'facet region number %d' % (self.mark_id, num))
+                simulation.log.info(
+                    'Applying boundary region number %d to mesh '
+                    'facet region number %d' % (self.mark_id, num)
+                )
                 array_ocellaris[array_mesh == num] = self.mark_id
             marker.set_values(array_ocellaris)
 
         else:
-            ocellaris_error('Error: unknown boundary selector',
-                            'Boundary condition for boundary "%s" has '
-                            'selector="%s". This selector is not implemented.'
-                            '\n\nImplemented selectors:\n\n'
-                            ' - code\n'
-                            ' - mesh_facet_region'
-                            % (self.name, self.selector_name))
+            ocellaris_error(
+                'Error: unknown boundary selector',
+                'Boundary condition for boundary "%s" has '
+                'selector="%s". This selector is not implemented.'
+                '\n\nImplemented selectors:\n\n'
+                ' - code\n'
+                ' - mesh_facet_region' % (self.name, self.selector_name),
+            )
 
     def create_periodic_boundary_conditions(self):
         """
@@ -86,9 +95,11 @@ class BoundaryRegion(object):
             sim.log.info('Applying periodic boundary conditions on %s' % self.name)
 
             if self.simulation.data['constrained_domain'] is not None:
-                ocellaris_error('Error in specification of periodic boundary conditions',
-                                'There can only be one periodic boundary region in the domain. '
-                                'Found more than one periodic region when processing boundary conditions')
+                ocellaris_error(
+                    'Error in specification of periodic boundary conditions',
+                    'There can only be one periodic boundary region in the domain. '
+                    'Found more than one periodic region when processing boundary conditions',
+                )
 
             self.selector.set_map_code(self.input['map_code'], self.name)
             self.simulation.data['constrained_domain'] = self.selector
@@ -101,13 +112,19 @@ class BoundaryRegion(object):
 
         # Get boundary conditions on this boundary
         for key, value in self.input.items():
-            if key.startswith('_') or not isinstance(value, dict) or 'type' not in value:
+            if (
+                key.startswith('_')
+                or not isinstance(value, dict)
+                or 'type' not in value
+            ):
                 continue
 
             inp = self.input.get_value(key, required_type='Input')
             bc_type = inp.get_value('type', required_type='string')
-            sim.log.info('Applying %s boundary condition for %s on %s' %
-                         (bc_type, key, self.name))
+            sim.log.info(
+                'Applying %s boundary condition for %s on %s'
+                % (bc_type, key, self.name)
+            )
             bc_class = get_boundary_condition(bc_type)
             bc = bc_class(sim, key, inp, self.marker, self.mark_id)
             self.conditions[key] = bc
@@ -137,9 +154,12 @@ class RegionSelector(dolfin.SubDomain):
         It the code contains a newline it must be the core
         of the function and define the inside variable
         """
-        self.inside_func = RunnablePythonString(self.simulation, code_string,
-                                                'inside code for %s' % region_name,
-                                                var_name='inside')
+        self.inside_func = RunnablePythonString(
+            self.simulation,
+            code_string,
+            'inside code for %s' % region_name,
+            var_name='inside',
+        )
 
     def set_map_code(self, code_string, region_name):
         """
@@ -148,9 +168,9 @@ class RegionSelector(dolfin.SubDomain):
 
         The code must assign to the 'y' variable
         """
-        self.map_func = RunnablePythonString(self.simulation, code_string,
-                                             'map code for %s' % region_name,
-                                             var_name='y')
+        self.map_func = RunnablePythonString(
+            self.simulation, code_string, 'map code for %s' % region_name, var_name='y'
+        )
 
     def inside(self, x, on_boundary):
         """

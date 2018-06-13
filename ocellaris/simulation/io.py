@@ -11,7 +11,7 @@ LVTK_WRITE_INTERVAL = 0
 SAVE_RESTART_AT_END = True
 
 
-class InputOutputHandling():
+class InputOutputHandling:
     def __init__(self, simulation):
         """
         This class handles reading and writing the simulation state such as
@@ -31,14 +31,21 @@ class InputOutputHandling():
         # Set up periodic output of plot files. Other parts of Ocellaris may
         # also add their plot writers to this list
         self._plotters = []
-        self.add_plotter(self.xdmf.write, 'output/xdmf_write_interval', XDMF_WRITE_INTERVAL)
-        self.add_plotter(self.lvtk.write, 'output/vtk_write_interval', LVTK_WRITE_INTERVAL)
+        self.add_plotter(
+            self.xdmf.write, 'output/xdmf_write_interval', XDMF_WRITE_INTERVAL
+        )
+        self.add_plotter(
+            self.lvtk.write, 'output/vtk_write_interval', LVTK_WRITE_INTERVAL
+        )
         self.add_plotter(
             self._interval_write_restart,
             'output/hdf5_write_interval',
-            HDF5_WRITE_INTERVAL)
+            HDF5_WRITE_INTERVAL,
+        )
 
-        def close(success): return self._close_files()  # @UnusedVariable - must be named success
+        def close(success):
+            return self._close_files()  # @UnusedVariable - must be named success
+
         sim.hooks.add_post_simulation_hook(close, 'Save restart file and close files')
 
         # When exiting due to a signal kill/shutdown a savepoint file will be
@@ -56,14 +63,16 @@ class InputOutputHandling():
         sim.log.info('Setting up simulation IO')
 
         # Make sure functions have nice names for output
-        for name, description in (('p', 'Pressure'),
-                                  ('p_hydrostatic', 'Hydrostatic pressure'),
-                                  ('c', 'Colour function'),
-                                  ('rho', 'Density'),
-                                  ('u0', 'X-component of velocity'),
-                                  ('u1', 'Y-component of velocity'),
-                                  ('u2', 'Z-component of velocity'),
-                                  ('boundary_marker', 'Domain boundary regions')):
+        for name, description in (
+            ('p', 'Pressure'),
+            ('p_hydrostatic', 'Hydrostatic pressure'),
+            ('c', 'Colour function'),
+            ('rho', 'Density'),
+            ('u0', 'X-component of velocity'),
+            ('u1', 'Y-component of velocity'),
+            ('u2', 'Z-component of velocity'),
+            ('boundary_marker', 'Domain boundary regions'),
+        ):
             if not name in sim.data:
                 continue
             func = sim.data[name]
@@ -82,7 +91,9 @@ class InputOutputHandling():
         The output files (XDMF) normally only contain u, p and potentially rho or c. Other
         custom fields can be added
         """
-        self.simulation.log.info('    Adding extra output function %s' % function.name())
+        self.simulation.log.info(
+            '    Adding extra output function %s' % function.name()
+        )
         self.xdmf.extra_functions.append(function)
 
     def get_persisted_dict(self, name):
@@ -110,10 +121,13 @@ class InputOutputHandling():
         if self.last_savepoint_is_checkpoint:
             # Shutting down, but ready to restart from checkpoint
             self.write_restart_file()
-        elif sim.input.get_value('output/save_restart_file_at_end', SAVE_RESTART_AT_END, 'bool'):
+        elif sim.input.get_value(
+            'output/save_restart_file_at_end', SAVE_RESTART_AT_END, 'bool'
+        ):
             # Shutting down for good
             h5_file_name = sim.input.get_output_file_path(
-                'output/hdf5_file_name', '_endpoint_%08d.h5')
+                'output/hdf5_file_name', '_endpoint_%08d.h5'
+            )
             h5_file_name = h5_file_name % sim.timestep
             self.write_restart_file(h5_file_name)
 
@@ -134,8 +148,9 @@ class InputOutputHandling():
         # Call the output functions at the right intervals
         for func, interval_inp_key, default_interval in self._plotters:
             # Check this every timestep, it might change
-            write_interval = sim.input.get_value(interval_inp_key,
-                                                 default_interval, 'int')
+            write_interval = sim.input.get_value(
+                interval_inp_key, default_interval, 'int'
+            )
 
             # Write plot file this time step if it aligns with the interval
             if write_interval > 0 and sim.timestep % write_interval == 0:
@@ -154,8 +169,10 @@ class InputOutputHandling():
         # Write was successfull (no exception) -> delete previous files
         if sim.input.get_value('output/hdf5_only_store_latest', False, 'bool'):
             if os.path.isfile(self.prev_savepoint_file_name) and sim.rank == 0:
-                sim.log.info('Deleting previous save point file %r'
-                             % self.prev_savepoint_file_name)
+                sim.log.info(
+                    'Deleting previous save point file %r'
+                    % self.prev_savepoint_file_name
+                )
                 os.unlink(self.prev_savepoint_file_name)
             self.prev_savepoint_file_name = h5_file_name
 

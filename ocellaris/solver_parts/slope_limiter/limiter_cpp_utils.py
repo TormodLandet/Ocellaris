@@ -17,8 +17,12 @@ class SlopeLimiterInput(object):
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
         indices = list(range(mesh.num_cells()))
-        self.cell_dofs_V = numpy.array([dm.cell_dofs(i) for i in indices], dtype=numpy.intc)
-        self.cell_dofs_V0 = numpy.array([dm0.cell_dofs(i) for i in indices], dtype=numpy.intc)
+        self.cell_dofs_V = numpy.array(
+            [dm.cell_dofs(i) for i in indices], dtype=numpy.intc
+        )
+        self.cell_dofs_V0 = numpy.array(
+            [dm0.cell_dofs(i) for i in indices], dtype=numpy.intc
+        )
 
         tdim = mesh.topology().dim()
         self.num_cells_owned = mesh.topology().ghost_offset(tdim)
@@ -37,13 +41,15 @@ class SlopeLimiterInput(object):
         if use_cpp:
             self.cpp_mod = load_module('hierarchical_taylor')
             self.cpp_obj = self.cpp_mod.SlopeLimiterInput()
-            self.cpp_obj.set_arrays(self.num_cells_owned,
-                                    num_neighbours,
-                                    neighbours,
-                                    self.cell_dofs_V,
-                                    self.cell_dofs_V0,
-                                    self.cell_vertices,
-                                    self.vertex_coordinates)
+            self.cpp_obj.set_arrays(
+                self.num_cells_owned,
+                num_neighbours,
+                neighbours,
+                self.cell_dofs_V,
+                self.cell_dofs_V0,
+                self.cell_vertices,
+                self.vertex_coordinates,
+            )
 
     def set_global_bounds(self, global_min, global_max):
         """

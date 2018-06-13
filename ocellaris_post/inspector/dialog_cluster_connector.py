@@ -6,9 +6,12 @@ import wx
 
 class OcellarisClusterConnectorDialog(wx.Dialog):
     def __init__(self, parent, inspector_state, file_opener):
-        super(OcellarisClusterConnectorDialog, self).__init__(parent, title='Cluster Connector',
-                                                              size=(550, 550),
-                                                              style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        super(OcellarisClusterConnectorDialog, self).__init__(
+            parent,
+            title='Cluster Connector',
+            size=(550, 550),
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+        )
         self.istate = inspector_state
         self.file_opener = file_opener
         self.layout()
@@ -37,19 +40,25 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
         self.host_name = wx.TextCtrl(p)
         fg.Add(self.host_name, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
 
-        host_help = ['Either "user@host" or "host" depending on your setup.',
-                     'You MUST have password-less SSH login working!']
+        host_help = [
+            'Either "user@host" or "host" depending on your setup.',
+            'You MUST have password-less SSH login working!',
+        ]
         fg.AddSpacer(5)
         fg.Add(wx.StaticText(p, label='\n'.join(host_help)))
 
-        fg.Add(wx.StaticText(p, label='Verify connection'), flag=wx.ALIGN_CENTER_VERTICAL)
+        fg.Add(
+            wx.StaticText(p, label='Verify connection'), flag=wx.ALIGN_CENTER_VERTICAL
+        )
         b = wx.Button(p, label='Test')
         b.Bind(wx.EVT_BUTTON, self.test_connection)
         fg.Add(b, flag=wx.ALIGN_CENTER_VERTICAL)
 
         fg.AddSpacer(10)
-        fg.Add(wx.StaticLine(p, style=wx.LI_HORIZONTAL),
-               flag=wx.EXPAND | wx.ALIGN_CENTER_HORIZONTAL)
+        fg.Add(
+            wx.StaticLine(p, style=wx.LI_HORIZONTAL),
+            flag=wx.EXPAND | wx.ALIGN_CENTER_HORIZONTAL,
+        )
 
         fg.Add(wx.StaticText(p, label='Cluster home'), flag=wx.ALIGN_CENTER_VERTICAL)
         self.remote_dir = wx.TextCtrl(p)
@@ -66,21 +75,27 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
         fg.Add(self.local_dir, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
         self.widgets1.append(self.local_dir)
 
-        mount_help = ['The local directory where you have mounted the cluster',
-                      'home directory. E.g., "~/mymount".',
-                      'You can mount using "sshfs CLUSTER_HOST: ~/LOCAL_DIR"']
+        mount_help = [
+            'The local directory where you have mounted the cluster',
+            'home directory. E.g., "~/mymount".',
+            'You can mount using "sshfs CLUSTER_HOST: ~/LOCAL_DIR"',
+        ]
         fg.AddSpacer(5)
         fg.Add(wx.StaticText(p, label='\n'.join(mount_help)))
 
-        fg.Add(wx.StaticText(p, label='Get running jobs'), flag=wx.ALIGN_CENTER_VERTICAL)
+        fg.Add(
+            wx.StaticText(p, label='Get running jobs'), flag=wx.ALIGN_CENTER_VERTICAL
+        )
         b = wx.Button(p, label='Connect')
         b.Bind(wx.EVT_BUTTON, self.get_jobs)
         fg.Add(b, flag=wx.ALIGN_CENTER_VERTICAL)
         self.widgets1.append(b)
 
         fg.AddSpacer(10)
-        fg.Add(wx.StaticLine(p, style=wx.LI_HORIZONTAL),
-               flag=wx.EXPAND | wx.ALIGN_CENTER_HORIZONTAL)
+        fg.Add(
+            wx.StaticLine(p, style=wx.LI_HORIZONTAL),
+            flag=wx.EXPAND | wx.ALIGN_CENTER_HORIZONTAL,
+        )
 
         # The file selector
         self.file_selector = wx.CheckListBox(p)
@@ -97,15 +112,15 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
         p.Layout()
 
     def warning(self, title, message):
-        with wx.MessageDialog(self, caption=title,
-                              message=message,
-                              style=wx.ICON_WARNING) as dlg:
+        with wx.MessageDialog(
+            self, caption=title, message=message, style=wx.ICON_WARNING
+        ) as dlg:
             dlg.ShowModal()
 
     def error(self, title, message):
-        with wx.MessageDialog(self, caption=title,
-                              message=message,
-                              style=wx.ICON_EXCLAMATION) as dlg:
+        with wx.MessageDialog(
+            self, caption=title, message=message, style=wx.ICON_EXCLAMATION
+        ) as dlg:
             dlg.ShowModal()
 
     def test_connection(self, _evt=None):
@@ -153,15 +168,15 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
         self.files = []
         for d in directories:
             if not d.startswith(remote_dir):
-                self.error('Path error',
-                           'Directory %r\ndoes not start with\n%r'
-                           % (d, remote_dir))
+                self.error(
+                    'Path error',
+                    'Directory %r\ndoes not start with\n%r' % (d, remote_dir),
+                )
                 return
 
             d2 = local_dir + d[N:]
             if not os.path.isdir(d2):
-                self.error('Path error',
-                           'Directory %r\ndoes not exist' % d2)
+                self.error('Path error', 'Directory %r\ndoes not exist' % d2)
                 return
 
             # Find the log file in this directory
@@ -174,11 +189,11 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
                     if f.endswith('.log'):
                         logs.append(os.path.join(d2, f))
                 if len(logs) > 1:
-                    self.warning('Missing log file',
-                                 'Found multiple log files in\n' + d2)
+                    self.warning(
+                        'Missing log file', 'Found multiple log files in\n' + d2
+                    )
                 elif len(logs) < 1:
-                    self.warning('Missing log file',
-                                 'Found no log file in\n' + d2)
+                    self.warning('Missing log file', 'Found no log file in\n' + d2)
                 else:
                     self.files.append(logs[0])
 
@@ -193,6 +208,7 @@ class OcellarisClusterConnectorDialog(wx.Dialog):
 
 ###############################################################################
 # Cluster connectors
+
 
 def slurm_test(host_name):
     cmd = ['ssh', host_name, 'pwd; whoami']
@@ -244,4 +260,9 @@ def run_command_with_timeout(cmd, timeout_sec):
     timer.start()
     stdout, stderr = proc.communicate()
     timer.cancel()
-    return proc.returncode, stdout.decode("utf-8"), stderr.decode("utf-8"), timeout["value"]
+    return (
+        proc.returncode,
+        stdout.decode("utf-8"),
+        stderr.decode("utf-8"),
+        timeout["value"],
+    )

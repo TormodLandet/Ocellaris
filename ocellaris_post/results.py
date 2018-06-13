@@ -106,8 +106,10 @@ class Results(object):
                 pth = os.path.join(bd, fn)
 
             if not os.path.exists(pth):
-                raise IOError('Could not find file %r when prefix is %r and result file is %r'
-                              % (name, prefix, self.file_name))
+                raise IOError(
+                    'Could not find file %r when prefix is %r and result file is %r'
+                    % (name, prefix, self.file_name)
+                )
 
         return pth
 
@@ -188,6 +190,7 @@ def read_h5_data(results):
     Read metadata and reports from a restart file (HDF5 format)
     """
     import h5py
+
     hdf = h5py.File(results.file_name, 'r')
 
     string_datasets = 'input_file' in hdf['/ocellaris']
@@ -382,8 +385,7 @@ def read_surfaces(res):
         return
 
     for probe in inp['probes']:
-        if not (probe.get('enabled', True) and
-                probe.get('type', '') == 'IsoSurface'):
+        if not (probe.get('enabled', True) and probe.get('type', '') == 'IsoSurface'):
             continue
         name = probe['name']
         field_name = probe['field']

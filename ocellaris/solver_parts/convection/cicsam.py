@@ -34,14 +34,21 @@ class ConvectionSchemeHric2D(ConvectionScheme):
 
         degree_b = self.blending_function.ufl_element().degree()
         degree_u = velocity[0].ufl_element().degree()
-        assert degree_b == 0, 'Only facetwise constant blending factors are supported! Got order %d' % degree_b
-        assert degree_u == 0, 'VelocityDGT0Projector must be enabled! Got order %d' % degree_u
+        assert degree_b == 0, (
+            'Only facetwise constant blending factors are supported! Got order %d'
+            % degree_b
+        )
+        assert degree_u == 0, (
+            'VelocityDGT0Projector must be enabled! Got order %d' % degree_u
+        )
 
         # Check that the input is supported by the C++ code
         degree_a = self.alpha_function.ufl_element().degree()
         if degree_a != 0:
-            ocellaris_error('CICSAM scalar field order must be 0',
-                            'CICSAM implementation does not support order %d fields' % degree_a)
+            ocellaris_error(
+                'CICSAM scalar field order must be 0',
+                'CICSAM implementation does not support order %d fields' % degree_a,
+            )
 
         alpha_arr = self.alpha_function.vector().get_local()
         beta_arr = self.blending_function.vector().get_local()
@@ -132,11 +139,15 @@ class ConvectionSchemeHric2D(ConvectionScheme):
             tilde_aF_HC = min(tilde_aC / Co, 1)
 
             # Less compressive scheme, Ultimate-Quickest
-            tilde_aF_UC = min((8 * Co * tilde_aC + (1 - Co) * (6 * tilde_aC + 3)) / 8, tilde_aF_HC)
+            tilde_aF_UC = min(
+                (8 * Co * tilde_aC + (1 - Co) * (6 * tilde_aC + 3)) / 8, tilde_aF_HC
+            )
 
             # Correct tilde_aF to avoid aligning with interfaces
             d = vec_to_downstream
-            theta = math.acos(abs(numpy.dot(gC, d) / (numpy.dot(gC, gC) * numpy.dot(d, d))**0.5))
+            theta = math.acos(
+                abs(numpy.dot(gC, d) / (numpy.dot(gC, gC) * numpy.dot(d, d)) ** 0.5)
+            )
             ky = 1.0
             y = min(ky * (math.cos(2 * theta) + 1) / 2, 1)
             tilde_aF_final = tilde_aF_HC * y + tilde_aF_UC * (1 - y)
