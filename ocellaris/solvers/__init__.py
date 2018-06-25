@@ -21,9 +21,11 @@ def register_solver(name):
     """
     A class decorator to register Navier-Stokes solvers
     """
+
     def register(solver_class):
         add_solver(name, solver_class)
         return solver_class
+
     return register
 
 
@@ -34,10 +36,13 @@ def get_solver(name):
     try:
         return _SOLVERS[name]
     except KeyError:
-        ocellaris_error('Navier-Stokes solver "%s" not found' % name,
-                        'Available solvers:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description)
-                                  for n, s in sorted(_SOLVERS.items())))
+        ocellaris_error(
+            'Navier-Stokes solver "%s" not found' % name,
+            'Available solvers:\n'
+            + '\n'.join(
+                '  %-20s - %s' % (n, s.description) for n, s in sorted(_SOLVERS.items())
+            ),
+        )
         raise
 
 
@@ -50,21 +55,27 @@ class Solver(object):
         Function space setup for standard flow solvers
         """
         # Get function space names
-        Vu_name = simulation.input.get_value('solver/function_space_velocity',
-                                             DEFAULT_FAMILY_U, 'string')
-        Vp_name = simulation.input.get_value('solver/function_space_pressure',
-                                             DEFAULT_FAMILY_P, 'string')
+        Vu_name = simulation.input.get_value(
+            'solver/function_space_velocity', DEFAULT_FAMILY_U, 'string'
+        )
+        Vp_name = simulation.input.get_value(
+            'solver/function_space_pressure', DEFAULT_FAMILY_P, 'string'
+        )
 
         # Get function space polynomial degrees
-        Pu = simulation.input.get_value('solver/polynomial_degree_velocity',
-                                        DEFAULT_DEGREE_U, 'int')
-        Pp = simulation.input.get_value('solver/polynomial_degree_pressure',
-                                        DEFAULT_DEGREE_P, 'int')
+        Pu = simulation.input.get_value(
+            'solver/polynomial_degree_velocity', DEFAULT_DEGREE_U, 'int'
+        )
+        Pp = simulation.input.get_value(
+            'solver/polynomial_degree_pressure', DEFAULT_DEGREE_P, 'int'
+        )
 
         # Get the constrained domain
         cd = simulation.data['constrained_domain']
         if cd is None:
-            simulation.log.info('Creating function spaces without periodic boundaries (none found)')
+            simulation.log.info(
+                'Creating function spaces without periodic boundaries (none found)'
+            )
         else:
             simulation.log.info('Creating function spaces with periodic boundaries')
 
@@ -114,7 +125,6 @@ BDM = 'BDM'
 from . import analytical_solution
 from . import coupled
 from . import coupled_ldg
-from . import fsvd
 from . import ipcs
 from . import ipcs_algebraic
 from . import simple

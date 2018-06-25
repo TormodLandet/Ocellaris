@@ -6,7 +6,7 @@ import dolfin
 XDMF_FLUSH = True
 
 
-class XDMFFileIO():
+class XDMFFileIO:
     def __init__(self, simulation):
         """
         Xdmf output using dolfin.XDMFFile
@@ -59,8 +59,9 @@ class XDMFFileIO():
             family = V.ufl_element().family()
             degree = V.ufl_element().degree()
             cd = sim.data['constrained_domain']
-            V_vec = dolfin.VectorFunctionSpace(sim.data['mesh'], family, degree,
-                                               constrained_domain=cd)
+            V_vec = dolfin.VectorFunctionSpace(
+                sim.data['mesh'], family, degree, constrained_domain=cd
+            )
             vec_func = dolfin.Function(V_vec)
             assigner = dolfin.FunctionAssigner(V_vec, [V] * sim.ndim)
             return vec_func, assigner
@@ -69,7 +70,9 @@ class XDMFFileIO():
         self._vel_func, self._vel_func_assigner = create_vec_func(sim.data['Vu'])
         self._vel_func.rename('u', 'Velocity')
         if sim.mesh_morpher.active:
-            self._mesh_vel_func, self._mesh_vel_func_assigner = create_vec_func(sim.data['Vmesh'])
+            self._mesh_vel_func, self._mesh_vel_func_assigner = create_vec_func(
+                sim.data['Vmesh']
+            )
             self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
 
     def _write_xdmf(self):
@@ -89,8 +92,8 @@ class XDMFFileIO():
         # Write the mesh velocities (used in ALE calculations)
         if self.simulation.mesh_morpher.active:
             self._mesh_vel_func_assigner.assign(
-                self._mesh_vel_func, list(
-                    self.simulation.data['u_mesh']))
+                self._mesh_vel_func, list(self.simulation.data['u_mesh'])
+            )
             self.xdmf_file.write(self._mesh_vel_func, t)
 
         # Write scalar functions

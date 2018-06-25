@@ -28,11 +28,21 @@ def define_penalty(mesh, P, k_min, k_max, boost_factor=3, exponent=1):
         geom_fac = max(geom_fac, gf)
     geom_fac = dolfin.MPI.max(dolfin.MPI.comm_world, float(geom_fac))
 
-    penalty = boost_factor * k_max**2 / k_min * (P + 1) * (P + ndim) / ndim * geom_fac**exponent
+    penalty = (
+        boost_factor
+        * k_max ** 2
+        / k_min
+        * (P + 1)
+        * (P + ndim)
+        / ndim
+        * geom_fac ** exponent
+    )
     return penalty
 
 
-def define_spatially_varying_penalty(simulation, P, k_min, k_max, boost_factor=3, exponent=1):
+def define_spatially_varying_penalty(
+    simulation, P, k_min, k_max, boost_factor=3, exponent=1
+):
     """
     Define the penalty parameter used in the Poisson equations
 
@@ -51,7 +61,7 @@ def define_spatially_varying_penalty(simulation, P, k_min, k_max, boost_factor=3
     ndim = mesh.geometry().dim()
 
     # Compute the constant part of the penalty
-    pconst = boost_factor * k_max**2 / k_min * (P + 1) * (P + ndim) / ndim
+    pconst = boost_factor * k_max ** 2 / k_min * (P + 1) * (P + ndim) / ndim
 
     # Compute the spatially varying penalty
     V = dolfin.FunctionSpace(mesh, 'DG', 0)
@@ -63,7 +73,7 @@ def define_spatially_varying_penalty(simulation, P, k_min, k_max, boost_factor=3
         area = sum(cell.facet_area(i) for i in range(ndim + 1))
         geom_fac = area / vol
         dof, = dm.cell_dofs(cell.index())
-        arr[dof] = pconst * geom_fac**exponent
+        arr[dof] = pconst * geom_fac ** exponent
 
     penalty_func.vector().set_local(arr)
     penalty_func.vector().apply('insert')
@@ -80,16 +90,22 @@ def define_spatially_varying_penalty(simulation, P, k_min, k_max, boost_factor=3
     return penalty_func
 
 
-def navier_stokes_stabilization_penalties(simulation, nu, velocity_continuity_factor_D12=0,
-                                          pressure_continuity_factor=0, no_coeff=False):
+def navier_stokes_stabilization_penalties(
+    simulation,
+    nu,
+    velocity_continuity_factor_D12=0,
+    pressure_continuity_factor=0,
+    no_coeff=False,
+):
     """
     Calculate the stabilization parameters needed in the DG scheme
     """
     ndim = simulation.ndim
     mpm = simulation.multi_phase_model
     mesh = simulation.data['mesh']
-    use_const = simulation.input.get_value('solver/spatially_constant_penalty',
-                                           False, 'bool')
+    use_const = simulation.input.get_value(
+        'solver/spatially_constant_penalty', False, 'bool'
+    )
 
     if no_coeff:
         mu_min = mu_max = 1.0
@@ -99,19 +115,27 @@ def navier_stokes_stabilization_penalties(simulation, nu, velocity_continuity_fa
     P = simulation.data['Vu'].ufl_element().degree()
     if use_const:
         simulation.log.info('    Using spatially constant elliptic penalty')
-        penalty_dS = define_penalty(mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0)
+        penalty_dS = define_penalty(
+            mesh, P, mu_min, mu_max, boost_factor=3, exponent=1.0
+        )
         penalty_ds = penalty_dS * 2
-        simulation.log.info('    DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds))
+        simulation.log.info(
+            '    DG SIP penalty:  dS %.1f  ds %.1f' % (penalty_dS, penalty_ds)
+        )
         penalty_dS = Constant(penalty_dS)
         penalty_ds = Constant(penalty_ds)
 
     else:
         simulation.log.info('    Using spatially varying elliptic penalties')
-        penalty_dS = define_spatially_varying_penalty(simulation, P, mu_min, mu_max,
-                                                      boost_factor=3, exponent=1.0)
+        penalty_dS = define_spatially_varying_penalty(
+            simulation, P, mu_min, mu_max, boost_factor=3, exponent=1.0
+        )
         penalty_ds = penalty_dS * 2
-        penalty_dS = dolfin.conditional(dolfin.lt(penalty_dS('+'), penalty_dS('-')),
-                                        penalty_dS('-'), penalty_dS('+'))
+        penalty_dS = dolfin.conditional(
+            dolfin.lt(penalty_dS('+'), penalty_dS('-')),
+            penalty_dS('-'),
+            penalty_dS('+'),
+        )
 
     if velocity_continuity_factor_D12:
         D12 = Constant([velocity_continuity_factor_D12] * ndim)

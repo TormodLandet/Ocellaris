@@ -25,7 +25,9 @@ class RaschiiWaveField(BaseWaveField):
         simulation.log.info('    Wave height: %r' % self.wave_height)
         simulation.log.info('    Wave approximation order: %r' % self.order)
         simulation.log.info('    Polynomial degree: %r' % self.polydeg)
-        simulation.log.info('    Colour proj. degree: %r' % self.colour_projection_degree)
+        simulation.log.info(
+            '    Colour proj. degree: %r' % self.colour_projection_degree
+        )
         simulation.log.info('    Raschii wave model: %s' % self.wave_model)
         simulation.log.info('    Raschii air model: %s' % self.air_model)
         self.construct_cpp_code()
@@ -39,31 +41,41 @@ class RaschiiWaveField(BaseWaveField):
         # Get global physical constants
         g = abs(sim.data['g'].values()[-1])
         if g == 0:
-            ocellaris_error('Waves require gravity',
-                            'The vertical component of gravity is 0')
+            ocellaris_error(
+                'Waves require gravity', 'The vertical component of gravity is 0'
+            )
         h = field_inp.get_value('depth', required_type='float')
         if h <= 0:
-            ocellaris_error('Waves require a still water depth',
-                            'The still water depth is %r' % h)
+            ocellaris_error(
+                'Waves require a still water depth', 'The still water depth is %r' % h
+            )
         self.wave_length = field_inp.get_value('wave_length', required_type='float')
         self.wave_height = field_inp.get_value('wave_height', required_type='float')
         self.stationary = self.wave_height == 0
         self.ramp_time = field_inp.get_value('ramp_time', 0, required_type='float')
 
-        self.still_water_pos = field_inp.get_value('still_water_position', required_type='float')
-        self.current_speed = field_inp.get_value('current_speed', 0, required_type='float')
+        self.still_water_pos = field_inp.get_value(
+            'still_water_position', required_type='float'
+        )
+        self.current_speed = field_inp.get_value(
+            'current_speed', 0, required_type='float'
+        )
         self.wind_speed = field_inp.get_value('wind_speed', 0, required_type='float')
         self.polydeg = field_inp.get_value(
-            'polynomial_degree', DEFAULT_POLYDEG, required_type='int')
+            'polynomial_degree', DEFAULT_POLYDEG, required_type='int'
+        )
         self.g = g
         self.h = h
         h_above = 3 * self.wave_height
-        self.h_above = field_inp.get_value('depth_above', h_above, required_type='float')
+        self.h_above = field_inp.get_value(
+            'depth_above', h_above, required_type='float'
+        )
         self.blending_height = field_inp.get_value('blending_height', None, 'float')
 
         # Project the colour function to DG0 (set degree to -1 to prevent this)
-        self.colour_projection_degree = field_inp.get_value('colour_projection_degree',
-                                                            COLOUR_PROJECTION_DEGREE, 'int')
+        self.colour_projection_degree = field_inp.get_value(
+            'colour_projection_degree', COLOUR_PROJECTION_DEGREE, 'int'
+        )
         self.colour_projection_form = None
 
     def construct_cpp_code(self):
@@ -76,9 +88,11 @@ class RaschiiWaveField(BaseWaveField):
         """
         # Get the requested classes and set up the required input
         WaveClass, AirClass = get_wave_model(self.wave_model, self.air_model)
-        wave_args = {'height': self.wave_height,
-                     'depth': self.h,
-                     'length': self.wave_length}
+        wave_args = {
+            'height': self.wave_height,
+            'depth': self.h,
+            'length': self.wave_length,
+        }
         if AirClass is not None:
             wave_args['air'] = AirClass(self.h_above, self.blending_height)
         if 'N' in WaveClass.required_input:

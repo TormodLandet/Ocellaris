@@ -51,10 +51,12 @@ class AnalyticalSolution(Solver):
         """
         sim = self.simulation
 
-        funcs = {'up0': sim.data['u0'] if 'u0' in sim.data else None,
-                 'up1': sim.data['u1'] if 'u1' in sim.data else None,
-                 'up2': sim.data['u2'] if 'u2' in sim.data else None,
-                 'p': sim.data['p']}
+        funcs = {
+            'up0': sim.data['u0'] if 'u0' in sim.data else None,
+            'up1': sim.data['u1'] if 'u1' in sim.data else None,
+            'up2': sim.data['u2'] if 'u2' in sim.data else None,
+            'p': sim.data['p'],
+        }
         ic = sim.input.get_value('initial_conditions', {}, 'dict(string:dict)')
         for name, info in ic.items():
             name = str(name)

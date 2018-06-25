@@ -49,6 +49,7 @@ def mk_limiter(degree, dim, use_cpp, comm_self=False):
 
     if True:
         from matplotlib import pyplot
+
         pyplot.figure()
         patches = dolfin.plot(phi)
         pyplot.colorbar(patches)
@@ -57,9 +58,17 @@ def mk_limiter(degree, dim, use_cpp, comm_self=False):
     return phi, lim
 
 
-@pytest.mark.parametrize("degree,dim,test_mpi", [(1, 2, True), (2, 3, True),
-                                                 (1, 2, False), (1, 3, False),
-                                                 (2, 2, False), (2, 3, False)][:2])
+@pytest.mark.parametrize(
+    "degree,dim,test_mpi",
+    [
+        (1, 2, True),
+        (2, 3, True),
+        (1, 2, False),
+        (1, 3, False),
+        (2, 2, False),
+        (2, 3, False),
+    ][:2],
+)
 def test_htlim_cpp_vs_py(degree, dim, test_mpi):
     """
     Apply the Hierarchical Taylor slope limiter with and without C++

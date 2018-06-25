@@ -8,7 +8,7 @@ class SlopeLimiterBoundaryConditions(object):
     BC_TYPE_NEUMANN = 2
     BC_TYPE_OTHER = 3
 
-    def __init__(self, simulation, field_name, output_name, dof_region_marks, V):
+    def __init__(self, simulation, field_name, dof_region_marks, V):
         """
         This class helps slope limiting of cells adjacent to the boundary by
         providing either values of the function and its derivatives at the
@@ -21,8 +21,8 @@ class SlopeLimiterBoundaryConditions(object):
 
         # Velocity BCs can be given for u itself (coupled components like slip
         # BCs) or for u0, u1 and u2 separately (e.g., for pure Dirichlet BCs)
-        if output_name in (field_name + '0', field_name + '1', field_name + '2'):
-            self.field_names = [field_name, output_name]
+        if field_name[-1] in '012':
+            self.field_names = [field_name[:-1], field_name]
         else:
             self.field_names = [field_name]
 
@@ -41,7 +41,7 @@ class SlopeLimiterBoundaryConditions(object):
         """
 
         self.dof_region_marks = {}  # Map from dof to ONE region
-        self.region_dofs = {}       # Map from region number to list of dofs
+        self.region_dofs = {}  # Map from region number to list of dofs
 
         for dof, regions in dof_region_marks.items():
             region = regions[-1]  # in case of multiple regions pick the last
@@ -52,7 +52,7 @@ class SlopeLimiterBoundaryConditions(object):
         self.active = active
 
     def _warn(self, message):
-        if not message in self._allready_warned:
+        if message not in self._allready_warned:
             self.simulation.log.warning(message)
             self._allready_warned.add(message)
 
@@ -119,8 +119,10 @@ class SlopeLimiterBoundaryConditions(object):
                     boundary_dof_type[dof] = self.BC_TYPE_OTHER
                 continue
             else:
-                self._warn('WARNING: Slope limiter found no BC for field %s '
-                           'in region %s' % (fname, boundary_region.name))
+                self._warn(
+                    'WARNING: Slope limiter found no BC for field %s '
+                    'in region %s' % (fname, boundary_region.name)
+                )
                 continue
 
             if bc_type == self.BC_TYPE_DIRICHLET and weak_dof_values is not None:
@@ -152,8 +154,10 @@ class SlopeLimiterBoundaryConditions(object):
                     boundary_dof_value[dof] = val[0]
 
             else:
-                self._warn('WARNING: Field %s has unsupported limiter BC %r in '
-                           'region %s' % (fname, type(value), boundary_region.name))
+                self._warn(
+                    'WARNING: Field %s has unsupported limiter BC %r in '
+                    'region %s' % (fname, type(value), boundary_region.name)
+                )
 
         timer.stop()
         return boundary_dof_type, boundary_dof_value

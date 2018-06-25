@@ -9,8 +9,9 @@ import pytest
 COMM = dolfin.MPI.comm_world
 RANK = COMM.rank
 SIZE = COMM.size
-skip_in_parallel = pytest.mark.skipif(SIZE > 1, reason='This test should '
-                                      'only be run in serial.')
+skip_in_parallel = pytest.mark.skipif(
+    SIZE > 1, reason='This test should ' 'only be run in serial.'
+)
 
 
 def all_ok(status):

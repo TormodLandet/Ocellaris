@@ -1,7 +1,14 @@
 import numpy
 import dolfin
-from ocellaris.utils import (facet_dofmap, sync_arrays, get_local, set_local,
-                             timeit, OcellarisCppExpression, OcellarisError)
+from ocellaris.utils import (
+    facet_dofmap,
+    sync_arrays,
+    get_local,
+    set_local,
+    timeit,
+    OcellarisCppExpression,
+    OcellarisError,
+)
 from .robin import OcellarisRobinBC
 from . import register_boundary_condition, BoundaryConditionCreator
 
@@ -22,16 +29,20 @@ def df_wrap(val, description, degree, sim):
         D = sim.ndim
         L = len(val)
         if L != D:
-            raise OcellarisError('Invalid length of list',
-                                 'BC list in "%r" must be length %d, is %d.'
-                                 % (description, D, L))
+            raise OcellarisError(
+                'Invalid length of list',
+                'BC list in "%r" must be length %d, is %d.' % (description, D, L),
+            )
 
         if all(isinstance(v, str) for v in val):
             # A list of C++ code strings
             return OcellarisCppExpression(sim, val, description, degree)
         else:
             # A mix of constants and (possibly) C++ strings
-            val = [df_wrap(v, description + ' item %d' % i, degree, sim) for i, v in enumerate(val)]
+            val = [
+                df_wrap(v, description + ' item %d' % i, degree, sim)
+                for i, v in enumerate(val)
+            ]
             return dolfin.as_vector(val)
 
 
@@ -51,30 +62,48 @@ class SlipLengthBoundary(BoundaryConditionCreator):
 
         length = inp_dict.get_value('slip_length', required_type='any')
         base = inp_dict.get_value('value', default_base, required_type='any')
-        self.register_slip_length_condition(var_name, length, base, subdomains, subdomain_id)
+        self.register_slip_length_condition(
+            var_name, length, base, subdomains, subdomain_id
+        )
 
-    def register_slip_length_condition(self, var_name, length, base, subdomains, subdomain_id):
+    def register_slip_length_condition(
+        self, var_name, length, base, subdomains, subdomain_id
+    ):
         """
         Add a Robin boundary condition to this variable
         """
         degree = self.func_space.ufl_element().degree()
-        df_blend = df_wrap(length, 'slip length for %s' % var_name, degree, self.simulation)
-        df_dval = df_wrap(base, 'boundary condition for %s' % var_name, degree, self.simulation)
+        df_blend = df_wrap(
+            length, 'slip length for %s' % var_name, degree, self.simulation
+        )
+        df_dval = df_wrap(
+            base, 'boundary condition for %s' % var_name, degree, self.simulation
+        )
         df_nval = 0.0
 
         # Store the boundary condition for use in the solver
-        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend, df_dval,
-                              df_nval, subdomains, subdomain_id)
+        bc = OcellarisRobinBC(
+            self.simulation,
+            self.func_space,
+            df_blend,
+            df_dval,
+            df_nval,
+            subdomains,
+            subdomain_id,
+        )
         bcs = self.simulation.data['robin_bcs']
         bcs.setdefault(var_name, []).append(bc)
 
-        self.simulation.log.info('    Constant slip length = %r (base %r) for %s'
-                                 % (length, base, var_name))
+        self.simulation.log.info(
+            '    Constant slip length = %r (base %r) for %s' % (length, base, var_name)
+        )
 
 
 @register_boundary_condition('InterfaceSlipLength')
 class InterfaceSlipLengthBoundary(BoundaryConditionCreator):
-    description = 'A variable slip length (Navier) boundary condition changing along the boundary'
+    description = (
+        'A variable slip length (Navier) boundary condition changing along the boundary'
+    )
 
     def __init__(self, simulation, var_name, inp_dict, subdomains, subdomain_id):
         """
@@ -99,30 +128,45 @@ class InterfaceSlipLengthBoundary(BoundaryConditionCreator):
         length = inp_dict.get_value('slip_length', required_type='any')
         base = inp_dict.get_value('value', default_base, required_type='float')
         self.register_slip_length_condition(
-            var_name, length, fac, factor_name, base, subdomains, subdomain_id)
+            var_name, length, fac, factor_name, base, subdomains, subdomain_id
+        )
 
     def register_slip_length_condition(
-            self, var_name, length, factor, factor_name, base, subdomains, subdomain_id):
+        self, var_name, length, factor, factor_name, base, subdomains, subdomain_id
+    ):
         """
         Add a Robin boundary condition to this variable
         """
         degree = self.func_space.ufl_element().degree()
-        df_length = df_wrap(length, 'slip length for %s' % var_name, degree, self.simulation)
+        df_length = df_wrap(
+            length, 'slip length for %s' % var_name, degree, self.simulation
+        )
         df_blend = df_length * factor
-        df_dval = df_wrap(base, 'boundary condition for %s' % var_name, degree, self.simulation)
+        df_dval = df_wrap(
+            base, 'boundary condition for %s' % var_name, degree, self.simulation
+        )
         df_nval = 0.0
 
         # Store the boundary condition for use in the solver
-        bc = OcellarisRobinBC(self.simulation, self.func_space, df_blend, df_dval,
-                              df_nval, subdomains, subdomain_id)
+        bc = OcellarisRobinBC(
+            self.simulation,
+            self.func_space,
+            df_blend,
+            df_dval,
+            df_nval,
+            subdomains,
+            subdomain_id,
+        )
         bcs = self.simulation.data['robin_bcs']
         bcs.setdefault(var_name, []).append(bc)
 
-        self.simulation.log.info('    Variable slip length %r (base %r) for %s'
-                                 % (factor_name, base, var_name))
+        self.simulation.log.info(
+            '    Variable slip length %r (base %r) for %s'
+            % (factor_name, base, var_name)
+        )
 
 
-class SlipFactorUpdater():
+class SlipFactorUpdater:
     def __init__(self, inp_dict, var_name):
         """
         This class makes sure the variable slip length is updated
@@ -131,24 +175,36 @@ class SlipFactorUpdater():
         """
         self.bc_var_name = var_name
         self.slip_factor_distance = inp_dict.get_value(
-            'slip_factor_distance', required_type='float')
-        self.slip_factor_degree = inp_dict.get_value('slip_factor_degree', 0, required_type='int')
+            'slip_factor_distance', required_type='float'
+        )
+        self.slip_factor_degree = inp_dict.get_value(
+            'slip_factor_degree', 0, required_type='int'
+        )
         self.slip_factor_name = inp_dict.get_value(
-            'slip_factor_name', 'slip_factor', required_type='string')
+            'slip_factor_name', 'slip_factor', required_type='string'
+        )
         self.scalar_field_level_set = inp_dict.get_value(
-            'scalar_field_level_set', 0.5, required_type='float')
-        self.scalar_field_name = inp_dict.get_value('scalar_field', 'c', required_type='string')
+            'scalar_field_level_set', 0.5, required_type='float'
+        )
+        self.scalar_field_name = inp_dict.get_value(
+            'scalar_field', 'c', required_type='string'
+        )
         self.custom_hook_point = inp_dict.get_value(
-            'custom_hook', 'MultiPhaseModelUpdated', required_type='string')
+            'custom_hook', 'MultiPhaseModelUpdated', required_type='string'
+        )
 
     def register(self, sim):
         if self.slip_factor_name in sim.data:
-            sim.log.info('    Found existing slip factor %r for %r. Reusing that'
-                         % (self.slip_factor_name, self.bc_var_name))
+            sim.log.info(
+                '    Found existing slip factor %r for %r. Reusing that'
+                % (self.slip_factor_name, self.bc_var_name)
+            )
             return self.slip_factor_name
 
         if self.slip_factor_degree != 0:
-            raise NotImplementedError('Slip factor must currently be piecewice constant')
+            raise NotImplementedError(
+                'Slip factor must currently be piecewice constant'
+            )
 
         # Create the slip factor field
         scalar_field = sim.data[self.scalar_field_name]
@@ -159,11 +215,15 @@ class SlipFactorUpdater():
 
         # We need to find where the interface intersects the boundary
         self.intersector = BoundaryLevelSetIntersector(
-            sim, scalar_field, self.scalar_field_level_set)
+            sim, scalar_field, self.scalar_field_level_set
+        )
 
         # Update the field before each time step
-        sim.hooks.add_custom_hook(self.custom_hook_point, self.update,
-                                  'Update slip length "%s"' % self.slip_factor_name)
+        sim.hooks.add_custom_hook(
+            self.custom_hook_point,
+            self.update,
+            'Update slip length "%s"' % self.slip_factor_name,
+        )
         return self.slip_factor_name
 
     @timeit.named('SlipFactorUpdater')
@@ -192,7 +252,7 @@ class SlipFactorUpdater():
                 d1 = mp - pos
                 d = numpy.dot(d1, d1)
                 min_dist = min(min_dist, d)
-            min_dist = min_dist**0.5
+            min_dist = min_dist ** 0.5
 
             # Update the slip factor for this facet
             dof = self.facet_dofs[fidx]
@@ -202,14 +262,14 @@ class SlipFactorUpdater():
             elif r < 2:
                 # Smooth transition from 1 to 0 when r goes from 1 to 2
                 # The slope in both ends is 0
-                arr[dof] = 2 * r**3 - 9 * r**2 + 12 * r - 4
+                arr[dof] = 2 * r ** 3 - 9 * r ** 2 + 12 * r - 4
             else:
                 arr[dof] = 0
 
         set_local(fac, arr, apply='insert')
-        #from matplotlib import pyplot
-        #from ocellaris.utils.plotting_trace import plot_matplotlib_dgt
-        #c = plot_matplotlib_dgt(fac)
+        # from matplotlib import pyplot
+        # from ocellaris.utils.plotting_trace import plot_matplotlib_dgt
+        # c = plot_matplotlib_dgt(fac)
         # pyplot.colorbar(c)
         # pyplot.savefig('debug.png')
 
@@ -228,8 +288,9 @@ class BoundaryLevelSetIntersector:
         conn_FC = sim.data['connectivity_FC']
 
         # Get external facing facets
-        self.boundary_facets = [(fidx, f) for fidx, f in enumerate(sim.data['facet_info'])
-                                if f.on_boundary]
+        self.boundary_facets = [
+            (fidx, f) for fidx, f in enumerate(sim.data['facet_info']) if f.on_boundary
+        ]
 
         # Scalar field info
         scalar_deg = scalar_field.ufl_element().degree()
@@ -262,8 +323,10 @@ class BoundaryLevelSetIntersector:
             if scalar_deg == 0:
                 sdof = sdofs[0]
             else:
-                raise NotImplementedError('Scalar field dof finder for degree '
-                                          '%d is not implemed yet' % scalar_deg)
+                raise NotImplementedError(
+                    'Scalar field dof finder for degree '
+                    '%d is not implemed yet' % scalar_deg
+                )
             self.facet_scalar_dofs[fidx] = sdof
             self.facet_is_owned[fidx] = sdof < num_dofs_owned
 

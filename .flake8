@@ -13,11 +13,17 @@ ignore =
     # W293: blank line contains whitespace
     # W391: blank line at end of file 
     W293, W391,
-    
+
     # We use import at the end of __init__ files which
     # use registration mackinery defined above
     # E402 module level import not at top of file
     E402,
-    
-    # Flake is not very smart, most of these are bogus
+
+    # Not PEP8 compliant:
+    # W503: line break before binary operator
+    # E203: whitespace before ':'
+    W503, E203,
+
+    # Flake is not very smart, most of these are bogus (__init__ API imports...)
+    # F401: module imported but unused
     F401

@@ -5,19 +5,21 @@ import dolfin
 
 ALWAYS_WRITE = 1e10
 NO_COLOR = '%s'
-RED = '\033[91m%s\033[0m'    # ANSI escape code Bright Red
+RED = '\033[91m%s\033[0m'  # ANSI escape code Bright Red
 YELLOW = '\033[93m%s\033[0m'  # ANSI escape code Bright Yellow
 
 
 class Log(object):
     # Names for the available log levels in Dolfin and Ocellaris
-    AVAILABLE_LOG_LEVELS = {'all': ALWAYS_WRITE,
-                            'critical': dolfin.LogLevel.CRITICAL,
-                            'error': dolfin.LogLevel.ERROR,
-                            'warning': dolfin.LogLevel.WARNING,
-                            'info': dolfin.LogLevel.INFO,
-                            'progress': dolfin.LogLevel.PROGRESS,
-                            'debug': dolfin.LogLevel.DEBUG}
+    AVAILABLE_LOG_LEVELS = {
+        'all': ALWAYS_WRITE,
+        'critical': dolfin.LogLevel.CRITICAL,
+        'error': dolfin.LogLevel.ERROR,
+        'warning': dolfin.LogLevel.WARNING,
+        'info': dolfin.LogLevel.INFO,
+        'progress': dolfin.LogLevel.PROGRESS,
+        'debug': dolfin.LogLevel.DEBUG,
+    }
 
     def __init__(self, simulation):
         self.simulation = simulation
@@ -42,11 +44,13 @@ class Log(object):
             # of them (bytes Mac OS X). Only shows memory usage for rank 0.
             import resource
             import datetime
+
             rusage = resource.getrusage(resource.RUSAGE_SELF)
             now = datetime.datetime.now().isoformat()
-            info = (('Current max RSS memory at timestep %d datetime %s is %r '
-                     'with %r maj. page faults') % (self.simulation.timestep,
-                                                    now, rusage.ru_maxrss, rusage.ru_majflt))
+            info = (
+                'Current max RSS memory at timestep %d datetime %s is %r '
+                'with %r maj. page faults'
+            ) % (self.simulation.timestep, now, rusage.ru_maxrss, rusage.ru_majflt)
             message += '\n' + info
 
         if self.log_level <= msg_log_level:
@@ -98,15 +102,24 @@ class Log(object):
             os.makedirs(output_dir)
 
         log_name = self.simulation.input.get_output_file_path('output/log_name', '.log')
-        log_on_all_ranks = self.simulation.input.get_value('output/log_on_all_ranks', False, 'bool')
-        log_enabled = self.simulation.input.get_value('output/log_enabled', True, 'bool')
+        log_on_all_ranks = self.simulation.input.get_value(
+            'output/log_on_all_ranks', False, 'bool'
+        )
+        log_enabled = self.simulation.input.get_value(
+            'output/log_enabled', True, 'bool'
+        )
         log_append_existing = self.simulation.input.get_value(
-            'output/log_append_to_existing_file', True, 'bool')
+            'output/log_append_to_existing_file', True, 'bool'
+        )
         stdout_on_all_ranks = self.simulation.input.get_value(
-            'output/stdout_on_all_ranks', False, 'bool')
-        stdout_enabled = self.simulation.input.get_value('output/stdout_enabled', True, 'bool')
+            'output/stdout_on_all_ranks', False, 'bool'
+        )
+        stdout_enabled = self.simulation.input.get_value(
+            'output/stdout_enabled', True, 'bool'
+        )
         self.show_memory_usage = self.simulation.input.get_value(
-            'output/show_memory_usage', False, 'bool')
+            'output/show_memory_usage', False, 'bool'
+        )
         rank = self.simulation.rank
 
         self.write_stdout = (rank == 0 or stdout_on_all_ranks) and stdout_enabled
@@ -125,11 +138,15 @@ class Log(object):
                     self.log_file = open(self.log_file_name, 'wt')
 
         # Set the Ocellaris log level
-        log_level = self.simulation.input.get_value('output/ocellaris_log_level', 'info')
+        log_level = self.simulation.input.get_value(
+            'output/ocellaris_log_level', 'info'
+        )
         self.simulation.log.set_log_level(self.AVAILABLE_LOG_LEVELS[log_level])
 
         # Set the Dolfin log level
-        df_log_level = self.simulation.input.get_value('output/dolfin_log_level', 'warning')
+        df_log_level = self.simulation.input.get_value(
+            'output/dolfin_log_level', 'warning'
+        )
         dolfin.set_log_level(self.AVAILABLE_LOG_LEVELS[df_log_level])
 
     def flush(self):

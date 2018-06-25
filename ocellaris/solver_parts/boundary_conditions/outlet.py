@@ -35,9 +35,11 @@ class OpenOutletBoundary(BoundaryConditionCreator):
         hydrostatic = inp_dict.get_value('hydrostatic', False, 'bool')
 
         if not var_name == 'u':
-            raise OcellarisError('Error in boundary condition',
-                                 'OpenOutletBoundary should be applied to '
-                                 '"u" only, p should be left out')
+            raise OcellarisError(
+                'Error in boundary condition',
+                'OpenOutletBoundary should be applied to '
+                '"u" only, p should be left out',
+            )
 
         # Store the boundary condition for use in the solver
         bc = OcellarisOutletBC(self.simulation, subdomain_id)

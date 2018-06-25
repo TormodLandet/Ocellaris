@@ -1,12 +1,26 @@
 import dolfin
-from dolfin import FiniteElement, VectorElement, MixedElement, FunctionSpace, VectorFunctionSpace
+from dolfin import (
+    FiniteElement,
+    VectorElement,
+    MixedElement,
+    FunctionSpace,
+    VectorFunctionSpace,
+)
 from dolfin import FacetNormal, TrialFunction, TestFunction, TestFunctions, Function
 from dolfin import dot, as_vector, dx, dS, ds, LocalSolver
 
 
-class VelocityBDMProjection():
-    def __init__(self, simulation, w, incompressibility_flux_type='central',
-                 D12=None, degree=None, use_bcs=True, use_nedelec=True):
+class VelocityBDMProjection:
+    def __init__(
+        self,
+        simulation,
+        w,
+        incompressibility_flux_type='central',
+        D12=None,
+        degree=None,
+        use_bcs=True,
+        use_nedelec=True,
+    ):
         """
         Implement equation 4a and 4b in "Two new techniques for generating exactly
         incompressible approximate velocities" by Bernardo Cocburn (2009)
@@ -41,14 +55,21 @@ class VelocityBDMProjection():
 
         if use_nedelec and pdeg > 1:
             a, L, V = self._setup_projection_nedelec(
-                w, incompressibility_flux_type, D12, use_bcs, pdeg, gdim)
+                w, incompressibility_flux_type, D12, use_bcs, pdeg, gdim
+            )
         elif gdim == 2 and pdeg == 1:
-            a, L, V = self._setup_dg1_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
+            a, L, V = self._setup_dg1_projection_2D(
+                w, incompressibility_flux_type, D12, use_bcs
+            )
         elif gdim == 2 and pdeg == 2:
-            a, L, V = self._setup_dg2_projection_2D(w, incompressibility_flux_type, D12, use_bcs)
+            a, L, V = self._setup_dg2_projection_2D(
+                w, incompressibility_flux_type, D12, use_bcs
+            )
         else:
-            raise NotImplementedError('VelocityBDMProjection does not support '
-                                      'degree %d and dimension %d' % pg)
+            raise NotImplementedError(
+                'VelocityBDMProjection does not support '
+                'degree %d and dimension %d' % pg
+            )
 
         # Pre-factorize matrices and store for usage in projection
         self.local_solver = LocalSolver(a, L)
@@ -192,7 +213,9 @@ class VelocityBDMProjection():
 
         return a, L, V
 
-    def _setup_projection_nedelec(self, w, incompressibility_flux_type, D12, use_bcs, pdeg, gdim):
+    def _setup_projection_nedelec(
+        self, w, incompressibility_flux_type, D12, use_bcs, pdeg, gdim
+    ):
         """
         Implement the BDM-like projection using Nedelec elements in the test function
         """

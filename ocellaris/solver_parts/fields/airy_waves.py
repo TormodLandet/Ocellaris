@@ -28,7 +28,9 @@ class AiryWaveField(BaseWaveField):
         simulation.log.info('    Current speed: %r' % self.current_speed)
         simulation.log.info('    Wind speed: %r' % self.wind_speed)
         simulation.log.info('    Polynomial degree: %r' % self.polydeg)
-        simulation.log.info('    Colour proj. degree: %r' % self.colour_projection_degree)
+        simulation.log.info(
+            '    Colour proj. degree: %r' % self.colour_projection_degree
+        )
         self.construct_cpp_code()
 
     def read_input(self, field_inp):
@@ -37,47 +39,69 @@ class AiryWaveField(BaseWaveField):
         # Get global physical constants
         g = abs(sim.data['g'].values()[-1])
         if g == 0:
-            ocellaris_error('Airy waves require gravity',
-                            'Cannot compute Airy waves when the vertical component of gravity is 0')
+            ocellaris_error(
+                'Airy waves require gravity',
+                'Cannot compute Airy waves when the vertical component of gravity is 0',
+            )
         h = field_inp.get_value('depth', required_type='float')
         if h <= 0:
-            ocellaris_error('Airy waves require a still water depth',
-                            'Cannot compute Airy waves when the still water depth is %r' % h)
+            ocellaris_error(
+                'Airy waves require a still water depth',
+                'Cannot compute Airy waves when the still water depth is %r' % h,
+            )
 
         # Get user specified wave data (user must specify one and only one of these)
         omegas = field_inp.get_value('omegas', None, required_type='list(float)')
         periods = field_inp.get_value('periods', None, required_type='list(float)')
-        wave_lengths = field_inp.get_value('wave_lengths', None, required_type='list(float)')
-        wave_numbers = field_inp.get_value('wave_numbers', None, required_type='list(float)')
+        wave_lengths = field_inp.get_value(
+            'wave_lengths', None, required_type='list(float)'
+        )
+        wave_numbers = field_inp.get_value(
+            'wave_numbers', None, required_type='list(float)'
+        )
 
         # Compute the missing data
-        self.omegas, self.periods, self.wave_lengths, self.wave_numbers = \
-            get_airy_wave_specs(g, h, omegas, periods, wave_lengths, wave_numbers)
+        self.omegas, self.periods, self.wave_lengths, self.wave_numbers = get_airy_wave_specs(
+            g, h, omegas, periods, wave_lengths, wave_numbers
+        )
         Nwave = len(self.omegas)
         self.stationary = Nwave == 0
         self.ramp_time = field_inp.get_value('ramp_time', 0, required_type='float')
 
-        self.still_water_pos = field_inp.get_value('still_water_position', required_type='float')
-        self.current_speed = field_inp.get_value('current_speed', 0, required_type='float')
+        self.still_water_pos = field_inp.get_value(
+            'still_water_position', required_type='float'
+        )
+        self.current_speed = field_inp.get_value(
+            'current_speed', 0, required_type='float'
+        )
         self.wind_speed = field_inp.get_value('wind_speed', 0, required_type='float')
         self.g = g
         self.h = h
-        self.thetas = field_inp.get_value('wave_phases', [0] * Nwave, required_type='list(float)')
+        self.thetas = field_inp.get_value(
+            'wave_phases', [0] * Nwave, required_type='list(float)'
+        )
         if not len(self.thetas) == Nwave:
-            ocellaris_error('Error with wave phase in Airy wave field input',
-                            'The length of the wave phase list does not match the number '
-                            'of waves specified, %d != %d' % (len(self.thetas), Nwave))
+            ocellaris_error(
+                'Error with wave phase in Airy wave field input',
+                'The length of the wave phase list does not match the number '
+                'of waves specified, %d != %d' % (len(self.thetas), Nwave),
+            )
         self.amplitudes = field_inp.get_value('amplitudes', required_type='list(float)')
         if not len(self.amplitudes) == Nwave:
-            ocellaris_error('Error with wave amplitudes in Airy wave field input',
-                            'The length of the wave amplitude list does not match the number '
-                            'of waves specified, %d != %d' % (len(self.amplitudes), Nwave))
+            ocellaris_error(
+                'Error with wave amplitudes in Airy wave field input',
+                'The length of the wave amplitude list does not match the number '
+                'of waves specified, %d != %d' % (len(self.amplitudes), Nwave),
+            )
         max_ampl = sum(abs(a) for a in self.amplitudes)
-        self.h_above = field_inp.get_value('depth_above', 2 * max_ampl, required_type='float')
+        self.h_above = field_inp.get_value(
+            'depth_above', 2 * max_ampl, required_type='float'
+        )
 
         # Project the colour function to DG0 (set degree to -1 to prevent this)
-        self.colour_projection_degree = field_inp.get_value('colour_projection_degree',
-                                                            COLOUR_PROJECTION_DEGREE, 'int')
+        self.colour_projection_degree = field_inp.get_value(
+            'colour_projection_degree', COLOUR_PROJECTION_DEGREE, 'int'
+        )
         self.colour_projection_form = None
 
     def construct_cpp_code(self):
@@ -124,23 +148,28 @@ class AiryWaveField(BaseWaveField):
             Nwave = len(self.omegas)
             for i in range(Nwave):
 
-                params = dict(a='(ramp * %r)' % self.amplitudes[i],
-                              w=self.omegas[i],
-                              k=self.wave_numbers[i],
-                              theta=self.thetas[i])
+                params = dict(
+                    a='(ramp * %r)' % self.amplitudes[i],
+                    w=self.omegas[i],
+                    k=self.wave_numbers[i],
+                    theta=self.thetas[i],
+                )
                 cppb = None
                 cppa = None
                 if name == 'elevation':
                     cppb = '{a} * sin({w} * t - {k} * X + {theta})'.format(**params)
                 elif name == 'uhoriz':
                     cppb = '{w} * {a} * cosh({k} * (Zp + h)) / sinh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(
-                        **params)
+                        **params
+                    )
                 elif name == 'uvert':
                     cppb = '{w} * {a} * sinh({k} * (Zp + h)) / sinh({k} * h) * cos({w} * t - {k} * X + {theta})'.format(
-                        **params)
+                        **params
+                    )
                 elif name in ('pdyn', 'ptot'):
                     cppb = 'rho_max * g * {a} * cosh({k} * (Zp + h)) / cosh({k} * h) * sin({w} * t - {k} * X + {theta})'.format(
-                        **params)
+                        **params
+                    )
 
                 if cppb is not None:
                     below_cpp.append(cppb)
@@ -153,16 +182,18 @@ class AiryWaveField(BaseWaveField):
 
             # Lines inside the lambda function. Some will be unused, but
             # the C++ compiler should be able to remove these easily
-            lines = ['double val;',
-                     'const double X = x[0];',
-                     'const double Z0 = x[%d];' % (self.simulation.ndim - 1),
-                     'const double swpos = %r;' % self.still_water_pos,
-                     'const double Z = Z0 - swpos;',
-                     'const double h = %r;' % self.h,
-                     'const double h_above = %r;' % self.h_above,
-                     'const double g = %r;' % self.g,
-                     'const double rho_min = %r;' % rho_min,
-                     'const double rho_max = %r;' % rho_max]
+            lines = [
+                'double val;',
+                'const double X = x[0];',
+                'const double Z0 = x[%d];' % (self.simulation.ndim - 1),
+                'const double swpos = %r;' % self.still_water_pos,
+                'const double Z = Z0 - swpos;',
+                'const double h = %r;' % self.h,
+                'const double h_above = %r;' % self.h_above,
+                'const double g = %r;' % self.g,
+                'const double rho_min = %r;' % rho_min,
+                'const double rho_max = %r;' % rho_max,
+            ]
 
             # Ramping up of amplitudes with time
             if self.ramp_time > 0:
@@ -220,7 +251,9 @@ class AiryWaveField(BaseWaveField):
             self._cpp[name] = lamcode % ('\n  '.join(lines))
 
 
-def get_airy_wave_specs(g, h, omegas=None, periods=None, wave_lengths=None, wave_numbers=None):
+def get_airy_wave_specs(
+    g, h, omegas=None, periods=None, wave_lengths=None, wave_numbers=None
+):
     """
     Give one of omegas, periods, wave_lengths or wave_numbers. Leave
     the others as None. The input must be a list. This function will
@@ -240,13 +273,20 @@ def get_airy_wave_specs(g, h, omegas=None, periods=None, wave_lengths=None, wave
         omega²/g = k * tanh(k * h)  (the linear dispersion relation)
 
     """
+
     def err_inp(name1, name2):
-        ocellaris_error('Airy wave input error',
-                        'You have given both %s and %s, please specify only one!'
-                        % (name1, name2))
+        ocellaris_error(
+            'Airy wave input error',
+            'You have given both %s and %s, please specify only one!' % (name1, name2),
+        )
 
     # Check input and make sure either omegas or wave_numers is defined
-    inp = dict(omegas=omegas, periods=periods, wave_lengths=wave_lengths, wave_numbers=wave_numbers)
+    inp = dict(
+        omegas=omegas,
+        periods=periods,
+        wave_lengths=wave_lengths,
+        wave_numbers=wave_numbers,
+    )
     if omegas is not None:
         for name, val in inp.items():
             if name is not 'omegas' and val is not None:
@@ -283,14 +323,15 @@ def calc_wave_number(g, h, omega, relax=0.5, eps=1e-15):
     """
     Relaxed Picard iterations to find k when omega is known
     """
-    k0 = omega**2 / g
+    k0 = omega ** 2 / g
     for _ in range(100):
-        k1 = omega**2 / g / tanh(k0 * h)
+        k1 = omega ** 2 / g / tanh(k0 * h)
         if abs(k1 - k0) < eps:
             break
         k0 = k1 * relax + k0 * (1 - relax)
     else:
-        ocellaris_error('calc_wave_number did not converge',
-                        'Input g=%r h=%r omega=%r, tolerance=%e'
-                        % (g, h, omega, eps))
+        ocellaris_error(
+            'calc_wave_number did not converge',
+            'Input g=%r h=%r omega=%r, tolerance=%e' % (g, h, omega, eps),
+        )
     return k1

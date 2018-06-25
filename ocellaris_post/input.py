@@ -1,4 +1,4 @@
-#encoding: utf8
+# encoding: utf8
 import os
 import collections
 import re
@@ -11,8 +11,10 @@ def read_yaml_input_file(file_name=None, yaml_string=None, error_func=None):
     YAML formated string. The user will get an error if the input is malformed
     """
     if error_func is None:
+
         def error_func(header, description):
             raise ValueError('%s\n%s' % (header, description))
+
     setup_yaml()
 
     def load_ocellaris_input(file_name=None, yaml_string=None):
@@ -80,7 +82,8 @@ def setup_yaml():
     # PyYAML bugfix to be able to read, e.g., 𝜏𝜀𝜁𝜃
     # See https://stackoverflow.com/a/44875714
     yaml.reader.Reader.NON_PRINTABLE = re.compile(
-        '[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]')
+        '[^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]'
+    )
 
 
 def search_for_file(file_name, inp_file_name, error_func):
@@ -110,9 +113,11 @@ def merge_nested_dicts(base, child):
     are treated as values and just replaced directly if found.
     """
     for k, v in child.items():
-        if (not k in base or
-            not isinstance(base[k], collections.abc.Mapping) or
-                not isinstance(v, collections.abc.Mapping)):
+        if (
+            not k in base
+            or not isinstance(base[k], collections.abc.Mapping)
+            or not isinstance(v, collections.abc.Mapping)
+        ):
             base[k] = v
         else:
             merge_nested_dicts(base[k], v)

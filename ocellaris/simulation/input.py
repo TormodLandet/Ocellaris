@@ -1,6 +1,6 @@
 import os
 import collections
-from ocellaris.utils import ocellaris_error, get_root_value
+from ocellaris.utils import ocellaris_error, OcellarisError, get_root_value
 from ocellaris_post import read_yaml_input_file
 import yaml
 
@@ -11,7 +11,20 @@ class UndefinedParameter(object):
         return '<UNDEFINED>'
 
 
+class KeyNotFound(OcellarisError):
+    pass
+
+
 UNDEFINED = UndefinedParameter()
+
+
+# Some things that could be better in this implementation
+# TODO: do not subclass OrderedDict! This makes it hard to get read/write
+#       sub-Input views of a part of the input tree
+# TODO: get_value should have required_type as the second argument. This
+#       would shorten the standard get-key-that-must-exist use case and
+#       passing 'any' would be a good documentation if the type can really
+#       be anything
 
 
 class Input(collections.OrderedDict):
@@ -48,8 +61,15 @@ class Input(collections.OrderedDict):
         self.clear()
         self.update(inp)
 
-    def get_value(self, path, default_value=UNDEFINED, required_type='any',
-                  mpi_root_value=False, safe_mode=False, required_length=None):
+    def get_value(
+        self,
+        path,
+        default_value=UNDEFINED,
+        required_type='any',
+        mpi_root_value=False,
+        safe_mode=False,
+        required_length=None,
+    ):
         """
         Get an input value by its path in the input dictionary
 
@@ -90,17 +110,22 @@ class Input(collections.OrderedDict):
                 try:
                     p = int(p)
                 except ValueError:
-                    ocellaris_error('List index not integer',
-                                    'Not a valid list index:  %s' % p)
+                    ocellaris_error(
+                        'List index not integer', 'Not a valid list index:  %s' % p
+                    )
             elif d is None or p not in d:
                 # This is an empty dict or a dict missing the key "p"
                 if default_value is UNDEFINED:
-                    ocellaris_error('Missing parameter on input file',
-                                    'Missing required input parameter:\n  %s' % pathstr)
+                    raise KeyNotFound(
+                        'Missing parameter on input file',
+                        'Missing required input parameter:\n  %s' % pathstr,
+                    )
                 else:
                     msg = '    No value set for "%s", using default value %r' % (
-                        pathstr, default_value)
-                    if not msg in self._already_logged:
+                        pathstr,
+                        default_value,
+                    )
+                    if msg not in self._already_logged:
                         self.simulation.log.debug(msg)
                         self._already_logged.add(msg)
                     if required_type == 'Input':
@@ -109,7 +134,9 @@ class Input(collections.OrderedDict):
             d = d[p]
 
         # Validate the input data and convert to the requested type
-        d = self.validate_and_convert(path, d, required_type, safe_mode, required_length)
+        d = self.validate_and_convert(
+            path, d, required_type, safe_mode, required_length
+        )
 
         # Get the value on the root process
         if mpi_root_value:
@@ -117,14 +144,15 @@ class Input(collections.OrderedDict):
 
         # Show what input values we use
         msg = '    Input value "%s" set to %r' % (pathstr, d)
-        if not msg in self._already_logged:
+        if msg not in self._already_logged:
             self.simulation.log.debug(msg)
             self._already_logged.add(msg)
 
         return d
 
-    def validate_and_convert(self, path, value, required_type='any',
-                             safe_mode=False, required_length=None):
+    def validate_and_convert(
+        self, path, value, required_type='any', safe_mode=False, required_length=None
+    ):
         """
         Verify that the given value has an appropriate type. Returns
         the value if it is OK, else calls ocellaris_error
@@ -146,9 +174,11 @@ class Input(collections.OrderedDict):
             value = eval_python_expression(self.simulation, value, pathstr, safe_mode)
 
             if not isinstance(value, classes):
-                ocellaris_error('Malformed data on input file',
-                                'Parameter %s should be of type %s,\nfound %r %r' %
-                                (pathstr, required_type, value, type(value)))
+                ocellaris_error(
+                    'Malformed data on input file',
+                    'Parameter %s should be of type %s,\nfound %r %r'
+                    % (pathstr, required_type, value, type(value)),
+                )
             return value
 
         def check_dict(d, keytype, valtype):
@@ -176,9 +206,11 @@ class Input(collections.OrderedDict):
                 d_new.append(check_isinstance(val, valtype))
 
             if required_length is not None and len(d_new) != required_length:
-                ocellaris_error('Malformed data on input file',
-                                'Parameter %s should be length %r found %r' %
-                                (pathstr, required_length, len(d_new)))
+                ocellaris_error(
+                    'Malformed data on input file',
+                    'Parameter %s should be length %r found %r'
+                    % (pathstr, required_length, len(d_new)),
+                )
             return d_new
 
         # Get validation function according to required data type
@@ -187,7 +219,10 @@ class Input(collections.OrderedDict):
         dict_types = (dict, collections.OrderedDict)
         anytype = (int, float, str, list, tuple, dict, collections.OrderedDict, bool)
         if required_type == 'bool':
-            def validate_and_convert(d): return check_isinstance(d, bool)
+
+            def validate_and_convert(d):
+                return check_isinstance(d, bool)
+
         elif required_type == 'float':
             # The YAML parser annoyingly thinks 1e-3 is a string (while 1.0e-3 is a float)
             def validate_and_convert(d):
@@ -197,41 +232,81 @@ class Input(collections.OrderedDict):
                     except ValueError:
                         pass
                 return check_isinstance(d, number)
+
         elif required_type == 'int':
-            def validate_and_convert(d): return check_isinstance(d, int)
+
+            def validate_and_convert(d):
+                return check_isinstance(d, int)
+
         elif required_type == 'string':
+
             def validate_and_convert(d):
                 d = check_isinstance(d, str)
                 # SWIG does not like Python 2 Unicode objects
                 return str(d)
+
         elif required_type == 'string!':
+
             def validate_and_convert(d):
                 d = check_isinstance(d, (str, int, float))
                 return str(d)
+
         elif required_type == 'Input':
+
             def validate_and_convert(d):
                 d = check_isinstance(d, dict_types)
                 return Input(self.simulation, d, basepath=pathstr)
+
         elif required_type == 'dict(string:any)':
-            def validate_and_convert(d): return check_dict(d, str, anytype)
+
+            def validate_and_convert(d):
+                return check_dict(d, str, anytype)
+
         elif required_type == 'dict(string:basic)':
-            def validate_and_convert(d): return check_dict(d, str, basic)
+
+            def validate_and_convert(d):
+                return check_dict(d, str, basic)
+
         elif required_type == 'dict(string:dict)':
-            def validate_and_convert(d): return check_dict(d, str, dict_types)
+
+            def validate_and_convert(d):
+                return check_dict(d, str, dict_types)
+
         elif required_type == 'dict(string:list)':
-            def validate_and_convert(d): return check_dict(d, str, list)
+
+            def validate_and_convert(d):
+                return check_dict(d, str, list)
+
         elif required_type == 'dict(string:float)':
-            def validate_and_convert(d): return check_dict(d, str, number)
+
+            def validate_and_convert(d):
+                return check_dict(d, str, number)
+
         elif required_type == 'list(float)':
-            def validate_and_convert(d): return check_list(d, number)
+
+            def validate_and_convert(d):
+                return check_list(d, number)
+
         elif required_type == 'list(int)':
-            def validate_and_convert(d): return check_list(d, int)
+
+            def validate_and_convert(d):
+                return check_list(d, int)
+
         elif required_type == 'list(string)':
-            def validate_and_convert(d): return check_list(d, str)
+
+            def validate_and_convert(d):
+                return check_list(d, str)
+
         elif required_type == 'list(dict)':
-            def validate_and_convert(d): return check_list(d, dict_types)
+
+            def validate_and_convert(d):
+                return check_list(d, dict_types)
+
         elif required_type == 'any':
-            def validate_and_convert(d): return check_isinstance(d, anytype)
+
+            def validate_and_convert(d):
+                return check_isinstance(d, anytype)
+
         else:
             raise ValueError('Unknown required_type %s' % required_type)
 
@@ -257,12 +332,41 @@ class Input(collections.OrderedDict):
                 try:
                     p = int(p)
                 except ValueError:
-                    ocellaris_error('List index not integer',
-                                    'Not a valid list index:  %s' % p)
+                    raise KeyNotFound(
+                        'List index not integer', 'Not a valid list index:  %s' % p
+                    )
             elif p not in d:
-                d[p] = {}
+                d[p] = collections.OrderedDict()
             d = d[p]
         d[path[-1]] = value
+
+    def has_path(self, path):
+        """
+        Checks if there is something (terminal or nested dict) at path
+        """
+        try:
+            self.get_value(path)
+            return True
+        except KeyNotFound:
+            return False
+
+    def ensure_path(self, path):
+        """
+        Ensures that get_value(path) will succeed.
+
+        Returns the object at the given path.
+        """
+        # Allow path to be a list or a "/" separated string
+        if isinstance(path, str):
+            path = path.split('/')
+
+        # Return early if the the path already exists
+        if self.has_path(path):
+            return self.get_value(path)
+
+        # Create the path and return the created object
+        self.set_value(path, collections.OrderedDict())
+        return self.get_value(path)
 
     def get_output_file_path(self, path, default_value=UNDEFINED):
         """
@@ -295,7 +399,9 @@ class Input(collections.OrderedDict):
             return pth2
         self.simulation.log.debug('File does not exist: %s' % pth2)
 
-        ocellaris_error('File not found', 'The specified file "%s" was not found' % file_name)
+        ocellaris_error(
+            'File not found', 'The specified file "%s" was not found' % file_name
+        )
 
     def __str__(self):
         inp = collections.OrderedDict(self.items())
@@ -312,8 +418,10 @@ def eval_python_expression(simulation, value, pathstr, safe_mode=False):
         return value
 
     if safe_mode:
-        ocellaris_error('Cannot have Python expression here',
-                        'Not allowed to have Python expression here:  %s' % pathstr)
+        ocellaris_error(
+            'Cannot have Python expression here',
+            'Not allowed to have Python expression here:  %s' % pathstr,
+        )
 
     # remove "py$" prefix
     expr = value[3:]
@@ -322,13 +430,15 @@ def eval_python_expression(simulation, value, pathstr, safe_mode=False):
     eval_locals = {}
 
     import math
+
     for name in dir(math):
         if not name.startswith('_'):
             eval_locals[name] = getattr(math, name)
 
     global_inp = simulation.input
-    user_constants = global_inp.get_value('user_code/constants', {}, 'dict(string:basic)',
-                                          safe_mode=True)
+    user_constants = global_inp.get_value(
+        'user_code/constants', {}, 'dict(string:basic)', safe_mode=True
+    )
     for name, const_value in user_constants.items():
         eval_locals[name] = const_value
 

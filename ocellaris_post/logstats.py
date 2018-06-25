@@ -21,7 +21,7 @@ from . import textplot
 
 
 # See https://en.wikipedia.org/wiki/ANSI_escape_code
-RED = '\033[91m%s\033[0m'    # ANSI escape code Bright Red
+RED = '\033[91m%s\033[0m'  # ANSI escape code Bright Red
 YELLOW = '\033[93m%s\033[0m'  # ANSI escape code Bright Yellow
 BLUE = '\033[94m%s\033[0m'  # ANSI escape code Bright Blue
 
@@ -51,8 +51,10 @@ def get_filtered_ts(results, ts_name, sieve=slice(None, None, None), plotargs=No
         x = results.reports_x['tstime']
         y = results.reports_x['tstime']
     else:
-        warn('\nWARNING: the time series %r is not present %s' %
-             (ts_name, results.file_name))
+        warn(
+            '\nWARNING: the time series %r is not present %s'
+            % (ts_name, results.file_name)
+        )
         return None, None
 
     if plotargs is None:
@@ -115,8 +117,10 @@ def show_logstats(results, sieve=slice(None, None, None), plotargs=None):
     print_stats_table(results.file_name, stats, maxlen)
 
     if None not in (results.ndofs, results.ncpus):
-        print('    Running on %d CPUs with a total of %d DOFs (%d per CPU)'
-              % (results.ncpus, results.ncpus, results.ndofs / results.ncpus))
+        print(
+            '    Running on %d CPUs with a total of %d DOFs (%d per CPU)'
+            % (results.ncpus, results.ncpus, results.ndofs / results.ncpus)
+        )
 
 
 def show_comparison(all_results, ts_name, sieve=slice(None, None, None), plotargs=None):
@@ -134,7 +138,7 @@ def show_comparison(all_results, ts_name, sieve=slice(None, None, None), plotarg
             continue
 
         # Get a short name with CPU number (for comparing timings)
-        name = res.file_name[len(prefix):]
+        name = res.file_name[len(prefix) :]
         if name.startswith('/'):
             name = name[1:]
         name = '%s (%r cpus)' % (name, res.ncpus)
@@ -163,22 +167,47 @@ def parse_args(argv):
     """
     Parse arguments
     """
-    parser = argparse.ArgumentParser(prog='ocellaris_logstats',
-                                     description='Ocellaris log statistics post processor')
-    parser.add_argument('resfile', nargs='+',
-                        help='Name of log or restartfile')
-    parser.add_argument('--plot', '-p', metavar='TSNAME', action='append', default=[],
-                        help='Plot the given time series (command line output only)')
-    parser.add_argument('--restrict', '-r', metavar='TSNAME', action='append', default=[],
-                        help='Only show info about the selected time series')
+    parser = argparse.ArgumentParser(
+        prog='ocellaris_logstats', description='Ocellaris log statistics post processor'
+    )
+    parser.add_argument('resfile', nargs='+', help='Name of log or restartfile')
+    parser.add_argument(
+        '--plot',
+        '-p',
+        metavar='TSNAME',
+        action='append',
+        default=[],
+        help='Plot the given time series (command line output only)',
+    )
+    parser.add_argument(
+        '--restrict',
+        '-r',
+        metavar='TSNAME',
+        action='append',
+        default=[],
+        help='Only show info about the selected time series',
+    )
 
     # Data selection
-    select = parser.add_argument_group('Data selection', 'Select data to be included in '
-                                       'statistics and plots')
-    select.add_argument('--skip-first', '-s', type=int, metavar='N', default=None,
-                        help='Skip the first N data points')
-    select.add_argument('--skip-last', '-e', type=int, metavar='N', default=None,
-                        help='Skip the last N data points')
+    select = parser.add_argument_group(
+        'Data selection', 'Select data to be included in ' 'statistics and plots'
+    )
+    select.add_argument(
+        '--skip-first',
+        '-s',
+        type=int,
+        metavar='N',
+        default=None,
+        help='Skip the first N data points',
+    )
+    select.add_argument(
+        '--skip-last',
+        '-e',
+        type=int,
+        metavar='N',
+        default=None,
+        help='Skip the last N data points',
+    )
 
     # Plot setup
     axargs = parser.add_argument_group('Plot controls', 'Control text plot visuals')
@@ -217,12 +246,16 @@ def main(args=None):
     print('Ocellaris result file statistics')
     print('================================')
 
-    sieve = slice(args.skip_first,
-                  -args.skip_last if args.skip_last is not None else None,
-                  None)
-    plotargs = {'xmin': args.xmin, 'xmax': args.xmax,
-                'ymin': args.ymin, 'ymax': args.ymax,
-                'figsize': (100, 15)}
+    sieve = slice(
+        args.skip_first, -args.skip_last if args.skip_last is not None else None, None
+    )
+    plotargs = {
+        'xmin': args.xmin,
+        'xmax': args.xmax,
+        'ymin': args.ymin,
+        'ymax': args.ymax,
+        'figsize': (100, 15),
+    }
 
     allres = []
     for fn in file_names:

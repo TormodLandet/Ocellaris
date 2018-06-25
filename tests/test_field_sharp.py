@@ -27,12 +27,12 @@ def test_sharp_field_dg0():
     sim.input.read_yaml(yaml_string=INP)
     mesh = dolfin.UnitCubeMesh(2, 2, 2)
     sim.set_mesh(mesh)
-    
+
     # Sharp jump at the cell boundaries
     field_inp = sim.input.get_value('fields/0', required_type='Input')
     f = SharpField(sim, field_inp).get_variable('rho')
     check_vector_value_histogram(f.vector(), {1: 24, 1000: 24}, round_digits=6)
-    
+
     # Sharp jump in the middle of the cells
     field_inp['z'] = 0.25
     f = SharpField(sim, field_inp).get_variable('rho')
@@ -43,13 +43,13 @@ def test_sharp_field_dg0():
             assert v == 8
         else:
             assert v == 24
-    
+
     # Non-projected sharp jump between cells
     field_inp['local_projection'] = False
     field_inp['z'] = 0.50
     f = SharpField(sim, field_inp).get_variable('rho')
     check_vector_value_histogram(f.vector(), {1: 24, 1000: 24}, round_digits=6)
-    
+
     # Non-projected sharp jump the middle of the cells
     field_inp['z'] = 0.25
     f = SharpField(sim, field_inp).get_variable('rho')

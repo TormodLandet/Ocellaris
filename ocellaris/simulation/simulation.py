@@ -1,7 +1,11 @@
 import time
 import dolfin
 from ocellaris.utils import timeit, shift_fields
-from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
+from ocellaris.utils.geometry import (
+    init_connectivity,
+    precompute_cell_data,
+    precompute_facet_data,
+)
 from .hooks import Hooks
 from .input import Input
 from .reporting import Reporting
@@ -40,11 +44,11 @@ class Simulation(object):
         # Several parts of the code wants to know these things,
         # so we keep them in a central place
         self.ndim = 0
-        self.timestep = 0           # Number of timesteps since beginning of sim
-        self.timestep_restart = 0   # Number of timesteps since last restart
+        self.timestep = 0  # Number of timesteps since beginning of sim
+        self.timestep_restart = 0  # Number of timesteps since last restart
         self.time = 0.0
         self.dt = 0.0
-        self.restarted = False      # Starting from a restart file or from inp
+        self.restarted = False  # Starting from a restart file or from inp
         self.ndofs = 0
 
         # These will be filled out when .setup() is configuring the Navier-Stokes
@@ -66,7 +70,9 @@ class Simulation(object):
         boundary conditions, initial condition, function spaces, runtime
         post-processing probes, program and user defined hooks ...
         """
-        self.flush_interval = self.input.get_value('output/flush_interval', FLUSH_INTERVAL, 'float')
+        self.flush_interval = self.input.get_value(
+            'output/flush_interval', FLUSH_INTERVAL, 'float'
+        )
         setup_simulation(self)
 
     def set_mesh(self, mesh, mesh_facet_regions=None):
@@ -102,7 +108,7 @@ class Simulation(object):
         # Work around missing consensus on what CellDiameter is for bendy cells
         mesh = self.data['mesh']
         if mesh.ufl_coordinate_element().degree() > 1:
-            h = dolfin.CellVolume(mesh)**(1 / mesh.topology().dim())
+            h = dolfin.CellVolume(mesh) ** (1 / mesh.topology().dim())
         else:
             h = dolfin.CellDiameter(mesh)
         self.data['h'] = h

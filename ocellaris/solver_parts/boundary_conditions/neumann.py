@@ -125,7 +125,9 @@ class CppCodedNeumannBoundary(BoundaryConditionCreator):
         """
         description = 'boundary condititon for %s' % var_name
         P = self.func_space.ufl_element().degree()
-        expr = OcellarisCppExpression(self.simulation, cpp_code, description, P, update=True)
+        expr = OcellarisCppExpression(
+            self.simulation, cpp_code, description, P, update=True
+        )
         bc = OcellarisNeumannBC(self.simulation, expr, subdomain_id)
         bcs = self.simulation.data['neumann_bcs']
         bcs.setdefault(var_name, []).append(bc)

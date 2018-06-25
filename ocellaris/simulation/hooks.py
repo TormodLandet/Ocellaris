@@ -208,13 +208,17 @@ class Hooks(object):
         Show all registered hooks
         """
         show = self.simulation.log.info
-        all_hooks = [('Pre-simulation', self._pre_simulation_hooks),
-                     ('Pre-timestep', self._pre_timestep_hooks),
-                     ('Post-timestep:', self._post_timestep_hooks),
-                     ('Post-simulation', self._post_simulation_hooks),
-                     ('Matrix ready', self._matrix_ready_hooks)]
-        all_hooks.extend(('Custom hook "%s"' % name, hooks)
-                         for name, hooks in self._custom_hooks.items())
+        all_hooks = [
+            ('Pre-simulation', self._pre_simulation_hooks),
+            ('Pre-timestep', self._pre_timestep_hooks),
+            ('Post-timestep:', self._post_timestep_hooks),
+            ('Post-simulation', self._post_simulation_hooks),
+            ('Matrix ready', self._matrix_ready_hooks),
+        ]
+        all_hooks.extend(
+            ('Custom hook "%s"' % name, hooks)
+            for name, hooks in self._custom_hooks.items()
+        )
 
         show('\nRegistered hooks:')
         for hook_type, hooks in all_hooks:

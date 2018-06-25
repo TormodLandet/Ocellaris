@@ -1,7 +1,9 @@
 import dolfin
 from ocellaris import Simulation, setup_simulation
-from ocellaris.solver_parts.boundary_conditions import \
-    get_dof_region_marks, mark_cell_layers
+from ocellaris.solver_parts.boundary_conditions import (
+    get_dof_region_marks,
+    mark_cell_layers,
+)
 from helpers import all_ok, mpi_print, mpi_int_sum
 
 
@@ -70,7 +72,7 @@ def test_get_dof_region_marks():
         for mark in marks:
             num_in_region[mark] += 1
 
-    assert(all_ok(ok))
+    assert all_ok(ok)
     assert mpi_int_sum(num_in_region[0]) == 30 + 29 * 2
     assert mpi_int_sum(num_in_region[1]) == 30
 

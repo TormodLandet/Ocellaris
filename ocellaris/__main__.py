@@ -6,6 +6,7 @@ import platform
 
 # Restore signals in non-interactive background shells
 import signal
+
 signal.signal(signal.SIGINT, signal.default_int_handler)
 signal.signal(signal.SIGTERM, signal.default_int_handler)
 signal.signal(signal.SIGQUIT, signal.default_int_handler)
@@ -18,6 +19,7 @@ def main(inputfile, input_override):
     if os.environ.get('OCELLARIS_SUPER_DEBUG', False):
         print('FOUND OCELLARIS_SUPER_DEBUG in environment')
         from ocellaris.utils.debug import enable_super_debug
+
         enable_super_debug()
 
     sim = Simulation()
@@ -80,7 +82,7 @@ def override_input_variables(simulation, input_override):
     for overrider in input_override:
         # Overrider is something like "time/dt=0.1"
         path = overrider.split('=')[0]
-        value = overrider[len(path) + 1:]
+        value = overrider[len(path) + 1 :]
 
         # Find the correct input sub-dictionary
         path_elements = path.split('/')
@@ -104,18 +106,30 @@ def override_input_variables(simulation, input_override):
 
         # Update the input sub-dictionary
         base[idx] = py_value
-        simulation.log.info('Command line overriding %r in %s to %r' % (idx, base_path, py_value))
+        simulation.log.info(
+            'Command line overriding %r in %s to %r' % (idx, base_path, py_value)
+        )
 
 
 def run_from_console():
     # Get command line arguments
     import argparse
-    parser = argparse.ArgumentParser(prog='ocellaris',
-                                     description='Discontinuous Galerkin Navier-Stokes solver')
-    parser.add_argument('inputfile', help='Name of file containing simulation '
-                        'configuration on the Ocellaris YAML input format')
-    parser.add_argument('--set-input', '-i', action='append', help='Set an input key. Can be added several '
-                        'times to set multiple input keys. Example: --set-input time/dt=0.1')
+
+    parser = argparse.ArgumentParser(
+        prog='ocellaris', description='Discontinuous Galerkin Navier-Stokes solver'
+    )
+    parser.add_argument(
+        'inputfile',
+        help='Name of file containing simulation '
+        'configuration on the Ocellaris YAML input format',
+    )
+    parser.add_argument(
+        '--set-input',
+        '-i',
+        action='append',
+        help='Set an input key. Can be added several '
+        'times to set multiple input keys. Example: --set-input time/dt=0.1',
+    )
 
     args = parser.parse_args()
 

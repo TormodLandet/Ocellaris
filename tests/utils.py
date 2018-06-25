@@ -9,7 +9,7 @@ def check_vector_value_histogram(vec, expected, comm=None, round_digits=0):
     """
     if comm is None:
         comm = dolfin.MPI.comm_world
-    
+
     hist = get_vector_value_histogram(vec, comm)
     print(hist, expected)
     assert len(hist) == len(expected)
@@ -27,14 +27,14 @@ def get_vector_value_histogram(vec, comm=None):
     """
     if comm is None:
         comm = dolfin.MPI.comm_world
-    
+
     hist = {}
     for v in vec.get_local():
         if v in hist:
             hist[v] += 1
         else:
             hist[v] = 1
-    
+
     all_hist = comm.gather(hist)
     hist2 = None
     if comm.rank == 0:

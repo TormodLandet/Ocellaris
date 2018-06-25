@@ -142,8 +142,7 @@ class InspectorPersistence(object):
             lables[res.file_name] = res.label
 
         with open(self.cache_file_name, 'wt') as f:
-            yaml.safe_dump(self._cached_data, f,
-                           allow_unicode=True)
+            yaml.safe_dump(self._cached_data, f, allow_unicode=True)
 
         self.timer = None
 

@@ -9,6 +9,7 @@ class VOFMixin(object):
     "get_colour_function(k)" and can also redefine the boolean property that
     controls the way mu is calculated, "calculate_mu_directly_from_colour_function".
     """
+
     calculate_mu_directly_from_colour_function = True
     default_polynomial_degree_colour = 0
 
@@ -16,10 +17,16 @@ class VOFMixin(object):
     def create_function_space(cls, simulation):
         mesh = simulation.data['mesh']
         cd = simulation.data['constrained_domain']
-        Vc_name = simulation.input.get_value('multiphase_solver/function_space_colour',
-                                             'Discontinuous Lagrange', 'string')
-        Pc = simulation.input.get_value('multiphase_solver/polynomial_degree_colour',
-                                        cls.default_polynomial_degree_colour, 'int')
+        Vc_name = simulation.input.get_value(
+            'multiphase_solver/function_space_colour',
+            'Discontinuous Lagrange',
+            'string',
+        )
+        Pc = simulation.input.get_value(
+            'multiphase_solver/polynomial_degree_colour',
+            cls.default_polynomial_degree_colour,
+            'int',
+        )
         Vc = FunctionSpace(mesh, Vc_name, Pc, constrained_domain=cd)
         simulation.data['Vc'] = Vc
         simulation.ndofs += Vc.dim()
@@ -28,7 +35,9 @@ class VOFMixin(object):
         """
         Return the colour function on timestep t^{n+k}
         """
-        raise NotImplementedError('The get_colour_function method must be implemented by subclass!')
+        raise NotImplementedError(
+            'The get_colour_function method must be implemented by subclass!'
+        )
 
     def get_density(self, k=None, c=None):
         """

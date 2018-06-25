@@ -149,4 +149,5 @@ OCELLARIS_ICON = PyEmbeddedImage(
     "N/4toh9i24WX48Xbtqz2PcltAD5pmG+cnqXh2p2I/yvX5jrtWCPgIgVeCeCnALyCiGrjpzQu"
     "3Y3DvQtbc+bbwBGy5VmOs36jpX04zBLR7xPR1SGMm72sM1DoEwT8moJua7W4/8Kt8sdItyPo"
     "Hn7q5eeFrryo05Zf7LTjJ7vt+OluV05aW8Tzld27l9d/d9rx6k477u2048FOO/775cPRAse4"
-    "z/+3stD90VUb4Cf7+2cr3Z+wwO5PAPn/AJggLIykhrEgAAAAAElFTkSuQmCC")
+    "z/+3stD90VUb4Cf7+2cr3Z+wwO5PAPn/AJggLIykhrEgAAAAAElFTkSuQmCC"
+)

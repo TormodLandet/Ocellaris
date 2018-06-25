@@ -11,9 +11,13 @@ simulations
 """
 import numpy
 import matplotlib
+
 matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas, NavigationToolbar2WxAgg as NavigationToolbar
+from matplotlib.backends.backend_wxagg import (
+    FigureCanvasWxAgg as FigureCanvas,
+    NavigationToolbar2WxAgg as NavigationToolbar,
+)
 import wx
 from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 from .widget_shared import PlotLimSelectors, PlotCustomLine
@@ -61,7 +65,8 @@ class OcellarisStairsPanel(wx.Panel):
         self.axes = self.fig.add_subplot(111)
         toolbar = NavigationToolbar(self.canvas)
         self.plot_cursor_position_info = wx.StaticText(
-            self, style=wx.ALIGN_RIGHT, size=(250, -1), label='')
+            self, style=wx.ALIGN_RIGHT, size=(250, -1), label=''
+        )
         self.canvas.mpl_connect('motion_notify_event', self.mouse_position_on_plot)
         v.Add(self.canvas, proportion=1, flag=wx.EXPAND)
         h = wx.BoxSizer(wx.HORIZONTAL)
@@ -77,78 +82,84 @@ class OcellarisStairsPanel(wx.Panel):
 
         L = 0
         gbs.Add(
-            wx.StaticText(
-                self, label='Control report:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Control report:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.control_selector = wx.Choice(self)
         self.control_selector.Bind(wx.EVT_CHOICE, self.control_selected)
         gbs.Add(
             self.control_selector,
             flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(
-                L,
-                1),
-            span=(
-                1,
-                1))
+            pos=(L, 1),
+            span=(1, 1),
+        )
 
         gbs.Add(
-            wx.StaticText(
-                self, label='Control value:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 2), span=(
-                1, 1))
+            wx.StaticText(self, label='Control value:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 2),
+            span=(1, 1),
+        )
         self.control_value = wx.Choice(self)
         self.control_value.Bind(wx.EVT_CHOICE, self.control_value_selected)
         gbs.Add(
             self.control_value,
             flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(
-                L,
-                3),
-            span=(
-                1,
-                1))
+            pos=(L, 3),
+            span=(1, 1),
+        )
 
         L += 1
         gbs.Add(
-            wx.StaticText(
-                self, label='Plot report:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Plot report:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.report_selector = wx.Choice(self)
         self.report_selector.Bind(wx.EVT_CHOICE, self.report_selected)
         gbs.Add(
             self.report_selector,
             flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(
-                L,
-                1),
-            span=(
-                1,
-                3))
+            pos=(L, 1),
+            span=(1, 3),
+        )
 
         # Plot title
         L += 1
         gbs.Add(
-            wx.StaticText(
-                self, label='Plot title:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Plot title:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.title = wx.TextCtrl(self)
         self.title.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(self.title, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 3))
+        gbs.Add(
+            self.title,
+            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 1),
+            span=(1, 3),
+        )
 
         # Plot xlabel / log x axis
         L += 1
         gbs.Add(
-            wx.StaticText(
-                self, label='Label X:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Label X:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.xlabel = wx.TextCtrl(self)
         self.xlabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(self.xlabel, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2))
+        gbs.Add(
+            self.xlabel,
+            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 1),
+            span=(1, 2),
+        )
         self.xlog = wx.CheckBox(self, label='X as log axis')
         self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         gbs.Add(self.xlog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 3), span=(1, 1))
@@ -156,13 +167,19 @@ class OcellarisStairsPanel(wx.Panel):
         # Plot ylabel
         L += 1
         gbs.Add(
-            wx.StaticText(
-                self, label='Label Y:'), flag=wx.ALIGN_CENTER_VERTICAL, pos=(
-                L, 0), span=(
-                1, 1))
+            wx.StaticText(self, label='Label Y:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 0),
+            span=(1, 1),
+        )
         self.ylabel = wx.TextCtrl(self)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(self.ylabel, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2))
+        gbs.Add(
+            self.ylabel,
+            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+            pos=(L, 1),
+            span=(1, 2),
+        )
         self.ylog = wx.CheckBox(self, label='Y as log axis')
         self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         gbs.Add(self.ylog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 3), span=(1, 1))
@@ -202,10 +219,13 @@ class OcellarisStairsPanel(wx.Panel):
             rep_names = list(res.reports.keys())
             all_rep_names.update(rep_names)
             for rep_name in rep_names:
-                all_rep_lengths[rep_name] = max(all_rep_lengths.get(rep_name, 0),
-                                                len(res.reports[rep_name]))
+                all_rep_lengths[rep_name] = max(
+                    all_rep_lengths.get(rep_name, 0), len(res.reports[rep_name])
+                )
 
-        def sort_key(rep_name): return (all_rep_lengths[rep_name], rep_name)
+        def sort_key(rep_name):
+            return (all_rep_lengths[rep_name], rep_name)
+
         self.report_names = sorted(all_rep_names, key=sort_key)
 
         # Update report selectors, restoring previous value if possible
@@ -324,15 +344,16 @@ class OcellarisStairsPanel(wx.Panel):
             plot = self.axes.plot
 
         xs, ys = [], []
-        for results, startstop in zip(self.istate.active_results,
-                                      self.startstop_indices):
+        for results, startstop in zip(
+            self.istate.active_results, self.startstop_indices
+        ):
             if report_name not in results.reports:
                 plot([0], [None], label=results.label)
                 continue
             istart_trans, istart, iend = startstop
-            x = results.reports_x[report_name][istart_trans:iend + 1]
+            x = results.reports_x[report_name][istart_trans : iend + 1]
             x = numpy.array(x) - x[istart - istart_trans]
-            y = results.reports[report_name][istart_trans:iend + 1]
+            y = results.reports[report_name][istart_trans : iend + 1]
             plot(x, y, label=results.label)
             xs.append(x)
             ys.append(y)

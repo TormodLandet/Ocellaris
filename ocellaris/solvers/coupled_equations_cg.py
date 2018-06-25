@@ -5,10 +5,19 @@ from dolfin import dx, div, grad, dot
 class CoupledEquationsCG(object):
     use_strong_bcs = True
 
-    def __init__(self, simulation, flux_type, use_stress_divergence_form,
-                 use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator,
-                 pressure_continuity_factor, velocity_continuity_factor_D12,
-                 include_hydrostatic_pressure, incompressibility_flux_type):
+    def __init__(
+        self,
+        simulation,
+        flux_type,
+        use_stress_divergence_form,
+        use_grad_p_form,
+        use_grad_q_form,
+        use_lagrange_multiplicator,
+        pressure_continuity_factor,
+        velocity_continuity_factor_D12,
+        include_hydrostatic_pressure,
+        incompressibility_flux_type,
+    ):
         """
         Weak form of the Navier-Stokes eq. on coupled form with continuous elements
 
@@ -79,7 +88,7 @@ class CoupledEquationsCG(object):
             u_mesh = sim.data['u_mesh']
 
             # Modification of the convective velocity
-            #u_conv -= u_mesh
+            # u_conv -= u_mesh
             eq -= dot(div(rho * dolfin.outer(u, u_mesh)), v) * dx
 
             # Divergence of u should balance expansion/contraction of the cell K

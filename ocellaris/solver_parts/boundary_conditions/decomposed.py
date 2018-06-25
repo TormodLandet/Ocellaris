@@ -34,9 +34,11 @@ class FreeSlipBoundary(BoundaryConditionCreator):
         Free slip boundary condition
         """
         if var_name[-1] in '0123456789':
-            raise OcellarisError('Error in FreeSlip boundary conditions',
-                                 'You must give the name of a vector field, like "u", '
-                                 'not a component. You gave %r' % var_name)
+            raise OcellarisError(
+                'Error in FreeSlip boundary conditions',
+                'You must give the name of a vector field, like "u", '
+                'not a component. You gave %r' % var_name,
+            )
 
         # Store the boundary condition for use in the solver
         bc = FreeSlipBC(simulation, subdomain_id)

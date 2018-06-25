@@ -8,10 +8,19 @@ from .coupled_equations_cg import CoupledEquationsCG
 class CoupledEquationsDG(object):
     use_strong_bcs = False
 
-    def __init__(self, simulation, flux_type, use_stress_divergence_form,
-                 use_grad_p_form, use_grad_q_form, use_lagrange_multiplicator,
-                 pressure_continuity_factor, velocity_continuity_factor_D12,
-                 include_hydrostatic_pressure, incompressibility_flux_type):
+    def __init__(
+        self,
+        simulation,
+        flux_type,
+        use_stress_divergence_form,
+        use_grad_p_form,
+        use_grad_q_form,
+        use_lagrange_multiplicator,
+        pressure_continuity_factor,
+        velocity_continuity_factor_D12,
+        include_hydrostatic_pressure,
+        incompressibility_flux_type,
+    ):
         """
         Weak form of the Navier-Stokes eq. on coupled form with discontinuous elements
 
@@ -62,14 +71,22 @@ class CoupledEquationsDG(object):
             lm_test = vc[ndim + 1]
 
         assert self.flux_type == UPWIND
-        eq = define_dg_equations(u, v, p, q, lm_trial, lm_test, self.simulation,
-                                 include_hydrostatic_pressure=self.include_hydrostatic_pressure,
-                                 incompressibility_flux_type=self.incompressibility_flux_type,
-                                 use_grad_q_form=self.use_grad_q_form,
-                                 use_grad_p_form=self.use_grad_p_form,
-                                 use_stress_divergence_form=self.use_stress_divergence_form,
-                                 velocity_continuity_factor_D12=self.velocity_continuity_factor_D12,
-                                 pressure_continuity_factor=self.pressure_continuity_factor)
+        eq = define_dg_equations(
+            u,
+            v,
+            p,
+            q,
+            lm_trial,
+            lm_test,
+            self.simulation,
+            include_hydrostatic_pressure=self.include_hydrostatic_pressure,
+            incompressibility_flux_type=self.incompressibility_flux_type,
+            use_grad_q_form=self.use_grad_q_form,
+            use_grad_p_form=self.use_grad_p_form,
+            use_stress_divergence_form=self.use_stress_divergence_form,
+            velocity_continuity_factor_D12=self.velocity_continuity_factor_D12,
+            pressure_continuity_factor=self.pressure_continuity_factor,
+        )
 
         a, L = dolfin.system(eq)
         self.form_lhs = a
@@ -92,10 +109,22 @@ class CoupledEquationsDG(object):
         return self.tensor_rhs
 
 
-def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
-                        include_hydrostatic_pressure, incompressibility_flux_type,
-                        use_grad_q_form, use_grad_p_form, use_stress_divergence_form,
-                        velocity_continuity_factor_D12=0, pressure_continuity_factor=0):
+def define_dg_equations(
+    u,
+    v,
+    p,
+    q,
+    lm_trial,
+    lm_test,
+    simulation,
+    include_hydrostatic_pressure,
+    incompressibility_flux_type,
+    use_grad_q_form,
+    use_grad_p_form,
+    use_stress_divergence_form,
+    velocity_continuity_factor_D12=0,
+    pressure_continuity_factor=0,
+):
     """
     Define the coupled equations. Also in use by the SIMPLE solver
 
@@ -135,7 +164,7 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
         u_mesh = sim.data['u_mesh']
 
         # Modification of the convective velocity
-        #u_conv -= u_mesh
+        # u_conv -= u_mesh
         eq -= dot(div(rho * dolfin.outer(u, u_mesh)), v) * dx
 
         # Divergence of u should balance expansion/contraction of the cell K
@@ -145,8 +174,9 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
         eq += (cvol_new - cvol_old) / dt * q * dx
 
     # Elliptic penalties
-    penalty_dS, penalty_ds, D11, D12 = navier_stokes_stabilization_penalties(sim, nu,
-                                                                             velocity_continuity_factor_D12, pressure_continuity_factor)
+    penalty_dS, penalty_ds, D11, D12 = navier_stokes_stabilization_penalties(
+        sim, nu, velocity_continuity_factor_D12, pressure_continuity_factor
+    )
     yh = 1 / penalty_ds
 
     # Upwind and downwind velocities
@@ -248,29 +278,113 @@ def define_dg_equations(u, v, p, q, lm_trial, lm_test, simulation,
         # Boundary conditions that do not couple the velocity components
         # The BCs are imposed for each velocity component u[d] separately
 
-        eq += add_dirichlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                                penalty_ds, use_grad_q_form, use_grad_p_form)
+        eq += add_dirichlet_bcs(
+            sim,
+            d,
+            u,
+            p,
+            v,
+            q,
+            rho,
+            mu,
+            n,
+            w_nU,
+            w_nD,
+            penalty_ds,
+            use_grad_q_form,
+            use_grad_p_form,
+        )
 
-        eq += add_neumann_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                              penalty_ds, use_grad_q_form, use_grad_p_form)
+        eq += add_neumann_bcs(
+            sim,
+            d,
+            u,
+            p,
+            v,
+            q,
+            rho,
+            mu,
+            n,
+            w_nU,
+            w_nD,
+            penalty_ds,
+            use_grad_q_form,
+            use_grad_p_form,
+        )
 
-        eq += add_robin_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                            yh, use_grad_q_form, use_grad_p_form)
+        eq += add_robin_bcs(
+            sim,
+            d,
+            u,
+            p,
+            v,
+            q,
+            rho,
+            mu,
+            n,
+            w_nU,
+            w_nD,
+            yh,
+            use_grad_q_form,
+            use_grad_p_form,
+        )
 
-        eq += add_outlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                             g, x, use_grad_q_form, use_grad_p_form)
+        eq += add_outlet_bcs(
+            sim,
+            d,
+            u,
+            p,
+            v,
+            q,
+            rho,
+            mu,
+            n,
+            w_nU,
+            w_nD,
+            g,
+            x,
+            use_grad_q_form,
+            use_grad_p_form,
+        )
 
     # Boundary conditions that couple the velocity components
     # Decomposing the velocity into wall normal and parallel parts
 
-    eq += add_slip_bcs(sim, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                       penalty_ds, use_grad_q_form, use_grad_p_form)
+    eq += add_slip_bcs(
+        sim,
+        u,
+        p,
+        v,
+        q,
+        rho,
+        mu,
+        n,
+        w_nU,
+        w_nD,
+        penalty_ds,
+        use_grad_q_form,
+        use_grad_p_form,
+    )
 
     return eq
 
 
-def add_dirichlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                      penalty_ds, use_grad_q_form, use_grad_p_form):
+def add_dirichlet_bcs(
+    sim,
+    d,
+    u,
+    p,
+    v,
+    q,
+    rho,
+    mu,
+    n,
+    w_nU,
+    w_nD,
+    penalty_ds,
+    use_grad_q_form,
+    use_grad_p_form,
+):
     """
     Dirichlet boundary conditions for one velocity component
     Nitsche method, see, e.g, Epshteyn and Rivière (2007),
@@ -311,8 +425,22 @@ def add_dirichlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
     return eq
 
 
-def add_neumann_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                    penalty_ds, use_grad_q_form, use_grad_p_form):
+def add_neumann_bcs(
+    sim,
+    d,
+    u,
+    p,
+    v,
+    q,
+    rho,
+    mu,
+    n,
+    w_nU,
+    w_nD,
+    penalty_ds,
+    use_grad_q_form,
+    use_grad_p_form,
+):
     """
     Neumann boundary conditions for one velocity component
     """
@@ -337,8 +465,9 @@ def add_neumann_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
     return eq
 
 
-def add_robin_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                  yh, use_grad_q_form, use_grad_p_form):
+def add_robin_bcs(
+    sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, yh, use_grad_q_form, use_grad_p_form
+):
     """
     Robin boundary conditions for one velocity component
     See Juntunen and Stenberg (2009)
@@ -381,8 +510,9 @@ def add_robin_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
     return eq
 
 
-def add_outlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                   g, x, use_grad_q_form, use_grad_p_form):
+def add_outlet_bcs(
+    sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, g, x, use_grad_q_form, use_grad_p_form
+):
     """
     Outlet boundary contitions for one velocity component
 
@@ -416,8 +546,21 @@ def add_outlet_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD,
     return eq
 
 
-def add_slip_bcs(sim, u, p, v, q, rho, mu, n, w_nU, w_nD,
-                 penalty_ds, use_grad_q_form, use_grad_p_form):
+def add_slip_bcs(
+    sim,
+    u,
+    p,
+    v,
+    q,
+    rho,
+    mu,
+    n,
+    w_nU,
+    w_nD,
+    penalty_ds,
+    use_grad_q_form,
+    use_grad_p_form,
+):
     """
     Free slip boundary contitions (this will couple velocity
     components on facets not aligned with the cartesian axes)
@@ -427,7 +570,7 @@ def add_slip_bcs(sim, u, p, v, q, rho, mu, n, w_nU, w_nD,
     un, vn = dot(u, n), dot(v, n)
     for sbc in slip_bcs:
         # Velocity in normal direction
-        #u_bc_n = 0
+        # u_bc_n = 0
         ds = sbc.ds()
 
         # Divergence free criterion
@@ -435,11 +578,11 @@ def add_slip_bcs(sim, u, p, v, q, rho, mu, n, w_nU, w_nD,
             pass  # eq += q*u_bc_n*ds
         else:
             eq -= q * un * ds
-            #eq += q*u_bc_n*ds
+            # eq += q*u_bc_n*ds
 
         # Convection (zero since w_nU should be zero here)
-        #eq += rho*w_nU*dot(u, v)*ds
-        #eq += rho*w_nD*dot(u_bc_vec, v)*ds
+        # eq += rho*w_nU*dot(u, v)*ds
+        # eq += rho*w_nD*dot(u_bc_vec, v)*ds
 
         # From IBP of the main equation
         for d in range(sim.ndim):
@@ -453,7 +596,7 @@ def add_slip_bcs(sim, u, p, v, q, rho, mu, n, w_nU, w_nD,
         # This is SIPG for -∇⋅μ∇u
         for z in [z1, z2]:
             eq += un * z * ds
-            #eq -= u_bc_n*z*ds
+            # eq -= u_bc_n*z*ds
 
         # Pressure
         if not use_grad_p_form:
@@ -464,5 +607,5 @@ def add_slip_bcs(sim, u, p, v, q, rho, mu, n, w_nU, w_nD,
 EQUATION_SUBTYPES = {
     'Default': CoupledEquationsDG,
     'DG': CoupledEquationsDG,
-    'CG': CoupledEquationsCG
+    'CG': CoupledEquationsCG,
 }

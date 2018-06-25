@@ -23,7 +23,9 @@ class SolutionProperties(object):
         sim = self.simulation
 
         self.active = sim.input.get_value('output/solution_properties', True, 'bool')
-        divergence_method = sim.input.get_value('output/divergence_method', 'div', 'string')
+        divergence_method = sim.input.get_value(
+            'output/divergence_method', 'div', 'string'
+        )
         plot_divergences = sim.input.get_value('output/plot_divergences', False, 'bool')
         if not self.active:
             sim.log.info('SolutionProperties not active')
@@ -88,9 +90,9 @@ class SolutionProperties(object):
             reports.append(('div_conv', div_conv_dx + div_conv_dS))
 
             # Difference between the convective and the convected velocity
-            ucdiff = velocity_change(u1=sim.data['up'],
-                                     u2=sim.data['up_conv'],
-                                     ui_tmp=sim.data['ui_tmp'])
+            ucdiff = velocity_change(
+                u1=sim.data['up'], u2=sim.data['up_conv'], ui_tmp=sim.data['ui_tmp']
+            )
             reports.append(('uconv_diff', ucdiff))
 
         if create_report:
@@ -103,16 +105,18 @@ class SolutionProperties(object):
             # will be generated when calling this method at a different time
             # than at the end of a time step
             info = ['%s = %10g' % (name, value) for name, value in reports]
-            sim.log.info('Solution properties for timestep = %5d, time = %10.4f, %s' %
-                         (sim.timestep, sim.time, ', '.join(info)))
+            sim.log.info(
+                'Solution properties for timestep = %5d, time = %10.4f, %s'
+                % (sim.timestep, sim.time, ', '.join(info))
+            )
 
         Co_lim = sim.input.get_value('simulation/Co_lim', CO_LIM, 'float')
         if Co_lim > 0 and Co_max > Co_lim:
-            ocellaris_error('Courant number exceeded limit',
-                            'Found Co = %g > %g' % (Co_max, Co_lim))
+            ocellaris_error(
+                'Courant number exceeded limit', 'Found Co = %g > %g' % (Co_max, Co_lim)
+            )
         elif not numpy.isfinite(Co_max):
-            ocellaris_error('Non finite Courant number',
-                            'Found Co = %g' % Co_max)
+            ocellaris_error('Non finite Courant number', 'Found Co = %g' % Co_max)
 
     def _setup_courant(self, vel, dt):
         """
@@ -139,7 +143,7 @@ class SolutionProperties(object):
         h = self.simulation.data['h']
         u, v = df.TrialFunction(V), df.TestFunction(V)
         a = u * v * dx
-        L = dot(vel, vel)**0.5 * h / (2 * nu) * v * dx
+        L = dot(vel, vel) ** 0.5 * h / (2 * nu) * v * dx
 
         # Pre-factorize matrices and store for usage in projection
         self._peclet_solver = df.LocalSolver(a, L)

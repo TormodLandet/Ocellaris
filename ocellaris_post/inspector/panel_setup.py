@@ -35,7 +35,9 @@ class OcellarisSetupPanel(wx.Panel):
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
 
-        st = wx.StaticText(self, label='Hover over "File X" label to see full file name')
+        st = wx.StaticText(
+            self, label='Hover over "File X" label to see full file name'
+        )
         v.Add(st, flag=wx.ALL, border=8)
 
         # Metadata FlexGridSizer
@@ -56,7 +58,10 @@ class OcellarisSetupPanel(wx.Panel):
         v.AddStretchSpacer(prop=1)
         h = wx.BoxSizer(wx.HORIZONTAL)
         v.Add(h, flag=wx.EXPAND | wx.ALL, border=10)
-        h.Add(wx.StaticText(self, label='Open previous file:'), flag=wx.ALIGN_CENTER_VERTICAL)
+        h.Add(
+            wx.StaticText(self, label='Open previous file:'),
+            flag=wx.ALIGN_CENTER_VERTICAL,
+        )
         h.AddSpacer(10)
         self.prevfiles = wx.Choice(self)
         h.Add(self.prevfiles, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL)
@@ -95,6 +100,7 @@ class OcellarisSetupPanel(wx.Panel):
                         pub.sendMessage(TOPIC_METADATA)
                         pub.sendMessage(TOPIC_RELOAD)
                         self.update_open_files()
+
                 return close
 
             b.Bind(wx.EVT_BUTTON, make_closer(il))
@@ -105,6 +111,7 @@ class OcellarisSetupPanel(wx.Panel):
                     with wx.BusyCursor():
                         self.istate.results[il].active_in_gui = evt.IsChecked()
                         pub.sendMessage(TOPIC_METADATA)
+
                 return activate
 
             tb = wx.ToggleButton(self, label='Active')
@@ -119,8 +126,9 @@ class OcellarisSetupPanel(wx.Panel):
 
         def shorten(fn, N=80):
             if len(fn) > N:
-                fn = '...' + fn[3 - N:]
+                fn = '...' + fn[3 - N :]
             return fn
+
         self.prevfiles.Set([shorten(fn) for fn in self.prev_file_names])
         i = len(self.prev_file_names) - 1 - len(self.istate.results)
         if i >= 0:
@@ -134,8 +142,14 @@ class OcellarisSetupPanel(wx.Panel):
             defdir = os.path.split(prev[-1])[0]
 
         wildcard = "H5 checkpoint and LOG files (*.h5;*.log)|*.h5;*.log"
-        dlg = wx.FileDialog(self, "Open Occelaris results file", defdir, deffile,
-                            wildcard, wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        dlg = wx.FileDialog(
+            self,
+            "Open Occelaris results file",
+            defdir,
+            deffile,
+            wildcard,
+            wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        )
         if dlg.ShowModal() != wx.ID_CANCEL:
             self.open_file(dlg.GetPath())
 

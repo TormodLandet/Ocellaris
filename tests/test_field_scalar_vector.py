@@ -35,21 +35,21 @@ def test_scalar_field():
     sim.input.read_yaml(yaml_string=INP)
     mesh = dolfin.UnitCubeMesh(2, 2, 2)
     sim.set_mesh(mesh)
-    
+
     field_inp = sim.input.get_value('fields/1', required_type='Input')
     field = ScalarField(sim, field_inp)
-    
+
     # t = 0
     t, A = 0, 1
     f = field.get_variable('rho')
     check_vector_value_histogram(f.vector(), {t * A + A: 125})
-    
+
     # t = 1
     t, A = 1, 1
     sim.time = t
     field.update(1, t, 1.0)
     check_vector_value_histogram(f.vector(), {t * A + A: 125})
-    
+
     # t = 2
     t, A = 2, 10
     sim.time = t
@@ -63,28 +63,28 @@ def test_vector_field():
     sim.input.read_yaml(yaml_string=INP)
     mesh = dolfin.UnitCubeMesh(2, 2, 2)
     sim.set_mesh(mesh)
-    
+
     field_inp = sim.input.get_value('fields/0', required_type='Input')
     field = VectorField(sim, field_inp)
-    
+
     def verify(f, t, A):
         print(t, A)
         check_vector_value_histogram(f[0].vector(), {t + A: 125})
         check_vector_value_histogram(f[1].vector(), {t * A: 125})
         check_vector_value_histogram(f[2].vector(), {t * A + A: 125})
-    
+
     # t = 0
     t, A = 0, 1
     f = field.get_variable('u')
     verify(f, t, A)
-    
+
     # t = 1
     t, A = 1, 1
     sim.time = t
     sim.input.set_value('user_code/constants/A', A)
     field.update(1, t, 1.0)
     verify(f, t, A)
-    
+
     # t = 2
     t, A = 2, 10
     sim.time = t

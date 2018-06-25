@@ -19,9 +19,11 @@ def register_velocity_slope_limiter(name):
     """
     A class decorator to register slope limiters
     """
+
     def register(slope_limiter_class):
         add_velocity_slope_limiter(name, slope_limiter_class)
         return slope_limiter_class
+
     return register
 
 
@@ -32,10 +34,14 @@ def get_velocity_slope_limiter(name):
     try:
         return _VELOCITY_SLOPE_LIMITERS[name]
     except KeyError:
-        ocellaris_error('Velocity slope limiter "%s" not found' % name,
-                        'Available velocity slope limiters:\n' +
-                        '\n'.join('  %-20s - %s' % (n, s.description)
-                                  for n, s in sorted(_VELOCITY_SLOPE_LIMITERS.items())))
+        ocellaris_error(
+            'Velocity slope limiter "%s" not found' % name,
+            'Available velocity slope limiters:\n'
+            + '\n'.join(
+                '  %-20s - %s' % (n, s.description)
+                for n, s in sorted(_VELOCITY_SLOPE_LIMITERS.items())
+            ),
+        )
         raise
 
 
@@ -57,8 +63,14 @@ class DoNothingSlopeLimiterVelocity(VelocitySlopeLimiterBase):
         pass
 
 
-def SlopeLimiterVelocity(simulation, vel_u, vel_name, default_limiter=LIMITER,
-                         vel_w=None, default_use_cpp=USE_CPP):
+def SlopeLimiterVelocity(
+    simulation,
+    vel_u,
+    vel_name,
+    default_limiter=LIMITER,
+    vel_w=None,
+    default_use_cpp=USE_CPP,
+):
     """
     Limit the slope of the given vector field to obtain boundedness
     """
@@ -69,7 +81,9 @@ def SlopeLimiterVelocity(simulation, vel_u, vel_name, default_limiter=LIMITER,
     plot_exceedance = inp.get_value('plot', False, 'bool')
 
     # Get the limiter
-    simulation.log.info('    Using velocity slope limiter %s for %s' % (method, vel_name))
+    simulation.log.info(
+        '    Using velocity slope limiter %s for %s' % (method, vel_name)
+    )
     limiter_class = get_velocity_slope_limiter(method)
     limiter = limiter_class(simulation, vel_u, vel_name, vel_w, use_cpp)
 
@@ -81,6 +95,5 @@ def SlopeLimiterVelocity(simulation, vel_u, vel_name, default_limiter=LIMITER,
     return limiter
 
 
-from . import experimental_limiters
 from . import solenoidal_limiter
 from . import componentwise_limiter
