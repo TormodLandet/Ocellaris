@@ -288,6 +288,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             c.assign(cp)
         else:
             if self.solver is None:
+                sim.log.info('Creating colour function solver', flush=True)
                 self.solver = linear_solver_from_input(
                     self.simulation, 'solver/c', default_parameters=SOLVER_OPTIONS
                 )

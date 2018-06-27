@@ -5,16 +5,7 @@ from dolfin import dot, div, grad, jump
 
 class AdvectionEquation(object):
     def __init__(
-        self,
-        simulation,
-        Vc,
-        cp,
-        cpp,
-        u_conv,
-        beta,
-        time_coeffs,
-        dirichlet_bcs,
-        forcing_zones=(),
+        self, simulation, Vc, cp, cpp, u_conv, beta, time_coeffs, dirichlet_bcs, forcing_zones=()
     ):
         """
         This class assembles the advection equation for a scalar function c
@@ -72,9 +63,7 @@ class AdvectionEquation(object):
         if not self.colour_is_discontinuous:
             # Continous Galerkin implementation of the advection equation
             # FIXME: add stabilization
-            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + div(
-                c * u_conv
-            ) * d * dx
+            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + div(c * u_conv) * d * dx
 
         elif self.velocity_is_trace:
             # Upstream and downstream normal velocities
@@ -90,9 +79,7 @@ class AdvectionEquation(object):
                 flux = jump(c * w_nU)
 
             # Discontinuous Galerkin implementation of the advection equation
-            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + flux * jump(
-                d
-            ) * dS
+            eq = (c1 * c + c2 * self.cp + c3 * self.cpp) / dt * d * dx + flux * jump(d) * dS
 
             # On each facet either w_nD or w_nU will be 0, the other is multiplied
             # with the appropriate flux, either the value c going out of the domain
@@ -159,14 +146,16 @@ class AdvectionEquation(object):
 
     def assemble_lhs(self):
         if self.tensor_lhs is None:
-            self.tensor_lhs = dolfin.assemble(self.form_lhs)
+            lhs = dolfin.assemble(self.form_lhs)
+            self.tensor_lhs = dolfin.as_backend_type(lhs)
         else:
             dolfin.assemble(self.form_lhs, tensor=self.tensor_lhs)
         return self.tensor_lhs
 
     def assemble_rhs(self):
         if self.tensor_rhs is None:
-            self.tensor_rhs = dolfin.assemble(self.form_rhs)
+            rhs = dolfin.assemble(self.form_rhs)
+            self.tensor_rhs = dolfin.as_backend_type(rhs)
         else:
             dolfin.assemble(self.form_rhs, tensor=self.tensor_rhs)
         return self.tensor_rhs
