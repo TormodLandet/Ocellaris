@@ -21,12 +21,12 @@ class OcellarisSetupPanel(wx.Panel):
         h = wx.BoxSizer(wx.HORIZONTAL)
         v.Add(h, flag=wx.EXPAND | wx.ALL, border=10)
 
-        b = wx.Button(self, label='Open new file (Ctrl+O)')
+        b = wx.Button(self, label='Open result file (Ctrl+O)')
         b.Bind(wx.EVT_BUTTON, self.select_file_to_open)
         pub.sendMessage(TOPIC_NEW_ACCEL, callback=self.select_file_to_open, key='O')
         h.Add(b)
-        h.AddSpacer(5)
-        b = wx.Button(self, label='Open running simulations')
+        h.AddSpacer(20)
+        b = wx.Button(self, label='Connect to running simulation')
         b.Bind(wx.EVT_BUTTON, self.show_cluster_connector)
         h.Add(b)
 
@@ -35,10 +35,8 @@ class OcellarisSetupPanel(wx.Panel):
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
 
-        st = wx.StaticText(
-            self, label='Hover over "File X" label to see full file name'
-        )
-        v.Add(st, flag=wx.ALL, border=8)
+        self.hover_info = wx.StaticText(self, label='No open files')
+        v.Add(self.hover_info, flag=wx.ALL, border=10)
 
         # Metadata FlexGridSizer
         self.file_lable_sizer = wx.FlexGridSizer(rows=1, cols=4, vgap=3, hgap=10)
@@ -49,7 +47,7 @@ class OcellarisSetupPanel(wx.Panel):
         st = wx.StaticText(self, label='Reload running simulation data:')
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
-        b = wx.Button(self, label='Reload (Ctrl+R)')
+        b = wx.Button(self, label='Reload all open files (Ctrl+R)')
         b.Bind(wx.EVT_BUTTON, self.reload_data)
         v.Add(b, flag=wx.ALL, border=10)
         pub.sendMessage(TOPIC_NEW_ACCEL, callback=self.reload_data, key='R')
@@ -58,10 +56,7 @@ class OcellarisSetupPanel(wx.Panel):
         v.AddStretchSpacer(prop=1)
         h = wx.BoxSizer(wx.HORIZONTAL)
         v.Add(h, flag=wx.EXPAND | wx.ALL, border=10)
-        h.Add(
-            wx.StaticText(self, label='Open previous file:'),
-            flag=wx.ALIGN_CENTER_VERTICAL,
-        )
+        h.Add(wx.StaticText(self, label='Open previous file:'), flag=wx.ALIGN_CENTER_VERTICAL)
         h.AddSpacer(10)
         self.prevfiles = wx.Choice(self)
         h.Add(self.prevfiles, proportion=1, flag=wx.ALIGN_CENTER_VERTICAL)
@@ -77,6 +72,11 @@ class OcellarisSetupPanel(wx.Panel):
         fgs = self.file_lable_sizer
         fgs.Clear(delete_windows=True)
         fgs.SetRows(len(self.istate.results) + 1)
+
+        if self.istate.results:
+            self.hover_info.Label = (
+                'Hold the mouse pointer over the "File X" label to see full file name'
+            )
 
         # Customize the lables
         self.label_controls = []
