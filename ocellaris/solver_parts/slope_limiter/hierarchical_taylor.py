@@ -10,16 +10,7 @@ from .limiter_cpp_utils import SlopeLimiterInput
 class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
     description = 'Uses a Taylor DG decomposition to limit derivatives at the vertices'
 
-    def __init__(
-        self,
-        phi_name,
-        phi,
-        skip_cells,
-        boundary_conditions,
-        use_cpp=True,
-        enforce_bounds=False,
-        enforce_bcs=True,
-    ):
+    def __init__(self, simulation, phi_name, phi, skip_cells, boundary_conditions, limiter_input):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -40,6 +31,15 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             'topological and geometrical dimensions are identical'
         )
 
+        # Read input
+        use_cpp = limiter_input.get_value('use_cpp', True, 'bool')
+        enforce_bounds = limiter_input.get_value('enforce_bounds', False, 'bool')
+        enforce_bcs = limiter_input.get_value('enforce_bcs', True, 'bool')
+        use_weak_bcs = limiter_input.get_value('use_weak_bcs', True, 'bool')
+        simulation.log.info('        Enforce global bounds: %r' % enforce_bounds)
+        simulation.log.info('        Enforcing BCs: %r' % enforce_bcs)
+        simulation.log.info('        Using weak BCs: %r' % use_weak_bcs)
+
         # Store input
         self.phi_name = phi_name
         self.phi = phi
@@ -49,7 +49,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         self.use_cpp = use_cpp
         self.enforce_global_bounds = enforce_bounds
         self.enforce_boundary_conditions = enforce_bcs
-        self.use_weak_bcs = True
+        self.use_weak_bcs = use_weak_bcs
         self.num_cells_owned = mesh.topology().ghost_offset(tdim)
         self.ndim = gdim
 
@@ -111,9 +111,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         use_weak_bcs = self.use_weak_bcs if use_weak_bcs is None else use_weak_bcs
         if use_weak_bcs:
             weak_vals = self.phi.vector().get_local()
-        boundary_dof_type, boundary_dof_value = self.boundary_conditions.get_bcs(
-            weak_vals
-        )
+        boundary_dof_type, boundary_dof_value = self.boundary_conditions.get_bcs(weak_vals)
 
         # Run the limiter implementation
         if self.use_cpp:
@@ -262,15 +260,9 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
 
                     vertex_value = lagrange_arr[dof]
                     if vertex_value > center_value:
-                        alpha = min(
-                            alpha,
-                            (maxval - center_value) / (vertex_value - center_value),
-                        )
+                        alpha = min(alpha, (maxval - center_value) / (vertex_value - center_value))
                     elif vertex_value < center_value:
-                        alpha = min(
-                            alpha,
-                            (minval - center_value) / (vertex_value - center_value),
-                        )
+                        alpha = min(alpha, (minval - center_value) / (vertex_value - center_value))
 
             if skip_this_cell:
                 alpha = 1.0
@@ -310,12 +302,8 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             skip_this_cell = self.limit_cell[icell] == 0
 
             cell_vertices = [self.vertex_coordinates[iv] for iv in self.vertices[icell]]
-            center_pos_x = (
-                cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]
-            ) / 3
-            center_pos_y = (
-                cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]
-            ) / 3
+            center_pos_x = (cell_vertices[0][0] + cell_vertices[1][0] + cell_vertices[2][0]) / 3
+            center_pos_y = (cell_vertices[0][1] + cell_vertices[1][1] + cell_vertices[2][1]) / 3
             assert len(cell_vertices) == 3
 
             # Find the minimum slope limiter coefficient alpha of the φ, dφdx and dφ/dy terms
@@ -357,14 +345,10 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
                         vertex_value = center_phi + center_phix * dx + center_phiy * dy
                     elif taylor_dof == 1:
                         # Derivative in x direction at the vertex  (linear reconstruction)
-                        vertex_value = (
-                            center_phix + center_phixx * dx + center_phixy * dy
-                        )
+                        vertex_value = center_phix + center_phixx * dx + center_phixy * dy
                     else:
                         # Derivative in y direction at the vertex  (linear reconstruction)
-                        vertex_value = (
-                            center_phiy + center_phiyy * dy + center_phixy * dx
-                        )
+                        vertex_value = center_phiy + center_phiyy * dy + center_phixy * dx
 
                     # Compute the slope limiter coefficient alpha
                     if vertex_value > base_value:

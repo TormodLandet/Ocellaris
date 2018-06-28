@@ -7,7 +7,6 @@ from .limiter_bcs import SlopeLimiterBoundaryConditions
 
 DEFAULT_LIMITER = 'None'
 DEFAULT_FILTER = 'nofilter'
-DEFAULT_USE_CPP = True
 _SLOPE_LIMITERS = {}
 
 
@@ -42,8 +41,7 @@ def get_slope_limiter(name):
             'Slope limiter "%s" not found' % name,
             'Available slope limiters:\n'
             + '\n'.join(
-                '  %-20s - %s' % (n, s.description)
-                for n, s in sorted(_SLOPE_LIMITERS.items())
+                '  %-20s - %s' % (n, s.description) for n, s in sorted(_SLOPE_LIMITERS.items())
             ),
         )
         raise
@@ -90,7 +88,7 @@ class DoNothingSlopeLimiter(SlopeLimiterBase):
     description = 'No slope limiter'
     active = False
 
-    def __init__(self, *argv, **kwargs):
+    def __init__(self, simulation, phi_name, phi, skip_cells, boundary_conditions, limiter_input):
         self.additional_plot_funcs = []
 
     def run(self):
@@ -102,11 +100,12 @@ class OnlyBoundSlopeLimiter(SlopeLimiterBase):
     description = 'Bounding limiter'
     active = False
 
-    def __init__(self, phi_name, phi, enforce_bounds=False, **kwargs):
+    def __init__(self, simulation, phi_name, phi, skip_cells, boundary_conditions, limiter_input):
         self.phi_name = phi_name
         self.phi = phi
-        self.enforce_global_bounds = enforce_bounds
+        self.enforce_global_bounds = limiter_input.get_value('enforce_bounds', False, 'bool')
         self.additional_plot_funcs = []
+        simulation.log.info('        Enforce global bounds: %r' % self.enforce_global_bounds)
 
     def run(self):
         if self.has_global_bounds:
@@ -125,12 +124,10 @@ def SlopeLimiter(simulation, phi_name, phi):
     # Get user provided input (or default values)
     inp = simulation.input.get_value('slope_limiter/%s' % phi_name, {}, 'Input')
     method = inp.get_value('method', DEFAULT_LIMITER, 'string')
-    use_cpp = inp.get_value('use_cpp', DEFAULT_USE_CPP, 'bool')
-    plot_exceedance = inp.get_value('plot', False, 'bool')
     skip_boundaries = inp.get_value('skip_boundaries', [], 'list(string)')
-    enforce_bounds = inp.get_value('enforce_bounds', False, 'bool')
-    enforce_bcs = inp.get_value('enforce_bcs', True, 'bool')
+    plot_exceedance = inp.get_value('plot', False, 'bool')
     simulation.log.info('    Using slope limiter %s for field %s' % (method, phi_name))
+    simulation.log.info('        Skip boundaries: %r' % skip_boundaries)
 
     # Find degree
     V = phi.function_space()
@@ -144,7 +141,12 @@ def SlopeLimiter(simulation, phi_name, phi):
                 '%s (due to degree == 0)' % phi_name
             )
         return OnlyBoundSlopeLimiter(
-            phi_name=phi_name, phi=phi, enforce_bounds=enforce_bounds
+            simulation,
+            phi_name=phi_name,
+            phi=phi,
+            skip_cells=None,
+            boundary_conditions=None,
+            limiter_input=inp,
         )
 
     # Get boundary region marks and get the helper class used to limit along the boundaries
@@ -159,18 +161,14 @@ def SlopeLimiter(simulation, phi_name, phi):
         bcs.activate()
 
     # Construct the limiter
-    simulation.log.info('        Enforcing BCs: %r' % enforce_bcs)
-    simulation.log.info('        Skip boundaries: %r' % skip_boundaries)
-    simulation.log.info('        Enforce global bounds: %r' % enforce_bounds)
     limiter_class = get_slope_limiter(method)
     limiter = limiter_class(
+        simulation,
         phi_name=phi_name,
         phi=phi,
         skip_cells=skip_cells,
         boundary_conditions=bcs,
-        use_cpp=use_cpp,
-        enforce_bounds=enforce_bounds,
-        enforce_bcs=enforce_bcs,
+        limiter_input=inp,
     )
 
     if plot_exceedance:
@@ -184,5 +182,4 @@ from ocellaris.cpp import load_module
 
 LocalMaximaMeasurer = load_module('measure_local_maxima').LocalMaximaMeasurer
 
-from . import naive_nodal
 from . import hierarchical_taylor
