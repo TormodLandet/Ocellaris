@@ -9,9 +9,7 @@ from . import register_slope_limiter, SlopeLimiterBase
 class NaiveNodalSlopeLimiter(SlopeLimiterBase):
     description = 'Ensures dof node values are not themselves a local extrema'
 
-    def __init__(
-        self, phi_name, phi, boundary_condition, use_cpp=True, enforce_bounds=False
-    ):
+    def __init__(self, simulation, phi_name, phi, skip_cells, boundary_conditions, limiter_input):
         """
         Limit the slope of the given scalar to obtain boundedness
         """
@@ -25,6 +23,11 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         verify_key('slope limited degree', degree, (0, 1, 2), loc)
         verify_key('function shape', phi.ufl_shape, [()], loc)
         verify_key('topological dimension', mesh.topology().dim(), [2], loc)
+
+        # Read input
+        use_cpp = limiter_input.get_value('use_cpp', True, 'bool')
+        enforce_bounds = limiter_input.get_value('enforce_bounds', False, 'bool')
+        simulation.log.info('        Enforce global bounds: %r' % enforce_bounds)
 
         # Store input
         self.phi_name = phi_name
@@ -56,7 +59,7 @@ class NaiveNodalSlopeLimiter(SlopeLimiterBase):
         num_neighbours, neighbours = get_dof_neighbours(V)
 
         # Remove boundary dofs from limiter
-        num_neighbours[boundary_condition != 0] = 0
+        num_neighbours[boundary_conditions != 0] = 0
 
         # Get indices for get_local on the DGX vector
         im = dm.index_map()
@@ -264,9 +267,7 @@ def slope_limiter_nodal_dg(
             print(new_vals)
             print([results[dof] for dof in dofs])
             print(repr(averages[ic] - sum(new_vals) / 3))
-            print(
-                '--------------------------------------------------------------------------'
-            )
+            print('--------------------------------------------------------------------------')
             exit()
         assert error < 1e-12, 'Got large difference in old and new average: %r' % error
 
