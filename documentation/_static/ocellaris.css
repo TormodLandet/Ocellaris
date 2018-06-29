@@ -1,3 +1,7 @@
+body {
+    background-color: white;
+}
+
 h3 a:link {
     color: #fb880c;
     font-weight: normal;
