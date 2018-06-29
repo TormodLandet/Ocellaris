@@ -235,6 +235,7 @@ type SlopeLimiter:
     optional skip_boundaries: list(type=str)
     optional enforce_bounds: bool
     optional enforce_bcs: bool
+    optional use_weak_bcs: bool
     optional plot: bool
     optional use_cpp: bool
 type SlopeLimiters:
