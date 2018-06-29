@@ -15,7 +15,8 @@ RUN apt-get -qq update && \
     update-alternatives --set mpi /usr/include/mpich && \
     python3 -m pip install --no-binary=h5py h5py && \
     python3 -m pip install PyYAML && \
-    python3 -m pip install git+https://github.com/nschloe/meshio.git && \
+    python3 -m pip install meshio && \
+    python3 -m pip install yschema raschii && \
     cd /tmp && \
     wget -nc --quiet http://gmsh.info/bin/Linux/gmsh-3.0.6-Linux64.tgz && \
     tar -xf gmsh-3.0.6-Linux64.tgz && \
