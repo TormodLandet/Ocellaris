@@ -63,6 +63,17 @@ class InspectorState(object):
             if r.active_in_gui or not only_active:
                 r.reload()
 
+    def remove_first_timesteps(self, n):
+        """
+        Remove the first n timesteps to avoid plotting transients without
+        having to change x-min limit everywhere
+        """
+        for r in self.results:
+            for name in r.reports:
+                r.reports[name] = r.reports[name][n:]
+            for name in r.reports_x:
+                r.reports_x[name] = r.reports_x[name][n:]
+
     def close(self, idx):
         """
         Close the results file with the given index

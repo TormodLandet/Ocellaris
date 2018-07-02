@@ -44,13 +44,24 @@ class OcellarisSetupPanel(wx.Panel):
         v.Add(self.file_lable_sizer, flag=wx.ALL | wx.EXPAND, border=6)
 
         #######################################################################
-        st = wx.StaticText(self, label='Reload running simulation data:')
+        st = wx.StaticText(self, label='Modify open data:')
         st.SetFont(st.GetFont().Bold())
         v.Add(st, flag=wx.ALL, border=5)
         b = wx.Button(self, label='Reload all open files (Ctrl+R)')
         b.Bind(wx.EVT_BUTTON, self.reload_data)
         v.Add(b, flag=wx.ALL, border=10)
         pub.sendMessage(TOPIC_NEW_ACCEL, callback=self.reload_data, key='R')
+
+        h = wx.BoxSizer(wx.HORIZONTAL)
+        v.Add(h, flag=wx.EXPAND | wx.ALL, border=10)
+        b = wx.Button(self, label='Remove the first')
+        b.Bind(wx.EVT_BUTTON, self.remove_first_timesteps)
+        h.Add(b)
+        h.AddSpacer(5)
+        self.nTs = wx.TextCtrl(self, value='10')
+        h.Add(self.nTs)
+        h.AddSpacer(5)
+        h.Add(wx.StaticText(self, label='timesteps'), flag=wx.ALIGN_CENTER_VERTICAL)
 
         #######################################################################
         v.AddStretchSpacer(prop=1)
@@ -181,3 +192,13 @@ class OcellarisSetupPanel(wx.Panel):
             self.istate.reload()
             pub.sendMessage(TOPIC_METADATA)
             pub.sendMessage(TOPIC_RELOAD)
+
+    def remove_first_timesteps(self, _evt=None):
+        n = self.nTs.Value
+        try:
+            n = int(n)
+            self.nTs.SetBackgroundColour('#FFFFFF')
+            self.istate.remove_first_timesteps(n)
+            pub.sendMessage(TOPIC_RELOAD)
+        except ValueError:
+            self.nTs.SetBackgroundColour('#FFCCCC')

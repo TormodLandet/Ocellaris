@@ -117,7 +117,7 @@ class Results(object):
         """
         Simplified handling of Python coded input fields
         """
-        if not isinstance(value, str) or not 'py$' in value:
+        if not isinstance(value, str) or 'py$' not in value:
             return value
         value = value.strip()
         assert value.startswith('py$')
@@ -223,7 +223,7 @@ def read_h5_data(results):
         while True:
             logname = 'full_log_%d' % i
             i += 1
-            if not logname in hdf['/ocellaris'].attrs:
+            if logname not in hdf['/ocellaris'].attrs:
                 break
             log.append(hdf['/ocellaris'].attrs[logname])
         log = ''.join(log)
@@ -381,7 +381,7 @@ def read_iteration_reports(results):
 def read_surfaces(res):
     inp = res.input
     res.surfaces = {}
-    if not 'probes' in inp:
+    if 'probes' not in inp:
         return
 
     for probe in inp['probes']:
