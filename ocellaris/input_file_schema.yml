@@ -217,6 +217,8 @@ type MultiphaseSolver:
     optional height_function_cpp: StringMin1
     optional sky_location: Float  # Is this still implemented (not removed)??
     optional explicit_rk_method: bool
+    optional analytical_solution: bool
+    optional force_static: bool
 optional multiphase_solver: MultiphaseSolver
 
 type ConvDef:
