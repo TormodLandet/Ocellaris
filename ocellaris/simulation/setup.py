@@ -48,7 +48,7 @@ def setup_simulation(simulation):
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')
     simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
-    simulation.dt = simulation.input.get_value('time/dt', None, required_type='float')
+    simulation.dt = simulation.input.get_value('time/dt', None, 'float')
     if simulation.dt is None:
         simulation.dt = 1e100
         simulation.log.warning(
