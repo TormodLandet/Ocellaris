@@ -73,7 +73,7 @@ class InputOutputHandling:
             ('u2', 'Z-component of velocity'),
             ('boundary_marker', 'Domain boundary regions'),
         ):
-            if not name in sim.data:
+            if name not in sim.data:
                 continue
             func = sim.data[name]
             if hasattr(func, 'rename'):
