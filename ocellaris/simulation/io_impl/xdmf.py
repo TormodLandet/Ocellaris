@@ -70,36 +70,34 @@ class XDMFFileIO:
         self._vel_func, self._vel_func_assigner = create_vec_func(sim.data['Vu'])
         self._vel_func.rename('u', 'Velocity')
         if sim.mesh_morpher.active:
-            self._mesh_vel_func, self._mesh_vel_func_assigner = create_vec_func(
-                sim.data['Vmesh']
-            )
+            self._mesh_vel_func, self._mesh_vel_func_assigner = create_vec_func(sim.data['Vmesh'])
             self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
 
     def _write_xdmf(self):
         """
         Write plot files for Paraview and similar applications
         """
-        t = self.simulation.time
+        sim = self.simulation
+        t = float(sim.time)
 
         if self.xdmf_first_output:
-            bm = self.simulation.data['boundary_marker']
+            bm = sim.data['boundary_marker']
             self.xdmf_file.write(bm)
 
         # Write the fluid velocities
-        self._vel_func_assigner.assign(self._vel_func, list(self.simulation.data['up']))
+        vel = sim.data.get('up', sim.data['u'])
+        self._vel_func_assigner.assign(self._vel_func, list(vel))
         self.xdmf_file.write(self._vel_func, t)
 
         # Write the mesh velocities (used in ALE calculations)
-        if self.simulation.mesh_morpher.active:
-            self._mesh_vel_func_assigner.assign(
-                self._mesh_vel_func, list(self.simulation.data['u_mesh'])
-            )
+        if sim.mesh_morpher.active:
+            self._mesh_vel_func_assigner.assign(self._mesh_vel_func, list(sim.data['u_mesh']))
             self.xdmf_file.write(self._mesh_vel_func, t)
 
         # Write scalar functions
         for name in ('p', 'p_hydrostatic', 'c', 'rho'):
-            if name in self.simulation.data:
-                func = self.simulation.data[name]
+            if name in sim.data:
+                func = sim.data[name]
                 if isinstance(func, dolfin.Function):
                     self.xdmf_file.write(func, t)
 

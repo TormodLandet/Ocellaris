@@ -1,6 +1,6 @@
 import numpy
 import dolfin as df
-from dolfin import dot, sqrt, grad, jump, avg, dx, dS, Form
+from dolfin import dot, sqrt, grad, jump, avg, dx, dS, Form, Constant
 from ocellaris.utils import timeit, ocellaris_error, velocity_change
 
 
@@ -23,10 +23,13 @@ class SolutionProperties(object):
         sim = self.simulation
 
         self.active = sim.input.get_value('output/solution_properties', True, 'bool')
-        divergence_method = sim.input.get_value(
-            'output/divergence_method', 'div', 'string'
-        )
+        divergence_method = sim.input.get_value('output/divergence_method', 'div', 'string')
         plot_divergences = sim.input.get_value('output/plot_divergences', False, 'bool')
+
+        dt = sim.data.get('dt', None)
+        if dt is None:
+            self.active = False
+
         if not self.active:
             sim.log.info('SolutionProperties not active')
             return
@@ -34,7 +37,6 @@ class SolutionProperties(object):
 
         self.mesh = sim.data['mesh']
         u = sim.data['u']
-        dt = sim.data['dt']
         rho = sim.data['rho']
         nu = sim.data['nu']
         g = sim.data['g']
