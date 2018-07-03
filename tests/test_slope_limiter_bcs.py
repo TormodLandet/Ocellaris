@@ -1,9 +1,6 @@
 import dolfin
 from ocellaris import Simulation, setup_simulation
-from ocellaris.solver_parts.boundary_conditions import (
-    get_dof_region_marks,
-    mark_cell_layers,
-)
+from ocellaris.solver_parts.boundary_conditions import get_dof_region_marks, mark_cell_layers
 from helpers import all_ok, mpi_print, mpi_int_sum
 
 
@@ -39,12 +36,6 @@ output:
     solution_properties: off
     xdmf_write_interval: 0
     save_restart_file_at_end: off
-
-time:
-    dt: 1.0
-    tmax: 1.0
-physical_properties:
-    nu: 1.0
 """
 
 

@@ -54,13 +54,6 @@ initial_conditions:
     p:
         cpp_code: py$ pa
 
-# Dummy values below here are just to make Ocellaris run. The
-# solution framework has some assumptions that all solvers
-# are (quasi) time stepping flow solvers
-time:
-    dt: 1.0
-physical_properties:
-    nu: 1.0
 boundary_conditions: []
 """
 

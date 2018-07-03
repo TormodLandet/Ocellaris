@@ -37,8 +37,7 @@ def setup_simulation(simulation):
 
     simulation.log.info('Preparing simulation')
     simulation.log.info(
-        'Output prefix is: %s'
-        % simulation.input.get_value('output/prefix', '', 'string')
+        'Output prefix is: %s' % simulation.input.get_value('output/prefix', '', 'string')
     )
     simulation.log.info("Current time: %s\n" % time.strftime('%Y-%m-%d %H:%M:%S'))
     t_start = time.time()
@@ -49,7 +48,13 @@ def setup_simulation(simulation):
     # Make time and timestep available in expressions for the initial conditions etc
     simulation.log.info('Creating time simulation')
     simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
-    simulation.dt = simulation.input.get_value('time/dt', required_type='float')
+    simulation.dt = simulation.input.get_value('time/dt', None, required_type='float')
+    if simulation.dt is None:
+        simulation.dt = 1e100
+        simulation.log.warning(
+            'No timestep (time/dt) given. Using %r' % simulation.dt
+            + ', make sure to change this if this is not a static simulation!'
+        )
     assert simulation.dt > 0
 
     # Preliminaries, before setup begins
@@ -131,9 +136,7 @@ def setup_simulation(simulation):
     simulation.hooks.add_post_simulation_hook(hook, 'Summarise simulation')
 
     # Show time spent setting up the solver
-    simulation.log.info(
-        '\nPreparing simulation done in %.3f seconds' % (time.time() - t_start)
-    )
+    simulation.log.info('\nPreparing simulation done in %.3f seconds' % (time.time() - t_start))
 
     # Show all registered hooks
     simulation.hooks.show_hook_info()
@@ -157,9 +160,7 @@ def setup_user_code(simulation):
     # Code to run right before setup (custom mesh generation etc)
     code = simulation.input.get_value('user_code/code', '', 'string')
     if code:
-        consts = simulation.input.get_value(
-            'user_code/constants', {}, 'dict(string:any)'
-        )
+        consts = simulation.input.get_value('user_code/constants', {}, 'dict(string:any)')
         variables = consts.copy()
         variables['simulation'] = simulation
         variables['__file__'] = simulation.input.file_name
@@ -178,8 +179,7 @@ def setup_fenics(simulation):
     if not dolfin.has_linear_algebra_backend("PETSc"):
         ocellaris_error(
             'Missing PETSc',
-            'DOLFIN has not been configured with PETSc '
-            'which is needed by Ocellaris.',
+            'DOLFIN has not been configured with PETSc ' 'which is needed by Ocellaris.',
         )
     dolfin.parameters['linear_algebra_backend'] = 'PETSc'
 
@@ -248,10 +248,7 @@ def load_mesh(simulation):
 
         mesh = dolfin.UnitDiscMesh(comm, N, degree, gdim)
 
-        if (
-            degree > 1
-            and dolfin.parameters['form_compiler']['representation'] != 'uflacs'
-        ):
+        if degree > 1 and dolfin.parameters['form_compiler']['representation'] != 'uflacs':
             simulation.log.warning('Using isoparametric elements without uflacs!')
 
     elif mesh_type == 'XML':
@@ -259,9 +256,7 @@ def load_mesh(simulation):
         simulation.log.warning('(deprecated, please use meshio reader)')
 
         mesh_file = inp.get_value('mesh/mesh_file', required_type='string')
-        facet_region_file = inp.get_value(
-            'mesh/facet_region_file', None, required_type='string'
-        )
+        facet_region_file = inp.get_value('mesh/facet_region_file', None, required_type='string')
 
         # Load the mesh from file
         pth = inp.get_input_file_path(mesh_file)
@@ -310,8 +305,7 @@ def load_mesh(simulation):
 
         if sort_order:
             simulation.log.info(
-                '    Ordering mesh elements by '
-                + ', then '.join('xyz'[i] for i in sort_order)
+                '    Ordering mesh elements by ' + ', then '.join('xyz'[i] for i in sort_order)
             )
 
         # Read mesh on rank 0
@@ -321,8 +315,7 @@ def load_mesh(simulation):
             # Read a mesh file by use of meshio
             physical_regions = load_meshio_mesh(mesh, file_name, file_type, sort_order)
             simulation.log.info(
-                '    Read mesh with %d cells in %.2f seconds'
-                % (mesh.num_cells(), time.time() - t1)
+                '    Read mesh with %d cells in %.2f seconds' % (mesh.num_cells(), time.time() - t1)
             )
         else:
             physical_regions = None
@@ -333,13 +326,9 @@ def load_mesh(simulation):
             t1 = time.time()
             simulation.log.info('    Distributing mesh to %d processors' % comm.size)
             build_distributed_mesh(mesh)
-            simulation.log.info(
-                '    Distributed mesh in %.2f seconds' % (time.time() - t1)
-            )
+            simulation.log.info('    Distributed mesh in %.2f seconds' % (time.time() - t1))
     else:
-        ocellaris_error(
-            'Unknown mesh type', 'Mesh type %r is not supported' % mesh_type
-        )
+        ocellaris_error('Unknown mesh type', 'Mesh type %r is not supported' % mesh_type)
 
     # Optionally move the mesh (for simple grading etc)
     move = inp.get_value('mesh/move', None, required_type='list(string)')
@@ -433,9 +422,7 @@ def mark_boundaries(simulation):
     if simulation.input.get_value('output/plot_bcs', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
         pfile = prefix + '_boundary_conditions.xdmf'
-        simulation.log.info(
-            '    Plotting boundary condition regions to ' 'XDMF file %r' % pfile
-        )
+        simulation.log.info('    Plotting boundary condition regions to ' 'XDMF file %r' % pfile)
         with dolfin.XDMFFile(mesh.mpi_comm(), pfile) as xdmf:
             xdmf.write(marker)
 
@@ -491,12 +478,8 @@ def setup_physical_properties(simulation, multiphase_class):
     simulation.multi_phase_model = multiphase_class(simulation)
 
     simulation.data['rho'] = simulation.multi_phase_model.get_density(0)
-    simulation.data[
-        'nu'
-    ] = simulation.multi_phase_model.get_laminar_kinematic_viscosity(0)
-    simulation.data['mu'] = simulation.multi_phase_model.get_laminar_dynamic_viscosity(
-        0
-    )
+    simulation.data['nu'] = simulation.multi_phase_model.get_laminar_kinematic_viscosity(0)
+    simulation.data['mu'] = simulation.multi_phase_model.get_laminar_dynamic_viscosity(0)
 
 
 def setup_known_fields(simulation):
@@ -545,18 +528,14 @@ def setup_sources(simulation):
     if ms:
         simulation.log.info('Creating sources')
         for i in range(len(ms)):
-            inp = simulation.input.get_value(
-                'momentum_sources/%d', required_type='Input'
-            )
+            inp = simulation.input.get_value('momentum_sources/%d', required_type='Input')
             name = inp.get_value('name', required_type='string')
             degree = inp.get_value('degree', required_type='int')
             cpp_code = inp.get_value('cpp_code', required_type='list(string)')
             description = 'momentum source %r' % name
             simulation.log.info('    C++ %s' % description)
 
-            expr = OcellarisCppExpression(
-                simulation, cpp_code, description, degree, update=True
-            )
+            expr = OcellarisCppExpression(simulation, cpp_code, description, degree, update=True)
             sources.append(expr)
 
     # Penalty forcing zones
@@ -565,9 +544,7 @@ def setup_sources(simulation):
     if fz:
         simulation.log.info('Creating forcing zones')
         for i in range(len(fz)):
-            inp = simulation.input.get_value(
-                'forcing_zones/%d' % i, required_type='Input'
-            )
+            inp = simulation.input.get_value('forcing_zones/%d' % i, required_type='Input')
             name = inp.get_value('name', required_type='string')
             ztype = inp.get_value('type', required_type='string')
             description = '%s zone %r' % (ztype, name)
@@ -591,14 +568,14 @@ def setup_initial_conditions(simulation):
         if name == 'file':
             has_file = True
             continue
-        elif not 'p' in name:
+        elif 'p' not in name:
             ocellaris_error(
                 'Invalid initial condition',
                 'You have given initial conditions for %r but this does '
                 'not seem to be a previous or pressure field.\n\n'
                 'Valid names: up0, up1, ... , p, cp, rho_p, ...' % name,
             )
-        elif not name in simulation.data:
+        elif name not in simulation.data:
             ocellaris_error(
                 'Invalid initial condition',
                 'You have given initial conditions for %r but this does '
@@ -633,18 +610,14 @@ def setup_initial_conditions(simulation):
             cname_main = cname_main_pattern % d
 
             if cname in ic:
-                simulation.log.info(
-                    '    Leaving %s as set by initial condition' % cname
-                )
+                simulation.log.info('    Leaving %s as set by initial condition' % cname)
                 continue
 
             if cname not in simulation.data or cname_main not in ic:
                 continue
 
             simulation.data[cname].assign(simulation.data[cname_main])
-            simulation.log.info(
-                '    Assigning initial value %s = %s' % (cname, cname_main)
-            )
+            simulation.log.info('    Assigning initial value %s = %s' % (cname, cname_main))
 
     if has_file:
         setup_initial_conditions_from_restart_file(simulation)

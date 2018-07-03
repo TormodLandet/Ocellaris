@@ -4,18 +4,20 @@ import dolfin
 
 @register_multi_phase_model('SinglePhase')
 class SinglePhaseScheme(MultiPhaseModel):
-    description = (
-        'A single phase model with a single denisity and laminar viscosity everywhere'
-    )
+    description = 'A single phase model with a single denisity and laminar viscosity everywhere'
 
     def __init__(self, simulation):
         self.simulation = simulation
         simulation.log.info('Creating single phase model')
-        props = self.simulation.input.get_value(
-            'physical_properties', required_type='Input'
-        )
+        props = self.simulation.input.get_value('physical_properties', required_type='Input')
         self.rho0 = props.get_value('rho', 1.0, 'float')
-        self.nu0 = props.get_value('nu', required_type='float')
+        self.nu0 = props.get_value('nu', None, required_type='float')
+        if self.nu0 is None:
+            self.nu0 = 1e100
+            simulation.log.warning(
+                'No viscosity (physical_properties/nu) given. Using %r' % self.nu0
+                + ', make sure to change this if you are using the viscosity!'
+            )
         simulation.log.info('    rho = %r' % self.rho0)
         simulation.log.info('    nu = %r' % self.nu0)
 

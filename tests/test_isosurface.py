@@ -26,7 +26,6 @@ multiphase_solver:
     polynomial_degree_colour: 0
 solver: {type: AnalyticalSolution}
 boundary_conditions: [{'name': 'all', 'selector': 'code', 'inside_code': 'on_boundary'}]
-time: {dt: 1.0}
 physical_properties: {nu0: 1.0, nu1: 1, rho0: 1, rho1: 1}
 output: {log_enabled: no}
 """
@@ -79,8 +78,7 @@ def test_isoline_circle(degree):
     sim.input.set_value('mesh/Nx', 10)
     sim.input.set_value('mesh/Ny', 10)
     sim.input.set_value(
-        'initial_conditions/cp/cpp_code',
-        '1.1*pow(pow(x[0] - 0.5, 2) + pow(x[1] - 0.5, 2), 0.5)',
+        'initial_conditions/cp/cpp_code', '1.1*pow(pow(x[0] - 0.5, 2) + pow(x[1] - 0.5, 2), 0.5)'
     )
     setup_simulation(sim)
 
