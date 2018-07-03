@@ -56,7 +56,7 @@ class PoissonDGSolver(Solver):
 
     def __init__(self, simulation):
         """
-        A discontinuous Galerkin Poisson solver for use in 
+        A discontinuous Galerkin Poisson solver for use in
         the Ocellaris solution framework. Solves -∇⋅∇φ = f
         by use of the Symmetric Interior Penalty method
         """

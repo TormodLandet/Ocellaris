@@ -25,8 +25,8 @@ user_code:
         pa:  |
           -a * a / 2 * (
               exp(2 * a * x[0]) + exp(2 * a * x[1]) + exp(2 * a * x[2]) +
-              2 * sin(a * x[0] + d * x[1]) * cos(a * x[2] + d * x[0]) * exp(a * (x[1] + x[2])) + 
-              2 * sin(a * x[1] + d * x[2]) * cos(a * x[0] + d * x[1]) * exp(a * (x[2] + x[0])) + 
+              2 * sin(a * x[0] + d * x[1]) * cos(a * x[2] + d * x[0]) * exp(a * (x[1] + x[2])) +
+              2 * sin(a * x[1] + d * x[2]) * cos(a * x[0] + d * x[1]) * exp(a * (x[2] + x[0])) +
               2 * sin(a * x[2] + d * x[0]) * cos(a * x[1] + d * x[2]) * exp(a * (x[0] + x[1]))
           ) * exp(-2 * d * d * t)
 
@@ -55,7 +55,7 @@ initial_conditions:
         cpp_code: py$ pa
 
 boundary_conditions: []
-"""
+"""  # noqa: E501
 
 
 def test_restart_file_io(tmpdir_factory):
@@ -66,6 +66,7 @@ def test_restart_file_io(tmpdir_factory):
     sim.input.read_yaml(yaml_string=BASE_INPUT_PHI)
     sim.input.set_value('output/prefix', prefix)
     sim.input.set_value('time/tstart', 42.0)
+    sim.input.set_value('time/dt', 1.0)
     setup_simulation(sim)
 
     # Fill in the phi function
