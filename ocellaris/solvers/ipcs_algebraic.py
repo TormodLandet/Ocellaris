@@ -59,6 +59,11 @@ SPLIT_APPROX_BLOCK_DIAG_MA = 'block diagonal'
 SPLIT_APPROX_DEFAULT = SPLIT_APPROX_MASS_WITH_RHO
 
 
+def assemble_into(form, tensor):
+    tensor = dolfin.assemble(form, tensor=tensor)
+    return dolfin.as_backend_type(tensor)
+
+
 @register_solver('IPCS-A')
 class SolverIPCSA(Solver):
     description = 'Incremental Pressure Correction Scheme (algebraic form)'
@@ -314,7 +319,7 @@ class SolverIPCSA(Solver):
             u2 = dolfin.as_vector(dolfin.TrialFunction(self.Vuvw)[:])
             v2 = dolfin.as_vector(dolfin.TestFunction(self.Vuvw)[:])
             a = dolfin.dot(u2, v2) * dolfin.dx
-            Mus = dolfin.as_backend_type(dolfin.assemble(a))
+            Mus = assemble_into(a, None)
             self.M_unscaled_inv = invert_block_diagonal_matrix(self.Vuvw, Mus)
 
     @timeit
@@ -332,15 +337,15 @@ class SolverIPCSA(Solver):
             rhs = self.C * vel.vector()
             # If there is no flux (Dirichlet type) across the boundaries then e is None
             if self.eqE is not None:
-                self.E = dolfin.as_backend_type(dolfin.assemble(self.eqE, tensor=self.E))
+                self.E = assemble_into(self.eqE, self.E)
                 rhs.axpy(-1.0, self.E)
             rhs.apply('insert')
             return rhs
 
         # Assemble RHS
         sim.log.info('    Assembling projection matrices')
-        self.B = dolfin.as_backend_type(dolfin.assemble(self.eqB, tensor=self.B))
-        self.C = dolfin.as_backend_type(dolfin.assemble(self.eqC, tensor=self.C))
+        self.B = assemble_into(self.eqB, self.B)
+        self.C = assemble_into(self.eqC, self.C)
         MinvB = matmul(self.M_unscaled_inv, self.B)
         rhs = mk_rhs()
 
@@ -384,49 +389,20 @@ class SolverIPCSA(Solver):
         u_temp = sim.data['uvw_temp']
         p_star = sim.data['p']
 
-        self.niters_u = 0
+        # Assemble only once per time step
+        if self.inner_iteration == 1:
+            self.MplusA = assemble_into(self.eqA, self.MplusA)
+            self.B = assemble_into(self.eqB, self.B)
+            self.D = assemble_into(self.eqD, self.D)
+
+        lhs = self.MplusA
+        rhs = self.D - self.B * p_star.vector()
+
+        # Solve the linearised convection-diffusion system
         u_temp.assign(u_star)
-
-        def assemble_into(form, tensor):
-            tensor = dolfin.assemble(form, tensor=tensor)
-            return dolfin.as_backend_type(tensor)
-
-        # Get actual rho_min and the optional extra rho_min we will try
-        # first to get a better estimate of u_star for the Krylov solver
-        mpm = sim.multi_phase_model
-        rho_min_orig = mpm.get_density_range()[0]
-        rho_mins = [500, 50, 5, rho_min_orig]
-        Nrho = len(rho_mins)
-        if self.MplusA is None:
-            self.MplusAs = [None] * Nrho
-            self.Bs = [None] * Nrho
-            self.Ds = [None] * Nrho
-
-        # Gradually decrease rho_min towards the physical value to speed
-        # up convergence of the Krylov iterations. It takes fewer Krylov
-        # iterations for small values of rho_fac = rho_max/rho_min
-        for irho, rho_min in enumerate(rho_mins):
-            mpm.set_rho_min(rho_min)
-
-            # Assemble only once per time step
-            if self.inner_iteration == 1:
-                self.MplusAs[irho] = assemble_into(self.eqA, self.MplusAs[irho])
-                self.Bs[irho] = assemble_into(self.eqB, self.Bs[irho])
-                self.Ds[irho] = assemble_into(self.eqD, self.Ds[irho])
-
-            lhs = self.MplusAs[irho]
-            rhs = self.Ds[irho] - self.Bs[irho] * p_star.vector()
-
-            # Solve the linearised convection-diffusion system
-            niters = self.velocity_solver.inner_solve(
-                lhs, u_star.vector(), rhs, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
-            )
-            self.niters_u += niters
-            print(irho, rho_min, niters)
-        
-        self.MplusA = self.MplusAs[-1]
-        self.B = self.Bs[-1]
-        self.D = self.Ds[-1]
+        self.niters_u = self.velocity_solver.inner_solve(
+            lhs, u_star.vector(), rhs, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
+        )
 
         # Compute change from last iteration
         u_temp.vector().axpy(-1, u_star.vector())
@@ -445,13 +421,13 @@ class SolverIPCSA(Solver):
         # Get the block diagonal matrix
         if self.splitting_approximation == SPLIT_APPROX_MASS_WITH_RHO:
             # The standard rho/dt approximation
-            self.M = dolfin.assemble(self.eqM, tensor=self.M)
+            self.M = assemble_into(self.eqM, self.M)
             approx_A = self.M
         if self.splitting_approximation == SPLIT_APPROX_MASS_MIN_RHO:
             # Use a min(rho)/dt approximation (assumed to not change with time)
             if self.Minv is not None:
                 return self.Minv
-            self.M = dolfin.assemble(self.eqM, tensor=self.M)
+            self.M = assemble_into(self.eqM, self.M)
             approx_A = self.M
         elif self.splitting_approximation == SPLIT_APPROX_MASS_UNSCALED:
             # Use the FEM "mass matrix", i.e. no rho or dt inside
@@ -477,10 +453,10 @@ class SolverIPCSA(Solver):
 
         # Assemble only once per time step
         if self.inner_iteration == 1:
-            self.C = dolfin.as_backend_type(dolfin.assemble(self.eqC, tensor=self.C))
+            self.C = assemble_into(self.eqC, self.C)
             self.Minv = dolfin.as_backend_type(self.compute_M_inverse())
             if self.eqE is not None:
-                self.E = dolfin.as_backend_type(dolfin.assemble(self.eqE, tensor=self.E))
+                self.E = assemble_into(self.eqE, self.E)
 
             # Compute LHS
             self.MinvB = matmul(self.Minv, self.B, self.MinvB)
