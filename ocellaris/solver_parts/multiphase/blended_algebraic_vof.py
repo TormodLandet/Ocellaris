@@ -86,14 +86,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         )
 
         # Get the physical properties
-        self.rho0 = self.simulation.input.get_value(
-            'physical_properties/rho0', required_type='float'
-        )
-        self.rho1 = self.simulation.input.get_value(
-            'physical_properties/rho1', required_type='float'
-        )
-        self.nu0 = self.simulation.input.get_value('physical_properties/nu0', required_type='float')
-        self.nu1 = self.simulation.input.get_value('physical_properties/nu1', required_type='float')
+        self.set_physical_properties(read_input=True)
 
         # The convection blending function that counteracts numerical diffusion
         scheme = simulation.input.get_value(

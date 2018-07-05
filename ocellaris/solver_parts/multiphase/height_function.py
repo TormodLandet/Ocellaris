@@ -19,9 +19,7 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
         """
         self.simulation = simulation
         simulation.log.info('Creating height function multiphase model')
-        assert (
-            simulation.ncpu == 1
-        ), 'HeightFunctionMultiphaseModel does not run in parallel'
+        assert simulation.ncpu == 1, 'HeightFunctionMultiphaseModel does not run in parallel'
 
         # Define colour function
         V = simulation.data['Vc']
@@ -77,18 +75,7 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
         simulation.log.info('    Created surface mesh with %d elements' % (Nx - 1))
 
         # Get the physical properties
-        self.rho0 = self.simulation.input.get_value(
-            'physical_properties/rho0', required_type='float'
-        )
-        self.rho1 = self.simulation.input.get_value(
-            'physical_properties/rho1', required_type='float'
-        )
-        self.nu0 = self.simulation.input.get_value(
-            'physical_properties/nu0', required_type='float'
-        )
-        self.nu1 = self.simulation.input.get_value(
-            'physical_properties/nu1', required_type='float'
-        )
+        self.set_physical_properties(read_input=True)
 
         # Update the rho and nu fields before each time step
         simulation.hooks.add_pre_timestep_hook(

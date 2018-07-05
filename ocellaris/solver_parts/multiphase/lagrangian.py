@@ -34,9 +34,7 @@ class LagrangianMeshMorpher(VOFMixin, MultiPhaseModel):
         V = simulation.data['Vc']
         c = dolfin.Function(V)
         simulation.data['c'] = c
-        simulation.data[
-            'cp'
-        ] = c  # Initial conditions are specified for cp, so we need this alias
+        simulation.data['cp'] = c  # Initial conditions are specified for cp, so we need this alias
 
         # Setup the mesh morpher
         simulation.mesh_morpher.setup()
@@ -49,23 +47,10 @@ class LagrangianMeshMorpher(VOFMixin, MultiPhaseModel):
         )
 
         # Get the physical properties
-        self.rho0 = self.simulation.input.get_value(
-            'physical_properties/rho0', required_type='float'
-        )
-        self.rho1 = self.simulation.input.get_value(
-            'physical_properties/rho1', required_type='float'
-        )
-        self.nu0 = self.simulation.input.get_value(
-            'physical_properties/nu0', required_type='float'
-        )
-        self.nu1 = self.simulation.input.get_value(
-            'physical_properties/nu1', required_type='float'
-        )
+        self.set_physical_properties(read_input=True)
 
         # Update the rho and nu fields after each time step
-        simulation.hooks.add_post_timestep_hook(
-            self.update, 'LagrangianMeshMorpher - update mesh'
-        )
+        simulation.hooks.add_post_timestep_hook(self.update, 'LagrangianMeshMorpher - update mesh')
 
         simulation.log.info('Creating Lagrangian mesh morphing multiphase model')
 
