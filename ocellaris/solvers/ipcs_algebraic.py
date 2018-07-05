@@ -93,9 +93,7 @@ class SolverIPCSA(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
-        self.hydrostatic_pressure = setup_hydrostatic_pressure(
-            simulation, needs_initial_value=True
-        )
+        self.hydrostatic_pressure = setup_hydrostatic_pressure(simulation, needs_initial_value=True)
 
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -107,18 +105,14 @@ class SolverIPCSA(Solver):
         self.define_weak_forms()
 
         # Slope limiter for the momentum equation velocity components
-        self.slope_limiter = SlopeLimiterVelocity(
-            sim, sim.data['u'], 'u', vel_w=sim.data['u_conv']
-        )
+        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
         self.using_limiter = self.slope_limiter.active
 
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
             self.velocity_postprocessor = VelocityBDMProjection(
-                sim,
-                sim.data['u'],
-                incompressibility_flux_type=self.incompressibility_flux_type,
+                sim, sim.data['u'], incompressibility_flux_type=self.incompressibility_flux_type
             )
 
         # Matrix and vector storage
@@ -181,10 +175,7 @@ class SolverIPCSA(Solver):
             'solver/velocity_postprocessing', default_postprocessing, 'string'
         )
         verify_key(
-            'velocity post processing',
-            self.velocity_postprocessing,
-            ('none', BDM),
-            'IPCS-A solver',
+            'velocity post processing', self.velocity_postprocessing, ('none', BDM), 'IPCS-A solver'
         )
 
         # What types of mass matrices to produce
@@ -293,9 +284,7 @@ class SolverIPCSA(Solver):
         # Check matrix and vector shapes and that the matrix is a saddle point matrix
         assert mat.shape == (2, 2)
         assert vec.shape == (2,)
-        assert (
-            mat[-1, -1] is None
-        ), 'Found p-q coupling, this is not a saddle point system!'
+        assert mat[-1, -1] is None, 'Found p-q coupling, this is not a saddle point system!'
 
         # Compile and store the forms
         sim.log.info('    Compiling IPCS-A forms')
@@ -317,9 +306,7 @@ class SolverIPCSA(Solver):
             c1 = sim.data['time_coeffs'][0]
             dt = sim.data['dt']
             eqM = rho_for_M * c1 / dt * dolfin.dot(u, v) * dolfin.dx
-            matM, _vecM = split_form_into_matrix(
-                eqM, Vcoupled, Vcoupled, check_zeros=True
-            )
+            matM, _vecM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)
             self.eqM = dolfin.Form(matM[0, 0])
 
         # The mass matrix without density
@@ -345,9 +332,7 @@ class SolverIPCSA(Solver):
             rhs = self.C * vel.vector()
             # If there is no flux (Dirichlet type) across the boundaries then e is None
             if self.eqE is not None:
-                self.E = dolfin.as_backend_type(
-                    dolfin.assemble(self.eqE, tensor=self.E)
-                )
+                self.E = dolfin.as_backend_type(dolfin.assemble(self.eqE, tensor=self.E))
                 rhs.axpy(-1.0, self.E)
             rhs.apply('insert')
             return rhs
@@ -399,45 +384,49 @@ class SolverIPCSA(Solver):
         u_temp = sim.data['uvw_temp']
         p_star = sim.data['p']
 
-        # Assemble only once per time step
-        if self.inner_iteration == 1:
-            self.MplusA = dolfin.as_backend_type(
-                dolfin.assemble(self.eqA, tensor=self.MplusA)
-            )
-            self.B = dolfin.as_backend_type(dolfin.assemble(self.eqB, tensor=self.B))
-            self.D = dolfin.as_backend_type(dolfin.assemble(self.eqD, tensor=self.D))
-
-        lhs = self.MplusA
-        rhs = self.D - self.B * p_star.vector()
-
-        self.project_rhs = False
-        if self.project_rhs and self.velocity_postprocessor:
-            print('PROJ PROJ PROJ PROJ PROJ PROJ PROJ PROJ PROJ!')
-
-            if not hasattr(self, 'rhs_tmp'):
-                # Setup RHS projection
-                Vu = sim.data['Vu']
-                funcs = [dolfin.Function(Vu) for _ in range(sim.ndim)]
-                self.rhs_tmp = dolfin.as_vector(funcs)
-                self.rhs_postprocessor = VelocityBDMProjection(
-                    sim,
-                    self.rhs_tmp,
-                    incompressibility_flux_type=self.incompressibility_flux_type,
-                )
-
-            self.assigner_split.assign(list(self.rhs_tmp), rhs)
-            self.rhs_postprocessor.run()
-            self.assigner_merge.assign(rhs, list(self.rhs_tmp))
-
-        # Solve the linearised convection-diffusion system
+        self.niters_u = 0
         u_temp.assign(u_star)
-        self.niters_u = self.velocity_solver.inner_solve(
-            lhs,
-            u_star.vector(),
-            rhs,
-            in_iter=self.inner_iteration,
-            co_iter=self.co_inner_iter,
-        )
+
+        def assemble_into(form, tensor):
+            tensor = dolfin.assemble(form, tensor=tensor)
+            return dolfin.as_backend_type(tensor)
+
+        # Get actual rho_min and the optional extra rho_min we will try
+        # first to get a better estimate of u_star for the Krylov solver
+        mpm = sim.multi_phase_model
+        rho_min_orig = mpm.get_density_range()[0]
+        rho_mins = [500, 50, 5, rho_min_orig]
+        Nrho = len(rho_mins)
+        if self.MplusA is None:
+            self.MplusAs = [None] * Nrho
+            self.Bs = [None] * Nrho
+            self.Ds = [None] * Nrho
+
+        # Gradually decrease rho_min towards the physical value to speed
+        # up convergence of the Krylov iterations. It takes fewer Krylov
+        # iterations for small values of rho_fac = rho_max/rho_min
+        for irho, rho_min in enumerate(rho_mins):
+            mpm.set_rho_min(rho_min)
+
+            # Assemble only once per time step
+            if self.inner_iteration == 1:
+                self.MplusAs[irho] = assemble_into(self.eqA, self.MplusAs[irho])
+                self.Bs[irho] = assemble_into(self.eqB, self.Bs[irho])
+                self.Ds[irho] = assemble_into(self.eqD, self.Ds[irho])
+
+            lhs = self.MplusAs[irho]
+            rhs = self.Ds[irho] - self.Bs[irho] * p_star.vector()
+
+            # Solve the linearised convection-diffusion system
+            niters = self.velocity_solver.inner_solve(
+                lhs, u_star.vector(), rhs, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
+            )
+            self.niters_u += niters
+            print(irho, rho_min, niters)
+        
+        self.MplusA = self.MplusAs[-1]
+        self.B = self.Bs[-1]
+        self.D = self.Ds[-1]
 
         # Compute change from last iteration
         u_temp.vector().axpy(-1, u_star.vector())
@@ -491,9 +480,7 @@ class SolverIPCSA(Solver):
             self.C = dolfin.as_backend_type(dolfin.assemble(self.eqC, tensor=self.C))
             self.Minv = dolfin.as_backend_type(self.compute_M_inverse())
             if self.eqE is not None:
-                self.E = dolfin.as_backend_type(
-                    dolfin.assemble(self.eqE, tensor=self.E)
-                )
+                self.E = dolfin.as_backend_type(dolfin.assemble(self.eqE, tensor=self.E))
 
             # Compute LHS
             self.MinvB = matmul(self.Minv, self.B, self.MinvB)
@@ -531,11 +518,7 @@ class SolverIPCSA(Solver):
 
         # Solve for the new pressure correction
         self.niters_p = self.pressure_solver.inner_solve(
-            lhs,
-            p_star.vector(),
-            rhs,
-            in_iter=self.inner_iteration,
-            co_iter=self.co_inner_iter,
+            lhs, p_star.vector(), rhs, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
         )
 
         # Removing the null space of the matrix system is not strictly the same as removing
@@ -619,9 +602,7 @@ class SolverIPCSA(Solver):
                 # Get input values, these can possibly change over time
                 dt = sim.input.get_value('time/dt', required_type='float')
                 tmax = sim.input.get_value('time/tmax', required_type='float')
-                num_inner_iter = sim.input.get_value(
-                    'solver/num_inner_iter', MAX_INNER_ITER, 'int'
-                )
+                num_inner_iter = sim.input.get_value('solver/num_inner_iter', MAX_INNER_ITER, 'int')
                 allowable_error_inner = sim.input.get_value(
                     'solver/allowable_error_inner', ALLOWABLE_ERROR_INNER, 'float'
                 )
@@ -652,13 +633,7 @@ class SolverIPCSA(Solver):
                     sim.log.info(
                         '  IPCS-A iteration %3d - err u* %10.3e - err p %10.3e'
                         ' - Num Krylov iters - u %3d - p %3d'
-                        % (
-                            self.inner_iteration,
-                            err_u,
-                            err_p,
-                            self.niters_u,
-                            self.niters_p,
-                        )
+                        % (self.inner_iteration, err_u, err_p, self.niters_u, self.niters_p)
                     )
                     self.inner_iteration += 1
 
@@ -668,9 +643,7 @@ class SolverIPCSA(Solver):
                 # DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG
                 # Report total flux in the domain, should be zero
                 n = dolfin.FacetNormal(self.simulation.data['mesh'])
-                flux = sum(
-                    n[i] * sim.data['uvw_star'][i] for i in range(self.simulation.ndim)
-                )
+                flux = sum(n[i] * sim.data['uvw_star'][i] for i in range(self.simulation.ndim))
                 tflux = dolfin.assemble(flux * dolfin.ds)
                 sim.reporting.report_timestep_value('TotFlux', tflux)
 

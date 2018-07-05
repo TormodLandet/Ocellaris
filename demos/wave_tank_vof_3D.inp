@@ -10,16 +10,16 @@ metadata:
 
 user_code:
     constants:
-        L: 140
+        L: 40
         H: 10
         W: 1
         h: 7
         h_above: 3 
-        N: 5
-        iz0: 0    # Inlet zone x pos 
-        iz1: 40
-        dz0: 100  # Outlet zone x pos
-        dz1: 140
+        N: 2     # cells per meter
+        iz0: 0   # Inlet zone x pos 
+        iz1: 10
+        dz0: 30  # Outlet zone x pos
+        dz1: 40
 
 physical_properties:
     rho0: 1000.0
@@ -30,9 +30,9 @@ physical_properties:
     
 mesh:
     type: Box
-    Nx: py$ int(N * L/10)
-    Ny: 1  # py$ max(int(N * W/10), 1)
-    Nz: py$ int(N * H/4)
+    Nx: py$ int(N * L + 0.5)
+    Ny: py$ max(int(N * W  + 0.5), 1)
+    Nz: py$ int(N * H)
     endx: py$ L
     endz: py$ H
     endy: py$ W
@@ -63,7 +63,7 @@ fields:
     stationary: yes
     cpp_code: 'x[0] < iz0 ? 1.0 : (x[0] > iz1 ? 0.0 : pow((x[0] - iz1)/(iz0 - iz1), 2))'
 
-_forcing_zones:
+forcing_zones:
 -   name: wave damping
     type: MomentumForcing
     zone: outlet zone/beta
@@ -94,40 +94,91 @@ _forcing_zones:
     penalty: 10
     plot: no
 
+initial_conditions:
+    cp:
+        function: waves/c
+    up0:
+        function: waves/uhoriz
+    up2:
+        function: waves/uvert
+
 boundary_conditions:
--   name: bottom
-    selector: code
-    inside_code: 'on_boundary and x[2] < 1e-5'
-    u:
-        type: FreeSlip
--   name: top
-    selector: code
-    inside_code: 'on_boundary and x[2] > H - 1e-5'
-    u:
-        type: FreeSlip # OpenOutletBoundary
--   name: inlet
+-   name: Inlet
     selector: code
     inside_code: 'on_boundary and x[0] < 1e-5'
-    u:
+    u0:
         type: FieldFunction
-        function: waves/u
+        function: waves/uhoriz
+    u1:
+        type: ConstantValue
+        value: 0
+    u2:
+        type: FieldFunction
+        function: waves/uvert
     c:
         type: FieldFunction
         function: waves/c
--   name: outlet
+
+-   name: Outlet
     selector: code
     inside_code: 'on_boundary and x[0] > L - 1e-5'
-    u:
+    u0:
         type: FieldFunction
-        function: waves/u
+        function: waves/uhoriz
+    u1:
+        type: ConstantValue
+        value: 0
+    u2:
+        type: FieldFunction
+        function: waves/uvert
     c:
         type: FieldFunction
         function: waves/c
--   name: sides
+
+-   name: Bottom
     selector: code
-    inside_code: 'on_boundary and x[1] < 1e-5 or x[1] > W - 1e-5'
-    u:
-        type: FreeSlip
+    inside_code: 'on_boundary and x[2] < 1e-5'
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantGradient
+        value: 0
+    u2:
+        type: ConstantValue
+        value: 0
+    c:
+        type: ConstantValue
+        value: 1
+
+-   name: Top
+    selector: code
+    inside_code: 'on_boundary and x[2] > H - 1e-5'
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantGradient
+        value: 0
+    u2:
+        type: ConstantValue
+        value: 0
+    c:
+        type: ConstantValue
+        value: 0
+
+-   name: Sides
+    selector: code
+    inside_code: 'on_boundary and (x[1] < 1e-5 or x[1] > W - 1e-5)'
+    u0:
+        type: ConstantGradient
+        value: 0
+    u1:
+        type: ConstantValue
+        value: 0
+    u2:
+        type: ConstantGradient
+        value: 0
 #-   name: valve
 #    selector: code
 #    inside_code: 'on_boundary and x[2] > H - 1e-5 and x[0] >= 80 and x[0] <= 100'
@@ -142,37 +193,27 @@ boundary_conditions:
 #        function: waves/u
 #        regions: [inlet, outlet]
 
-initial_conditions:
-    cp:
-        function: waves/c
-    up0:
-        function: waves/uhoriz
-    up2:
-        function: waves/uvert
-
 time:
     dt: 0.02
-    tmax: 30.0
+    tmax: 0.3 #30.0
 
 output:
     prefix: 'output/wave_tank_vof_3D'
     dolfin_log_level: warning
     ocellaris_log_level: info
+    flush_interval: 60
     xdmf_write_interval: 10
+    hdf5_write_interval: 50
+    hdf5_only_store_latest: yes
     divergence_method: div0
     plot_divergences: yes
 
-multiphase_solver:
-    type: BlendedAlgebraicVOF
-    function_space_colour: DG
-    polynomial_degree_colour: 0
-    plot_fields: yes
-
 solver:
     type: IPCS-A
-    num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
+    num_inner_iter: py$ 10 if it < 3 else (5 if it < 10 else 2)
+    allowable_error_inner: 1e-4
+    use_stress_divergence_form: yes
     #hydrostatic_pressure_calculation_every_timestep: no
-    #allowable_error_inner: 1e-4
     #project_initial_velocity: yes
     #splitting_approximation: min rho mass
     #num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
@@ -187,6 +228,12 @@ solver:
         inner_iter_atol: [1.0e-12, 1.0e-12, 1.0e-12]
         inner_iter_max_it: [1000, 1000, 1000]
 
+multiphase_solver:
+    type: BlendedAlgebraicVOF
+    function_space_colour: DG
+    polynomial_degree_colour: 0
+    plot_fields: no
+
 convection:
     c:
         convection_scheme: HRIC
@@ -197,8 +244,13 @@ slope_limiter:
     u:
         method: Componentwise
         comp_method: HierarchicalTaylor
-        limit_conv: no
-        skip_boundaries: ['all']
+        use_weak_bcs: no
+    #u0:
+    #    skip_boundaries: [Inlet, Outlet]
+    #u1:
+    #    skip_boundaries: []
+    #u2:
+    #    skip_boundaries: [Inlet, Outlet]
 
 probes:
     -   name: cutY_c
