@@ -213,6 +213,9 @@ solver:
     num_inner_iter: py$ 10 if it < 3 else (5 if it < 10 else 2)
     allowable_error_inner: 1e-4
     use_stress_divergence_form: yes
+    rho_start_momentum: 100.0
+    rho_steps_momentum: 10
+    rho_iters_momentum: 3
     #hydrostatic_pressure_calculation_every_timestep: no
     #project_initial_velocity: yes
     #splitting_approximation: min rho mass

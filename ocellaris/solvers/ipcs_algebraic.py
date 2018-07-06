@@ -1,3 +1,4 @@
+import numpy
 import dolfin
 from ocellaris.utils import (
     verify_key,
@@ -123,6 +124,7 @@ class SolverIPCSA(Solver):
         # Matrix and vector storage
         self.MplusA = self.B = self.C = self.M = self.Minv = self.D = self.E = None
         self.MinvB = self.CMinvB = None
+        self.MplusA_nice = self.B_nice = self.D_nice = None
 
         # Store number of iterations
         self.niters_u = None
@@ -395,13 +397,56 @@ class SolverIPCSA(Solver):
             self.B = assemble_into(self.eqB, self.B)
             self.D = assemble_into(self.eqD, self.D)
 
+        # The equation system to solve
         lhs = self.MplusA
         rhs = self.D - self.B * p_star.vector()
 
-        # Solve the linearised convection-diffusion system
+        # Store the starting point to be able to compute the change
         u_temp.assign(u_star)
-        self.niters_u = self.velocity_solver.inner_solve(
-            lhs, u_star.vector(), rhs, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
+        self.niters_u = 0
+
+        # Method to speed up Krylov solution when the rho_min is small
+        # compared to rho_max (leads to ill conditioning for sharp multi
+        # phase problems, mustly tested vith BlendedAlgebraicVOF)
+        rho_steps = sim.input.get_value('solver/rho_steps_momentum', 0, 'int')
+        if rho_steps and self.inner_iteration == 1:
+            rho_min_orig, rho_max = sim.multi_phase_model.get_density_range()
+            rho_min_nice = sim.input.get_value(
+                'solver/rho_start_momentum', (rho_min_orig + rho_max) / 2, 'float'
+            )
+            sim.multi_phase_model.set_rho_min(rho_min_nice)
+            self.MplusA_nice = assemble_into(self.eqA, self.MplusA_nice)
+            self.B_nice = assemble_into(self.eqB, self.B_nice)
+            self.D_nice = assemble_into(self.eqD, self.D_nice)
+            sim.multi_phase_model.set_rho_min(rho_min_orig)
+
+        if rho_steps:
+            # The equation system to solve - nice version, better conditioned
+            lhs_nice = self.MplusA_nice
+            rhs_nice = self.D_nice - self.B_nice * p_star.vector()
+
+            niters = sim.input.get_value('solver/rho_iters_momentum', 3, 'int')
+            for fac in numpy.linspace(0.0, 1.0, rho_steps):
+                lhs_total = lhs * fac + lhs_nice * (1 - fac)
+                rhs_total = rhs * fac + rhs_nice * (1 - fac)
+
+                self.niters_u += self.velocity_solver.inner_solve(
+                    lhs_total,
+                    u_star.vector(),
+                    rhs_total,
+                    in_iter=self.inner_iteration,
+                    co_iter=self.co_inner_iter,
+                    force_max_it=niters,
+                )
+
+        # Solve the linearised convection-diffusion system
+        self.niters_u += self.velocity_solver.inner_solve(
+            lhs,
+            u_star.vector(),
+            rhs,
+            in_iter=self.inner_iteration,
+            co_iter=self.co_inner_iter,
+            force_max_it=None,
         )
 
         # Compute change from last iteration

@@ -198,6 +198,9 @@ type Solver:
     optional function_space_velocity: StringMin1
     optional function_space_pressure: StringMin1
     optional num_elements_in_A_tilde_block: Integer
+    optional rho_steps_momentum: Integer
+    optional rho_start_momentum: Float
+    optional rho_iters_momentum: Integer
 
     # Rare settings, may not be super well tested
     optional timestepping_method: str(equals='BDF')
