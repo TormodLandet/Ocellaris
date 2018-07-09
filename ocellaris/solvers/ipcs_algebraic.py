@@ -612,6 +612,7 @@ class SolverIPCSA(Solver):
                         % (self.inner_iteration, err_u, err_p, self.niters_u, self.niters_p)
                     )
                     self.inner_iteration += 1
+                    sim.flush(False)  # Flushes output if sufficient time has passed
 
                     if err_u < allowable_error_inner:
                         break
