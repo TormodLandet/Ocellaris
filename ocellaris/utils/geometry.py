@@ -50,6 +50,8 @@ def init_connectivity(simulation):
         simulation.data['connectivity_CV'] = mesh.topology()(3, 0)
         simulation.data['connectivity_FC'] = mesh.topology()(2, 3)
         simulation.data['connectivity_CF'] = mesh.topology()(3, 2)
+        simulation.data['connectivity_FV'] = mesh.topology()(2, 0)
+        simulation.data['connectivity_VF'] = mesh.topology()(0, 2)
 
 
 def precompute_cell_data(simulation):
