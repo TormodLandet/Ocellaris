@@ -1,11 +1,7 @@
 import time
 import dolfin
 from ocellaris.utils import timeit, shift_fields
-from ocellaris.utils.geometry import (
-    init_connectivity,
-    precompute_cell_data,
-    precompute_facet_data,
-)
+from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
 from .reporting import Reporting
@@ -58,6 +54,7 @@ class Simulation(object):
         self.mesh_morpher = None
         self.t_start = None
         self.probes = None
+        self.iso_surface_locators = {}
 
         # For timing the analysis and flushing the log at intervals
         self.prevtime = self.starttime = time.time()
@@ -70,9 +67,7 @@ class Simulation(object):
         boundary conditions, initial condition, function spaces, runtime
         post-processing probes, program and user defined hooks ...
         """
-        self.flush_interval = self.input.get_value(
-            'output/flush_interval', FLUSH_INTERVAL, 'float'
-        )
+        self.flush_interval = self.input.get_value('output/flush_interval', FLUSH_INTERVAL, 'float')
         setup_simulation(self)
 
     def set_mesh(self, mesh, mesh_facet_regions=None):

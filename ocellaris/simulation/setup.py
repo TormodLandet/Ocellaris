@@ -394,7 +394,7 @@ def mark_boundaries(simulation):
     # condition objects that are later used in the eq. solvers
     boundary = []
     for index, _ in enumerate(
-        simulation.input.get_value('boundary_conditions', required_type='list(dict)')
+        simulation.input.get_value('boundary_conditions', [], 'list(dict)')
     ):
         part = BoundaryRegion(simulation, marker, index, mesh_facet_regions)
         boundary.append(part)

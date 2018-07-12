@@ -61,7 +61,7 @@ class AnalyticalSolution(Solver):
         for name, info in ic.items():
             name = str(name)
 
-            if not name in funcs:
+            if name not in funcs:
                 continue
             func = funcs[name]
 
