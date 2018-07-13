@@ -44,7 +44,7 @@ class FreeSurfaceLocator:
         deg = V.ufl_element().degree()
         fam = V.ufl_element().family()
         if fam == 'Discontinuous Lagrange' and deg == 0:
-            self.impl = FreeSurfaceLocatorImplDG0(simulation, density)
+            self.impl = FreeSurfaceLocatorImplDG0(simulation, density, free_surface_value)
         else:
             raise NotImplementedError(
                 'FreeSurfaceLocator not implemented for %r degree %r' % (fam, deg)
