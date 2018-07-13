@@ -1,3 +1,4 @@
+import dolfin
 from ocellaris import Simulation
 import pytest
 
@@ -64,21 +65,24 @@ def vof_sim(request):
 
 
 def test_surface_locator(vof_sim):
-    # Get a level set view of the colour function
-    ls = vof_sim.multi_phase_model.get_level_set_view()
+    # Get a level set view of the colour function and extract the fs locator
+    lsv = vof_sim.multi_phase_model.get_level_set_view()
+    loc = lsv._locator
 
-    loc = ls._locator
+    # Check that the caching works as intended
     assert loc._crossing_points is None
     cp = loc.crossing_points
     assert loc._crossing_points is not None
     vof_sim.hooks.run_custom_hook('MultiPhaseModelUpdated')
     assert loc._crossing_points is None
 
+    # Check the number of crossings
     ndim = vof_sim.ndim
     num_crossings = len(cp)
     if vof_sim.ncpu == 1:
         assert num_crossings == 4 if ndim == 2 else 16
 
+    # Check the location of the crossings and the fs orientation
     expected = vof_sim.test_surf_normal
     index = vof_sim.test_coord_index
     for points in cp.values():
@@ -86,3 +90,17 @@ def test_surface_locator(vof_sim):
             print(pt, vec.dot(expected), vec, expected)
             assert abs(pt[index] - 0.5) < 1e-4
             assert vec.dot(expected) > 0.3
+
+
+def test_level_set_view(vof_sim):
+    lsv = vof_sim.multi_phase_model.get_level_set_view()
+    vof_sim.hooks.run_custom_hook('MultiPhaseModelUpdated')
+
+    lsf = lsv.level_set_function
+    V = lsf.function_space()
+
+    cpp = '0.5 - x[%d]' % vof_sim.test_coord_index
+    expected = dolfin.Expression(cpp, element=V.ufl_element())
+
+    err = dolfin.errornorm(expected, lsf)
+    assert err < 1e-2
