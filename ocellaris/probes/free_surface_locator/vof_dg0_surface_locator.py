@@ -1,5 +1,6 @@
 import numpy
 import dolfin
+from ocellaris.utils import get_local
 
 
 class FreeSurfaceLocatorImplDG0:
@@ -31,7 +32,7 @@ def crossing_points_and_cells(simulation, field, value):
     The field is assumed to be piecewice constant (DG0)
     """
     mesh = simulation.data['mesh']
-    all_values = field.vector().get_local()
+    all_values = get_local(field)
     dofmap = field.function_space().dofmap()
 
     # Mesh connectivities

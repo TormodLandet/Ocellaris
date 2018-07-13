@@ -75,9 +75,12 @@ def test_surface_locator(vof_sim):
     assert loc._crossing_points is None
 
     ndim = vof_sim.ndim
+    num_crossings = len(cp)
+    if vof_sim.ncpu == 1:
+        assert num_crossings == 4 if ndim == 2 else 16
+
     expected = vof_sim.test_surf_normal
     index = vof_sim.test_coord_index
-    assert len(cp) == 4 if ndim == 2 else 16
     for points in cp.values():
         for pt, vec in points:
             print(pt, vec.dot(expected), vec, expected)
