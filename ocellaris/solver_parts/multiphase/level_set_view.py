@@ -24,6 +24,7 @@ class LevelSetView:
         mesh = simulation.data['mesh']
         V = dolfin.FunctionSpace(mesh, 'CG', 1)
         self.level_set_function = dolfin.Function(V)
+        self.cache = preprocess(simulation, self.level_set_function)
 
     def set_density_field(self, c, name='c', value=0.5, update_hook='MultiPhaseModelUpdated'):
         """
@@ -57,11 +58,10 @@ class LevelSetView:
             )
 
     def _update_from_vof(self):
-        # This can be expensive, will involve recomputing the crossing points if
-        # the density function has changed since the last access
+        # This can be expensive, will involve recomputing the crossing
+        # points if the density function has changed since the last access
         crossings = self._locator.crossing_points
-
-        pass
+        update_level_set_view(self.simulation, self.level_set_function, crossings, self.cache)
 
 
 def float_to_ident(v):
@@ -69,3 +69,11 @@ def float_to_ident(v):
     for s0, s1 in [('.', '_'), ('+', 'p'), ('-', 'm')]:
         s = s.replace(s0, s1)
     return s
+
+
+def preprocess(simulation, level_set_view):
+    V = level_set_view.function_space()
+
+
+def update_level_set_view(simulation, level_set_view, crossings, cache):
+    pass

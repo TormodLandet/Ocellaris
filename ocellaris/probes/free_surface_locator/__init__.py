@@ -39,6 +39,7 @@ class FreeSurfaceLocator:
         self.density_name = density_name
         self.free_surface_value = free_surface_value
         self.installed_hooks = set()
+        self.callbacks = []
 
         V = density.function_space()
         deg = V.ufl_element().degree()
@@ -85,7 +86,10 @@ class FreeSurfaceLocator:
             'Update FreeSurfaceLocator for %s at %r' % (self.density_name, self.free_surface_value),
         )
         self.installed_hooks.add(hook_name)
+        self.callbacks.append(callback)
 
     def update(self):
         self._needs_update = True
         self._crossing_points = None
+        for cb in self.callbacks:
+            cb()
