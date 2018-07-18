@@ -32,6 +32,7 @@ initial_conditions:
 output:
     log_enabled: no
     stdout_enabled: no
+    stdout_on_all_ranks: no
     solution_properties: off
     save_restart_file_at_end: off
 """
@@ -42,8 +43,9 @@ def vof_sim(request):
     sim = Simulation()
     sim.input.read_yaml(yaml_string=BASE_INPUT)
 
+    case_name = request.param
     cases = {'DG0_2D_y': (2, 0, 'y'), 'DG0_3D_y': (3, 0, 'y'), 'DG0_2D_x': (2, 0, 'x')}
-    dim, vof_deg, surf_normal = cases[request.param]
+    dim, vof_deg, surf_normal = cases[case_name]
 
     if dim == 3:
         sim.input.set_value('mesh/type', 'Box')
@@ -51,6 +53,7 @@ def vof_sim(request):
 
     sim.test_surf_normal = [0, -1, 0]
     sim.test_coord_index = 1
+    sim.test_name = case_name
     if surf_normal == 'x':
         sim.input.set_value('initial_conditions/cp/cpp_code', 'x[0] < 0.5 ? 0.0 : 1.0')
         sim.test_surf_normal = [1, 0, 0]
@@ -107,14 +110,30 @@ def test_level_set_view(vof_sim):
 
     lsf = lsv.level_set_function
     V = lsf.function_space()
+    print(vof_sim.test_name)
+    print(lsf.vector().get_local())
 
-    cpp = '0.5 - x[%d]' % vof_sim.test_coord_index
-    expected = dolfin.Expression(cpp, element=V.ufl_element())
+    cpp = 'std::abs(0.5 - x[%d])' % vof_sim.test_coord_index
+    expected = dolfin.Expression(cpp, degree=V.ufl_element().degree() + 3)
+
+    # The LSV is only a quasi distance function due to following the
+    # edges of the mesh which exagerates distances a bit. Scale back to
+    # max abs value of 0.5 for comparing with the expected solution
+    arr = lsf.vector().get_local()
+    arr /= abs(arr).max() / 0.5
+    lsf.vector().set_local(arr)
+    lsf.vector().apply('insert')
 
     err = dolfin.errornorm(expected, lsf)
 
-    # TEMPORARY TEMPORARY TEMPORARY TEMPORARY TEMPORARY TEMPORARY TEMPORARY
-    pytest.xfail()
-    # TEMPORARY TEMPORARY TEMPORARY TEMPORARY TEMPORARY TEMPORARY TEMPORARY
+    plot = False
+    if '2D' in vof_sim.test_name and plot:
+        from matplotlib import pyplot
 
-    assert err < 1e-2
+        fig = pyplot.figure()
+        c = dolfin.plot(lsf)
+        pyplot.colorbar(c)
+        pyplot.title(vof_sim.test_name + ' - error %g' % err)
+        fig.savefig(vof_sim.test_name + '.png')
+
+    assert err < 0.1
