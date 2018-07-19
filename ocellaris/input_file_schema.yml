@@ -147,12 +147,8 @@ type BoundaryCondition:
     optional dval: FloatOrList
     optional nval: FloatOrList
     optional slip_length: FloatOrList
-    optional scalar_field: StringMin1
-    optional scalar_field_level_set: Float
     optional slip_factor_name: StringMin1
     optional slip_factor_distance: Float
-    optional slip_factor_degree: IntegerMin1
-    optional custom_hook: StringMin1
 type BoundaryRegion:
     required name: StringMin1
     required selector: StringMin1
@@ -219,6 +215,7 @@ type MultiphaseSolver:
     optional explicit_rk_method: bool
     optional analytical_solution: bool
     optional force_static: bool
+    optional plot_level_set_view: Boolean
 optional multiphase_solver: MultiphaseSolver
 
 type ConvDef:

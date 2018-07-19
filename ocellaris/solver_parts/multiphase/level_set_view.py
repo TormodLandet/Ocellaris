@@ -23,11 +23,21 @@ class LevelSetView:
         self.iso_value = None
         self.name = None
 
+        # Pieces of code that wants to know when we are updated
+        self._callbacks = []
+
         # Create the level set function
         mesh = simulation.data['mesh']
         V = dolfin.FunctionSpace(mesh, 'CG', 1)
         self.level_set_function = dolfin.Function(V)
         self.cache = preprocess(simulation, self.level_set_function)
+
+    def add_update_callback(self, cb):
+        """
+        Other functionality may depend on the level set view and want to
+        be updated when we are updated
+        """
+        self._callbacks.append(cb)
 
     def set_density_field(self, c, name='c', value=0.5, update_hook='MultiPhaseModelUpdated'):
         """
@@ -64,6 +74,10 @@ class LevelSetView:
             raise NotImplementedError(
                 'Cannot compute level set function ' 'from %r base field' % self.base_type
             )
+
+        # Inform dependent functionality that we have updated
+        for cb in self._callbacks:
+            cb()
 
     def _update_from_vof(self):
         # This can be expensive, will involve recomputing the crossing

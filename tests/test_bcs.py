@@ -376,39 +376,6 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
     assert relative_error < 0.0099  # Expect 0.0097 for 𝛿=0.001
 
 
-@pytest.mark.parametrize("N", [4, 6])
-def test_slip_length_boundary_level_set_intersector(N):
-    from ocellaris.solver_parts.boundary_conditions.slip_length import (
-        BoundaryLevelSetIntersector
-    )
-
-    sim = Simulation()
-    sim.input.read_yaml(yaml_string=BASE_INPUT)
-
-    # Create simulation with a scalar field that has a level set at x[1] == 0.5
-    sim.input.set_value('mesh/Nx', N)
-    sim.input.set_value('mesh/Ny', N)
-    sim.input.set_value('multiphase_solver/type', 'BlendedAlgebraicVOF')
-    sim.input.set_value('multiphase_solver/function_space_colour', 'DG')
-    sim.input.set_value('multiphase_solver/polynomial_degree_colour', 0)
-    sim.input.set_value('initial_conditions/cp/cpp_code', 'x[1] < 0.5 ? 1.0 : 0.0')
-    sim.input.set_value('physical_properties/rho0', 1.0)
-    sim.input.set_value('physical_properties/rho1', 1.0)
-    sim.input.set_value('physical_properties/nu0', 1.0)
-    sim.input.set_value('physical_properties/nu1', 1.0)
-    setup_simulation(sim)
-
-    intersector = BoundaryLevelSetIntersector(sim, sim.data['cp'], 0.5)
-    intersections = intersector.get()
-
-    for pos in intersections:
-        print('Intersection: %r' % pos)
-
-    assert len(intersections) == 2
-    for pos in intersections:
-        assert numpy.allclose(pos, [0, 0.5]) or numpy.allclose(pos, [1, 0.5])
-
-
 def debug_phi_plot(phi, phia, phih, plotname, compare_historical=False, **plotargs):
     """
     Only used while developing the tests, left here in case more tests are
