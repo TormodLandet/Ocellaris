@@ -46,8 +46,13 @@ class LevelSetView:
         self.level_set_function.rename(self.name, self.name)
         self.simulation.data[self.name] = self.level_set_function
 
+        # The locator helps find the position of the free surface
         self._locator = get_free_surface_locator(self.simulation, name, c, value)
-        self._locator.add_update_hook(update_hook, self.update)
+        self._locator.add_update_hook(update_hook, self.update, 'Update LevelSetView')
+
+        # Optionally add the level set view to plot output
+        if self.simulation.input.get_value('multiphase_solver/plot_level_set_view', False, 'bool'):
+            self.simulation.io.add_extra_output_function(self.level_set_function)
 
     def update(self):
         """
