@@ -1,10 +1,10 @@
-import numpy
 import dolfin
 from ocellaris.utils import (
     facet_dofmap,
     get_local,
     set_local,
     timeit,
+    verify_key,
     OcellarisCppExpression,
     OcellarisError,
 )
@@ -97,18 +97,19 @@ class InterfaceSlipLengthBoundary(BoundaryConditionCreator):
         dim = self.func_space.num_sub_spaces()
         default_base = 0.0 if dim == 0 else [0.0] * dim
 
-        # Create the slip length factor and the functionality that
-        # updates this factor automatically before each time step,
-        # just after the multiphase solver is done determining the
-        # interface position
-        sfu = SlipFactorUpdater(simulation, inp_dict, var_name)
-        factor_name = sfu.register(simulation)
-
-        fac = simulation.data[factor_name]
         length = inp_dict.get_value('slip_length', required_type='any')
-        base = inp_dict.get_value('value', default_base, required_type='float')
+        base = inp_dict.get_value('value', default_base, 'float')
+        sd_name = inp_dict.get_value('slip_factor_subdomain', required_type='string')
+
+        # Use a subdomain as the slip factor (1.0 inside the domain and
+        # 0.0 outside with a smooth transition)
+        verify_key('slip_factor_subdomain', sd_name, simulation.subdomains)
+        subdomain = simulation.subdomains[sd_name]
+        fac = subdomain.function
+        fac_name = 'subdomain %s' % sd_name
+
         self.register_slip_length_condition(
-            var_name, length, fac, factor_name, base, subdomains, subdomain_id
+            var_name, length, fac, fac_name, base, subdomains, subdomain_id
         )
 
     def register_slip_length_condition(
@@ -134,81 +135,3 @@ class InterfaceSlipLengthBoundary(BoundaryConditionCreator):
             '    Variable slip length %r (base %r) for %s' % (factor_name, base, var_name)
         )
 
-
-class SlipFactorUpdater:
-    def __init__(self, simulation, inp_dict, var_name):
-        """
-        This class makes sure the variable slip length is updated
-        on the start of every timestep, after the multi phase flow
-        density field has been updated
-        """
-        self.simulation = simulation
-        self.bc_var_name = var_name
-        self.slip_factor_distance = inp_dict.get_value(
-            'slip_factor_distance', required_type='float'
-        )
-        self.slip_factor_degree = inp_dict.get_value('slip_factor_degree', 0, required_type='int')
-        self.slip_factor_name = inp_dict.get_value(
-            'slip_factor_name', 'slip_factor', required_type='string'
-        )
-
-    def register(self, sim):
-        if self.slip_factor_name in sim.data:
-            sim.log.info(
-                '    Found existing slip factor %r for %r. Reusing that'
-                % (self.slip_factor_name, self.bc_var_name)
-            )
-            return self.slip_factor_name
-
-        # Create the slip factor field
-        mesh = self.simulation.data['mesh']
-        V = dolfin.FunctionSpace(mesh, 'DGT', 0)
-        self.facet_dofs = facet_dofmap(V)
-        sim.data[self.slip_factor_name] = self.slip_factor = dolfin.Function(V)
-
-        # Update the field before each time step
-        self.level_set_view = self.simulation.multi_phase_model.get_level_set_view()
-        self.level_set_view.add_update_callback(self.update)
-
-        # Form to compute the facet average distace to the free surface
-        v = dolfin.TestFunction(V)
-        ls = self.level_set_view.level_set_function
-        fa = dolfin.FacetArea(mesh)
-        self.dist_form = dolfin.Form(ls * v / fa * dolfin.ds)
-
-        return self.slip_factor_name
-
-    @timeit.named('SlipFactorUpdater')
-    def update(self):
-        fac = self.slip_factor
-        D = self.slip_factor_distance
-
-        # Initialize the factor to 0 (far away from the interface)
-        arr = get_local(fac)
-        arr[:] = 0.0
-
-        # Get the level set distance at the facets
-        distances = dolfin.assemble(self.dist_form)
-
-        # Update the slip factor for facets close to the interface
-        for fdof in self.facet_dofs:
-            # Find the distance to the closest intersection
-            min_dist = distances[fdof]
-
-            # Update the slip factor for this facet
-            r = min_dist / D
-            if r < 1:
-                arr[fdof] = 1
-            elif r < 2:
-                # Smooth transition from 1 to 0 when r goes from 1 to 2
-                # The slope in both ends is 0
-                arr[fdof] = 2 * r ** 3 - 9 * r ** 2 + 12 * r - 4
-            else:
-                arr[fdof] = 0
-
-        set_local(fac, arr, apply='insert')
-        # from matplotlib import pyplot
-        # from ocellaris.utils.plotting_trace import plot_matplotlib_dgt
-        # c = plot_matplotlib_dgt(fac)
-        # pyplot.colorbar(c)
-        # pyplot.savefig('debug.png')
