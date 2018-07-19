@@ -121,6 +121,15 @@ type Field:
     optional *: Any  # TODO: further specify fields
 optional fields: list(type=Field)
 
+type SubDomainBase:
+    optional name: StringMin1
+    required type: StringMin1
+    optional plot: Boolean
+type SubDomainNearInterface:
+    inherit: SubDomainBase
+    required radius: Float
+alias SubDomain: one_of(types=(SubDomainNearInterface,))
+optional subdomains: list(type=SubDomain)
 
 # -- Initial and boundary conditions -------------------------------------
 
@@ -147,8 +156,7 @@ type BoundaryCondition:
     optional dval: FloatOrList
     optional nval: FloatOrList
     optional slip_length: FloatOrList
-    optional slip_factor_name: StringMin1
-    optional slip_factor_distance: Float
+    optional slip_factor_subdomain: StringMin1
 type BoundaryRegion:
     required name: StringMin1
     required selector: StringMin1

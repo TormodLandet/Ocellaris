@@ -1,3 +1,4 @@
+# flake8: noqa
 from .boundary_conditions import BoundaryRegion, get_dof_region_marks, mark_cell_layers
 from .slope_limiter import SlopeLimiter, LocalMaximaMeasurer
 from .slope_limiter_velocity import SlopeLimiterVelocity
@@ -14,3 +15,4 @@ from .bdm import VelocityBDMProjection
 from .ale import MeshMorpher
 from .timestepping import before_simulation, after_timestep
 from .forcing_zone import add_forcing_zone
+from .subdomain import make_subdomain

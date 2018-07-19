@@ -55,6 +55,7 @@ class Simulation(object):
         self.t_start = None
         self.probes = None
         self.iso_surface_locators = {}
+        self.subdomains = None
 
         # For timing the analysis and flushing the log at intervals
         self.prevtime = self.starttime = time.time()
