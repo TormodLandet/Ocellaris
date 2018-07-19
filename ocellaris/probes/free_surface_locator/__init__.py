@@ -65,7 +65,7 @@ class FreeSurfaceLocator:
             self._crossing_points = self.impl.compute_crossing_points()
         return self._crossing_points
 
-    def add_update_hook(self, hook_name, callback=lambda: None):
+    def add_update_hook(self, hook_name, callback=None, description=None):
         """
         Add a hook point to connect to in order to be notified whenever
         the underlying field changes. In this way the user of the free
@@ -86,10 +86,14 @@ class FreeSurfaceLocator:
             'Update FreeSurfaceLocator for %s at %r' % (self.density_name, self.free_surface_value),
         )
         self.installed_hooks.add(hook_name)
-        self.callbacks.append(callback)
+
+        if callback is not None:
+            self.callbacks.append((callback, description))
 
     def update(self):
         self._needs_update = True
         self._crossing_points = None
-        for cb in self.callbacks:
-            cb()
+        for cb, descr in self.callbacks:
+            if descr is None:
+                descr = 'FreeSurfaceLocator callback'
+            self.simulation.hooks.call_after(cb, descr)
