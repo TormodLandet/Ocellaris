@@ -1,6 +1,6 @@
 import time
 import dolfin
-from ocellaris.utils import timeit, shift_fields
+from ocellaris.utils import timeit, shift_fields, verify_field_variable_definition
 from ocellaris.utils.geometry import init_connectivity, precompute_cell_data, precompute_facet_data
 from .hooks import Hooks
 from .input import Input
@@ -107,6 +107,20 @@ class Simulation(object):
         else:
             h = dolfin.CellDiameter(mesh)
         self.data['h'] = h
+
+    def get_data(self, name):
+        """
+        Return a solver variable if one exists with the given name (p, u0,
+        mesh, ...) or a known field function if no solver variable with
+        the given name exists.
+        
+        Known field functions must be specified (as always) with forward
+        slash separated field name and function name, e.g., "waves/c"
+        """
+        if name in self.data:
+            return self.data[name]
+        else:
+            return verify_field_variable_definition(self, name)
 
     def _at_start_of_simulation(self):
         """
