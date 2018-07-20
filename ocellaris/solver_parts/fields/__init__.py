@@ -1,4 +1,3 @@
-import dolfin
 from ocellaris.utils import ocellaris_error
 
 
@@ -36,8 +35,7 @@ def get_known_field(name):
             'Field type "%s" not found' % name,
             'Available field types:\n'
             + '\n'.join(
-                '  %-20s - %s' % (n, s.description)
-                for n, s in sorted(_KNOWN_FIELDS.items())
+                '  %-20s - %s' % (n, s.description) for n, s in sorted(_KNOWN_FIELDS.items())
             ),
         )
         raise
@@ -55,3 +53,4 @@ from . import raschii_waves
 from . import wave_outflow
 from . import blended_field
 from . import conditional_field
+from . import free_surface_zone

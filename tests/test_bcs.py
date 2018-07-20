@@ -315,12 +315,12 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
     else:
         sim.input.set_value('boundary_conditions/0/phi/type', 'InterfaceSlipLength')
         sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
-        sim.input.set_value('boundary_conditions/0/phi/slip_factor_subdomain', 'fs')
+        sim.input.set_value('boundary_conditions/0/phi/slip_factor_function', 'fs_zone/phi')
 
-        sim.input.set_value('subdomains', [{}])
-        sim.input.set_value('subdomains/0/name', 'fs')
-        sim.input.set_value('subdomains/0/type', 'NearInterface')
-        sim.input.set_value('subdomains/0/radius', 0.5)
+        sim.input.set_value('fields', [{}])
+        sim.input.set_value('fields/0/name', 'fs_zone')
+        sim.input.set_value('fields/0/type', 'FreeSurfaceZone')
+        sim.input.set_value('fields/0/radius', 0.5)
 
         # Create dummy scalar field
         sim.input.set_value('multiphase_solver/type', 'BlendedAlgebraicVOF')
@@ -375,7 +375,7 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
         c = dolfin.plot(sim.data['ls_c_0_5'])
         pyplot.colorbar(c)
         fig.add_subplot(313)
-        c = dolfin.plot(sim.data['subdomain_fs'])
+        c = dolfin.plot(sim.fields['fs_zone'].get_variable('phi'))
         pyplot.colorbar(c)
         fig.tight_layout()
         fig.savefig('AAAAAAAAAAAaaaa.png')

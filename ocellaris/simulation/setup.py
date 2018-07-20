@@ -20,8 +20,7 @@ from ocellaris.solver_parts import (
     get_multi_phase_model,
     get_known_field,
     MeshMorpher,
-    add_forcing_zone,
-    make_subdomain
+    add_forcing_zone
 )
 
 
@@ -99,9 +98,6 @@ def setup_simulation(simulation):
 
     # Setup known fields (incomming waves etc)
     setup_known_fields(simulation)
-
-    # Setup subdomains
-    setup_subdomains(simulation)
 
     # Load the boundary conditions. This must be done
     # before creating the solver as the solver needs
@@ -501,25 +497,6 @@ def setup_known_fields(simulation):
             )
         field_class = get_known_field(field_type)
         simulation.fields[name] = field_class(simulation, field_inp)
-
-
-def setup_subdomains(simulation):
-    """
-    Setup a subdomain such as a region close to the free surface with
-    smooth falloff to the rest of the domain
-    """
-    simulation.log.info('Creating subdomains')
-    simulation.subdomains = {}
-    Ndomains = len(simulation.input.get_value('subdomains', [], 'list(dict)'))
-    for i in range(Ndomains):
-        dom_inp = simulation.input.get_value('subdomains/%d' % i, required_type='Input')
-        sdom = make_subdomain(simulation, dom_inp)
-        if sdom.name in simulation.subdomains:
-            ocellaris_error(
-                'Subdomain %s is defined multiple times' % sdom.name,
-                'Input file contains multiple subdomains with the same name',
-            )
-        simulation.subdomains[sdom.name] = sdom
 
 
 def setup_boundary_conditions(simulation):

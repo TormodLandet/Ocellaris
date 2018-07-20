@@ -15,4 +15,3 @@ from .bdm import VelocityBDMProjection
 from .ale import MeshMorpher
 from .timestepping import before_simulation, after_timestep
 from .forcing_zone import add_forcing_zone
-from .subdomain import make_subdomain

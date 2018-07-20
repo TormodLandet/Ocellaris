@@ -1,13 +1,5 @@
 import dolfin
-from ocellaris.utils import (
-    facet_dofmap,
-    get_local,
-    set_local,
-    timeit,
-    verify_key,
-    OcellarisCppExpression,
-    OcellarisError,
-)
+from ocellaris.utils import OcellarisCppExpression, OcellarisError, verify_field_variable_definition
 from .robin import OcellarisRobinBC
 from . import register_boundary_condition, BoundaryConditionCreator
 
@@ -99,14 +91,12 @@ class InterfaceSlipLengthBoundary(BoundaryConditionCreator):
 
         length = inp_dict.get_value('slip_length', required_type='any')
         base = inp_dict.get_value('value', default_base, 'float')
-        sd_name = inp_dict.get_value('slip_factor_subdomain', required_type='string')
+        vardef = inp_dict.get_value('slip_factor_function', required_type='string')
 
         # Use a subdomain as the slip factor (1.0 inside the domain and
         # 0.0 outside with a smooth transition)
-        verify_key('slip_factor_subdomain', sd_name, simulation.subdomains)
-        subdomain = simulation.subdomains[sd_name]
-        fac = subdomain.function
-        fac_name = 'subdomain %s' % sd_name
+        fac = verify_field_variable_definition(simulation, vardef, 'InterfaceSlipLength')
+        fac_name = 'subdomain %s' % vardef.split('/')[0]
 
         self.register_slip_length_condition(
             var_name, length, fac, fac_name, base, subdomains, subdomain_id

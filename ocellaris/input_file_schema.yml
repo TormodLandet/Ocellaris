@@ -116,20 +116,21 @@ optional time: Time
 
 # -- Known fields and zones ----------------------------------------------
 
-type Field:
+type FieldBase:
+    required name: StringMin1
     required type: StringMin1
-    optional *: Any  # TODO: further specify fields
-optional fields: list(type=Field)
-
-type SubDomainBase:
-    optional name: StringMin1
-    required type: StringMin1
-    optional plot: Boolean
-type SubDomainNearInterface:
-    inherit: SubDomainBase
+    optional stationary: Boolean
+type FreeSurfaceZoneField:
+    inherit: FieldBase
     required radius: Float
-alias SubDomain: one_of(types=(SubDomainNearInterface,))
-optional subdomains: list(type=SubDomain)
+    optional plot: Boolean
+    optional variable_name: StringMin1
+type OtherField:
+    inherit: FieldBase
+    optional *: Any  # TODO: further specify fields
+alias KnownField: any_of(types=(FreeSurfaceZoneField, OtherField))
+optional fields: list(type=KnownField)
+
 
 # -- Initial and boundary conditions -------------------------------------
 
@@ -156,7 +157,7 @@ type BoundaryCondition:
     optional dval: FloatOrList
     optional nval: FloatOrList
     optional slip_length: FloatOrList
-    optional slip_factor_subdomain: StringMin1
+    optional slip_factor_function: StringMin1
 type BoundaryRegion:
     required name: StringMin1
     required selector: StringMin1
@@ -224,6 +225,7 @@ type MultiphaseSolver:
     optional analytical_solution: bool
     optional force_static: bool
     optional plot_level_set_view: Boolean
+    optional project_uconv_dgt0: Boolean
 optional multiphase_solver: MultiphaseSolver
 
 type ConvDef:

@@ -64,6 +64,9 @@ class LevelSetView:
         if self.simulation.input.get_value('multiphase_solver/plot_level_set_view', False, 'bool'):
             self.simulation.io.add_extra_output_function(self.level_set_function)
 
+        # Get the starting value
+        self.update()
+
     def update(self):
         """
         The underlying data has changed, update the level set function
@@ -173,7 +176,6 @@ def update_level_set_view(simulation, level_set_view, crossings, cache):
     # Breadth first search from ghost dofs
     values2 = get_local(level_set_view)
     queue = deque(range(Nlocal, len(values2)))
-    print(Nlocal, len(values), len(values2))
     bfs(queue, values2, cell_dofs, dof_cells, dof_dist)
     level_set_view.vector().set_local(values2[:Nlocal])
     level_set_view.vector().apply('insert')
@@ -188,7 +190,6 @@ def bfs(queue, values, cell_dofs, dof_cells, dof_dist):
     checks = 0
     Nval = len(values)
 
-    print(queue, Nval)
     while queue:
         dof = queue.popleft()
         checks += 1
