@@ -120,7 +120,7 @@ class Simulation(object):
         if name in self.data:
             return self.data[name]
         else:
-            return verify_field_variable_definition(self, name)
+            return verify_field_variable_definition(self, name, 'Simulation.get_data()')
 
     def _at_start_of_simulation(self):
         """

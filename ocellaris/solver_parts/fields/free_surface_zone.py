@@ -14,9 +14,6 @@ class FreeSurfaceZone(KnownField):
         self.simulation = simulation
         self._construct(field_inp)
 
-        # Get the starting value
-        self.update(True)
-
     def _construct(self, field_inp):
         # Read the input
         self.name = field_inp.get_value('name', required_type='string')

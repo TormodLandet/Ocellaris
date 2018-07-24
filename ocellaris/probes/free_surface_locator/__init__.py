@@ -51,6 +51,7 @@ class FreeSurfaceLocator:
                 'FreeSurfaceLocator not implemented for %r degree %r' % (fam, deg)
             )
 
+        # Set need_update to True to prepare for queries
         self.update()
 
     @property
