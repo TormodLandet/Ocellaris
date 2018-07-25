@@ -12,15 +12,17 @@
 #include <Eigen/Core>
 #include "limiter_common.h" // remove_in_jit
 
-#define RANGE_CHECK(expr) if (expr) throw std::length_error("RANGE ERROR: " #expr);
+#define RANGE_CHECK(expr) \
+  if (expr)               \
+    throw std::length_error("RANGE ERROR: " #expr);
 
 namespace dolfin
 {
 
 using DoubleVec = Eigen::Ref<Eigen::VectorXd>;
 
-template <int Ndim>  // Ndim is 2 for 2D triangles and 3 for 3D tetrahedra
-void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
+template <int Ndim> // Ndim is 2 for 2D triangles and 3 for 3D tetrahedra
+void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput &input,
                                            DoubleVec taylor_arr,
                                            DoubleVec taylor_arr_old,
                                            DoubleVec alpha_arr)
@@ -46,8 +48,8 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
   RANGE_CHECK(num_dofs_owned != input.boundary_dof_type.size());
   RANGE_CHECK(num_cells_owned != input.limit_cell.size());
 
-  double cx, cy, cz=0.0, dx, dy, dz=0.0;
-  double center_phi, center_phix, center_phiy, center_phiz=0.0;
+  double cx, cy, cz = 0.0, dx, dy, dz = 0.0;
+  double center_phi, center_phix, center_phiy, center_phiz = 0.0;
 
   // Loop over all cells that are owned by this process
   for (int ic = 0; ic < num_cells_owned; ic++)
@@ -61,7 +63,7 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
       cz = input.cell_midpoints(ic, 2);
 
     // Get the Taylor values for this cell
-    center_phi  = taylor_arr[input.cell_dofs(ic, 0)];
+    center_phi = taylor_arr[input.cell_dofs(ic, 0)];
     center_phix = taylor_arr[input.cell_dofs(ic, 1)];
     center_phiy = taylor_arr[input.cell_dofs(ic, 2)];
     if (Ndim == 3)
@@ -101,7 +103,10 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
         }
 
         // Modify local bounds to incorporate the boundary conditions
-        if (input.boundary_dof_type[dof] == BoundaryDofType::DIRICHLET)
+        bool dof_is_dirichlet = input.boundary_dof_type[dof] == BoundaryDofType::DIRICHLET ||
+                                (input.boundary_dof_type[dof] == BoundaryDofType::ROBIN &&
+                                 input.trust_robin_dval);
+        if (dof_is_dirichlet)
         {
           double bc_value = input.boundary_dof_value[dof];
           lo = std::min(lo, bc_value);
@@ -142,9 +147,8 @@ void hierarchical_taylor_slope_limiter_dg1(const SlopeLimiterInput& input,
   }
 }
 
-
-template <int Ndim>  // Ndim is 2 for 2D triangles and 3 for 3D tetrahedra
-void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
+template <int Ndim> // Ndim is 2 for 2D triangles and 3 for 3D tetrahedra
+void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput &input,
                                            DoubleVec taylor_arr,
                                            DoubleVec taylor_arr_old,
                                            DoubleVec alpha1_arr,
@@ -173,10 +177,10 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
   RANGE_CHECK(num_dofs_owned != input.boundary_dof_type.size());
   RANGE_CHECK(num_cells_owned != input.limit_cell.size());
 
-  double cx, cy, cz=0.0, dx, dy, dz=0.0;
-  double center_phi, center_phix, center_phiy, center_phiz=0.0;
-  double center_phixx, center_phiyy, center_phizz=0.0;
-  double center_phixy, center_phixz=0.0, center_phiyz=0.0;
+  double cx, cy, cz = 0.0, dx, dy, dz = 0.0;
+  double center_phi, center_phix, center_phiy, center_phiz = 0.0;
+  double center_phixx, center_phiyy, center_phizz = 0.0;
+  double center_phixy, center_phixz = 0.0, center_phiyz = 0.0;
 
   // Loop over all cells that are owned by this process
   for (int ic = 0; ic < num_cells_owned; ic++)
@@ -192,19 +196,19 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
     // Get the Taylor values for this cell
     if (Ndim == 2)
     {
-      center_phi   = taylor_arr[input.cell_dofs(ic, 0)];
-      center_phix  = taylor_arr[input.cell_dofs(ic, 1)];
-      center_phiy  = taylor_arr[input.cell_dofs(ic, 2)];
+      center_phi = taylor_arr[input.cell_dofs(ic, 0)];
+      center_phix = taylor_arr[input.cell_dofs(ic, 1)];
+      center_phiy = taylor_arr[input.cell_dofs(ic, 2)];
       center_phixx = taylor_arr[input.cell_dofs(ic, 3)];
       center_phiyy = taylor_arr[input.cell_dofs(ic, 4)];
       center_phixy = taylor_arr[input.cell_dofs(ic, 5)];
     }
     else
     {
-      center_phi   = taylor_arr[input.cell_dofs(ic, 0)];
-      center_phix  = taylor_arr[input.cell_dofs(ic, 1)];
-      center_phiy  = taylor_arr[input.cell_dofs(ic, 2)];
-      center_phiz  = taylor_arr[input.cell_dofs(ic, 3)];
+      center_phi = taylor_arr[input.cell_dofs(ic, 0)];
+      center_phix = taylor_arr[input.cell_dofs(ic, 1)];
+      center_phiy = taylor_arr[input.cell_dofs(ic, 2)];
+      center_phiz = taylor_arr[input.cell_dofs(ic, 3)];
       center_phixx = taylor_arr[input.cell_dofs(ic, 4)];
       center_phiyy = taylor_arr[input.cell_dofs(ic, 5)];
       center_phizz = taylor_arr[input.cell_dofs(ic, 6)];
@@ -275,14 +279,16 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
         }
 
         // Handle boundary conditions and global bounds
-        bool dof_is_dirichlet = input.boundary_dof_type[dof] == BoundaryDofType::DIRICHLET;
+        bool dof_is_dirichlet = input.boundary_dof_type[dof] == BoundaryDofType::DIRICHLET ||
+                                (input.boundary_dof_type[dof] == BoundaryDofType::ROBIN &&
+                                 input.trust_robin_dval);
         if (itaylor == 0)
         {
           // Modify local bounds to incorporate the boundary conditions
           if (dof_is_dirichlet)
           {
             // Value in the centre of a mirrored cell on the other side of the boundary
-            double bc_value = 2*input.boundary_dof_value[dof] - center_phi;
+            double bc_value = 2 * input.boundary_dof_value[dof] - center_phi;
             lo = std::min(lo, bc_value);
             hi = std::max(hi, bc_value);
           }
@@ -297,7 +303,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
         {
           // The derivative in the x-direction at the centre of a mirrored cell
           double ddx = (input.boundary_dof_value[dof] - center_phi) / dx;
-          double ddx2 = 4*ddx - 3*center_phix;
+          double ddx2 = 4 * ddx - 3 * center_phix;
           lo = std::min(lo, ddx2);
           hi = std::max(hi, ddx2);
         }
@@ -305,7 +311,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
         {
           // The derivative in the y-direction at the centre of a mirrored cell
           double ddy = (input.boundary_dof_value[dof] - center_phi) / dy;
-          double ddy2 = 4*ddy - 3*center_phiy;
+          double ddy2 = 4 * ddy - 3 * center_phiy;
           lo = std::min(lo, ddy2);
           hi = std::max(hi, ddy2);
         }
@@ -313,7 +319,7 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
         {
           // The derivative in the z-direction at the center of a mirrored cell
           double ddz = (input.boundary_dof_value[dof] - center_phi) / dz;
-          double ddz2 = 4*ddz - 3*center_phiz;
+          double ddz2 = 4 * ddz - 3 * center_phiz;
           lo = std::min(lo, ddz2);
           hi = std::max(hi, ddz2);
         }
@@ -370,13 +376,13 @@ void hierarchical_taylor_slope_limiter_dg2(const SlopeLimiterInput& input,
   }
 }
 
-
 PYBIND11_MODULE(SIGNATURE, m)
 {
   pybind11::class_<SlopeLimiterInput>(m, "SlopeLimiterInput")
       .def(pybind11::init())
       .def_readwrite("global_min", &SlopeLimiterInput::global_min)
       .def_readwrite("global_max", &SlopeLimiterInput::global_max)
+      .def_readwrite("trust_robin_dval", &SlopeLimiterInput::trust_robin_dval)
       .def("set_arrays", &SlopeLimiterInput::set_arrays)
       .def("set_limit_cell", &SlopeLimiterInput::set_limit_cell)
       .def("set_boundary_values", &SlopeLimiterInput::set_boundary_values)
@@ -391,7 +397,6 @@ PYBIND11_MODULE(SIGNATURE, m)
   m.def("hierarchical_taylor_slope_limiter_dg2_3D", &hierarchical_taylor_slope_limiter_dg2<3>);
 }
 
-
-}
+} // namespace dolfin
 
 #endif

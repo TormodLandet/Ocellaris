@@ -36,6 +36,7 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
         enforce_bounds = limiter_input.get_value('enforce_bounds', False, 'bool')
         enforce_bcs = limiter_input.get_value('enforce_bcs', True, 'bool')
         use_weak_bcs = limiter_input.get_value('use_weak_bcs', True, 'bool')
+        trust_robin_dval = limiter_input.get_value('trust_robin_dval', True, 'bool')
         simulation.log.info('        Enforce global bounds: %r' % enforce_bounds)
         simulation.log.info('        Enforcing BCs: %r' % enforce_bcs)
         simulation.log.info('        Using weak BCs: %r' % use_weak_bcs)
@@ -78,7 +79,9 @@ class HierarchicalTaylorSlopeLimiter(SlopeLimiterBase):
             for cid in skip_cells:
                 self.limit_cell[cid] = 0
 
-        self.input = SlopeLimiterInput(mesh, V, V0, use_cpp)
+        self.input = SlopeLimiterInput(
+            mesh, V, V0, use_cpp=use_cpp, trust_robin_dval=trust_robin_dval
+        )
         if use_cpp:
             self.cpp_mod = self.input.get_cpp_mod()
 

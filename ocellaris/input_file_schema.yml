@@ -245,6 +245,7 @@ type SlopeLimiter:
     optional enforce_bounds: bool
     optional enforce_bcs: bool
     optional use_weak_bcs: bool
+    optional trust_robin_dval: bool
     optional plot: bool
     optional use_cpp: bool
 type SlopeLimiters:
