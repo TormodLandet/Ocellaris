@@ -55,13 +55,21 @@ def verify_field_variable_definition(simulation, vardef, loc, return_var=True):
     comps = vardef.strip().split('/')
     if len(comps) != 2:
         ocellaris_error(
-            'Fild variable reference error',
+            'Field variable reference error',
             'Field variable should be on format "field name/varname", found %r in %s'
             % (vardef, loc),
         )
     field_name, var_name = comps
 
-    verify_key('field name', field_name, simulation.fields, loc)
+    if field_name not in simulation.fields:
+        existing = ','.join(simulation.fields)
+        if not existing:
+            existing = 'NO FIELDS DEFINED!'
+        ocellaris_error(
+            'Field missing',
+            'No field named %r exists, existing fields: %s' % (field_name, existing),
+        )
+
     field = simulation.fields[field_name]
     if return_var:
         return field.get_variable(var_name)

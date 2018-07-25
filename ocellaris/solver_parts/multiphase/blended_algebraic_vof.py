@@ -187,6 +187,9 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             # Reconstruct the gradient from the colour function DG0 field
             self.convection_scheme.initialize_gradient()
 
+        # Notify listeners that the initial values are available
+        sim.hooks.run_custom_hook('MultiPhaseModelUpdated')
+
     def get_colour_function(self, k):
         """
         Return the colour function on timestep t^{n+k}

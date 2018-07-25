@@ -127,14 +127,12 @@ def test_neumann_bcs_scalar_mms(method):
     sim.input.set_value('boundary_conditions/0/name', 'vertical walls')
     sim.input.set_value('boundary_conditions/0/selector', 'code')
     sim.input.set_value(
-        'boundary_conditions/0/inside_code',
-        'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)',
+        'boundary_conditions/0/inside_code', 'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)'
     )
     sim.input.set_value('boundary_conditions/1/name', 'horizontal walls')
     sim.input.set_value('boundary_conditions/1/selector', 'code')
     sim.input.set_value(
-        'boundary_conditions/1/inside_code',
-        'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)',
+        'boundary_conditions/1/inside_code', 'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)'
     )
 
     # Get analytical expressions
@@ -207,19 +205,15 @@ def test_robin_bcs_scalar_mms(bcs, b):
     sim.input.set_value('boundary_conditions/0/name', 'vertical wall x=0')
     sim.input.set_value('boundary_conditions/0/selector', 'code')
     sim.input.set_value(
-        'boundary_conditions/0/inside_code',
-        'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)',
+        'boundary_conditions/0/inside_code', 'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)'
     )
     sim.input.set_value('boundary_conditions/1/name', 'vertical walls x=1')
     sim.input.set_value('boundary_conditions/1/selector', 'code')
-    sim.input.set_value(
-        'boundary_conditions/1/inside_code', 'on_boundary and x[0] > 1 - 1e-6'
-    )
+    sim.input.set_value('boundary_conditions/1/inside_code', 'on_boundary and x[0] > 1 - 1e-6')
     sim.input.set_value('boundary_conditions/2/name', 'horizontal walls')
     sim.input.set_value('boundary_conditions/2/selector', 'code')
     sim.input.set_value(
-        'boundary_conditions/2/inside_code',
-        'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)',
+        'boundary_conditions/2/inside_code', 'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)'
     )
 
     # Setup the boundary conditions to test
@@ -241,9 +235,7 @@ def test_robin_bcs_scalar_mms(bcs, b):
         sim.input.set_value('boundary_conditions/1/phi/value', 1.0)
 
     # RHS
-    sim.input.set_value(
-        'solver/source', '2*pi*pi*(pow(sin(x[0]*pi), 2) - pow(cos(x[0]*pi), 2))'
-    )
+    sim.input.set_value('solver/source', '2*pi*pi*(pow(sin(x[0]*pi), 2) - pow(cos(x[0]*pi), 2))')
 
     # Run Ocellaris
     setup_simulation(sim)
@@ -305,14 +297,12 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
     sim.input.set_value('boundary_conditions/0/name', 'vertical walls')
     sim.input.set_value('boundary_conditions/0/selector', 'code')
     sim.input.set_value(
-        'boundary_conditions/0/inside_code',
-        'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)',
+        'boundary_conditions/0/inside_code', 'on_boundary and (x[0] < 1e-6 or x[0] > 1 - 1e-6)'
     )
     sim.input.set_value('boundary_conditions/1/name', 'horizontal walls')
     sim.input.set_value('boundary_conditions/1/selector', 'code')
     sim.input.set_value(
-        'boundary_conditions/1/inside_code',
-        'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)',
+        'boundary_conditions/1/inside_code', 'on_boundary and (x[1] < 1e-6 or x[1] > 1 - 1e-6)'
     )
 
     # Vertical wall BCs
@@ -325,15 +315,18 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
     else:
         sim.input.set_value('boundary_conditions/0/phi/type', 'InterfaceSlipLength')
         sim.input.set_value('boundary_conditions/0/phi/slip_length', slip_length)
-        sim.input.set_value('boundary_conditions/0/phi/slip_factor_distance', 0.1)
+        sim.input.set_value('boundary_conditions/0/phi/slip_factor_function', 'fs_zone/phi')
+
+        sim.input.set_value('fields', [{}])
+        sim.input.set_value('fields/0/name', 'fs_zone')
+        sim.input.set_value('fields/0/type', 'FreeSurfaceZone')
+        sim.input.set_value('fields/0/radius', 0.5)
 
         # Create dummy scalar field
         sim.input.set_value('multiphase_solver/type', 'BlendedAlgebraicVOF')
         sim.input.set_value('multiphase_solver/function_space_colour', 'DG')
         sim.input.set_value('multiphase_solver/polynomial_degree_colour', 0)
-        sim.input.set_value(
-            'initial_conditions/cp/cpp_code', '0.5'
-        )  # The interface is everywhere
+        sim.input.set_value('initial_conditions/cp/cpp_code', 'x[1] < 0.5 ? 1.0 : 0.0')
 
         sim.input.set_value('physical_properties/rho0', 1.0)
         sim.input.set_value('physical_properties/rho1', 1.0)
@@ -349,9 +342,7 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
     sim.input.set_value('boundary_conditions/1/phi/value', 0.0)
 
     # RHS
-    sim.input.set_value(
-        'solver/source', '12/(6*𝛿  - 1.0)'.replace('𝛿', repr(slip_length))
-    )
+    sim.input.set_value('solver/source', '12/(6*𝛿  - 1.0)'.replace('𝛿', repr(slip_length)))
 
     # Run Ocellaris
     setup_simulation(sim)
@@ -373,40 +364,23 @@ def test_slip_length_robin_bcs_scalar_mms(slip_length, method):
     relative_error = phidiff / analytical
     print('RELATIVE ERROR IS %.4f for 𝛿=%r' % (relative_error, slip_length))
 
+    if method == 'Interface' and False:
+        from matplotlib import pyplot
+
+        fig = pyplot.figure(figsize=(8, 15))
+        fig.add_subplot(311)
+        c = dolfin.plot(sim.data['c'])
+        pyplot.colorbar(c)
+        fig.add_subplot(312)
+        c = dolfin.plot(sim.data['ls_c_0_5'])
+        pyplot.colorbar(c)
+        fig.add_subplot(313)
+        c = dolfin.plot(sim.fields['fs_zone'].get_variable('phi'))
+        pyplot.colorbar(c)
+        fig.tight_layout()
+        fig.savefig('AAAAAAAAAAAaaaa.png')
+
     assert relative_error < 0.0099  # Expect 0.0097 for 𝛿=0.001
-
-
-@pytest.mark.parametrize("N", [4, 6])
-def test_slip_length_boundary_level_set_intersector(N):
-    from ocellaris.solver_parts.boundary_conditions.slip_length import (
-        BoundaryLevelSetIntersector
-    )
-
-    sim = Simulation()
-    sim.input.read_yaml(yaml_string=BASE_INPUT)
-
-    # Create simulation with a scalar field that has a level set at x[1] == 0.5
-    sim.input.set_value('mesh/Nx', N)
-    sim.input.set_value('mesh/Ny', N)
-    sim.input.set_value('multiphase_solver/type', 'BlendedAlgebraicVOF')
-    sim.input.set_value('multiphase_solver/function_space_colour', 'DG')
-    sim.input.set_value('multiphase_solver/polynomial_degree_colour', 0)
-    sim.input.set_value('initial_conditions/cp/cpp_code', 'x[1] < 0.5 ? 1.0 : 0.0')
-    sim.input.set_value('physical_properties/rho0', 1.0)
-    sim.input.set_value('physical_properties/rho1', 1.0)
-    sim.input.set_value('physical_properties/nu0', 1.0)
-    sim.input.set_value('physical_properties/nu1', 1.0)
-    setup_simulation(sim)
-
-    intersector = BoundaryLevelSetIntersector(sim, sim.data['cp'], 0.5)
-    intersections = intersector.get()
-
-    for pos in intersections:
-        print('Intersection: %r' % pos)
-
-    assert len(intersections) == 2
-    for pos in intersections:
-        assert numpy.allclose(pos, [0, 0.5]) or numpy.allclose(pos, [1, 0.5])
 
 
 def debug_phi_plot(phi, phia, phih, plotname, compare_historical=False, **plotargs):

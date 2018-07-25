@@ -15,7 +15,7 @@ ignore =
     W293, W391,
 
     # We use import at the end of __init__ files which
-    # use registration mackinery defined above
+    # use registration machinery defined above
     # E402 module level import not at top of file
     E402,
 
@@ -26,4 +26,4 @@ ignore =
 
     # Flake is not very smart, most of these are bogus (__init__ API imports...)
     # F401: module imported but unused
-    F401
+    #F401

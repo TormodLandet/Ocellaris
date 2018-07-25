@@ -1,5 +1,6 @@
 import numpy
 from dolfin import Constant, FunctionSpace
+from .level_set_view import LevelSetView
 
 
 class VOFMixin(object):
@@ -12,6 +13,7 @@ class VOFMixin(object):
 
     calculate_mu_directly_from_colour_function = True
     default_polynomial_degree_colour = 0
+    _level_set_view = None
 
     @classmethod
     def create_function_space(cls, simulation):
@@ -154,3 +156,13 @@ class VOFMixin(object):
             rho = rho0 * c + rho1 * (1 - c)
             mu = nu * rho
             return mu.min(), mu.max()
+
+    def get_level_set_view(self):
+        """
+        Get a view of this VOF field as a level set function
+        """
+        if self._level_set_view is None:
+            self._level_set_view = LevelSetView(self.simulation)
+            c = self.get_colour_function(0)
+            self._level_set_view.set_density_field(c)
+        return self._level_set_view

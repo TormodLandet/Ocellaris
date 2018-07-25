@@ -1,3 +1,4 @@
+from collections import deque
 import traceback
 import dolfin
 from ocellaris.utils import timeit, verify_key
@@ -22,6 +23,7 @@ class Hooks(object):
         # More specialized hooks
         self._matrix_ready_hooks = []
         self._custom_hooks = {}
+        self._call_after = deque()
 
         # TODO: consider making all other hooks wrappers over custom hooks
 
@@ -77,6 +79,12 @@ class Hooks(object):
         verify_key('custom hook point', hook_point, self._custom_hooks)
         self._custom_hooks[hook_point].append((hook, description))
 
+    def call_after(self, callable, description, *args, **kwargs):
+        """
+        Call this after the current hook calls are done
+        """
+        self._call_after.append((callable, description, args, kwargs))
+
     # ------------------------------------------
     # Hook runners:
 
@@ -100,6 +108,9 @@ class Hooks(object):
         # happens after the hooks, as they may alter the initial conditions
         self.simulation._at_start_of_simulation()
 
+        # Run any delayed actions
+        self._process_call_after()
+
     @timeit.named('all hooks: new_timestep')
     def new_timestep(self, timestep_number, t, dt):
         """
@@ -119,6 +130,9 @@ class Hooks(object):
                     self.simulation.log.error('Got exception in hook: %s' % description)
                     self.simulation.log.error(traceback.format_exc())
                     raise
+
+        # Run any delayed actions
+        self._process_call_after()
 
     @timeit.named('all hooks: end_timestep')
     def end_timestep(self):
@@ -140,6 +154,9 @@ class Hooks(object):
         # Take care of reporting etc after the solver and any hooks have
         # finished running the current time step
         self.simulation._at_end_of_timestep()
+
+        # Run any delayed actions
+        self._process_call_after()
 
     def simulation_ended(self, success):
         """
@@ -164,6 +181,9 @@ class Hooks(object):
         # Take care of flushing files after the solver and any hooks are done
         self.simulation._at_end_of_simulation(success)
 
+        # Run any delayed actions
+        self._process_call_after()
+
     # FIXME: this is not really used and the whole matrix_ready machinery should
     # probably be removed or made into a custom hook in case someone wants to
     # hook into the matrix assembly process. The intent was to report condition
@@ -176,15 +196,16 @@ class Hooks(object):
         and reporting matrix sizes etc
         """
         for hook, description in self._matrix_ready_hooks[::-1]:
-            t = dolfin.Timer('Ocellaris hook %s' % description)
-            try:
-                hook(Aname=Aname, A=A, b=b)
-            except Exception:
-                self.simulation.log.error('Got exception in hook: %s' % description)
-                self.simulation.log.error(traceback.format_exc())
-                raise
-            finally:
-                t.stop()
+            with dolfin.Timer('Ocellaris hook %s' % description):
+                try:
+                    hook(Aname=Aname, A=A, b=b)
+                except Exception:
+                    self.simulation.log.error('Got exception in hook: %s' % description)
+                    self.simulation.log.error(traceback.format_exc())
+                    raise
+
+        # Run any delayed actions
+        self._process_call_after()
 
     def run_custom_hook(self, hook_point, *args, **kwargs):
         """
@@ -203,6 +224,18 @@ class Hooks(object):
                     self.simulation.log.error(traceback.format_exc())
                     raise
 
+        # Run any delayed actions
+        self._process_call_after()
+
+    def _process_call_after(self):
+        """
+        Run any delayed action after a normal hooks is done
+        """
+        while self._call_after:
+            func, description, args, kwargs = self._call_after.popleft()
+            with dolfin.Timer('Ocellaris delayed %s' % description):
+                func(*args, **kwargs)
+
     def show_hook_info(self):
         """
         Show all registered hooks
@@ -216,8 +249,7 @@ class Hooks(object):
             ('Matrix ready', self._matrix_ready_hooks),
         ]
         all_hooks.extend(
-            ('Custom hook "%s"' % name, hooks)
-            for name, hooks in self._custom_hooks.items()
+            ('Custom hook "%s"' % name, hooks) for name, hooks in self._custom_hooks.items()
         )
 
         show('\nRegistered hooks:')

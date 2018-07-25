@@ -15,6 +15,9 @@ class PlaneProbe(Probe):
 
     def __init__(self, simulation, probe_input):
         self.simulation = simulation
+        self.family = None
+        self.degree = None
+
         assert self.simulation.ndim == 3, 'PlaneProbe only implemented in 3D'
 
         # Read input
@@ -38,28 +41,23 @@ class PlaneProbe(Probe):
             self.field_names = inp.validate_and_convert('field', fn, 'list(string)')
 
         # Get the functions and verify the function spaces
-        self.funcs_3d = []
         for fn in self.field_names:
-            func_3d = simulation.data[fn]
+            func_3d = simulation.get_data(fn)
             V = func_3d.function_space()
             fam = V.ufl_element().family()
             deg = V.ufl_element().degree()
-            if not self.funcs_3d:
+            if self.family is None:
                 self.family = fam
                 self.degree = deg
             elif fam != self.family or deg != self.degree:
                 ocellaris_error(
                     'Mismatching function spaces in PlainProbe %s' % self.name,
                     'All functions must have the same function space. '
-                    + '%s is %r but %r was expected'
-                    % (fn, (fam, deg), (self.family, self.degree)),
+                    + '%s is %r but %r was expected' % (fn, (fam, deg), (self.family, self.degree)),
                 )
-            self.funcs_3d.append(func_3d)
 
         # Create the slice
-        self.slice = FunctionSlice(
-            self.plane_point, self.plane_normal, V, xlim, ylim, zlim
-        )
+        self.slice = FunctionSlice(self.plane_point, self.plane_normal, V, xlim, ylim, zlim)
         prefix = simulation.input.get_value('output/prefix', '', 'string')
 
         # Get the XDMF file name (also ensures it does not exist)
@@ -69,9 +67,7 @@ class PlaneProbe(Probe):
         if simulation.rank == 0:
             V_2d = self.slice.slice_function_space
             mesh_2d = V_2d.mesh()
-            simulation.log.info(
-                '        Created 2D mesh with %r cells' % mesh_2d.num_cells()
-            )
+            simulation.log.info('        Created 2D mesh with %r cells' % mesh_2d.num_cells())
             simulation.log.info('        Creating XDMF file %s' % self.file_name)
             self.xdmf_file = dolfin.XDMFFile(dolfin.MPI.comm_self, self.file_name)
             self.xdmf_file.parameters['flush_output'] = True
@@ -95,7 +91,8 @@ class PlaneProbe(Probe):
         """
         Find and output the plane probe
         """
-        for func_3d, func_2d in zip(self.funcs_3d, self.funcs_2d):
+        for fn, func_2d in zip(self.field_names, self.funcs_2d):
+            func_3d = self.simulation.get_data(fn)
             self.slice.get_slice(func_3d, func_2d)
             if self.simulation.rank == 0:
                 self.xdmf_file.write(func_2d, self.simulation.time)
@@ -418,9 +415,7 @@ def split_cells(unsplit):
         elif N == 3:
             results[cell_id] = [cell_coords]
         else:
-            raise NotImplementedError(
-                'Expected elements with 3 or 4 ' 'vertices, not %d' % N
-            )
+            raise NotImplementedError('Expected elements with 3 or 4 ' 'vertices, not %d' % N)
     return results
 
 

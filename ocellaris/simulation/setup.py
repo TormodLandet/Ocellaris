@@ -20,7 +20,7 @@ from ocellaris.solver_parts import (
     get_multi_phase_model,
     get_known_field,
     MeshMorpher,
-    add_forcing_zone,
+    add_forcing_zone
 )
 
 
@@ -393,9 +393,7 @@ def mark_boundaries(simulation):
     # boundary that they belong to. They also create boundary
     # condition objects that are later used in the eq. solvers
     boundary = []
-    for index, _ in enumerate(
-        simulation.input.get_value('boundary_conditions', required_type='list(dict)')
-    ):
+    for index, _ in enumerate(simulation.input.get_value('boundary_conditions', [], 'list(dict)')):
         part = BoundaryRegion(simulation, marker, index, mesh_facet_regions)
         boundary.append(part)
 
