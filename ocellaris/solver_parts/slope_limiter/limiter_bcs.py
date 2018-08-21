@@ -6,7 +6,8 @@ class SlopeLimiterBoundaryConditions(object):
     BC_TYPE_NOT_ON_BOUNDARY = 0
     BC_TYPE_DIRICHLET = 1
     BC_TYPE_NEUMANN = 2
-    BC_TYPE_OTHER = 3
+    BC_TYPE_ROBIN = 3
+    BC_TYPE_OTHER = 4
 
     def __init__(self, simulation, field_name, dof_region_marks, V):
         """
@@ -113,7 +114,10 @@ class SlopeLimiterBoundaryConditions(object):
             elif region_number in neumann:
                 bc_type = self.BC_TYPE_NEUMANN
                 value = neumann[region_number].func()
-            elif region_number in robin or region_number in slip:
+            elif region_number in robin:
+                bc_type = self.BC_TYPE_ROBIN
+                value = robin[region_number].dfunc()
+            elif region_number in slip:
                 value = None
                 for dof in dofs:
                     boundary_dof_type[dof] = self.BC_TYPE_OTHER

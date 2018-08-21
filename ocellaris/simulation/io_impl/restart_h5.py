@@ -205,6 +205,10 @@ class RestartFileIO:
                 mesh_facet_regions = None
             sim.set_mesh(mesh, mesh_facet_regions)
 
+            # Setup needs to know that the simulation was restarted for
+            # XDMF file renaming (among other possible uses)
+            sim.timestep = it
+
         if read_results:
             sim.log.info('Reading fields from restart file %r' % h5_file_name)
             sim.timestep = it

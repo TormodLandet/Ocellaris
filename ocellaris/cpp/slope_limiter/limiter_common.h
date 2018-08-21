@@ -8,7 +8,6 @@
 #include <pybind11/eigen.h>
 #include <Eigen/Core>
 
-
 namespace dolfin
 {
 
@@ -22,14 +21,14 @@ using IntMatIn = Eigen::Ref<const MatIntRM>;
 using DoubleVecIn = Eigen::Ref<const Eigen::VectorXd>;
 using DoubleMatIn = Eigen::Ref<const MatDoubleRM>;
 
-
-enum BoundaryDofType {
+enum BoundaryDofType
+{
   NOT_ON_BOUNDARY = 0,
   DIRICHLET = 1,
   NEUMANN = 2,
-  OTHER = 3
+  ROBIN = 3,
+  OTHER = 4
 };
-
 
 struct SlopeLimiterInput
 {
@@ -54,12 +53,16 @@ struct SlopeLimiterInput
   MatIntRM cell_vertices;
   MatDoubleRM vertex_coords;
 
- // Coordinate of cell midpoints
+  // Coordinate of cell midpoints
   MatDoubleRM cell_midpoints;
 
   // We can clamp the limited values to a given range
   double global_min = std::numeric_limits<double>::lowest();
   double global_max = std::numeric_limits<double>::max();
+
+  // Treat Robin BCs as Dirichlet in the sence that the Robin Dirichlet
+  // value is included in the valid value range for boundary dofs
+  bool trust_robin_dval = true;
 
   void set_arrays(const int num_cells_owned,
                   IntVecIn num_neighbours,
@@ -180,8 +183,6 @@ struct SlopeLimiterInput
     this->enforce_boundary_conditions = enforce_bcs;
   }
 };
-
-
 
 } // end namespace dolfin
 

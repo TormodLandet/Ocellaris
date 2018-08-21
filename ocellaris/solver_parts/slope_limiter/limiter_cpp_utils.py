@@ -4,7 +4,7 @@ from ocellaris.utils import get_dof_neighbours
 
 
 class SlopeLimiterInput(object):
-    def __init__(self, mesh, V, V0, use_cpp=True):
+    def __init__(self, mesh, V, V0, use_cpp=True, trust_robin_dval=True):
         """
         This class stores the connectivity and dof maps necessary to
         perform slope limiting in an efficient manner in the C++ code
@@ -17,12 +17,8 @@ class SlopeLimiterInput(object):
         # Fast access to cell dofs
         dm, dm0 = V.dofmap(), V0.dofmap()
         indices = list(range(mesh.num_cells()))
-        self.cell_dofs_V = numpy.array(
-            [dm.cell_dofs(i) for i in indices], dtype=numpy.intc
-        )
-        self.cell_dofs_V0 = numpy.array(
-            [dm0.cell_dofs(i) for i in indices], dtype=numpy.intc
-        )
+        self.cell_dofs_V = numpy.array([dm.cell_dofs(i) for i in indices], dtype=numpy.intc)
+        self.cell_dofs_V0 = numpy.array([dm0.cell_dofs(i) for i in indices], dtype=numpy.intc)
 
         tdim = mesh.topology().dim()
         self.num_cells_owned = mesh.topology().ghost_offset(tdim)
@@ -50,6 +46,7 @@ class SlopeLimiterInput(object):
                 self.cell_vertices,
                 self.vertex_coordinates,
             )
+            self.cpp_obj.trust_robin_dval = trust_robin_dval
 
     def set_global_bounds(self, global_min, global_max):
         """
