@@ -203,6 +203,7 @@ type Solver:
     optional function_space_velocity: StringMin1
     optional function_space_pressure: StringMin1
     optional num_elements_in_A_tilde_block: Integer
+    optional num_pressure_corr: Integer
 
     # Rare settings, may not be super well tested
     optional timestepping_method: str(equals='BDF')
