@@ -299,6 +299,7 @@ type Output:
     optional divergence_method: StringMin1
     optional plot_divergences: bool
     optional Co_lim: Float
+    optional plot_mesh: bool
     optional plot_facet_regions: bool
     optional plot_bcs: bool
 optional output: Output

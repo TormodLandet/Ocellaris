@@ -362,14 +362,20 @@ def load_mesh(simulation):
         # Store the loaded regions
         simulation.data['mesh_facet_regions'] = mfr
         mesh_facet_regions = mfr
+    
+    # Optionally plot mesh right after loading (for debugging)
+    if simulation.input.get_value('output/plot_mesh', False, 'bool'):
+        prefix = simulation.input.get_value('output/prefix', '', 'string')
+        pfile = prefix + '_input_mesh.xdmf'
+        simulation.log.info('    Plotting input mesh to XDMF file %r' % pfile)
+        with dolfin.XDMFFile(comm, pfile) as xdmf:
+            xdmf.write(mesh)
 
     # Optionally plot facet regions to file
     if simulation.input.get_value('output/plot_facet_regions', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
         pfile = prefix + '_input_facet_regions.xdmf'
-        simulation.log.info(
-            '    Plotting mesh input boundary facet regions ' 'to XDMF file %r' % pfile
-        )
+        simulation.log.info('    Plotting input mesh facet regions to XDMF file %r' % pfile)
         if mesh_facet_regions is None:
             simulation.log.warning('Cannot plot mesh facet regions, no regions found!')
         else:
