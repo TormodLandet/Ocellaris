@@ -65,7 +65,7 @@ ALPHA_U_LAST = 1.0
 ALPHA_P_LAST = 1.0
 
 # Approximation of Ã
-NUM_ELEMENTS_IN_BLOCK = 0
+NUM_ELEMENTS_IN_BLOCK = 1
 LUMP_DIAGONAL = False
 MASS_ONLY_A_TILDE = False
 
@@ -306,12 +306,13 @@ class SolverPIMPLE(Solver):
             alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
         if alpha != 1.0:
             # Implicit under relaxation
-            relax = (1 - alpha) / alpha
-            lhs = dolfin.as_backend_type(lhs.copy())
-            lhs.axpy(relax, self.A_tilde, False)
-            lhs.apply('insert')
-            rhs.axpy(relax, self.A_tilde * u_star.vector())
-            rhs.apply('insert')
+            rhs = alpha * rhs + (1 - alpha) * lhs * u_star.vector()
+            #relax = (1 - alpha) / alpha
+            #lhs = dolfin.as_backend_type(lhs.copy())
+            #lhs.axpy(relax, self.A_tilde, False)
+            #lhs.apply('insert')
+            #rhs.axpy(relax, self.A_tilde * u_star.vector())
+            #rhs.apply('insert')
 
         # Solve the linearised convection-diffusion system
         self.niters_u = self.velocity_solver.inner_solve(
@@ -326,21 +327,16 @@ class SolverPIMPLE(Solver):
         N = self.simulation.input.get_value('solver/num_pressure_corr', MAX_PRESSURE_ITER, 'int')
         for i in range(N):
             reassemble = self.inner_iteration == 1 and i == 0
-            err_p, div_err = self.pressure_correction(reassemble)
+            last_piso_iter = i == N - 1
+            err_p, div_err = self.pressure_correction(reassemble, last_piso_iter)
             err_u = self.velocity_update()
-            if N != 1:
+            if N != 1 and not "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX":
                 txt = (
                     '    Pressure correction %2d - err u* %10.3e - '
                     'err p %10.3e - div inp %10.3e - Kry. iters %3d'
                     % (i + 1, err_u, err_p, div_err, self.niters_p)
                 )
                 self.simulation.log.info(txt)
-
-            sim = self.simulation
-            self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])
-            self.postprocess_velocity()
-            self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
-        exit()
 
         # The change in u_star from before the momentum prediction and up to now
         u_star_old = self.simulation.data['uvw_start']
@@ -350,7 +346,7 @@ class SolverPIMPLE(Solver):
         return err_p, err_u
 
     @timeit
-    def pressure_correction(self, reassemble):
+    def pressure_correction(self, reassemble, last_piso_iter):
         """
         PIMPLE pressure correction
         """
@@ -430,7 +426,7 @@ class SolverPIMPLE(Solver):
             p_star.vector()[:] -= pavg
 
         # Explicit relaxation
-        if self.last_inner_iter:
+        if self.last_inner_iter and last_piso_iter:
             alpha = sim.input.get_value('solver/relaxation_p_last_iter', ALPHA_P_LAST, 'float')
         else:
             alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
@@ -448,12 +444,28 @@ class SolverPIMPLE(Solver):
         """
         p = self.simulation.data['p']
         uvw = self.simulation.data['uvw_star']
+        
+        # Explicit velocity update
+        #Ati = self.A_tilde_inv
+        #AtiA = self.AtinvA
+        #AtiB = self.AtinvB
+        #delta_u = Ati * self.D - AtiA * uvw.vector() - AtiB * p.vector()
 
-        minus_u_upd = (
-            self.AtinvA * uvw.vector() + self.AtinvB * p.vector() - self.A_tilde_inv * self.D
-        )
-        uvw.vector().axpy(-1.0, minus_u_upd)
+        # Explicit velocity update
+        Ati, A, B, D = self.A_tilde_inv, self.A, self.B, self.D
+        delta_u = Ati * (D - A * uvw.vector() - B * p.vector())
+        
+        uvw.vector().axpy(1.0, delta_u)
         uvw.vector().apply('insert')
+
+        print(
+            uvw.vector()[0],
+            uvw.vector()[10000],
+            uvw.vector()[20000],
+            uvw.vector()[30000],
+            uvw.vector()[40000],
+            delta_u.norm('l2'),
+        )
 
         if DEBUG_RHS:
             # Quantify RHS contributions
@@ -466,7 +478,7 @@ class SolverPIMPLE(Solver):
                 '  %5.2f  %5.2f  %5.2f    %.2e' % (c0 / cT, c1 / cT, c2 / cT, cT)
             )
 
-        return minus_u_upd.norm('l2')
+        return delta_u.norm('l2')
 
     @timeit
     def postprocess_velocity(self):
@@ -537,7 +549,7 @@ class SolverPIMPLE(Solver):
                 # Collect previous velocity components in coupled function
                 self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
 
-                # Run inner iterations
+                # Run inner iterations, PIMPLE loop
                 self.inner_iteration = 1
                 self.last_inner_iter = False
                 while True:
@@ -558,6 +570,7 @@ class SolverPIMPLE(Solver):
                         break
                     elif err_u < allowable_error_inner:
                         self.last_inner_iter = True
+                exit()
 
                 # Extract the separate velocity component functions
                 self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])

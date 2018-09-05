@@ -88,9 +88,10 @@ solver:
     function_space_pressure: DG
     timestepping_method: BDF
     num_inner_iter: 50
-    relaxation_u: 1.0
-    relaxation_p: 1.0
-    num_pressure_corr: 30
+    relaxation_u: 1
+    relaxation_p: 0.7
+    num_pressure_corr: 1000
+    num_inner_iter: 1
     allowable_error_inner: 1.0e-8
     use_stress_divergence_form: false
     velocity_postprocessing: BDM

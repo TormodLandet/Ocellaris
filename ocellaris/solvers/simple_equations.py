@@ -46,6 +46,22 @@ class SimpleEquations(object):
         self.block_partitions = None
         self.a_tilde_is_mass = a_tilde_is_mass
 
+        # Show some configuration info
+        log = simulation.log.info
+        nelem = self.num_elements_in_block
+        if nelem == 0:
+            log('    Using diagonal Ã matrix')
+        elif nelem == 1:
+            log('    Using block-diagonal Ã matrix')
+        else:
+            log('    Using %d-element block-diagonal Ã matrix' % nelem)
+        if self.a_tilde_is_mass:
+            log('    Using only mass matrix when constructing Ã')
+        else:
+            log('    Using full A matrix when constructing Ã')
+        if self.lump_diagonal:
+            log('    Lumping diagonal constructing Ã')
+
         # We do not currently support all possible options
         assert self.incompressibility_flux_type in ('central', 'upwind')
         assert not self.simulation.mesh_morpher.active
@@ -104,9 +120,7 @@ class SimpleEquations(object):
         # Check matrix and vector shapes and that the matrix is a saddle point matrix
         assert mat.shape == (2, 2)
         assert vec.shape == (2,)
-        assert (
-            mat[-1, -1] is None
-        ), 'Found p-q coupling, this is not a saddle point system!'
+        assert mat[-1, -1] is None, 'Found p-q coupling, this is not a saddle point system!'
 
         # Store the forms
         self.eqA = mat[0, 0]
@@ -124,9 +138,7 @@ class SimpleEquations(object):
             c1 = sim.data['time_coeffs'][0]
             dt = sim.data['dt']
             eqM = rho * c1 / dt * dolfin.dot(u, v) * dolfin.dx
-            matM, _vecM = split_form_into_matrix(
-                eqM, Vcoupled, Vcoupled, check_zeros=True
-            )
+            matM, _vecM = split_form_into_matrix(eqM, Vcoupled, Vcoupled, check_zeros=True)
             self.eqM = dolfin.Form(matM[0, 0])
             self.M = None
 
@@ -239,9 +251,7 @@ class SimpleEquations(object):
         are the dofs of N elememts a single element
         """
         if self.block_partitions is None:
-            self.block_partitions = create_block_partitions(
-                self.simulation, self.Vuvw, Nelem
-            )
+            self.block_partitions = create_block_partitions(self.simulation, self.Vuvw, Nelem)
             self.simulation.log.info(
                 'SIMPLE solver with %d cell blocks found %d blocks in total'
                 % (Nelem, len(self.block_partitions))
