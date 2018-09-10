@@ -65,7 +65,7 @@ ALPHA_U_LAST = 1.0
 ALPHA_P_LAST = 1.0
 
 # Approximation of Ã
-NUM_ELEMENTS_IN_BLOCK = 0
+NUM_ELEMENTS_IN_BLOCK = 1
 LUMP_DIAGONAL = False
 MASS_ONLY_A_TILDE = False
 
@@ -108,7 +108,7 @@ class SolverPIMPLE(Solver):
 
         (3) Update the velocity based on the new pressure
 
-            u** = u* - Ã⁻¹A u* - Ã⁻¹B p + Ã⁻¹d
+            u** = u* - Ã⁻¹A u* - Ã⁻¹B p** + Ã⁻¹d
 
         (4) Go back to step 2 and compute a new pressure correction if requested
             This is the "PISO-loop" of PIMPLE, steps 2 and 3
@@ -120,9 +120,7 @@ class SolverPIMPLE(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
-        self.hydrostatic_pressure = setup_hydrostatic_pressure(
-            simulation, needs_initial_value=True
-        )
+        self.hydrostatic_pressure = setup_hydrostatic_pressure(simulation, needs_initial_value=True)
         ph_every_timestep = 'p_hydrostatic' in sim.data
 
         # First time step timestepping coefficients
@@ -147,18 +145,14 @@ class SolverPIMPLE(Solver):
         self.matrices = matrices
 
         # Slope limiter for the momentum equation velocity components
-        self.slope_limiter = SlopeLimiterVelocity(
-            sim, sim.data['u'], 'u', vel_w=sim.data['u_conv']
-        )
+        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
         self.using_limiter = self.slope_limiter.active
 
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
             self.velocity_postprocessor = VelocityBDMProjection(
-                sim,
-                sim.data['u'],
-                incompressibility_flux_type=self.incompressibility_flux_type,
+                sim, sim.data['u'], incompressibility_flux_type=self.incompressibility_flux_type
             )
 
         # Matrix and vector storage
@@ -217,10 +211,7 @@ class SolverPIMPLE(Solver):
             'solver/velocity_postprocessing', BDM, 'string'
         )
         verify_key(
-            'velocity post processing',
-            self.velocity_postprocessing,
-            ('none', BDM),
-            'SIMPLE solver',
+            'velocity post processing', self.velocity_postprocessing, ('none', BDM), 'SIMPLE solver'
         )
 
         # Quasi-steady simulation input
@@ -310,27 +301,22 @@ class SolverPIMPLE(Solver):
 
         # Add optional under relaxation
         if self.last_inner_iter:
-            alpha = sim.input.get_value(
-                'solver/relaxation_u_last_iter', ALPHA_U_LAST, 'float'
-            )
+            alpha = sim.input.get_value('solver/relaxation_u_last_iter', ALPHA_U_LAST, 'float')
         else:
             alpha = sim.input.get_value('solver/relaxation_u', ALPHA_U, 'float')
         if alpha != 1.0:
             # Implicit under relaxation
-            relax = (1 - alpha) / alpha
-            lhs = dolfin.as_backend_type(lhs.copy())
-            lhs.axpy(relax, self.A_tilde, False)
-            lhs.apply('insert')
-            rhs.axpy(relax, self.A_tilde * u_star.vector())
-            rhs.apply('insert')
+            rhs = alpha * rhs + (1 - alpha) * lhs * u_star.vector()
+            #relax = (1 - alpha) / alpha
+            #lhs = dolfin.as_backend_type(lhs.copy())
+            #lhs.axpy(relax, self.A_tilde, False)
+            #lhs.apply('insert')
+            #rhs.axpy(relax, self.A_tilde * u_star.vector())
+            #rhs.apply('insert')
 
         # Solve the linearised convection-diffusion system
         self.niters_u = self.velocity_solver.inner_solve(
-            lhs,
-            u_star.vector(),
-            rhs,
-            in_iter=self.inner_iteration,
-            co_iter=self.co_inner_iter,
+            lhs, u_star.vector(), rhs, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
         )
 
     def piso_loop(self):
@@ -338,14 +324,13 @@ class SolverPIMPLE(Solver):
         Perform pressure correction and velocity update iteratively.
         This is the "PISO" part of the PIMPLE algorithm
         """
-        N = self.simulation.input.get_value(
-            'solver/num_pressure_corr', MAX_PRESSURE_ITER, 'int'
-        )
+        N = self.simulation.input.get_value('solver/num_pressure_corr', MAX_PRESSURE_ITER, 'int')
         for i in range(N):
             reassemble = self.inner_iteration == 1 and i == 0
-            err_p, div_err = self.pressure_correction(reassemble)
-            err_u = self.velocity_update(i == N - 1)
-            if N != 1:
+            last_piso_iter = i == N - 1
+            err_p, div_err = self.pressure_correction(reassemble, last_piso_iter)
+            err_u = self.velocity_update()
+            if N != 1 and not "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX":
                 txt = (
                     '    Pressure correction %2d - err u* %10.3e - '
                     'err p %10.3e - div inp %10.3e - Kry. iters %3d'
@@ -361,7 +346,7 @@ class SolverPIMPLE(Solver):
         return err_p, err_u
 
     @timeit
-    def pressure_correction(self, reassemble):
+    def pressure_correction(self, reassemble, last_piso_iter):
         """
         PIMPLE pressure correction
         """
@@ -425,11 +410,7 @@ class SolverPIMPLE(Solver):
         # Solve for the new pressure correction
         minus_p_hat.assign(p_star)
         self.niters_p = self.pressure_solver.inner_solve(
-            lhs,
-            p_star.vector(),
-            rhs,
-            in_iter=self.inner_iteration,
-            co_iter=self.co_inner_iter,
+            lhs, p_star.vector(), rhs, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
         )
 
         # Compute change from last iteration
@@ -445,10 +426,8 @@ class SolverPIMPLE(Solver):
             p_star.vector()[:] -= pavg
 
         # Explicit relaxation
-        if self.last_inner_iter:
-            alpha = sim.input.get_value(
-                'solver/relaxation_p_last_iter', ALPHA_P_LAST, 'float'
-            )
+        if self.last_inner_iter and last_piso_iter:
+            alpha = sim.input.get_value('solver/relaxation_p_last_iter', ALPHA_P_LAST, 'float')
         else:
             alpha = sim.input.get_value('solver/relaxation_p', ALPHA_P, 'float')
         if alpha != 1:
@@ -458,37 +437,48 @@ class SolverPIMPLE(Solver):
         return minus_p_hat.vector().norm('l2'), div_err
 
     @timeit
-    def velocity_update(self, last):
+    def velocity_update(self):
         """
         Update the velocity predictions with the updated pressure
         field from the pressure correction equation
         """
         p = self.simulation.data['p']
         uvw = self.simulation.data['uvw_star']
+        
+        # Explicit velocity update
+        #Ati = self.A_tilde_inv
+        #AtiA = self.AtinvA
+        #AtiB = self.AtinvB
+        #delta_u = Ati * self.D - AtiA * uvw.vector() - AtiB * p.vector()
 
-        # <<<<<<<####################################################################################################################################
-        for _i in range(1 if last else 10):
-            minus_u_upd = (
-                self.AtinvA * uvw.vector()
-                + self.AtinvB * p.vector()
-                - self.A_tilde_inv * self.D
+        # Explicit velocity update
+        Ati, A, B, D = self.A_tilde_inv, self.A, self.B, self.D
+        delta_u = Ati * (D - A * uvw.vector() - B * p.vector())
+        
+        uvw.vector().axpy(1.0, delta_u)
+        uvw.vector().apply('insert')
+
+        print(
+            uvw.vector()[0],
+            uvw.vector()[10000],
+            uvw.vector()[20000],
+            uvw.vector()[30000],
+            uvw.vector()[40000],
+            delta_u.norm('l2'),
+        )
+
+        if DEBUG_RHS:
+            # Quantify RHS contributions
+            c0 = (self.AtinvA * uvw.vector()).norm('l2')
+            c1 = (self.AtinvB * p.vector()).norm('l2')
+            c2 = (self.A_tilde_inv * self.D).norm('l2')
+            cT = max([c0, c1, c2])
+            self.simulation.log.info(
+                '                              VelUp contributions:'
+                '  %5.2f  %5.2f  %5.2f    %.2e' % (c0 / cT, c1 / cT, c2 / cT, cT)
             )
-            uvw.vector().axpy(-1.0, minus_u_upd)
-            uvw.vector().apply('insert')
 
-            self.simulation.log.info('Vel.upd.: %15.2e' % minus_u_upd.norm('l2'))
-            if DEBUG_RHS:
-                # Quantify RHS contributions
-                c0 = (self.AtinvA * uvw.vector()).norm('l2')
-                c1 = (self.AtinvB * p.vector()).norm('l2')
-                c2 = (self.A_tilde_inv * self.D).norm('l2')
-                cT = max([c0, c1, c2])
-                self.simulation.log.info(
-                    '                              VelUp contributions:'
-                    '  %5.2f  %5.2f  %5.2f    %.2e' % (c0 / cT, c1 / cT, c2 / cT, cT)
-                )
-
-        return minus_u_upd.norm('l2')
+        return delta_u.norm('l2')
 
     @timeit
     def postprocess_velocity(self):
@@ -538,9 +528,7 @@ class SolverPIMPLE(Solver):
                 # Get input values, these can possibly change over time
                 dt = sim.input.get_value('time/dt', required_type='float')
                 tmax = sim.input.get_value('time/tmax', required_type='float')
-                num_inner_iter = sim.input.get_value(
-                    'solver/num_inner_iter', MAX_INNER_ITER, 'int'
-                )
+                num_inner_iter = sim.input.get_value('solver/num_inner_iter', MAX_INNER_ITER, 'int')
                 allowable_error_inner = sim.input.get_value(
                     'solver/allowable_error_inner', ALLOWABLE_ERROR_INNER, 'float'
                 )
@@ -561,7 +549,7 @@ class SolverPIMPLE(Solver):
                 # Collect previous velocity components in coupled function
                 self.assigner_merge.assign(sim.data['uvw_star'], list(sim.data['u']))
 
-                # Run inner iterations
+                # Run inner iterations, PIMPLE loop
                 self.inner_iteration = 1
                 self.last_inner_iter = False
                 while True:
@@ -574,13 +562,7 @@ class SolverPIMPLE(Solver):
                     sim.log.info(
                         '  PIMPLE iteration %3d - err u* %10.3e - err p %10.3e'
                         ' - Num Krylov iters - u %3d - p %3d'
-                        % (
-                            self.inner_iteration,
-                            err_u,
-                            err_p,
-                            self.niters_u,
-                            self.niters_p,
-                        )
+                        % (self.inner_iteration, err_u, err_p, self.niters_u, self.niters_p)
                     )
                     self.inner_iteration += 1
 
@@ -588,6 +570,7 @@ class SolverPIMPLE(Solver):
                         break
                     elif err_u < allowable_error_inner:
                         self.last_inner_iter = True
+                exit()
 
                 # Extract the separate velocity component functions
                 self.assigner_split.assign(list(sim.data['u']), sim.data['uvw_star'])

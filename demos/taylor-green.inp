@@ -81,15 +81,17 @@ output:
     ocellaris_log_level: info
 
 solver:
-    type: SIMPLE
+    type: PIMPLE
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     function_space_velocity: DG
     function_space_pressure: DG
     timestepping_method: BDF
     num_inner_iter: 50
-    relaxation_u: 0.5
-    relaxation_p: 0.5
+    relaxation_u: 1
+    relaxation_p: 0.7
+    num_pressure_corr: 1000
+    num_inner_iter: 1
     allowable_error_inner: 1.0e-8
     use_stress_divergence_form: false
     velocity_postprocessing: BDM
