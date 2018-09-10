@@ -366,10 +366,15 @@ def load_mesh(simulation):
     # Optionally plot mesh right after loading (for debugging)
     if simulation.input.get_value('output/plot_mesh', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
-        pfile = prefix + '_input_mesh.xdmf'
-        simulation.log.info('    Plotting input mesh to XDMF file %r' % pfile)
+        pfile = prefix + '_mesh.xdmf'
+        simulation.log.info('    Plotting mesh with current MPI ranks to XDMF file %r' % pfile)
+        V0 = dolfin.FunctionSpace(mesh, 'DG', 0)
+        ranks = dolfin.Function(V0)
+        ranks.vector().set_local(ranks.vector().get_local() * 0 + comm.rank)
+        ranks.vector().apply('insert')
+        ranks.rename('MPI_rank', 'MPI_rank')
         with dolfin.XDMFFile(comm, pfile) as xdmf:
-            xdmf.write(mesh)
+            xdmf.write(ranks)
 
     # Optionally plot facet regions to file
     if simulation.input.get_value('output/plot_facet_regions', False, 'bool'):
@@ -425,8 +430,8 @@ def mark_boundaries(simulation):
     # Optionally plot boundary regions to file
     if simulation.input.get_value('output/plot_bcs', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
-        pfile = prefix + '_boundary_conditions.xdmf'
-        simulation.log.info('    Plotting boundary condition regions to ' 'XDMF file %r' % pfile)
+        pfile = prefix + '_boundary_regions.xdmf'
+        simulation.log.info('    Plotting boundary regions to ' 'XDMF file %r' % pfile)
         with dolfin.XDMFFile(mesh.mpi_comm(), pfile) as xdmf:
             xdmf.write(marker)
 
