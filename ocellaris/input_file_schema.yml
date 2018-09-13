@@ -26,6 +26,7 @@ alias FloatList: any_of(types=(PyCode, list(type=Float)))
 alias FloatOrList: any_of(types=(Float, FloatList))
 alias StrOrList: any_of(types=(str, list(type=str)))
 alias StrOrFloat: any_of(types=(str, float))
+alias ListOfLists: any_of(types=(PyCode, list(type=any_of(types=(PyCode, list(type=Any))))))
 
 
 # -- Header --------------------------------------------------------------
@@ -346,7 +347,11 @@ type ProbePlane:
     required field: StrOrList
     required plane_point: FloatList
     required plane_normal: FloatList
-alias Probe: one_of(types=(ProbeIsoSurface, ProbeLine, ProbePlane))
+type ProbePoint:
+    inherit: ProbeBase
+    required type: str(equals='PointProbe')
+    required probe_points: ListOfLists
+alias Probe: one_of(types=(ProbeIsoSurface, ProbeLine, ProbePlane, ProbePoint))
 optional probes: list(type=Probe)
 
 

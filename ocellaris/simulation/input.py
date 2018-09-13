@@ -110,9 +110,7 @@ class Input(collections.OrderedDict):
                 try:
                     p = int(p)
                 except ValueError:
-                    ocellaris_error(
-                        'List index not integer', 'Not a valid list index:  %s' % p
-                    )
+                    ocellaris_error('List index not integer', 'Not a valid list index:  %s' % p)
             elif d is None or p not in d:
                 # This is an empty dict or a dict missing the key "p"
                 if default_value is UNDEFINED:
@@ -134,9 +132,7 @@ class Input(collections.OrderedDict):
             d = d[p]
 
         # Validate the input data and convert to the requested type
-        d = self.validate_and_convert(
-            path, d, required_type, safe_mode, required_length
-        )
+        d = self.validate_and_convert(path, d, required_type, safe_mode, required_length)
 
         # Get the value on the root process
         if mpi_root_value:
@@ -302,6 +298,11 @@ class Input(collections.OrderedDict):
             def validate_and_convert(d):
                 return check_list(d, dict_types)
 
+        elif required_type == 'list(any)':
+
+            def validate_and_convert(d):
+                return check_list(d, anytype)
+
         elif required_type == 'any':
 
             def validate_and_convert(d):
@@ -332,9 +333,7 @@ class Input(collections.OrderedDict):
                 try:
                     p = int(p)
                 except ValueError:
-                    raise KeyNotFound(
-                        'List index not integer', 'Not a valid list index:  %s' % p
-                    )
+                    raise KeyNotFound('List index not integer', 'Not a valid list index:  %s' % p)
             elif p not in d:
                 d[p] = collections.OrderedDict()
             d = d[p]
@@ -399,9 +398,7 @@ class Input(collections.OrderedDict):
             return pth2
         self.simulation.log.debug('File does not exist: %s' % pth2)
 
-        ocellaris_error(
-            'File not found', 'The specified file "%s" was not found' % file_name
-        )
+        ocellaris_error('File not found', 'The specified file "%s" was not found' % file_name)
 
     def __str__(self):
         inp = collections.OrderedDict(self.items())

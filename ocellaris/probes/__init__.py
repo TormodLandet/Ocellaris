@@ -130,3 +130,4 @@ class Probe(object):
 from . import line_probe
 from . import iso_surface
 from . import plane_probe
+from . import point_probe
