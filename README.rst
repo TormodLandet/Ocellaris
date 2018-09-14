@@ -50,9 +50,8 @@ Please feel free to test Ocellaris, but please keep in mind:
 
 - Ocellaris is in a state of constant development 
 - Ocellaris supports Python 3 only
-- FEniCS DOLFIN with pybind11 Python3 wrappers is required (master version, still unreleased as of 
-  November 2017)
-- This is a research project, do not expect results to be correct without proper validation!
+- Tested with FEniCS 2018.1. Earlier versions will NOT work, later version may possibly work.
+- This is an ongoing research project, do not expect results to be correct without proper validation!
 
 
 Documentation
