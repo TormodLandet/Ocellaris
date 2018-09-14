@@ -84,7 +84,7 @@ class BaseWaveField(KnownField):
         if name == 'c' and self.colour_projection_degree >= 0:
             # Perform projection for c instead of interpolation to better
             # capture the discontinuous nature of the colour field
-            if not 'Vc' in sim.data:
+            if 'Vc' not in sim.data:
                 ocellaris_error(
                     'Error in wave field %r input' % self.name,
                     'Cannot specify colour_to_dg_degree when c is '

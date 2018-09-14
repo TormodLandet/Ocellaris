@@ -54,3 +54,4 @@ from . import wave_outflow
 from . import blended_field
 from . import conditional_field
 from . import free_surface_zone
+from . import water_block_field
