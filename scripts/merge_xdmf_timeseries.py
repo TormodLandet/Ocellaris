@@ -23,7 +23,7 @@ def merge_xdmf_timeseries(inp_file_names, out_file_name, verbose=True):
     # Collect grids (time steps with functions and mesh info)
     # The time series is also a grid, with GridType = "Collection" and
     # CollectionType = "Temporal", the time steps are sub-grids of this
-    grids = []
+    timestep_grids = {}
     out_tree = None
     for fn in inp_file_names:
         if verbose:
@@ -43,12 +43,15 @@ def merge_xdmf_timeseries(inp_file_names, out_file_name, verbose=True):
             grid_with_mesh = None
             for gridelem in tselem.findall('Grid'):
                 t = float(gridelem.find('Time[@Value]').attrib['Value'])
-                grids.append((t, grid_with_mesh, gridelem))
+                timestep_grids[t] = (grid_with_mesh, gridelem)
                 if grid_with_mesh is None:
                     grid_with_mesh = gridelem
 
     # Sort grids by simulation time step
-    grids.sort()
+    grids = []
+    for t in sorted(timestep_grids):
+        grid_with_mesh, gridelem = timestep_grids[t]
+        grids.append((t, grid_with_mesh, gridelem))
 
     # Correct xi:include references
     grids2 = []
