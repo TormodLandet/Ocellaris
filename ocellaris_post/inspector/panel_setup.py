@@ -136,9 +136,13 @@ class OcellarisSetupPanel(wx.Panel):
         self.prev_file_names = self.istate.persistence.get_prev_files(20)
 
         def shorten(fn, N=80):
+            label = self.istate.get_label(fn)
             if len(fn) > N:
                 fn = '...' + fn[3 - N :]
-            return fn
+            if label is not None:
+                return '%s (%s)' % (fn, label)
+            else:
+                return fn
 
         self.prevfiles.Set([shorten(fn) for fn in self.prev_file_names])
         i = len(self.prev_file_names) - 1 - len(self.istate.results)

@@ -54,6 +54,12 @@ class InspectorState(object):
         r.active_in_gui = True
         self.persistence.register_opened_file(file_name)
 
+    def get_label(self, file_name):
+        """
+        Get the user selected label for a given result file name
+        """
+        return self.persistence.get_label(file_name)
+
     def reload(self, only_active=True):
         """
         Reload the data. Usefull when plotting log files that are
@@ -144,6 +150,10 @@ class InspectorPersistence(object):
             res.label = lables[res.file_name]
         else:
             res.label = os.path.basename(res.file_name)
+
+    def get_label(self, file_name):
+        lables = self._cached_data.setdefault('result_file_lables', {})
+        return lables.get(file_name, None)
 
     def save(self, evt=None):
         # Save lables
