@@ -16,6 +16,7 @@ syntax: glob
 *.msh
 *.xml
 *.img
+*.sif
 results/
 results_*
 _build
