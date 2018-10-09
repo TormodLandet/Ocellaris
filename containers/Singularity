@@ -1,8 +1,9 @@
+Bootstrap: docker
+From: trlandet/fenics-dev:py3_CI
+
 # Build image from the same container that is used in the CircleCI
 # testing. This image is kept up to date with requirements etc, we
 # only need to actually install Ocellaris in the container
-Bootstrap: docker
-From: trlandet/fenics-dev:py3_CI
 
 %post
     # Install Ocellaris
