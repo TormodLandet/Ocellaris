@@ -2,6 +2,11 @@ import sys
 import os
 from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation
 import platform
+import dolfin
+import meshio
+import yaml
+import mpi4py
+import h5py
 
 
 # Restore signals in non-interactive background shells
@@ -46,6 +51,14 @@ def main(inputfile, input_override):
     sim.log.info('    %s' % location)
     sim.log.info('    host: %s' % platform.node())
     sim.log.info()
+
+    # Print some version information
+    sim.log.info('Running on Python %s' % sys.version)
+    sim.log.info('    Using dolfin %s' % dolfin.__version__)
+    sim.log.info('    Using mpi4py %s' % mpi4py.__version__)
+    sim.log.info('    Using h5py   %s' % h5py.__version__)
+    sim.log.info('    Using meshio %s' % meshio.__version__)
+    sim.log.info('    Using PyYAML %s\n' % yaml.__version__)
 
     # Setup the Ocellaris simulation
     ok = setup_simulation(sim, setup_logging=False, catch_exceptions=True)
@@ -106,9 +119,7 @@ def override_input_variables(simulation, input_override):
 
         # Update the input sub-dictionary
         base[idx] = py_value
-        simulation.log.info(
-            'Command line overriding %r in %s to %r' % (idx, base_path, py_value)
-        )
+        simulation.log.info('Command line overriding %r in %s to %r' % (idx, base_path, py_value))
 
 
 def run_from_console():

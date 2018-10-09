@@ -18,6 +18,8 @@ def verify_env():
     else:
         matplotlib.use('Agg')
 
+    error = False
+
     if not has_dolfin():
         msg = """
 
@@ -27,22 +29,34 @@ def verify_env():
 
         """
         sys.stderr.write(msg)
-        exit()
+        error = True
 
     if not has_h5py():
-        print('WARNING: missing h5py. Saving restart files will not work!')
+        print('ERROR: missing h5py. Saving restart files will not work!', file=sys.stderr)
+        error = True
+
+    if not has_mpi4py():
+        print('ERROR: missing mpi4py. FEniCS dolfin must be build with mpi4py', file=sys.stderr)
+        error = True
+
+    if not has_meshio():
+        print('ERROR: missing meshio. Please install the "meshio" package!', file=sys.stderr)
+        error = True
 
     if not has_yaml():
         print(
-            'Missing required yaml module, please install the PyYAML package',
+            'ERROR: missing required yaml module, please install the "PyYAML" package',
             file=sys.stderr,
         )
+        error = True
+
+    if error:
         exit()
 
 
 def has_tk():
     try:
-        from six.moves import tkinter  # @UnusedImport
+        from six.moves import tkinter  # NOQA
 
         return True
     except ImportError:
@@ -51,7 +65,7 @@ def has_tk():
 
 def has_wx():
     try:
-        import wx  # @UnusedImport
+        import wx  # NOQA
 
         return True
     except ImportError:
@@ -60,7 +74,7 @@ def has_wx():
 
 def has_yaml():
     try:
-        import yaml  # @UnusedImport
+        import yaml  # NOQA
 
         return True
     except ImportError:
@@ -69,7 +83,25 @@ def has_yaml():
 
 def has_dolfin():
     try:
-        import dolfin  # @UnusedImport
+        import dolfin  # NOQA
+
+        return True
+    except ImportError:
+        return False
+
+
+def has_meshio():
+    try:
+        import meshio  # NOQA
+
+        return True
+    except ImportError:
+        return False
+
+
+def has_mpi4py():
+    try:
+        import mpi4py  # NOQA
 
         return True
     except ImportError:
@@ -131,7 +163,7 @@ def has_h5py():
     try:
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
-            import h5py  # @UnusedImport
+            import h5py  # NOQA
         return True
     except Exception:
         return False
