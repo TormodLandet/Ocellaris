@@ -9,7 +9,7 @@ From: trlandet/fenics-dev:py3_CI
     # Update Python dependencies (same as CircleCI config.py)
     sudo pip3 install pip --upgrade
     sudo pip3 install pytest pytest-timeout pytest-instafail --upgrade
-    sudo pip3 install meshio raschii PyYAML yschema --upgrade
+    sudo pip3 install meshio==2.3.0 raschii PyYAML yschema --upgrade
 
     # Install Ocellaris
     mkdir /source
