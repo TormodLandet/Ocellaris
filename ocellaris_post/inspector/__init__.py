@@ -5,8 +5,7 @@ except ImportError:
     print()
     print('You must install wxPython to run the GUI. Python wheels are')
     print('available for most platforms in addition to conda and other')
-    print('packages. The code has been tested with wxPython-4.0.0a3, an')
-    print('alpha release of wxPython 4 (which seems to work perfectly).')
+    print('packages. The code has been tested with wxPython-4.0.3.')
     print()
     print('ERROR: missing wxPython')
     exit(1)
@@ -17,6 +16,8 @@ import yaml
 import collections
 from ocellaris_post import Results
 from wx.lib.pubsub import pub
+import matplotlib
+from cycler import cycler
 
 
 SAVE_WAIT_TIME = 5000  # wait 5 seconds before saving cached state again
@@ -28,8 +29,15 @@ TOPIC_RELOAD = 'reloaded_data'
 TOPIC_NEW_ACCEL = 'new_keyboard_shortcut'
 
 
+# Configure matplotlib
+matplotlib.use('WxAgg')
+default_cycler = matplotlib.rcParams['axes.prop_cycle']
+linestyle_cycler = cycler('linestyle', ['-', ':', '--', '-.'])
+matplotlib.rcParams['axes.prop_cycle'] = linestyle_cycler * default_cycler
+
+
 # Must import the inspector after the definition of TOPIC_*
-from .inspector import OcellarisInspector
+from .inspector import OcellarisInspector  # NOQA
 
 
 class InspectorState(object):

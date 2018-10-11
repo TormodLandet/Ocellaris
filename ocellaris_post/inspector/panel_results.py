@@ -1,7 +1,4 @@
 import numpy
-import matplotlib
-
-matplotlib.use('WxAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import (
     FigureCanvasWxAgg as FigureCanvas,
@@ -70,10 +67,7 @@ class OcellarisReportsPanel(wx.Panel):
         self.report_selector = wx.Choice(self)
         self.report_selector.Bind(wx.EVT_CHOICE, self.report_selected)
         gbs.Add(
-            self.report_selector,
-            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(L, 1),
-            span=(1, 2),
+            self.report_selector, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2)
         )
 
         # Plot title
@@ -86,12 +80,7 @@ class OcellarisReportsPanel(wx.Panel):
         )
         self.title = wx.TextCtrl(self)
         self.title.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(
-            self.title,
-            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(L, 1),
-            span=(1, 2),
-        )
+        gbs.Add(self.title, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2))
 
         # Plot xlabel / log x axis
         L += 1
@@ -103,12 +92,7 @@ class OcellarisReportsPanel(wx.Panel):
         )
         self.xlabel = wx.TextCtrl(self)
         self.xlabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(
-            self.xlabel,
-            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(L, 1),
-            span=(1, 1),
-        )
+        gbs.Add(self.xlabel, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 1))
         self.xlog = wx.CheckBox(self, label='X as log axis')
         self.xlog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         gbs.Add(self.xlog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))
@@ -123,12 +107,7 @@ class OcellarisReportsPanel(wx.Panel):
         )
         self.ylabel = wx.TextCtrl(self)
         self.ylabel.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(
-            self.ylabel,
-            flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-            pos=(L, 1),
-            span=(1, 1),
-        )
+        gbs.Add(self.ylabel, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 1))
         self.ylog = wx.CheckBox(self, label='Y as log axis')
         self.ylog.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
         gbs.Add(self.ylog, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))

@@ -1,14 +1,16 @@
-import wx
 import os
+import wx
+from wx.lib.scrolledpanel import ScrolledPanel
 from . import pub, TOPIC_METADATA, TOPIC_RELOAD, TOPIC_NEW_ACCEL
 from .dialog_cluster_connector import OcellarisClusterConnectorDialog
 
 
-class OcellarisSetupPanel(wx.Panel):
+class OcellarisSetupPanel(ScrolledPanel):
     def __init__(self, parent, inspector_state):
         super(OcellarisSetupPanel, self).__init__(parent)
         self.istate = inspector_state
         self.layout_widgets()
+        self.SetupScrolling(scroll_x=False, scroll_y=True)
 
     def layout_widgets(self):
         v = wx.BoxSizer(wx.VERTICAL)
@@ -77,7 +79,6 @@ class OcellarisSetupPanel(wx.Panel):
         h.Add(b, flag=wx.ALIGN_CENTER_VERTICAL)
 
         self.update_open_files()
-        v.Fit(self)
 
     def update_open_files(self, _evt=None):
         fgs = self.file_lable_sizer
