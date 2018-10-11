@@ -65,7 +65,8 @@ class Results(object):
             if 'mass' in reps:
                 m, t = reps['mass'], reps['timesteps']
                 dm = numpy.zeros_like(m)
-                dm[1:] = (m[1:] - m[:-1]) / (t[1:] - t[:-1])
+                with numpy.errstate(invalid='ignore'):
+                    dm[1:] = (m[1:] - m[:-1]) / (t[1:] - t[:-1])
                 reps['mass change'] = dm
 
         # Set the time to be on the x axis for the report plots
