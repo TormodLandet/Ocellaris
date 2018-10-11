@@ -80,7 +80,10 @@ class OcellarisReportsPanel(wx.Panel):
         )
         self.title = wx.TextCtrl(self)
         self.title.Bind(wx.EVT_TEXT, self.update_plot_soon)
-        gbs.Add(self.title, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 2))
+        gbs.Add(self.title, flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, pos=(L, 1), span=(1, 1))
+        self.yinv = wx.CheckBox(self, label='Invert Y')
+        self.yinv.Bind(wx.EVT_CHECKBOX, self.update_plot_soon)
+        gbs.Add(self.yinv, flag=wx.ALIGN_CENTER_VERTICAL, pos=(L, 2), span=(1, 1))
 
         # Plot xlabel / log x axis
         L += 1
@@ -205,6 +208,7 @@ class OcellarisReportsPanel(wx.Panel):
         # How to plot
         xlog = self.xlog.GetValue()
         ylog = self.ylog.GetValue()
+        yinv = self.yinv.GetValue()
         if xlog and ylog:
             plot = self.axes.loglog
         elif xlog:
@@ -222,7 +226,7 @@ class OcellarisReportsPanel(wx.Panel):
                 plot([0], [None], label=results.label)
                 continue
             x = results.reports_x[report_name]
-            y = results.reports[report_name]
+            y = results.reports[report_name] * (-1 if yinv else 1)
             plot(x, y, label=results.label)
             xs.append(x)
             ys.append(y)
@@ -234,6 +238,7 @@ class OcellarisReportsPanel(wx.Panel):
             xlim = self.axes.get_xlim()
             x = numpy.linspace(xlim[0], xlim[1], 1000)
             y, name = self.custom_line.get_function(x)
+            y *= -1 if yinv else 1
             plot(x, y, label=name, color='k', linestyle='--')
             xs.append(x)
             ys.append(y)
