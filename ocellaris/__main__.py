@@ -142,7 +142,19 @@ def run_from_console():
         'times to set multiple input keys. Example: --set-input time/dt=0.1',
     )
 
+    parser.add_argument(
+        '--pystuck',
+        action='store_true',
+        help='Activate pystuck to debug hangs (only on MPI rank 0)',
+    )
+
     args = parser.parse_args()
+
+    # Enable debuging of stuck processes
+    if args.pystuck and dolfin.MPI.comm_world.rank() == 0:
+        import pystuck
+
+        pystuck.run_server()
 
     # Run Ocellaris
     main(args.inputfile, args.set_input)

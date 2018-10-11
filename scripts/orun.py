@@ -17,8 +17,6 @@ utilisation. No backtrace is available on Ctrl+C / SIGINT which would be the
 case if there was a infinite loop in the Python code, so most likely the error
 exists in a C extension.
 """
-DESCRIPTION = __doc__
-
 import sys
 import argparse
 import glob
@@ -30,6 +28,9 @@ import signal
 from fcntl import fcntl, F_GETFL, F_SETFL
 from os import O_NONBLOCK, read, environ
 from ocellaris_post import read_yaml_input_file
+
+
+DESCRIPTION = __doc__
 
 
 # Restore signals in non-interactive background shells
@@ -72,11 +73,7 @@ def info(text):
 
 
 def terminate_simulation(
-    p,
-    signum=signal.SIGTERM,
-    wait=DEFAULT_KILL_WAIT,
-    retries=DEFAULT_KILL_RETRIES,
-    silent=False,
+    p, signum=signal.SIGTERM, wait=DEFAULT_KILL_WAIT, retries=DEFAULT_KILL_RETRIES, silent=False
 ):
     # How long to try the signal before going into TERM / KILL mode
     # Currently hardcoded to minimum 1 and maximum 3 times
@@ -137,13 +134,13 @@ def read_process_output(p, silent):
     return got_data
 
 
-def run_simulation(inp_file, ncpus, interval, timeout, silent, mpirun):
+def run_simulation(inp_file, ncpus, interval, timeout, silent, mpirun, pystuck):
     """
     Run the simulation while watching the stdout for output every ``interval``
     seconds and terminating after ``timeout`` seconds without any output.
-    
+
     Returns one of ``('exited', exit_code)``  or ``('timeout', term_ok)``.
-    
+
     Where ``term_ok`` is ``True`` if the simulation was shut down properly
     after the timeout and ``False`` if it is still running (unkillable). This
     should probably never happen, but you never know with IO drivers and
@@ -158,6 +155,8 @@ def run_simulation(inp_file, ncpus, interval, timeout, silent, mpirun):
         runner = mpirun + ['-np', str(ncpus)]
 
     cmd = runner + ['python3', '-m', 'ocellaris', inp_file]
+    if pystuck:
+        cmd.append('--pystuck')
     p = Popen(cmd, stdout=PIPE)
 
     # Make sure we can read from p.stdout without blocking
@@ -184,6 +183,14 @@ def run_simulation(inp_file, ncpus, interval, timeout, silent, mpirun):
                         '\nStdout timeout exceeded, %d seconds since last output\n'
                         % time_since_last_io
                     )
+
+                    if pystuck:
+                        info('@@@@@@@@@@ Using pystuck to investigate hung process @@@@@@@@@@')
+                        import pystuck
+
+                        pystuck.run_client(stacks=True, ipython=False)
+                        info('@@@@@@@@@@ End of pystuck output @@@@@@@@@@')
+
                     info('Killing child process with PID %d\n' % p.pid)
                     term_ok = terminate_simulation(p, silent=silent)
                     read_process_output(p, silent)
@@ -217,9 +224,7 @@ def get_restart_files(inp_file):
     return [inp_file] + sorted(restart_files)
 
 
-def babysit_simulation(
-    inp_file, ncpus, interval, timeout, max_restarts, silent, mpirun
-):
+def babysit_simulation(inp_file, ncpus, interval, timeout, max_restarts, silent, mpirun, pystuck):
     """
     Run the simulation, possibly restarting from savepoint files in case of a
     stuck simulation. Only ``max_restarts`` of the same file are tried before
@@ -241,12 +246,9 @@ def babysit_simulation(
             return
 
         fn = files[-1]
-        info(
-            'Running Ocellaris simulation number %d with input file %r\n'
-            % (restarts, fn)
-        )
+        info('Running Ocellaris simulation number %d with input file %r\n' % (restarts, fn))
 
-        res, status = run_simulation(fn, ncpus, interval, timeout, silent, mpirun)
+        res, status = run_simulation(fn, ncpus, interval, timeout, silent, mpirun, pystuck)
         if res in 'exited':
             sys.exit(status)
         elif not status:
@@ -256,18 +258,11 @@ def babysit_simulation(
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
-        prog='orun',
-        description=DESCRIPTION,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        prog='orun', description=DESCRIPTION, formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('input_file', help='Name of inputfile on YAML format')
     parser.add_argument(
-        '--ncpus',
-        '-n',
-        metavar='NCPU',
-        default=1,
-        type=int,
-        help='Number of MPI processes',
+        '--ncpus', '-n', metavar='NCPU', default=1, type=int, help='Number of MPI processes'
     )
     parser.add_argument(
         '--interval',
@@ -276,6 +271,9 @@ def parse_args(argv):
         type=float,
         default=DEFAULT_INTERVAL,
         help='Output interval in seconds',
+    )
+    parser.add_argument(
+        '--pystuck', action='store_true', help='Enable pystuck on the root MPI rank.'
     )
     parser.add_argument(
         '--timeout',
@@ -320,6 +318,7 @@ def main(args=None):
         max_restarts=args.restarts,
         silent=args.silent,
         mpirun=shlex.split(args.mpirun),
+        pystuck=args.pystuck,
     )
 
 
