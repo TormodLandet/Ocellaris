@@ -27,6 +27,7 @@ from time import sleep, time
 import signal
 from fcntl import fcntl, F_GETFL, F_SETFL
 from os import O_NONBLOCK, read, environ
+import traceback
 from ocellaris_post import read_yaml_input_file
 
 
@@ -186,9 +187,16 @@ def run_simulation(inp_file, ncpus, interval, timeout, silent, mpirun, pystuck):
 
                     if pystuck:
                         info('@@@@@@@@@@ Using pystuck to investigate hung process @@@@@@@@@@')
-                        import pystuck
+                        try:
+                            import pystuck
 
-                        pystuck.run_client(stacks=True, ipython=False)
+                            pystuck.run_client(stacks=True, ipython=False)
+                        except Exception as e:
+                            warn('Running pystuck failed')
+                            tb_msg = traceback.format_tb(sys.exc_info()[2])
+                            info('Traceback:\n\n%s\n' % ''.join(tb_msg))
+                            e_type = type(e).__name__
+                            warn('Got %s exception when running pystuck:\n%s' % (e_type, str(e)))
                         info('@@@@@@@@@@ End of pystuck output @@@@@@@@@@')
 
                     info('Killing child process with PID %d\n' % p.pid)

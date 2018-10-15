@@ -151,7 +151,7 @@ def run_from_console():
     args = parser.parse_args()
 
     # Enable debuging of stuck processes
-    if args.pystuck and dolfin.MPI.comm_world.rank() == 0:
+    if args.pystuck and dolfin.MPI.comm_world.rank == 0:
         import pystuck
 
         pystuck.run_server()
