@@ -74,9 +74,10 @@ output:
     prefix: kovasznay
     dolfin_log_level: warning
     ocellaris_log_level: info
+    save_restart_file_at_end: no
 
 solver:
-    type: SIMPLE
+    type: IPCS-A
     num_inner_iter: 4
     polynomial_degree_velocity: 2  # Overridden in convergence.py
     polynomial_degree_pressure: 1  # Overridden in convergence.py
