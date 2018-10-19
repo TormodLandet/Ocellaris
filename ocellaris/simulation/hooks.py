@@ -95,18 +95,21 @@ class Hooks(object):
         Will run all pre simulation hooks in the reverse
         order they have been added
         """
+        sim = self.simulation
+
         for hook, description in self._pre_simulation_hooks[::-1]:
+            sim.log.info('Running pre-simulation hook "%s"' % description)
             try:
                 hook()
             except Exception:
-                self.simulation.log.error('Got exception in hook: %s' % description)
-                self.simulation.log.error(traceback.format_exc())
+                sim.log.error('Got exception in hook: %s' % description)
+                sim.log.error(traceback.format_exc())
                 raise
 
         # Reports the solution properties and create initial condition plot
         # files right before starting the solver loop. It is important that this
         # happens after the hooks, as they may alter the initial conditions
-        self.simulation._at_start_of_simulation()
+        sim._at_start_of_simulation()
 
         # Run any delayed actions
         self._process_call_after()
@@ -169,17 +172,20 @@ class Hooks(object):
             success: True if nothing went wrong, False for
             diverging solution and other problems
         """
-        self.simulation.success = success
+        sim = self.simulation
+
+        sim.success = success
         for hook, description in self._post_simulation_hooks[::-1]:
+            sim.log.info('Running post_simulation hook "%s"' % description)
             try:
                 hook(success=success)
             except Exception:
-                self.simulation.log.error('Got exception in hook: %s' % description)
-                self.simulation.log.error(traceback.format_exc())
+                sim.log.error('Got exception in hook: %s' % description)
+                sim.log.error(traceback.format_exc())
                 raise
 
         # Take care of flushing files after the solver and any hooks are done
-        self.simulation._at_end_of_simulation(success)
+        sim._at_end_of_simulation(success)
 
         # Run any delayed actions
         self._process_call_after()
