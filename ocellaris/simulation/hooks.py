@@ -98,7 +98,7 @@ class Hooks(object):
         sim = self.simulation
 
         for hook, description in self._pre_simulation_hooks[::-1]:
-            sim.log.info('Running pre-simulation hook "%s"' % description)
+            sim.log.info('Running pre_simulation hook "%s"' % description)
             try:
                 hook()
             except Exception:
@@ -113,6 +113,7 @@ class Hooks(object):
 
         # Run any delayed actions
         self._process_call_after()
+        sim.log.info('Running pre_simulation hooks completed\n')
 
     @timeit.named('all hooks: new_timestep')
     def new_timestep(self, timestep_number, t, dt):
@@ -189,6 +190,7 @@ class Hooks(object):
 
         # Run any delayed actions
         self._process_call_after()
+        sim.log.info('Running post_simulation hooks completed\n')
 
     # FIXME: this is not really used and the whole matrix_ready machinery should
     # probably be removed or made into a custom hook in case someone wants to
