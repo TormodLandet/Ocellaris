@@ -1,4 +1,3 @@
-import sys
 import time
 from math import log
 import dolfin
@@ -268,17 +267,21 @@ def make_quasi_3D(sim):
 
 
 if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Kovasznay convergence tests')
+    parser.add_argument('--Q3D', action='store_true', help='make quasi 3D')
+    parser.add_argument('--verbose', action='store_true')
+    args = parser.parse_args()
 
     mods = []
+    if args.Q3D:
+        mods.append(make_quasi_3D)
+    if args.verbose:
+        mods.append(lambda sim: sim.input.set_value('output/stdout_enabled', True))
 
     def modifier(sim):
         for mod in mods:
             mod(sim)
-
-    if '--Q3D' in sys.argv:
-        mods.append(make_quasi_3D)
-
-    if '--verbose' in sys.argv:
-        mods.append(lambda sim: sim.input.set_value('output/stdout_enabled', True))
 
     run_convergence_space([8, 16, 24], modifier)
