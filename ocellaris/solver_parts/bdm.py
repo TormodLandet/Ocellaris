@@ -104,6 +104,7 @@ class VelocityBDMProjection:
             L += dot(u_hat_dS, n(R)) * v1(R) * dS
 
         # Eq. 1 cont. - flux through external boundaries
+        a += dot(u, n) * v1 * ds
         if use_bcs:
             for d in range(gdim):
                 dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
@@ -113,17 +114,17 @@ class VelocityBDMProjection:
 
                 for dbc in dirichlet_bcs:
                     u_bc = dbc.func()
-                    a += u[d] * n[d] * v1 * dbc.ds()
                     L += u_bc * n[d] * v1 * dbc.ds()
 
                 for nbc in neumann_bcs + robin_bcs + outlet_bcs:
-                    a += u[d] * n[d] * v1 * nbc.ds()
-                    L += w[d] * n[d] * v1 * nbc.ds()
+                    if nbc.enforce_zero_flux:
+                        pass  # L += 0
+                    else:
+                        L += w[d] * n[d] * v1 * nbc.ds()
 
             for sbc in sim.data['slip_bcs'].get('u', []):
-                a += dot(u, n) * v1 * sbc.ds()
+                pass  # L += 0
         else:
-            a += dot(u, n) * v1 * ds
             L += dot(w, n) * v1 * ds
 
         # Equation 2 - internal shape   :   empty for DG1
@@ -169,6 +170,7 @@ class VelocityBDMProjection:
             L += dot(u_hat_dS, n(R)) * v1(R) * dS
 
         # Eq. 1 cont. - flux through external boundaries
+        a += dot(u, n) * v1 * ds
         if use_bcs:
             for d in range(gdim):
                 dirichlet_bcs = sim.data['dirichlet_bcs']['u%d' % d]
@@ -178,17 +180,17 @@ class VelocityBDMProjection:
 
                 for dbc in dirichlet_bcs:
                     u_bc = dbc.func()
-                    a += u[d] * n[d] * v1 * dbc.ds()
                     L += u_bc * n[d] * v1 * dbc.ds()
 
                 for nbc in neumann_bcs + robin_bcs + outlet_bcs:
-                    a += u[d] * n[d] * v1 * nbc.ds()
-                    L += w[d] * n[d] * v1 * nbc.ds()
+                    if nbc.enforce_zero_flux:
+                        pass  # L += 0
+                    else:
+                        L += w[d] * n[d] * v1 * nbc.ds()
 
             for sbc in sim.data['slip_bcs'].get('u', []):
-                a += dot(u, n) * v1 * sbc.ds()
+                pass  # L += 0
         else:
-            a += dot(u, n) * v1 * ds
             L += dot(w, n) * v1 * ds
 
         # Equation 2 - internal shape
@@ -238,6 +240,7 @@ class VelocityBDMProjection:
             L += dot(u_hat_dS, n(R)) * v1(R) * dS
 
         # Eq. 1 cont. - flux through external boundaries
+        a += dot(u, n) * v1 * ds
         if use_bcs:
             for d in range(gdim):
                 dirichlet_bcs = sim.data['dirichlet_bcs'].get('u%d' % d, [])
@@ -247,17 +250,17 @@ class VelocityBDMProjection:
 
                 for dbc in dirichlet_bcs:
                     u_bc = dbc.func()
-                    a += u[d] * n[d] * v1 * dbc.ds()
                     L += u_bc * n[d] * v1 * dbc.ds()
 
                 for nbc in neumann_bcs + robin_bcs + outlet_bcs:
-                    a += u[d] * n[d] * v1 * nbc.ds()
-                    L += w[d] * n[d] * v1 * nbc.ds()
+                    if nbc.enforce_zero_flux:
+                        pass  # L += 0
+                    else:
+                        L += w[d] * n[d] * v1 * nbc.ds()
 
             for sbc in sim.data['slip_bcs'].get('u', []):
-                a += dot(u, n) * v1 * sbc.ds()
+                pass  # L += 0
         else:
-            a += dot(u, n) * v1 * ds
             L += dot(w, n) * v1 * ds
 
         # Equation 2 - internal shape using 'Nedelec 1st kind H(curl)' elements

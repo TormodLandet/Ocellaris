@@ -6,6 +6,7 @@ DEFAULT_BLEND = 1.0
 DEFAULT_DVAL = 0.0
 DEFAULT_NVAL = 0.0
 DEFAULT_NSCALE = 1.0
+DEFAULT_ENFORCE_ZERO_FLUX = False
 
 
 class OcellarisRobinBC:
@@ -34,6 +35,7 @@ class OcellarisRobinBC:
         self._nfunc = neumann_value
         self.subdomain_marker = subdomain_marker
         self.subdomain_id = subdomain_id
+        self.enforce_zero_flux = DEFAULT_ENFORCE_ZERO_FLUX
         self._updater = updater
 
     def blend(self):
@@ -57,9 +59,7 @@ class OcellarisRobinBC:
         This is used every timestep and for all RK substeps
         """
         if self._updater:
-            self._updater(
-                self.simulation.timestep, self.simulation.time, self.simulation.dt
-            )
+            self._updater(self.simulation.timestep, self.simulation.time, self.simulation.dt)
 
     def __repr__(self):
         return '<OcellarisRobinBC on subdomain %d>' % self.subdomain_id
@@ -94,13 +94,9 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
                     name, blend[d], dval[d], nval[d], subdomains, subdomain_id
                 )
         else:
-            self.register_robin_condition(
-                var_name, blend, dval, nval, subdomains, subdomain_id
-            )
+            self.register_robin_condition(var_name, blend, dval, nval, subdomains, subdomain_id)
 
-    def register_robin_condition(
-        self, var_name, blend, dval, nval, subdomains, subdomain_id
-    ):
+    def register_robin_condition(self, var_name, blend, dval, nval, subdomains, subdomain_id):
         """
         Add a Dirichlet condition to this variable
         """
@@ -113,13 +109,7 @@ class ConstantRobinBoundary(BoundaryConditionCreator):
 
         # Store the boundary condition for use in the solver
         bc = OcellarisRobinBC(
-            self.simulation,
-            self.func_space,
-            df_blend,
-            df_dval,
-            df_nval,
-            subdomains,
-            subdomain_id,
+            self.simulation, self.func_space, df_blend, df_dval, df_nval, subdomains, subdomain_id
         )
         bcs = self.simulation.data['robin_bcs']
         bcs.setdefault(var_name, []).append(bc)

@@ -279,111 +279,33 @@ def define_dg_equations(
         # The BCs are imposed for each velocity component u[d] separately
 
         eq += add_dirichlet_bcs(
-            sim,
-            d,
-            u,
-            p,
-            v,
-            q,
-            rho,
-            mu,
-            n,
-            w_nU,
-            w_nD,
-            penalty_ds,
-            use_grad_q_form,
-            use_grad_p_form,
+            sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, penalty_ds, use_grad_q_form, use_grad_p_form
         )
 
         eq += add_neumann_bcs(
-            sim,
-            d,
-            u,
-            p,
-            v,
-            q,
-            rho,
-            mu,
-            n,
-            w_nU,
-            w_nD,
-            penalty_ds,
-            use_grad_q_form,
-            use_grad_p_form,
+            sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, penalty_ds, use_grad_q_form, use_grad_p_form
         )
 
         eq += add_robin_bcs(
-            sim,
-            d,
-            u,
-            p,
-            v,
-            q,
-            rho,
-            mu,
-            n,
-            w_nU,
-            w_nD,
-            yh,
-            use_grad_q_form,
-            use_grad_p_form,
+            sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, yh, use_grad_q_form, use_grad_p_form
         )
 
         eq += add_outlet_bcs(
-            sim,
-            d,
-            u,
-            p,
-            v,
-            q,
-            rho,
-            mu,
-            n,
-            w_nU,
-            w_nD,
-            g,
-            x,
-            use_grad_q_form,
-            use_grad_p_form,
+            sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, g, x, use_grad_q_form, use_grad_p_form
         )
 
     # Boundary conditions that couple the velocity components
     # Decomposing the velocity into wall normal and parallel parts
 
     eq += add_slip_bcs(
-        sim,
-        u,
-        p,
-        v,
-        q,
-        rho,
-        mu,
-        n,
-        w_nU,
-        w_nD,
-        penalty_ds,
-        use_grad_q_form,
-        use_grad_p_form,
+        sim, u, p, v, q, rho, mu, n, w_nU, w_nD, penalty_ds, use_grad_q_form, use_grad_p_form
     )
 
     return eq
 
 
 def add_dirichlet_bcs(
-    sim,
-    d,
-    u,
-    p,
-    v,
-    q,
-    rho,
-    mu,
-    n,
-    w_nU,
-    w_nD,
-    penalty_ds,
-    use_grad_q_form,
-    use_grad_p_form,
+    sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, penalty_ds, use_grad_q_form, use_grad_p_form
 ):
     """
     Dirichlet boundary conditions for one velocity component
@@ -426,20 +348,7 @@ def add_dirichlet_bcs(
 
 
 def add_neumann_bcs(
-    sim,
-    d,
-    u,
-    p,
-    v,
-    q,
-    rho,
-    mu,
-    n,
-    w_nU,
-    w_nD,
-    penalty_ds,
-    use_grad_q_form,
-    use_grad_p_form,
+    sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, penalty_ds, use_grad_q_form, use_grad_p_form
 ):
     """
     Neumann boundary conditions for one velocity component
@@ -449,7 +358,10 @@ def add_neumann_bcs(
     for nbc in neumann_bcs:
         # Divergence free criterion
         if use_grad_q_form:
-            eq += q * u[d] * n[d] * nbc.ds()
+            if nbc.enforce_zero_flux:
+                pass  # u⋅n = 0
+            else:
+                eq += q * u[d] * n[d] * nbc.ds()
         else:
             eq -= q * u[d] * n[d] * nbc.ds()
 
@@ -465,9 +377,7 @@ def add_neumann_bcs(
     return eq
 
 
-def add_robin_bcs(
-    sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, yh, use_grad_q_form, use_grad_p_form
-):
+def add_robin_bcs(sim, d, u, p, v, q, rho, mu, n, w_nU, w_nD, yh, use_grad_q_form, use_grad_p_form):
     """
     Robin boundary conditions for one velocity component
     See Juntunen and Stenberg (2009)
@@ -547,19 +457,7 @@ def add_outlet_bcs(
 
 
 def add_slip_bcs(
-    sim,
-    u,
-    p,
-    v,
-    q,
-    rho,
-    mu,
-    n,
-    w_nU,
-    w_nD,
-    penalty_ds,
-    use_grad_q_form,
-    use_grad_p_form,
+    sim, u, p, v, q, rho, mu, n, w_nU, w_nD, penalty_ds, use_grad_q_form, use_grad_p_form
 ):
     """
     Free slip boundary contitions (this will couple velocity
