@@ -132,8 +132,17 @@ def define_dg_equations(
 
     :type simulation: ocellaris.Simulation
     """
-    simulation.log.info('    Creating DG weak form with BCs')
     sim = simulation
+    show = sim.log.info
+    show('    Creating DG weak form with BCs')
+    show('        include_hydrostatic_pressure = %r' % include_hydrostatic_pressure)
+    show('        incompressibility_flux_type = %s' % incompressibility_flux_type)
+    show('        use_grad_q_form = %r' % use_grad_q_form)
+    show('        use_grad_p_form = %r' % use_grad_p_form)
+    show('        use_stress_divergence_form = %r' % use_stress_divergence_form)
+    show('        velocity_continuity_factor_D12 = %r' % velocity_continuity_factor_D12)
+    show('        pressure_continuity_factor = %r' % pressure_continuity_factor)
+
     mpm = sim.multi_phase_model
     mesh = sim.data['mesh']
     u_conv = sim.data['u_conv']

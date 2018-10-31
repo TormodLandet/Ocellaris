@@ -20,7 +20,7 @@ from ocellaris.solver_parts import (
     get_multi_phase_model,
     get_known_field,
     MeshMorpher,
-    add_forcing_zone
+    add_forcing_zone,
 )
 
 
@@ -67,7 +67,7 @@ def setup_simulation(simulation):
 
     # Get the main solver class
     solver_name = simulation.input.get_value('solver/type', required_type='string')
-    simulation.log.info('Creating equation solver %s' % solver_name)
+    simulation.log.info('Using equation solver %s' % solver_name)
     solver_class = get_solver(solver_name)
 
     ###########################################################################
@@ -362,7 +362,7 @@ def load_mesh(simulation):
         # Store the loaded regions
         simulation.data['mesh_facet_regions'] = mfr
         mesh_facet_regions = mfr
-    
+
     # Optionally plot mesh right after loading (for debugging)
     if simulation.input.get_value('output/plot_mesh', False, 'bool'):
         prefix = simulation.input.get_value('output/prefix', '', 'string')
