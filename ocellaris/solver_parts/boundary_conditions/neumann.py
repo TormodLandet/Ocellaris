@@ -7,7 +7,9 @@ DEFAULT_ENFORCE_ZERO_FLUX = False
 
 
 class OcellarisNeumannBC(object):
-    def __init__(self, simulation, value, subdomain_id, enforce_zero_flux):
+    def __init__(
+        self, simulation, value, subdomain_id, enforce_zero_flux=DEFAULT_ENFORCE_ZERO_FLUX
+    ):
         """
         A simple storage class for Neumann boundary conditions
         """
