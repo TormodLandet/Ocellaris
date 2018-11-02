@@ -159,6 +159,7 @@ type BoundaryCondition:
     optional nval: FloatOrList
     optional slip_length: FloatOrList
     optional slip_factor_function: StringMin1
+    optional enforce_zero_flux: Boolean
 type BoundaryRegion:
     required name: StringMin1
     required selector: StringMin1

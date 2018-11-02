@@ -3,14 +3,20 @@ from . import register_boundary_condition, BoundaryConditionCreator
 from ocellaris.utils import CodedExpression, OcellarisCppExpression
 
 
+DEFAULT_ENFORCE_ZERO_FLUX = False
+
+
 class OcellarisNeumannBC(object):
-    def __init__(self, simulation, value, subdomain_id):
+    def __init__(
+        self, simulation, value, subdomain_id, enforce_zero_flux=DEFAULT_ENFORCE_ZERO_FLUX
+    ):
         """
         A simple storage class for Neumann boundary conditions
         """
         self.simulation = simulation
         self._value = value
         self.subdomain_id = subdomain_id
+        self.enforce_zero_flux = enforce_zero_flux
 
     def func(self):
         """
@@ -38,6 +44,9 @@ class NeumannBoundary(BoundaryConditionCreator):
         """
         self.simulation = simulation
         value = inp_dict.get_value('value', required_type='any')
+        enforce_zero_flux = inp_dict.get_value(
+            'enforce_zero_flux', DEFAULT_ENFORCE_ZERO_FLUX, 'bool'
+        )
 
         if isinstance(value, list):
             assert len(value) == simulation.ndim
@@ -45,9 +54,9 @@ class NeumannBoundary(BoundaryConditionCreator):
                 name = '%s%d' % (var_name, d)
                 self.register_neumann_condition(name, value[d], subdomain_id)
         else:
-            self.register_neumann_condition(var_name, value, subdomain_id)
+            self.register_neumann_condition(var_name, value, subdomain_id, enforce_zero_flux)
 
-    def register_neumann_condition(self, var_name, value, subdomain_id):
+    def register_neumann_condition(self, var_name, value, subdomain_id, enforce_zero_flux):
         """
         Add a Neumann condition to this variable
         """
@@ -55,7 +64,7 @@ class NeumannBoundary(BoundaryConditionCreator):
         df_value = dolfin.Constant(value)
 
         # Store the boundary condition for use in the solver
-        bc = OcellarisNeumannBC(self.simulation, df_value, subdomain_id)
+        bc = OcellarisNeumannBC(self.simulation, df_value, subdomain_id, enforce_zero_flux)
         bcs = self.simulation.data['neumann_bcs']
         bcs.setdefault(var_name, []).append(bc)
 
@@ -74,6 +83,9 @@ class CodedNeumannBoundary(BoundaryConditionCreator):
 
         # Make a dolfin Expression object that runs the code string
         code = inp_dict.get_value('code', required_type='any')
+        enforce_zero_flux = inp_dict.get_value(
+            'enforce_zero_flux', DEFAULT_ENFORCE_ZERO_FLUX, 'bool'
+        )
 
         if isinstance(code, list):
             assert len(code) == simulation.ndim
@@ -82,17 +94,23 @@ class CodedNeumannBoundary(BoundaryConditionCreator):
                 description = 'coded gradient boundary condition for %s' % name
                 sub_code = inp_dict.get_value('code/%d' % d, required_type='string')
                 expr = CodedExpression(simulation, sub_code, description)
-                self.register_neumann_condition(name, expr, subdomains, subdomain_id)
+                self.register_neumann_condition(
+                    name, expr, subdomains, subdomain_id, enforce_zero_flux
+                )
         else:
             description = 'coded gradient boundary condition for %s' % var_name
             expr = CodedExpression(simulation, code, description)
-            self.register_neumann_condition(var_name, expr, subdomains, subdomain_id)
+            self.register_neumann_condition(
+                var_name, expr, subdomains, subdomain_id, enforce_zero_flux
+            )
 
-    def register_neumann_condition(self, var_name, expr, subdomains, subdomain_id):
+    def register_neumann_condition(
+        self, var_name, expr, subdomains, subdomain_id, enforce_zero_flux
+    ):
         """
         Store the boundary condition for use in the solver
         """
-        bc = OcellarisNeumannBC(self.simulation, expr, subdomain_id)
+        bc = OcellarisNeumannBC(self.simulation, expr, subdomain_id, enforce_zero_flux)
         bcs = self.simulation.data['neumann_bcs']
         bcs.setdefault(var_name, []).append(bc)
         self.simulation.log.info('    Coded gradient for %s' % var_name)
@@ -109,26 +127,27 @@ class CppCodedNeumannBoundary(BoundaryConditionCreator):
         self.simulation = simulation
         self.func_space = simulation.data['V%s' % var_name]
         cpp_code = inp_dict.get_value('cpp_code', required_type='any')
+        enforce_zero_flux = inp_dict.get_value(
+            'enforce_zero_flux', DEFAULT_ENFORCE_ZERO_FLUX, 'bool'
+        )
 
         if isinstance(cpp_code, list):
             assert len(cpp_code) == simulation.ndim
             for d in range(simulation.ndim):
                 name = '%s%d' % (var_name, d)
                 sub_code = inp_dict.get_value('cpp_code/%d' % d, required_type='string')
-                self.register_neumann_condition(name, sub_code, subdomain_id)
+                self.register_neumann_condition(name, sub_code, subdomain_id, enforce_zero_flux)
         else:
-            self.register_neumann_condition(var_name, cpp_code, subdomain_id)
+            self.register_neumann_condition(var_name, cpp_code, subdomain_id, enforce_zero_flux)
 
-    def register_neumann_condition(self, var_name, cpp_code, subdomain_id):
+    def register_neumann_condition(self, var_name, cpp_code, subdomain_id, enforce_zero_flux):
         """
         Add a C++ coded Neumann condition to this variable
         """
         description = 'boundary condititon for %s' % var_name
         P = self.func_space.ufl_element().degree()
-        expr = OcellarisCppExpression(
-            self.simulation, cpp_code, description, P, update=True
-        )
-        bc = OcellarisNeumannBC(self.simulation, expr, subdomain_id)
+        expr = OcellarisCppExpression(self.simulation, cpp_code, description, P, update=True)
+        bc = OcellarisNeumannBC(self.simulation, expr, subdomain_id, enforce_zero_flux)
         bcs = self.simulation.data['neumann_bcs']
         bcs.setdefault(var_name, []).append(bc)
         self.simulation.log.info('    C++ coded gradient for %s' % var_name)

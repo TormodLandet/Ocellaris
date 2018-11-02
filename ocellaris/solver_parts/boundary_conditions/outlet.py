@@ -12,6 +12,7 @@ class OcellarisOutletBC(object):
         self.simulation = simulation
         self.subdomain_id = subdomain_id
         self.hydrostatic = False
+        self.enforce_zero_flux = False
 
     def ds(self):
         """
@@ -37,8 +38,7 @@ class OpenOutletBoundary(BoundaryConditionCreator):
         if not var_name == 'u':
             raise OcellarisError(
                 'Error in boundary condition',
-                'OpenOutletBoundary should be applied to '
-                '"u" only, p should be left out',
+                'OpenOutletBoundary should be applied to ' '"u" only, p should be left out',
             )
 
         # Store the boundary condition for use in the solver
