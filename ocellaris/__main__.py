@@ -152,9 +152,14 @@ def run_from_console():
 
     # Enable debuging of stuck processes
     if args.pystuck and dolfin.MPI.comm_world.rank == 0:
-        import pystuck
+        try:
+            import pystuck
 
-        pystuck.run_server()
+            pystuck.run_server()
+        except Exception as e:
+            print('Could not start pystuck')
+            print(e)
+            print('Starting Ocellaris without pystuck')
 
     # Run Ocellaris
     main(args.inputfile, args.set_input)
