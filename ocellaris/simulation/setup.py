@@ -49,6 +49,7 @@ def setup_simulation(simulation):
     simulation.log.info('Creating time simulation')
     simulation.time = simulation.input.get_value('time/tstart', 0.0, 'float')
     simulation.dt = simulation.input.get_value('time/dt', None, 'float')
+    simulation.dt_prev = simulation.dt
     if simulation.dt is None:
         simulation.dt = 1e100
         simulation.log.warning(

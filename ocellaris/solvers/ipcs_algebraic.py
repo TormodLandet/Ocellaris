@@ -18,6 +18,7 @@ from ..solver_parts import (
     SlopeLimiterVelocity,
     before_simulation,
     after_timestep,
+    update_timestep
 )
 
 # Solvers - default values, can be changed in the input file
@@ -576,7 +577,7 @@ class SolverIPCSA(Solver):
         with dolfin.Timer('Ocellaris run IPCS-A solver'):
             while True:
                 # Get input values, these can possibly change over time
-                dt = sim.input.get_value('time/dt', required_type='float')
+                dt = update_timestep(sim)
                 tmax = sim.input.get_value('time/tmax', required_type='float')
                 num_inner_iter = sim.input.get_value('solver/num_inner_iter', MAX_INNER_ITER, 'int')
                 allowable_error_inner = sim.input.get_value(
@@ -590,7 +591,6 @@ class SolverIPCSA(Solver):
                 # Advance one time step
                 it += 1
                 t += dt
-                self.simulation.data['dt'].assign(dt)
                 self.simulation.hooks.new_timestep(it, t, dt)
 
                 # Calculate the hydrostatic pressure when the density is not constant

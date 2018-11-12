@@ -34,13 +34,26 @@ def before_simulation(simulation, force_steady=False):
     else:
         # Standard first order time stepping
         simulation.log.info(
-            'Initial values for upp are not found, '
-            'starting with first order time stepping.'
+            'Initial values for upp are not found, ' 'starting with first order time stepping.'
         )
         simulation.data['time_coeffs'].assign(dolfin.Constant([1.0, -1.0, 0.0]))
     update_convection(simulation, starting_order, force_steady=force_steady)
 
     simulation.log.info('\nTime loop is now starting\n', flush='force')
+
+
+def update_timestep(simulation):
+    """
+    Switch to first order time stepping if the timestep has changed
+    """
+    dt = simulation.input.get_value('time/dt', required_type='float')
+    dt_prev = simulation.dt
+
+    if dt != dt_prev:
+        simulation.log.info('Temporarily changing to first order time stepping')
+        simulation.data['time_coeffs'].assign(dolfin.Constant([1.0, -1.0, 0.0]))
+
+    return dt
 
 
 def after_timestep(simulation, is_steady, force_steady=False):

@@ -260,8 +260,10 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             if self.degree == 0:
                 self.vel_dgt0_projector.update()
 
+        # Timestepping
         self.dt.assign(dt)
         is_static = isinstance(self.convection_scheme, StaticScheme)
+        dt_changed = dt != sim.dt_prev
 
         # Reconstruct the gradients
         if self.need_gradient:
@@ -278,6 +280,11 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
                 sim.log.info(
                     'Setting global bounds [%r, %r] in BlendedAlgebraicVofModel' % (lo, hi)
                 )
+
+        # Temporary first order timestepping
+        if dt_changed:
+            sim.log.info('VOF solver is first order this time step due to change in dt')
+            self.time_coeffs.assign(Constant([1.0, -1.0, 0.0]))
 
         # Solve the advection equations for the colour field
         if timestep_number == 1 or is_static:

@@ -44,6 +44,7 @@ class Simulation(object):
         self.timestep_restart = 0  # Number of timesteps since last restart
         self.time = 0.0
         self.dt = 0.0
+        self.dt_prev = 0.0  # Some solvers need to know when the timestep changes
         self.restarted = False  # Starting from a restart file or from inp
         self.ndofs = 0
 
@@ -155,7 +156,11 @@ class Simulation(object):
         self.timestep = timestep_number
         self.timestep_restart += 1
         self.time = t
+        self.dt_prev = self.dt
         self.dt = dt
+
+        if 'dt' in self.data:
+            self.data['dt'].assign(dt)
 
     @timeit.named('simulation at_end_of_timestep')
     def _at_end_of_timestep(self):
