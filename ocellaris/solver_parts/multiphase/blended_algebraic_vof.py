@@ -147,7 +147,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         beta = self.convection_scheme.blending_function
 
         # The time step (real value to be supplied later)
-        self.dt = Constant(1.0)
+        self.dt = Constant(sim.dt)
 
         # Setup the equation to solve
         c = sim.data['c']
@@ -260,16 +260,12 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             if self.degree == 0:
                 self.vel_dgt0_projector.update()
 
-        # Timestepping
-        self.dt.assign(dt)
-        is_static = isinstance(self.convection_scheme, StaticScheme)
-        dt_changed = dt != sim.dt_prev
-
         # Reconstruct the gradients
         if self.need_gradient:
             self.convection_scheme.gradient_reconstructor.reconstruct()
 
         # Update the convection blending factors
+        is_static = isinstance(self.convection_scheme, StaticScheme)
         if not is_static:
             self.convection_scheme.update(dt, self.u_conv)
 
@@ -280,11 +276,6 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
                 sim.log.info(
                     'Setting global bounds [%r, %r] in BlendedAlgebraicVofModel' % (lo, hi)
                 )
-
-        # Temporary first order timestepping
-        if dt_changed:
-            sim.log.info('VOF solver is first order this time step due to change in dt')
-            self.time_coeffs.assign(Constant([1.0, -1.0, 0.0]))
 
         # Solve the advection equations for the colour field
         if timestep_number == 1 or is_static:
@@ -312,8 +303,20 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         sim.reporting.report_timestep_value('min(c)', c.vector().min())
         sim.reporting.report_timestep_value('max(c)', c.vector().max())
 
-        # Use second order backward time difference after the first time step
-        self.time_coeffs.assign(Constant([3 / 2, -2, 1 / 2]))
+        # The next update should use the dt from this time step of the
+        # main Navier-Stoke solver. The update just computed above uses
+        # data from the previous Navier-Stokes solve with the previous dt
+        self.dt.assign(dt)
+
+        if dt != sim.dt_prev:
+            # Temporary switch to first order timestepping for the next
+            # time step. This code is run before the Navier-Stokes solver
+            # in each time step
+            sim.log.info('VOF solver is first order this time step due to change in dt')
+            self.time_coeffs.assign(Constant([1.0, -1.0, 0.0]))
+        else:
+            # Use second order backward time difference next time step
+            self.time_coeffs.assign(Constant([3 / 2, -2.0, 1 / 2]))
 
         self.update_plot_fields()
         timer.stop()  # Stop timer before hook
