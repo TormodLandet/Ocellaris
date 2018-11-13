@@ -4,6 +4,7 @@ import numpy
 import yaml
 from io import StringIO
 from .files import get_result_file_type
+from .readers import read_surfaces, read_point_probes
 
 
 if sys.version[0] != '2':
@@ -36,6 +37,7 @@ class Results(object):
         self.reports = None
         self.reports_x = None
         self.surfaces = None
+        self.point_probes = None
         self.input = None
 
         # Auxillary info
@@ -44,7 +46,9 @@ class Results(object):
 
         self.reload(file_name, derived, inner_iterations)
 
-    def reload(self, file_name=None, derived=True, inner_iterations=True):
+    def reload(
+        self, file_name=None, derived=True, inner_iterations=True, include_auxiliary_reports=True
+    ):
         if file_name is None:
             file_name = self.file_name
 
@@ -80,11 +84,29 @@ class Results(object):
         if inner_iterations:
             read_iteration_reports(self)
 
+        # Read ISO surfaces
         if self.surfaces is None:
             read_surfaces(self)
         else:
             for surf in self.surfaces.values():
                 surf.reload()
+
+        # Read point probes
+        if self.point_probes is None:
+            read_point_probes(self)
+        else:
+            for probe in self.point_probes.values():
+                probe.reload()
+
+        # Include point probe values among the time step reports
+        if include_auxiliary_reports:
+            for probe in self.point_probes.values():
+                rep_prefix = 'PointProbe:%s:' % probe.name
+                for pname in probe.probe_names:
+                    tarr, parr = probe.get_probe(pname)
+                    rep_name = rep_prefix + pname
+                    self.reports_x[rep_name] = tarr
+                    self.reports[rep_name] = parr
 
     def get_file_path(self, name, check=True):
         """
@@ -127,63 +149,6 @@ class Results(object):
     def _eval(self, code):
         consts = self.input.get('user_code', {}).get('constants')
         return eval(code, globals(), consts)
-
-
-class IsoSurfaces(object):
-    def __init__(self, name, field_name, value, file_name):
-        self.name = name
-        self.field_name = field_name
-        self.value = value
-        self.file_name = file_name
-        self._cache = None
-
-    def reload(self):
-        self._cache = None
-
-    def get_surfaces(self, cache=True):
-        if cache and self._cache is not None:
-            return self._cache
-
-        timesteps = []
-        data = []
-
-        with open(self.file_name, 'rt') as f:
-            description = f.readline()[1:].strip()
-            value = float(f.readline().split()[-1])
-            dim = int(f.readline().split()[-1])
-
-            line = f.readline()
-            while line:
-                wds = line.split()
-                try:
-                    time = float(wds[1])
-                    nsurf = int(wds[3])
-                except Exception:
-                    break
-
-                if nsurf == 0:
-                    timesteps.append(time)
-                    data.append([])
-                    line = f.readline()
-                    continue
-
-                datalines = [f.readline() for _ in range(nsurf * 3)]
-                if not datalines[-1]:
-                    break
-                timesteps.append(time)
-                data.append([])
-                for i in range(nsurf):
-                    xvals = [float(v) for v in datalines[i * 3 + 0].split()]
-                    yvals = [float(v) for v in datalines[i * 3 + 1].split()]
-                    zvals = [float(v) for v in datalines[i * 3 + 2].split()]
-                    data[-1].append((xvals, yvals, zvals))
-
-                line = f.readline()
-
-        res = (description, value, dim, numpy.array(timesteps), data)
-        if cache:
-            self._cache = res
-        return res
 
 
 def read_h5_data(results):
@@ -377,21 +342,3 @@ def read_iteration_reports(results):
         name2 = '%s (last iter)' % name
         results.reports[name2] = numpy.array(value[:Nmin])
         results.reports_x[name2] = xaxis
-
-
-def read_surfaces(res):
-    inp = res.input
-    res.surfaces = {}
-    if 'probes' not in inp:
-        return
-
-    for probe in inp['probes']:
-        if not (probe.get('enabled', True) and probe.get('type', '') == 'IsoSurface'):
-            continue
-        name = probe['name']
-        field_name = probe['field']
-        value = probe['value']
-        file_name_postfix = probe['file_name']
-        file_name = res.get_file_path(file_name_postfix)
-        isosurf = IsoSurfaces(name, field_name, value, file_name)
-        res.surfaces[name] = isosurf
