@@ -201,6 +201,13 @@ def show_inspector(file_names, lables):
 
     app = wx.App()
 
+    # This should change WM_CLASS on linux, but it still shows up as
+    # "__main__.py" in the alt+tab and mouse-over popup ... :-(
+    app.SetVendorName('Ocellaris')
+    app.SetAppName('OcellarisInspector')
+    app.SetAppDisplayName('Ocellaris Inspector')
+    app.SetClassName('OcellarisInspector')
+
     istate = InspectorState()
     for file_name, label in zip(file_names, lables):
         if not os.path.isfile(file_name):
@@ -209,4 +216,5 @@ def show_inspector(file_names, lables):
 
     frame = OcellarisInspector(istate)
     frame.Show()
+    app.SetTopWindow(frame)
     app.MainLoop()
