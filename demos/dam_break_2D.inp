@@ -9,9 +9,9 @@ user_code:
 
 physical_properties:
     rho0: 1000.0
-    nu0:     1.0e-6
-    rho1:    1.0
-    nu1:     1.5e-5
+    nu0: 1.0e-6
+    rho1: 1.0
+    nu1: 1.5e-5
     g: [0, -9.81]
 
 mesh:
@@ -21,7 +21,6 @@ mesh:
     endx: py$ A * 4
     endy: py$ A * 2.5
 
-# BCs with wall slip
 boundary_conditions:
 -   name: all walls
     selector: code
@@ -42,11 +41,11 @@ time:
     tmax: 1.0
 
 output:
-    prefix: py$ 'output/dam_break_2D_ijCFD_TEST_%02d' % N
+    prefix: output/dam_break_2D
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10
-    plot_divergences: yes
+    plot_divergences: no
     divergence_method: div0
 
 multiphase_solver:
@@ -59,24 +58,20 @@ multiphase_solver:
 solver:
     type: IPCS-A
     num_inner_iter: py$ 30 if it < 3 else (10 if it < 10 else 3)
-    hydrostatic_pressure_calculation_every_timestep: yes
+    hydrostatic_pressure_calculation_every_timestep: no
     num_elements_in_A_tilde_block: 1 # for SIMPLE solver only
-    allowable_error_inner: 1e-8
-    function_space_velocity: DG
-    function_space_pressure: DG
-    polynomial_degree_velocity: 2
-    polynomial_degree_pressure: 1
+    allowable_error_inner: 1e-2
     
     u:
         inner_iter_control: [5, 3]
         inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
         inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
-        inner_iter_max_it: [5, 20, 30]
+        inner_iter_max_it: [5, 20, 9999]
     p:
         inner_iter_control: [5, 3]
         inner_iter_rtol: [1.0e-4, 1.0e-6, 1.0e-8]
         inner_iter_atol: [1.0e-6, 1.0e-8, 1.0e-10]
-        inner_iter_max_it: [5, 20, 30]
+        inner_iter_max_it: [5, 20, 9999]
 
 convection:
     c:
@@ -86,20 +81,11 @@ slope_limiter:
     c:
         enforce_bounds: yes
     u:
-        #method: Solenoidal
-        #out_of_bounds_penalty_fac: 1000.0
-        #out_of_bounds_penalty_const: 0.1
-        
         method: Componentwise
         comp_method: HierarchicalTaylor
         limit_conv: no
-        
-        plot: yes
         use_cpp: yes
         skip_boundaries: []
-        #limit_no_cells: yes
-        #max_cost: 0.1
-        #surface_probe: free_surface
 
 probes:
     -   name: free_surface
@@ -109,3 +95,13 @@ probes:
         field: c
         file_name: '_free_surface.out'
         custom_hook: MultiPhaseModelUpdated
+        
+    -   name: pressure_probes
+        enabled: yes
+        type: PointProbe
+        probe_points:
+        -   py$ ['p', 'PA0', A * 0 + 0.001, 0.001]
+        -   py$ ['p', 'PA1', A * 1, 0.001]
+        -   py$ ['p', 'PA2', A * 2, 0.001]
+        -   py$ ['p', 'PA3', A * 3, 0.001]
+        -   py$ ['p', 'PA4', A * 4 - 0.001, 0.001]
