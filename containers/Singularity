@@ -4,6 +4,15 @@ From: trlandet/fenics-dev:py3_CI
 # Build image from the same container that is used in the CircleCI
 # testing. This image is kept up to date with requirements etc, we
 # only need to actually install Ocellaris in the container
+#
+# To build an image run
+#   sudo singularity build ocellaris.sif Singularity
+#
+# Running ocellaris from the *.sif image file
+#   singularity run ocellaris.sif INPUT_FILE.inp
+#
+# Launch a shell inside the container
+#   singularity shell ocellaris.sif
 
 %post
     # Update Python dependencies (same as CircleCI config.py)
@@ -17,7 +26,7 @@ From: trlandet/fenics-dev:py3_CI
     git clone https://bitbucket.org/trlandet/ocellaris.git
     cd ocellaris
     pip3 install .
-    chmod a+rwX /source
+    chown fenics:fenics -R /source
 
 %environment
     export FENICS_PREFIX=/usr/local

@@ -7,7 +7,8 @@
 # See '.circleci/config.yml' for details on how Ocellaris is tested using
 # this Docker image
 #
-# Reminder: how to build a new 'trlandet/fenics-dev:py3_CI' image:
+# How to build a new 'trlandet/fenics-dev:py3_CI' image
+#
 # - Put this file in an empty directory. You can also use a non-empty
 #   directory, but then it should not contain large files (like 
 #   Singularity images etc.)
@@ -23,6 +24,13 @@
 #       docker login -u trlandet
 # - Push the updated image to Docker Hub
 #       docker push trlandet/fenics-dev:py3_CI
+# - Optionally list all containers and delete the ones you do not need
+#       docker ps -a
+#       docker rm CONTAINER_ID_1 CONTAINER_ID_2 ...
+# - Optionally list all images and delete the ones you do not need
+#       docker images
+#       docker rmi IMAGE_ID_1 IMAGE_ID_2 ...
+
 FROM quay.io/fenicsproject/stable:2018.1.0.r3
 
 USER root
