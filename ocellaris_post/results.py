@@ -39,6 +39,7 @@ class Results(object):
         self.surfaces = None
         self.point_probes = None
         self.input = None
+        self.warnings = []
 
         # Auxillary info
         self.ndofs = None
@@ -63,11 +64,17 @@ class Results(object):
 
         # Add derived reports
         reps = self.reports
-        if derived:
+        if derived and 'timesteps' in reps:
+            t = reps['timesteps']
+            if len(t) > 1 and 'dt' not in reps:
+                dt = numpy.zeros_like(t)
+                dt[:-1] = t[1:] - t[:-1]
+                dt[-1] = dt[-2]
+                reps['dt'] = dt
             if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
                 reps['Et'] = reps['Ek'] + reps['Ep']
             if 'mass' in reps:
-                m, t = reps['mass'], reps['timesteps']
+                m = reps['mass']
                 dm = numpy.zeros_like(m)
                 with numpy.errstate(invalid='ignore'):
                     dm[1:] = (m[1:] - m[:-1]) / (t[1:] - t[:-1])

@@ -1,4 +1,5 @@
 import numpy
+import os
 
 
 def read_point_probes(res):
@@ -13,6 +14,10 @@ def read_point_probes(res):
         name = probe['name']
         prefix = res.get_file_path('', check=False)
         file_name = probe.get('file_name', prefix + '_%s.tsv' % name)
+
+        if not os.path.isfile(file_name):
+            res.warnings.append('PointProbe file not found: %s' % file_name)
+            continue
 
         probes = PointProbes(name, file_name)
         res.point_probes[name] = probes
