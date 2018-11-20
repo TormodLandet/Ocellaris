@@ -1,8 +1,8 @@
 from .results import Results
-from .input import read_yaml_input_file
+from .input import read_yaml_input_file  # noqa
 
 
-def open_results(file_or_dir, derived=True, inner_iterations=True):
+def open_results(file_or_dir, derived=True, inner_iterations=True) -> Results:
     """
     Give a file or directory name and get back a
     Results object
