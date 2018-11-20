@@ -8,7 +8,8 @@ LINE_TRACE_PATTERNS = []
 
 def enable_super_debug():
     """
-    For those times when a C++ call is hanging and you need to know where ...
+    For those times when a C++ call is hanging and you need to know where,
+    or the code SEGFAULTs without any sensible output
     Logs all function calls to stderr, will produce a LOT of output and
     slow down the program significantly
     """
@@ -48,14 +49,7 @@ def enable_super_debug():
             # Must NEVER run when stdout.write() or flush() will trigger this trace
             outfile.write(
                 'Call to %s (%s @ %s) from %s (%s @ %s)\n'
-                % (
-                    func_name,
-                    file_name,
-                    line_no,
-                    caller_name,
-                    caller_file_name,
-                    caller_line_no,
-                )
+                % (func_name, file_name, line_no, caller_name, caller_file_name, caller_line_no)
             )
             outfile.flush()
 

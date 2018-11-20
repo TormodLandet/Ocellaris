@@ -38,12 +38,6 @@ def test_taylor_green(solver_type, monkeypatch):
         sim.input.set_value('solver/num_inner_iter', 10)
         shared_regression_modifier(sim)
 
-    if solver_type == 'Coupled':
-        # The new FEniCS Docker images (2018.1.0.r1 - 2018.1.0.r3) all
-        # SEGFAULT in the LU solver for some reason. I do not have time to
-        # investigate this now, so skipping. Sorry! Tormod, 2018-11-20
-        return pytest.skip()
-
     # Run the Taylor-Green test case on a course mesh
     res = runner(N, dt, tmax, polydeg_u, polydeg_p, modifier)
     assert check_results(res, limits.get(solver_type, limits['Coupled']))
@@ -63,12 +57,6 @@ def test_kovasznay(solver_type, monkeypatch):
         'Coupled': [0.00037, 0.007, 0.02, 0.016, 0.023, 0.07],
         'SIMPLE': [0.00500, 0.084, 0.08, 0.075, 0.130, 0.12],
     }
-
-    if solver_type == 'Coupled':
-        # The new FEniCS Docker images (2018.1.0.r1 - 2018.1.0.r3) all
-        # SEGFAULT in the LU solver for some reason. I do not have time to
-        # investigate this now, so skipping. Sorry! Tormod, 2018-11-20
-        return pytest.skip()
 
     def modifier(sim):
         sim.input.set_value('solver/type', solver_type)

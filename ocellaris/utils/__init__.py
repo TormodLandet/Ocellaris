@@ -30,3 +30,4 @@ from .small_helpers import (
 from .field_inspector import FieldInspector
 from .ufl_transformers import is_zero_ufl_expression, split_form_into_matrix
 from .meshio import load_meshio_mesh, build_distributed_mesh, init_mesh_geometry
+from .debug import enable_super_debug

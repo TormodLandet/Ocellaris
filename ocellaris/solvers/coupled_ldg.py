@@ -67,7 +67,9 @@ class SolverCoupledLDG(Solver):
                 'WARNING: Using a Krylov solver for the coupled NS equations is not a good idea'
             )
         else:
-            self.coupled_solver.parameters['same_nonzero_pattern'] = True
+            # Removed in DOLFIN 2018.1
+            # self.coupled_solver.set_parameter('same_nonzero_pattern', True)
+            pass
 
         # Deal with pressure null space
         self.fix_pressure_dof = sim.input.get_value(
@@ -215,15 +217,11 @@ class SolverCoupledLDG(Solver):
                 # Convert null space vector to coupled space
                 null_func2 = dolfin.Function(self.simulation.data['Vcoupled'])
                 ndim = self.simulation.ndim
-                fa = dolfin.FunctionAssigner(
-                    self.subspaces[ndim], self.simulation.data['Vp']
-                )
+                fa = dolfin.FunctionAssigner(self.subspaces[ndim], self.simulation.data['Vp'])
                 fa.assign(null_func2.sub(ndim), null_func)
 
                 # Create the null space basis
-                self.pressure_null_space = dolfin.VectorSpaceBasis(
-                    [null_func2.vector()]
-                )
+                self.pressure_null_space = dolfin.VectorSpaceBasis([null_func2.vector()])
 
             # Make sure the null space is set on the matrix
             dolfin.as_backend_type(A).set_nullspace(self.pressure_null_space)
@@ -308,9 +306,7 @@ class SolverCoupledLDG(Solver):
                 upp = self.simulation.data['upp%d' % d]
 
                 if self.is_steady:
-                    diff = abs(
-                        u_new.vector().get_local() - up.vector().get_local()
-                    ).max()
+                    diff = abs(u_new.vector().get_local() - up.vector().get_local()).max()
                     vel_diff = max(vel_diff, diff)
 
                 upp.assign(up)

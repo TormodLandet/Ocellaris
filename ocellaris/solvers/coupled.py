@@ -62,9 +62,7 @@ class SolverCoupled(Solver):
         CoupledEquations = EQUATION_SUBTYPES[self.equation_subtype]
 
         # Get the BCs for the coupled function space
-        self.dirichlet_bcs = self.coupled_boundary_conditions(
-            CoupledEquations.use_strong_bcs
-        )
+        self.dirichlet_bcs = self.coupled_boundary_conditions(CoupledEquations.use_strong_bcs)
 
         # Create equation
         self.eqs = CoupledEquations(
@@ -80,9 +78,7 @@ class SolverCoupled(Solver):
             incompressibility_flux_type=self.incompressibility_flux_type,
         )
 
-        sim.log.info(
-            '    Using velocity postprocessor: %r' % self.velocity_postprocessing_method
-        )
+        sim.log.info('    Using velocity postprocessor: %r' % self.velocity_postprocessing_method)
         self.velocity_postprocessor = None
         if self.velocity_postprocessing_method == BDM:
             D12 = self.velocity_continuity_factor_D12
@@ -138,7 +134,9 @@ class SolverCoupled(Solver):
                 'WARNING: Using a Krylov solver for the coupled NS equations is not a good idea'
             )
         else:
-            self.coupled_solver.parameters['same_nonzero_pattern'] = True
+            # Removed in DOLFIN 2018.1, causes segfault now (Nov 2018)
+            # self.coupled_solver.set_parameter('same_nonzero_pattern', True)
+            pass
 
         # Lagrange multiplicator or remove null space via PETSc or just normalize after solving
         self.remove_null_space = True
@@ -158,8 +156,7 @@ class SolverCoupled(Solver):
         does_not_support_null_space = ('mumps',)
         if (
             self.remove_null_space
-            and self.coupled_solver.created_with_lu_method
-            in does_not_support_null_space
+            and self.coupled_solver.created_with_lu_method in does_not_support_null_space
         ):
             self.normalize_pressure = True
             self.remove_null_space = False
@@ -188,9 +185,7 @@ class SolverCoupled(Solver):
             'solver/pressure_continuity_factor', PRESSURE_CONTINUITY_FACTOR, 'float'
         )
         self.velocity_continuity_factor_D12 = sim.input.get_value(
-            'solver/velocity_continuity_factor_D12',
-            VELOCITY_CONTINUITY_FACTOR_D12,
-            'float',
+            'solver/velocity_continuity_factor_D12', VELOCITY_CONTINUITY_FACTOR_D12, 'float'
         )
 
         # Representation of velocity
@@ -318,15 +313,11 @@ class SolverCoupled(Solver):
                 # Convert null space vector to coupled space
                 null_func2 = dolfin.Function(self.simulation.data['Vcoupled'])
                 ndim = self.simulation.ndim
-                fa = dolfin.FunctionAssigner(
-                    self.subspaces[ndim], self.simulation.data['Vp']
-                )
+                fa = dolfin.FunctionAssigner(self.subspaces[ndim], self.simulation.data['Vp'])
                 fa.assign(null_func2.sub(ndim), null_func)
 
                 # Create the null space basis
-                self.pressure_null_space = dolfin.VectorSpaceBasis(
-                    [null_func2.vector()]
-                )
+                self.pressure_null_space = dolfin.VectorSpaceBasis([null_func2.vector()])
 
             # Make sure the null space is set on the matrix
             dolfin.as_backend_type(A).set_nullspace(self.pressure_null_space)
