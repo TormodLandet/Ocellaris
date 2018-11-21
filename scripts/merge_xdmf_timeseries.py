@@ -41,6 +41,7 @@ def merge_xdmf_timeseries(inp_file_names, out_file_name, verbose=True):
         # grid contains the mesh data (assumed to be the first grid)
         for tselem in xdmf.findall('.//Grid[@CollectionType="Temporal"]'):
             grid_with_mesh = None
+            tmax_file = -1e100
             for gridelem in tselem.findall('Grid'):
                 t = float(gridelem.find('Time[@Value]').attrib['Value'])
                 data = (t, grid_with_mesh, gridelem)
@@ -50,6 +51,8 @@ def merge_xdmf_timeseries(inp_file_names, out_file_name, verbose=True):
                     fgrids = []
                     file_grids.append((t, fgrids))
                 fgrids.append(data)
+                tmax_file = max(tmax_file, t)
+            print('    File tN = %g' % tmax_file)
 
     # Make sure the later files overwrite the earlier if they have the
     # same time steps. The later will be what was used further on
