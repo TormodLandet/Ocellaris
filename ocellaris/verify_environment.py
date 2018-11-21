@@ -39,6 +39,10 @@ def verify_env():
         print('ERROR: missing mpi4py. FEniCS dolfin must be build with mpi4py', file=sys.stderr)
         error = True
 
+    if not has_petsc4py():
+        print('ERROR: missing petsc4py. FEniCS dolfin must be build with petsc4py', file=sys.stderr)
+        error = True
+
     if not has_meshio():
         print('ERROR: missing meshio. Please install the "meshio" package!', file=sys.stderr)
         error = True
@@ -102,6 +106,15 @@ def has_meshio():
 def has_mpi4py():
     try:
         import mpi4py  # NOQA
+
+        return True
+    except ImportError:
+        return False
+
+
+def has_petsc4py():
+    try:
+        from petsc4py import PETSc  # NOQA
 
         return True
     except ImportError:

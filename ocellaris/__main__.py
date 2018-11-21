@@ -7,6 +7,7 @@ import meshio
 import yaml
 import mpi4py
 import h5py
+from petsc4py import PETSc, __version__ as petsc4py_version
 
 
 # Restore signals in non-interactive background shells
@@ -58,7 +59,9 @@ def main(inputfile, input_override):
     sim.log.info('    Using mpi4py %s' % mpi4py.__version__)
     sim.log.info('    Using h5py   %s' % h5py.__version__)
     sim.log.info('    Using meshio %s' % meshio.__version__)
-    sim.log.info('    Using PyYAML %s\n' % yaml.__version__)
+    sim.log.info('    Using PyYAML %s' % yaml.__version__)
+    sim.log.info('    Using petsc4py %s' % petsc4py_version)
+    sim.log.info('    Using PETSc %d.%d.%d\n' % PETSc.Sys.getVersion())
 
     # Setup the Ocellaris simulation
     ok = setup_simulation(sim, setup_logging=False, catch_exceptions=True)
