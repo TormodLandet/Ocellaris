@@ -219,6 +219,7 @@ type MultiphaseSolver:
     optional function_space_rho: StringMin1
     optional polynomial_degree_colour: Integer
     optional polynomial_degree_rho: Integer
+    optional num_subcycles: Integer
     optional plot_fields: bool
     optional continuous_fields: bool
     optional height_function_mean: Float
