@@ -136,6 +136,10 @@ class Results(object):
                 pth = os.path.join(bd, fn)
 
             if not os.path.exists(pth):
+                fn = os.path.split(prefix)[1] + name
+                pth = os.path.join(bd, fn)
+
+            if not os.path.exists(pth):
                 raise IOError(
                     'Could not find file %r when prefix is %r and result file is %r'
                     % (name, prefix, self.file_name)
