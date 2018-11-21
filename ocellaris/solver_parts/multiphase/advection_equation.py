@@ -5,7 +5,17 @@ from dolfin import dot, div, grad, jump
 
 class AdvectionEquation(object):
     def __init__(
-        self, simulation, Vc, cp, cpp, u_conv, beta, time_coeffs, dirichlet_bcs, forcing_zones=()
+        self,
+        simulation,
+        Vc,
+        cp,
+        cpp,
+        u_conv,
+        beta,
+        time_coeffs,
+        dirichlet_bcs,
+        forcing_zones=(),
+        dt=None,
     ):
         """
         This class assembles the advection equation for a scalar function c
@@ -19,6 +29,7 @@ class AdvectionEquation(object):
         self.time_coeffs = time_coeffs
         self.dirichlet_bcs = dirichlet_bcs
         self.forcing_zones = forcing_zones
+        self.dt = dt if dt is not None else simulation.data['dt']
 
         # Discontinuous or continuous elements
         Vc_family = Vc.ufl_element().family()
@@ -57,7 +68,7 @@ class AdvectionEquation(object):
         d = dolfin.TestFunction(Vc)
 
         c1, c2, c3 = self.time_coeffs
-        dt = sim.data['dt']
+        dt = self.dt
         u_conv = self.u_conv
 
         if not self.colour_is_discontinuous:

@@ -16,6 +16,7 @@ FORCE_STATIC = False
 FORCE_BOUNDED = False
 FORCE_SHARP = False
 PLOT_FIELDS = False
+NUM_SUBCYCLES = 1
 
 
 # Default values, can be changed in the input file
@@ -119,6 +120,21 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
                 self.simulation, 'solver/c', default_parameters=SOLVER_OPTIONS
             )
 
+        # Subcycle the VOF calculation multiple times per Navier-Stokes time step
+        self.num_subcycles = scheme = simulation.input.get_value(
+            'multiphase_solver/num_subcycles', NUM_SUBCYCLES, 'int'
+        )
+        if self.num_subcycles < 1:
+            self.num_subcycles = 1
+
+        # Time stepping based on the subcycled values
+        if self.num_subcycles == 1:
+            self.cp = simulation.data['cp']
+            self.cpp = simulation.data['cpp']
+        else:
+            self.cp = dolfin.Function(V)
+            self.cpp = dolfin.Function(V)
+
         # Plot density and viscosity fields for visualization
         self.plot_fields = simulation.input.get_value(
             'multiphase_solver/plot_fields', PLOT_FIELDS, 'bool'
@@ -147,24 +163,27 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         beta = self.convection_scheme.blending_function
 
         # The time step (real value to be supplied later)
-        self.dt = Constant(sim.dt)
+        self.dt = Constant(sim.dt / self.num_subcycles)
 
         # Setup the equation to solve
         c = sim.data['c']
-        cp = sim.data['cp']
-        cpp = sim.data['cpp']
+        cp = self.cp
+        cpp = self.cpp
         dirichlet_bcs = sim.data['dirichlet_bcs'].get('c', [])
 
         # Use backward Euler (BDF1) for timestep 1
         self.time_coeffs = Constant([1, -1, 0])
 
-        if dolfin.norm(cpp.vector()) > 0:
+        if dolfin.norm(cpp.vector()) > 0 and self.num_subcycles == 1:
             # Use BDF2 from the start
             self.time_coeffs.assign(Constant([3 / 2, -2, 1 / 2]))
             sim.log.info('Using second order timestepping from the start in BlendedAlgebraicVOF')
 
         # Make sure the convection scheme has something usefull in the first iteration
-        c.assign(cp)
+        c.assign(sim.data['cp'])
+
+        if self.num_subcycles > 1:
+            cp.assign(sim.data['cp'])
 
         # Plot density and viscosity
         self.update_plot_fields()
@@ -180,7 +199,16 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             self.u_conv = sim.data['u_conv']
         forcing_zones = sim.data['forcing_zones'].get('c', [])
         self.eq = AdvectionEquation(
-            sim, Vc, cp, cpp, self.u_conv, beta, self.time_coeffs, dirichlet_bcs, forcing_zones
+            sim,
+            Vc,
+            cp,
+            cpp,
+            self.u_conv,
+            beta,
+            time_coeffs=self.time_coeffs,
+            dirichlet_bcs=dirichlet_bcs,
+            forcing_zones=forcing_zones,
+            dt=self.dt,
         )
 
         if self.need_gradient:
@@ -267,7 +295,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # Update the convection blending factors
         is_static = isinstance(self.convection_scheme, StaticScheme)
         if not is_static:
-            self.convection_scheme.update(dt, self.u_conv)
+            self.convection_scheme.update(dt / self.num_subcycles, self.u_conv)
 
         # Update global bounds in slope limiter
         if self.is_first_timestep:
@@ -287,10 +315,15 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
                     self.simulation, 'solver/c', default_parameters=SOLVER_OPTIONS
                 )
 
+            # Solve the advection equation
             A = self.eq.assemble_lhs()
-            b = self.eq.assemble_rhs()
-            self.solver.inner_solve(A, c.vector(), b, 1, 0)
-            self.slope_limiter.run()
+            for _ in range(self.num_subcycles):
+                b = self.eq.assemble_rhs()
+                self.solver.inner_solve(A, c.vector(), b, 1, 0)
+                self.slope_limiter.run()
+                if self.num_subcycles > 1:
+                    self.cpp.assign(self.cp)
+                    self.cp.assign(c)
 
         # Optionally use a continuous predicted colour field
         if self.continuous_fields:
@@ -306,7 +339,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
         # The next update should use the dt from this time step of the
         # main Navier-Stoke solver. The update just computed above uses
         # data from the previous Navier-Stokes solve with the previous dt
-        self.dt.assign(dt)
+        self.dt.assign(dt / self.num_subcycles)
 
         if dt != sim.dt_prev:
             # Temporary switch to first order timestepping for the next

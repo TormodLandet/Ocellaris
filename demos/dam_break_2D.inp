@@ -52,6 +52,7 @@ multiphase_solver:
     type: BlendedAlgebraicVOF
     function_space_colour: DG
     polynomial_degree_colour: 0
+    num_subcycles: 5
     continuous_fields: no
     plot_fields: yes
 
