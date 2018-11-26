@@ -66,11 +66,19 @@ class Results(object):
         reps = self.reports
         if derived and 'timesteps' in reps:
             t = reps['timesteps']
+            dtsieve = None
             if len(t) > 1 and 'dt' not in reps:
                 dt = numpy.zeros_like(t)
                 dt[:-1] = t[1:] - t[:-1]
                 dt[-1] = dt[-2]
+                dtsieve = dt > 0
+                dt[numpy.logical_not(dtsieve)] = None
                 reps['dt'] = dt
+            if 'tstime/dt' not in reps and dtsieve is not None:
+                tperdt = numpy.zeros_like(t)
+                tperdt[:] = None
+                tperdt[dtsieve] = reps['tstime'][dtsieve] / dt[dtsieve]
+                reps['tstime/dt'] = tperdt
             if 'Ep' in reps and 'Ek' in reps and 'Et' not in reps:
                 reps['Et'] = reps['Ek'] + reps['Ep']
             if 'mass' in reps:
