@@ -1,5 +1,8 @@
 """
-Plot timestep reports from one or more Ocellaris restart files 
+Plot timestep reports from one or more Ocellaris restart files
+
+Optionally save to HTML report. Should be rewritten to use the
+ocellaris_post package to read the time step reports
 """
 import os
 from io import StringIO
@@ -86,9 +89,7 @@ def save_reports_to_html(fig, report_names, Nfiles, all_reps, labels, plot_rep):
         html.write('    body * { margin-left: 5%; }\n')
         html.write('    h1  { margin-left: 2%; font-family: sans-serif; }\n')
         html.write('    img { margin-left: 5%; }\n')
-        html.write(
-            '    table { margin-left: 10%; border-collapse: collapse; width: 30em; }\n'
-        )
+        html.write('    table { margin-left: 10%; border-collapse: collapse; width: 30em; }\n')
         html.write('    th, td { text-align: left; padding: 8px; }\n')
         html.write('    tr:nth-child(even) { background-color: #f2f2f2 }\n')
         html.write('    th { background-color: #5072a8; color: white; }\n')

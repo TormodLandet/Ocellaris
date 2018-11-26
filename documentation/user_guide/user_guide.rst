@@ -15,3 +15,4 @@ the configuration (input file) for your own purposes before trusting the results
     input
     demos
     inspector
+    scripts

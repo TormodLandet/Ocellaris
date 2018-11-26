@@ -31,7 +31,7 @@ import traceback
 from ocellaris_post import read_yaml_input_file
 
 
-DESCRIPTION = __doc__
+DESCRIPTION = '\n'.join(__doc__.splitlines()[3:])
 
 
 # Restore signals in non-interactive background shells
@@ -270,7 +270,13 @@ def parse_args(argv):
     )
     parser.add_argument('input_file', help='Name of inputfile on YAML format')
     parser.add_argument(
-        '--ncpus', '-n', metavar='NCPU', default=1, type=int, help='Number of MPI processes'
+        '--ncpus',
+        '-n',
+        metavar='NCPU',
+        default=1,
+        type=int,
+        help='Number of MPI processes. Not used when running under SLURM '
+        'where SLURM_NTASKS is used instead',
     )
     parser.add_argument(
         '--interval',
@@ -281,7 +287,10 @@ def parse_args(argv):
         help='Output interval in seconds',
     )
     parser.add_argument(
-        '--pystuck', action='store_true', help='Enable pystuck on the root MPI rank.'
+        '--pystuck',
+        action='store_true',
+        help='Enable pystuck on the root MPI rank. Most likely will not work '
+        'since most hangs happen in C++ code',
     )
     parser.add_argument(
         '--timeout',
