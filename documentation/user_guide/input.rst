@@ -303,7 +303,20 @@ Example: 2D disc
 Mesh file formats
 ~~~~~~~~~~~~~~~~~
 
-Example: legacy DOLFIN XML format
+**Example:** using meshio_ to load all its supported formats (RECOMMENDED)
+
+.. code-block:: yaml
+        
+    mesh:
+        type: meshio
+        mesh_file: mesh.msh
+        meshio_type: gmsh
+
+The supported formats (as of November 2018) can be found `in this list 
+<https://github.com/nschloe/meshio/blob/8289814be4f714b6d6000e173ab6697d1f35655f/meshio/helpers.py#L130>`_
+in the meshio source on github.
+
+**Example:** legacy DOLFIN XML format
 
 .. code-block:: yaml
         
@@ -322,7 +335,7 @@ directory. The mesh ``ocellaris_mesh.xml.gz`` and the facet regions
 ``ocellaris_facet_regions.xml.gz``. You can load these files without unzipping
 them. The *flow around Ocellaris* demo shows how it is done.
 
-Example: XDMF format
+**Example:** XDMF format
 
 .. code-block:: yaml
         
@@ -330,7 +343,7 @@ Example: XDMF format
         type: XDMF
         mesh_file: mesh.xdmf
 
-Example: Ocellaris HDF5 restart file format
+**Example:** Ocellaris HDF5 restart file format
 
 .. code-block:: yaml
         
@@ -342,19 +355,6 @@ This will only load the mesh and (possibly) facet regions. You can also start
 the simulation from a restart file instead of an input file. Then the mesh *and*
 the function values from that save point are used, allowing you to restart the
 simulation more or less like it was never stopped.
-
-Example: using meshio_ to load all its supported formats
-
-.. code-block:: yaml
-        
-    mesh:
-        type: meshio
-        mesh_file: mesh.msh
-        meshio_type: gmsh
-
-The supported formats (as of April 2018) can be found `in this list 
-<https://github.com/nschloe/meshio/blob/f37dd29d67a35ec49a02bd131d1bf11ffde9ff85/meshio/helpers.py#L104>`_
-in the meshio source on github.
 
 
 Moving the mesh
