@@ -11,7 +11,7 @@ def verify_env():
     # Use non-GUI matplotlib backend if no GUI is available
     import matplotlib
 
-    if has_tk():
+    if has_tkinter():
         matplotlib.use('TkAgg')
     elif has_wx():
         matplotlib.use('WxAgg')
@@ -58,9 +58,9 @@ def verify_env():
         exit()
 
 
-def has_tk():
+def has_tkinter():
     try:
-        from six.moves import tkinter  # NOQA
+        import tkinter  # NOQA
 
         return True
     except ImportError:
@@ -72,7 +72,7 @@ def has_wx():
         import wx  # NOQA
 
         return True
-    except ImportError:
+    except Exception:
         return False
 
 
