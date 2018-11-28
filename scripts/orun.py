@@ -22,7 +22,7 @@ import argparse
 import glob
 import re
 import shlex
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, call
 from time import sleep, time
 import signal
 from fcntl import fcntl, F_GETFL, F_SETFL
@@ -89,12 +89,15 @@ def terminate_simulation(
         # First we try to send the signal, after some tries we just term/kill
         if i < nsig:
             info('Sending signal %d to PID %d\n' % (signum, p.pid))
+            call(['pkill', '-%d' % signum, '-P', str(p.pid)])  # Signal children processes
             p.send_signal(signum)
         elif i == nsig:
             info('Terminating PID %d\n' % p.pid)
+            call(['pkill', '-TERM', '-P', str(p.pid)])  # Terminate children processes
             p.terminate()
         else:
             warn('Killing PID %d\n' % p.pid)
+            call(['pkill', '-KILL', '-P', str(p.pid)])  # Kill children processes
             p.kill()
 
         # Wait for process to handle signal
