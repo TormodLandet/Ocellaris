@@ -153,7 +153,7 @@ def update_level_set_view(simulation, level_set_view, crossings, cache):
                         vec = dpos - crossing_point
                         dist = (vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2) ** 0.5
 
-                        # Make the level set function the signed distance
+                        # Make the level set function a signed distance function
                         # if vec.dot(direction) < 0:
                         #     dist = -dist
 
@@ -163,7 +163,7 @@ def update_level_set_view(simulation, level_set_view, crossings, cache):
         # Breadth-first search to populate all of the local domain
         queue = deque()
         for cid in crossings:
-            queue.extend([d for d in cell_dofs[cid] if d <= Nlocal])
+            queue.extend([d for d in cell_dofs[cid] if d < Nlocal])
         bfs(queue, values, cell_dofs, dof_cells, dof_dist)
 
     # Update ghost cell values
@@ -205,6 +205,8 @@ def bfs(queue, values, cell_dofs, dof_cells, dof_dist):
                 # Has some problems with inaccurate surface normals
                 # s = 1 if dval >= 0 else -1
                 # distance_to_crossing = dval + s * dx
+
+                # Unsigned distance function
                 distance_to_crossing = dval + dx
 
                 # Update if we have found a shorter path to a crossing

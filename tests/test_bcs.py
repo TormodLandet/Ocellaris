@@ -271,7 +271,7 @@ def test_robin_bcs_scalar_mms(bcs, b):
         ('Constant', 0.001),
         ('Constant', 0.0),
         ('C++', 1.0),
-        # ('Interface', 1.0),  temporary to debug MPI problems on CircleCI
+        ('Interface', 1.0),
     ],
 )
 def test_slip_length_robin_bcs_scalar_mms(slip_length, method):

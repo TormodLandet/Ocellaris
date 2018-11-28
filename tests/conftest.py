@@ -27,7 +27,7 @@ def pytest_runtest_logfinish(nodeid, location):
     Help pinpoint MPI deadlocks by putting a barrier and an stdin flush
     before and after each test run
 
-    This runs after each
+    This runs after each test
     """
     if SIZE == 1:
         return
