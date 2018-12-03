@@ -1,0 +1,47 @@
+{% extends "!layout.html" %}
+{% block extrahead %}
+<link rel="alternate" type="application/rss+xml" href="{{pathto('index.rss', 1)}}" />
+{{ super() }}
+{% endblock %}
+
+{# From https://github.com/sphinx-doc/sphinx/blob/master/sphinx/themes/haiku/layout.html #}
+{% block content %}
+<div class="header" role="banner">
+    {%- block haikuheader %}
+    {%- if theme_full_logo != "false" %}
+    <a href="{{ pathto('index') }}">
+        <img class="logo" src="{{ pathto('_static/' + logo, 1) }}" alt="Logo" />
+    </a>
+    {%- else %}
+    {%- if logo -%}
+    <img class="rightlogo" src="{{ pathto('_static/' + logo, 1) }}" alt="Logo" />
+    {%- endif -%}
+    <h1 class="heading"><a href="{{ pathto('index') }}">
+            {# <span>{{ title|striptags|e }}</span> #}
+            <span>Ocellaris DG FEM multi-phase flow solver</span>
+        </a>
+    </h1>
+    <h2 class="heading"><span style="text-transform: none">{{ shorttitle|e }}</span></h2>
+    {%- endif %}
+    {%- endblock %}
+</div>
+<div class="topnav" role="navigation" aria-label="top navigation">
+    <p>
+        <a href="{{pathto('index')}}#documentation" style="margin-left: 3em">Documentation</a>
+        <a href="{{pathto('blog/index')}}" style="margin-left: 3em">Blog</a>
+        <a href="https://bitbucket.org/trlandet/ocellaris" style="margin-left: 3em">Source code</a>
+    </p>
+</div>
+<div class="content">
+    {#{%- if display_toc %}
+    <div id="toc">
+        <h3>{{ _('Table of Contents') }}</h3>
+        {{ toc }}
+    </div>
+    {%- endif %}#}
+    {% block body %}{% endblock %}
+</div>
+<div class="bottomnav" role="navigation" aria-label="bottom navigation">
+    {{ nav() }}
+</div>
+{% endblock %}
