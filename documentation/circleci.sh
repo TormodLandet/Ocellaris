@@ -18,6 +18,8 @@ cd documentation/
 
 # Install and run Sphinx
 pip3 install sphinx --force --user
+pip3 install sphinxcontrib-newsfeed --user
+pip3 install git+https://github.com/sphinx-contrib/youtube.git --user
 export PATH=~/.local/bin:$PATH
 make html
 

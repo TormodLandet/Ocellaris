@@ -11,6 +11,8 @@ Subsequent runs of Ocellaris will use the precompiled modules.
     :local:
 
 
+.. _label-containers:
+
 Installation using containers
 .............................
 
@@ -60,19 +62,20 @@ Ocellaris depends on an installation of FEniCS, compiled with support for
 PETSc, and some additional Python packages like PyYAML and h5py. Ocellaris will
 inform you about any missing packages when you run it for the first time.
 
-Eventually Ocellaris will be available on PYPI for installation through the
-``pip``, command but currently you must download the package manually from 
-`the Ocellaris Bitbucket git repository
-<https://bitbucket.org/trlandet/ocellaris/src>`_ before you can install it. You
-can get the source code by::
+The Ocellaris version will be available on PYPI for installation may lag 
+significantly behind the master version. This is the version you get from
+``pip install ocellaris``. To get the latest master version you can 
+download the source code manually from  `the Ocellaris Bitbucket git repository
+<https://bitbucket.org/trlandet/ocellaris/src>`_. You can get the source code
+and install it by running::
 
   git clone https://bitbucket.org/trlandet/ocellaris.git
   cd ocellaris
   pip3 install .
 
 FEniCS, which Ocellaris is built on top of, is not currently pip-installable
-(Nov 2017) so it can be slightly hard to install all prerequisites. The 
-recommended way which should always work is to use the same installation as
+as of December 2018, so it can be slightly hard to install all prerequisites.
+The recommended way which should always work is to use the same installation as
 on the automated test system—running in a container—or using the same
 installation procedure as used in the containers, see the container section
 above for more info. 

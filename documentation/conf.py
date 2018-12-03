@@ -49,7 +49,9 @@ if os.environ.get('READTHEDOCS') == 'True':
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinxcontrib.newsfeed',
+    'sphinxcontrib.youtube',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

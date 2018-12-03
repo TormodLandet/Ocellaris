@@ -13,6 +13,7 @@
 .. toctree::
    :maxdepth: 2
    
+   blog/index
    user_guide/user_guide
    programmers_guide/programmers_guide
    license
