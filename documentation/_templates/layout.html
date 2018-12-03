@@ -27,7 +27,8 @@
 </div>
 <div class="topnav" role="navigation" aria-label="top navigation">
     <p>
-        <a href="{{pathto('index')}}#documentation" style="margin-left: 3em">Documentation</a>
+        {# pathto() returns '#' if the linked page is the current page #}
+        <a href="{{pathto('index').replace('#', '')}}#documentation" style="margin-left: 3em">Documentation</a>
         <a href="{{pathto('blog/index')}}" style="margin-left: 3em">Blog</a>
         <a href="https://bitbucket.org/trlandet/ocellaris" style="margin-left: 3em">Source code</a>
     </p>
