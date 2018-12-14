@@ -1,5 +1,4 @@
 import os
-import sys
 import h5py
 from xml.etree import ElementTree as ET
 
@@ -85,8 +84,8 @@ def merge_xdmf_timeseries(inp_file_names, out_file_name, verbose=True):
 
     # Merge HDF5 files
     print('\nCopying datasets to merged HDF5 file')
-    current_h5_file = source = None
     h5_out_file = out_file_name.replace('.xdmf', '.h5')
+    current_h5_file = source = None
     with h5py.File(h5_out_file, 'w') as dest:
         counters = {}
         for grid in grids2:
@@ -121,26 +120,46 @@ def merge_xdmf_timeseries(inp_file_names, out_file_name, verbose=True):
     out_tree.write(out_file_name, xml_declaration=True)
 
 
-def error(msg):
-    print('USAGE:')
-    print('    merge_xdmf_timeseries inp1.xdmf [inp2.xdmf ...] out.xdmf')
-    print('ERROR!')
-    print('   ', msg)
-    sys.exit(1)
+def delete_existing_file(out_file_name):
+    """
+    Remove any previous merged XDMF files
+    """
+    h5_out_file = out_file_name.replace('.xdmf', '.h5')
+    if os.path.isfile(out_file_name):
+        told = -1
+        for line in open(out_file_name, 'rt'):
+            if '<Time Value=' in line:
+                try:
+                    tiold = float(line.split('"')[1])
+                except ValueError:
+                    continue
+                told = max(told, tiold)
+        print('Deleting existing %s with max time = %r' % (out_file_name, told))
+        os.unlink(out_file_name)
+    if os.path.isfile(h5_out_file):
+        print('Deleting existing %s' % h5_out_file)
+        os.unlink(h5_out_file)
 
 
 if __name__ == '__main__':
-    fns = sys.argv[1:]
-    assert len(fns) > 1, "You must give input file names (min 1) and then output file name"
+    import argparse
 
-    inp_file_names = fns[:-1]
-    out_file_name = fns[-1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input_files', nargs='+')
+    parser.add_argument('output_file')
+    parser.add_argument('--delete-old', action='store_true')
+    args = parser.parse_args()
 
-    for fn in inp_file_names:
+    for fn in args.input_files:
         if not os.path.isfile(fn):
-            error("Input file %r does not exist!" % fn)
+            parser.print_help()
+            print("\nERROR: Input file %r does not exist!" % fn)
 
-    if os.path.exists(out_file_name):
-        error("Output file %r exists!" % out_file_name)
+    if os.path.exists(args.output_file):
+        if args.delete_old:
+            delete_existing_file(args.output_file)
+        else:
+            parser.print_help()
+            print("\nERROR: Output file %r exists!" % args.output_file)
 
-    merge_xdmf_timeseries(inp_file_names, out_file_name)
+    merge_xdmf_timeseries(args.input_files, args.output_file)
