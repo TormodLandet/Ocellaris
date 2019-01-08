@@ -9,6 +9,11 @@ def read_yaml_input_file(file_name=None, yaml_string=None, error_func=None):
     """
     Read the input to an Ocellaris simulation from a YAML formated input file or a
     YAML formated string. The user will get an error if the input is malformed
+
+    This reader is less advanced than what is used inside Ocellaris, but it does
+    not depend on FEniCS or any heavy libraries, so it is more lightweight. For
+    full compatibility the ``ocellaris.Simulation().input.read_yaml(...)`` method
+    should be used.
     """
     if error_func is None:
 

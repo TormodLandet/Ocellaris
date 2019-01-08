@@ -13,9 +13,7 @@ class HeightFunctionMultiphaseModel(VOFMixin, MultiPhaseModel):
 
     def __init__(self, simulation):
         """
-        A simple height function multiphase model. The mesh is moved
-        according to the vertical fluid velocity at the free surface
-        after each time step.
+        A simple height function multiphase model
         """
         self.simulation = simulation
         simulation.log.info('Creating height function multiphase model')

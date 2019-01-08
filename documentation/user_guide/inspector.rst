@@ -80,29 +80,34 @@ Scripting
 
 For publication quality plots it is probaly best to use the ``ocellaris_post``
 package from your own Python scripts instead of using Ocellaris Inspector.
-Script examples can be found in the ``scripts/`` directory, though some of these
-predate the ``ocellaris_post`` package. All results that are plotted in the
-Inspector can be recreated by use of the :class:`ocellaris_post.Results` 
-class:
+Script examples can be found in the ``scripts/`` directory, though some of
+these predate the ``ocellaris_post`` package. All results that are plotted in
+the Inspector can be recreated by use of the :class:`ocellaris_post.Results`
+class. Open using the :func:`ocellaris_post.open_results` function:
+
+
+.. autofunction:: ocellaris_post.open_results
+
+.. autofunction:: ocellaris_post.read_yaml_input_file
 
 .. autoclass:: ocellaris_post.Results
 
   .. attribute:: reports
         :annotation:
-        
+
         A dictionary of report time series, the same as can be plotted in
-        Ocellaris Inspector (Courant number, total mass, energy etc). 
+        Ocellaris Inspector (Courant number, total mass, energy etc).
         Corresponding x-axis data can be found in  :py:attr:`reports_x`.
-    
+
   .. attribute:: reports_x
         :annotation:
-        
+
         A dictionary of report time series x-axis data vectors. Same
         length as the corresonding entry in :py:attr:`reports`.
-        
+
   .. attribute:: input
         :annotation:
-        
+
         A plain dictionary conversion of the Ocellaris input file as
         returned by PyYAML.
 
