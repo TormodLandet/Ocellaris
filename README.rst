@@ -4,13 +4,15 @@ Ocellaris
 Ocellaris is a work in progress to make a mass conserving DG FEM solver for sharp interface
 multiphase free surface flows. The current goal of the project is to simulate water entry and 
 exit of objects in ocean waves with accurate capturing of the force on the object and the 
-behaviour of the free surface.
+behaviour of the free surface. Some examples of what Ocellaris can do are shown
+in the `Ocellaris Blog`_.
 
 Ocellaris is implemented in Python and C++ with FEniCS_ as the backend for the mesh and 
 finite element assembly. PETSc_ is used for solving the resulting linear systems.
 
 .. contents:: Quick start
 
+.. _Ocellaris Blog: https://trlandet.bitbucket.io/ocellaris/blog/
 .. _FEniCS: https://fenicsproject.org/
 .. _PETSc: https://www.mcs.anl.gov/petsc/
 

@@ -12,17 +12,18 @@
 
 .. toctree::
    :maxdepth: 2
-   
+
    blog/index
    user_guide/user_guide
    programmers_guide/programmers_guide
    license
-   
+   zreferences
+
 .. not used currently ...
 
     Indices and tables
     ==================
-    
+
     * :ref:`genindex`
     * :ref:`modindex`
     * :ref:`search`
@@ -31,5 +32,4 @@
 
 .. include:: ../README.rst
    :start-after: TOC_ENDS_HERE
-
 

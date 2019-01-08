@@ -3,7 +3,8 @@
 Physical properties
 ===================
 
-You will need to specify some physical constants. A simple example:
+Specify physical constants. How this is done depends mostly on your choice of
+multi phase solver (see :ref:`inp_multiphase_solver`). A single phase example:
 
 .. code-block:: yaml
 

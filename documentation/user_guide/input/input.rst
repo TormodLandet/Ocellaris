@@ -1,11 +1,13 @@
 Ocellaris input file description
 ================================
 
+
 .. contents:: Contents
    :local:
 
+
 File format
-...........
+-----------
 
 Ocellaris uses the YAML format for input files. The input file is divided
 into separate sections dealing with geometry, boundary conditions, solver
@@ -19,8 +21,9 @@ file in JSON format. JSON has no simple support for multi-line strings and
 comments, so YAML is the format used by the Ocellaris demos and also in the
 descriptions below.
 
+
 Common errors
-~~~~~~~~~~~~~
+.............
 
 Some errors that are easy to make when writing a YAML input file:
 
@@ -30,11 +33,25 @@ Some errors that are easy to make when writing a YAML input file:
   confusion is avoided.
 - The value ``5e-3`` is a string in YAML while ``5.0e-3`` is a float.
 - Indentation is significant, just like in Python
-- Misspellings are not checked!
+- Misspellings are not errors!
+
+The input you specify is validated against a schema, but you only get a warning
+in the top of the Ocellaris simulation log file and no errors since the schema
+is not guaranteed to be perfect. The input file YSchema_ file
+(``ocellaris/input_file_schema.yml`` in the source code) is an approximate
+representation of all valid and invalid Ocellaris input files and it is not
+trusted to reject files that it believes are not valid. The warning can still
+help catching some misspelling errors, but you must read the log file to see
+them. When performing a new type of simulation it is always **strongly**
+recommended to thoroughly read through the start of the log file for warnings
+from the schema validator and from the many other modules of Ocellaris that
+will warn you about fishy input.
+
+.. _Yschema: https://bitbucket.org/trlandet/yschema
 
 
 Header
-......
+------
 
 The input file **must** start with the following header:
 
@@ -62,7 +79,7 @@ Here you also see the syntax for multi-line strings in YAML.
 
 
 Templates
-~~~~~~~~~
+.........
 
 You can specify a list of base input files that will be read first and used
 as a basis for the input. Any values given in an input file will then extend
@@ -118,7 +135,7 @@ Ocellaris will interpret the input as:
 
 
 Input file sections
-...................
+-------------------
 
 
 .. toctree::

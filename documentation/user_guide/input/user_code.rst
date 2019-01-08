@@ -5,7 +5,7 @@ User constants and code
 
 You can specify constants that can be used in subsequent sections to make
 the input file easily configurable. You can also specify some code that
-will run right after the input file has been read, before any of the 
+will run right after the input file has been read, before any of the
 simulation setup such as loading the mesh has been done. You can even
 change the input by accessing the ``simulation.input`` object since no
 parts of Ocellaris has accessed the input yet.
@@ -28,7 +28,7 @@ Example of using the constants in later sections of the input file:
         section:
             param1: 4.3
             param2: py$ 2.3 * L * sin(theta)
-            cpp_code: 'x[0] + L * sin(theta)' 
+            cpp_code: 'x[0] + L * sin(theta)'
 
 Any value (except inside the ``user_code/constants`` block) can be given as
 a string starting with ``py$``. Ocellaris will then execute the given Python
@@ -36,14 +36,14 @@ code to produce the value to be used in Ocellaris just as if you had written
 the value directly into the input file. The Python code you give can evaluate
 to a list, string, number...
 
-Code given as strings in the input file, either Python or C++ can also use
+Code given as strings in the input file, both Python or C++, can also use
 the constants as can be seen in the example. These are typically expressions
 defining initial or boundary values. You can even combine these functions:
 
 .. code-block:: yaml
 
     some-section:
-        cpp_code: py$ 'x[0] + L * sin(theta)'.replace('theta', 'theta + L') 
+        cpp_code: py$ 'x[0] + L * sin(theta)'.replace('theta', 'theta + L')
 
 This can be handy if you give the C++ code to compute the value of a field
 as a user constant string, and then you can use python code to replace the

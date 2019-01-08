@@ -31,23 +31,13 @@ combination with a piecewise constant VOF colour function.
 Three versions are implemented
 
 * Standard HRIC (**HRIC**, default, the only one that is well tested)
-
-  "A Two-Fluid Navie-Stokes Solver to Simulate Water Entry",
-  Twenty-Second Symposium on Naval Hydrodynamics, 1999
-  S. Muzaferija, M. Peric, P. Sames, t. Schellin
+  :cite:`muzaferija_hric_1998`
 
 * Modified HRIC (**MHRIC**, practically untested code, use with caution)
-
-  "Fluent Theory Guide v15.0"
-  2013
-  ANSYS
+  :cite:`fluent2013`
 
 * Refined HRIC (**RHRIC**, practically untested code, use with caution)
-
-  "Free surface flow analysis based on improved HRIC VOF method",
-  Journal of the Society of Naval Architects of Korea,
-  Vol. 47, No 3, pp. 279-290, June 2010
-  Il-Ryong Park, Kwang-Soo Kim, Jin Kim and Suak-Ho Van
+  :cite:`rhric2010`
 
 .. code-block:: yaml
 

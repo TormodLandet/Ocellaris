@@ -5,7 +5,7 @@ Mesh
 
 You can specify simple geometries using FEniCS DOLFIN built in mesh generators,
 and also load a mesh from file. For realistic cases using something like gmsh
-to generate meshes is recommended. The meshio_ program can be used to convert 
+to generate meshes is recommended. The meshio_ program can be used to convert
 between different mesh file formats and also loading these formats directly,
 see below.
 
