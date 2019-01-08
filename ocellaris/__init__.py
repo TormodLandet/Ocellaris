@@ -4,7 +4,7 @@ from .verify_environment import verify_env
 verify_env()
 
 
-__version__ = '2018.1.0.dev0'
+__version__ = '2019.0.0'
 
 
 # This should potentially be made local to the mesh creation routines
