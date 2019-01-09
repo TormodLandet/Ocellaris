@@ -146,6 +146,8 @@ code that describes the wave field
     more details.
 
 
+.. _inp_fields_scalar:
+
 ScalarField
 -----------
 

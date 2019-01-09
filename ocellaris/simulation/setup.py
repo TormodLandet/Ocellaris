@@ -105,7 +105,7 @@ def setup_simulation(simulation):
     # the Neumann conditions to define weak forms
     setup_boundary_conditions(simulation)
 
-    # Create momentum sources (usefull for MMS tests etc)
+    # Create momentum sources (useful for MMS tests etc)
     setup_sources(simulation)
 
     # Create the solver

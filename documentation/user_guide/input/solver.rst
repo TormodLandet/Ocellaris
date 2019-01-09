@@ -15,11 +15,11 @@ description.
     solver:
         type: IPCS-A
         num_inner_iter: 10
-        allowable_error_inner: 1.0e-10
-        polynomial_degree_pressure: 1
-        polynomial_degree_velocity: 2
-        function_space_pressure: DG
-        function_space_velocity: DG
+        allowable_error_inner: 1.0e-4
+        polynomial_degree_pressure: 1  # not needed, this is the default value
+        polynomial_degree_velocity: 2  # not needed, this is the default value
+        function_space_pressure: DG    # not needed, this is the default value
+        function_space_velocity: DG    # not needed, this is the default value
         u:
             # see linear solver documentation below
         p:
@@ -56,6 +56,9 @@ IPCS-A
 Incremental Pressure Correction Scheme on Algebraic form. This is an iterative
 Chorin/Temam type pressure correction solver.
 
+This is the most used solver and it typically has more advanced features than
+the other solvers.
+
 
 IPCS-D
 ------
@@ -74,8 +77,7 @@ SIMPLE
 ------
 
 Semi-Implicit Method for Pressure-Linked Equations. The implementation of the
-algorithm is based on Klein, Kummer, Keil & Oberlack (2015).
-
+algorithm is based on :cite:`klein_simple_2015`.
 
 PISO
 ----
@@ -117,7 +119,7 @@ Analytical
 
 Use the initial condition C++ code (possibly containing the time variable ``t``
 which will be updated for each time step) to define the velocity and pressure
-for all time steps. This can be usefull for testing other parts of the
+for all time steps. This can be useful for testing other parts of the
 Ocellaris solution framework with a known Navier-Stokes solution.
 
 

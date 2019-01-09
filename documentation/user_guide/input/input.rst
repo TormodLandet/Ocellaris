@@ -28,6 +28,8 @@ simulation input files:
   simulations should something hang, see :ref:`inp_output` for details on this.
   You should also consider using the ``orun`` script to "babysit" your
   simulations, see :ref:`script_orun`.
+* Write XDMF plot files for visualization in Paraview and similar programs so
+  that you can understand what is happening in your simulation.
 
 
 File format
@@ -95,7 +97,7 @@ required, but can be useful for explainations and later references.
         date: 2015-02-13
         description: |
             Free form text description of the input
-            It can be quite usefull to have some text to
+            It can be quite useful to have some text to
             describe the purpose of the simulation etc for
             future reference
 
@@ -180,3 +182,4 @@ Input file sections
     output
     probes
     hooks
+    momentum_sources

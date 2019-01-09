@@ -65,7 +65,7 @@ class RunnablePythonString(object):
         """
         Run the code
         """
-        # Make sure some usefull variables are available
+        # Make sure some useful variables are available
         sim = simulation = self.simulation
         t = time = simulation.time
         it = timestep = simulation.timestep

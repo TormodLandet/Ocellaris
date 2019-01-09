@@ -172,7 +172,7 @@ the following options:
 
     For Neumann and Robin boundaries where the value is not prescribed, but you
     want to ensure that nothing of the variable you are describing flows
-    through the wall. This can be usefull when the mesh should be a plane
+    through the wall. This can be useful when the mesh should be a plane
     normal to the direction you are describing, but the mesh is not a perfect
     plane, but has some innacurracies causing the normal to be slightly off
 
@@ -299,7 +299,7 @@ Example from a wave simulation
             function: waves/c
 
 
-BC type: Constant Robin
+BC type Constant Robin
 -----------------------
 
 Robin condition with constant values

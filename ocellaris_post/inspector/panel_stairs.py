@@ -1,11 +1,11 @@
 """
-This plot panel is usefull when a quasi static simulation contains multiple
+This plot panel is useful when a quasi static simulation contains multiple
 quasi-static periods separated by transitions
 
 An example is running a stair-stepped velocity and looking at the drag force
 as it stabilises on each stair "thread" before moving on to the next velocity.
 
-When comparing such simulations it is usefull to syncronize the start of each
+When comparing such simulations it is useful to syncronize the start of each
 "stair" in case these do not happen at the same time instance for all
 simulations
 """

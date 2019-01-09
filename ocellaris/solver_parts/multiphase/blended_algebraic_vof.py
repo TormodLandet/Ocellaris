@@ -179,7 +179,7 @@ class BlendedAlgebraicVofModel(VOFMixin, MultiPhaseModel):
             self.time_coeffs.assign(Constant([3 / 2, -2, 1 / 2]))
             sim.log.info('Using second order timestepping from the start in BlendedAlgebraicVOF')
 
-        # Make sure the convection scheme has something usefull in the first iteration
+        # Make sure the convection scheme has something useful in the first iteration
         c.assign(sim.data['cp'])
 
         if self.num_subcycles > 1:

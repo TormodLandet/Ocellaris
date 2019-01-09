@@ -70,7 +70,7 @@ class InspectorState(object):
 
     def reload(self, only_active=True):
         """
-        Reload the data. Usefull when plotting log files that are
+        Reload the data. Useful when plotting log files that are
         continuously updated
         """
         for r in self.results:

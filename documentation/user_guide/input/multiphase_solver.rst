@@ -33,11 +33,32 @@ from 0 to 1 inclusive.
 When using the multi phase VOF solver by specifying
 :code:`type: BlendedAlgebraicVOF` the following parameters can be specified:
 
-.. csv-table::
-   :header: "key", "Default value", "Description"
+.. describe:: function_space_colour
 
-    "multiphase_solver/function_space_colour", "DG", "CG for continuous Galerkin, DG for discontinuous Galerkin"
-    "multiphase_solver/polynomial_degree_colour", "0", "The degree of the approximating polynomials"
+    CG for continuous Galerkin, DG for discontinuous Galerkin (default)
+
+.. describe:: polynomial_degree_colour
+
+    The degree of the approximating polynomials, default 0 (piecewise constant)
+
+.. describe:: num_subcycles
+
+    Number of times the VOF method is run per time step. Running VOF with a
+    smaller time step can be beneficial to decrease the Courant number. The
+    VOF calculations are typically much faster than the Navier-Stokes solver.
+    Default value 1, using about 5 sub cycles can to give good results in
+    many cases without much impact on running time.
+
+.. describe:: force_static
+
+    Do not move the free surface. Can be useful for testing in some cases.
+
+.. describe:: project_uconv_dgt0
+
+    Project the velocity that will convect the colour function into a DGT0
+    field, piecewise constant on each facet. This is consistent with how the
+    finite volume method handles advection, it can be more stable (lower local
+    Courant numbers) and it is mass conserving in DG0 space. Default on.
 
 In addition you will have to specify a convection scheme for the VOF colour
 function in order to keep the free surface sharp. For specifying the convection

@@ -186,7 +186,7 @@ def validate_input_file(simulation):
 def plot_at_end(simulation):
     """
     Open dolfin plotting windows with results at the end of
-    the simulation. Only usefull for simple 2D cases
+    the simulation. Only useful for simple 2D cases
     """
     # Plot velocity components
     for d in range(simulation.ndim):

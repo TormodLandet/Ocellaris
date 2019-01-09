@@ -79,7 +79,7 @@ Ocellaris can save results in XDMF_ format. There are several programs that
 can postprocess such files. Paraview_ is one good option.
 A custom post-processor, :ref:`OcellarisInspector`, also exist. It can be used
 to plot residuals and other time series produced by the simulator. The 
-inspector is usefull when Ocellaris is running (for plotting log files) and
+inspector is useful when Ocellaris is running (for plotting log files) and
 after finishing (plotting restart h5 files). All numbers printed on the screen
 and in the log file when Ocellaris is running should be accessible in 
 :ref:`the Ocellaris Inspector program <OcellarisInspector>`.
