@@ -9,7 +9,7 @@ class FreeSurfaceZone(KnownField):
 
     def __init__(self, simulation, field_inp):
         """
-        A max field, represents the maximum of two fields
+        Mark the area within a distance radius from the free surface
         """
         self.simulation = simulation
         self._construct(field_inp)

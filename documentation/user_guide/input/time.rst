@@ -26,3 +26,15 @@ Example user code that changes the time step. See details under
             code: |
                 if t > 10:
                     simulation.input['time']['dt'] = 0.005
+
+.. describe:: dt
+
+    Time step
+
+.. describe:: tstart
+
+    Starting time, default 0.0
+
+.. describe:: tmax
+
+    Maximum simulation time, simulation will stop when t > tmax

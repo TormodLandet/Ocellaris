@@ -9,6 +9,8 @@ Ocellaris comes with utility scripts for automating common tasks in the
     :local:
 
 
+.. _script_orun:
+
 orun.py - Run Ocellaris on a HPC with automatic restarts
 --------------------------------------------------------
 

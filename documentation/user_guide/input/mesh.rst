@@ -18,7 +18,7 @@ Simple geometries
 Example: 2D rectangle
 
 .. code-block:: yaml
-        
+
     mesh:
         type: Rectangle
         Nx: 64
@@ -31,7 +31,7 @@ Example: 2D rectangle
 Example: 3D box
 
 .. code-block:: yaml
-        
+
     mesh:
         type: Box
         Nx: 64
@@ -44,11 +44,32 @@ Example: 3D box
 Example: 2D disc
 
 .. code-block:: yaml
-        
+
     mesh:
         type: UnitDisc
         N: 20
         degree: 1  # defaults to 1 (degree of mesh elements)
+
+.. describe:: startx, starty, startz, endx, endy, endz
+
+    Geometry descriptions for the simple geometries. Defaults coordinate ranges
+    are [0, 1] in each direction.
+
+.. describe:: Nx, Ny, Nz, N
+
+    The number of mesh cells in each direction. N is used for the radial
+    direction for UnitDisc meshes.
+
+.. describe:: degree
+
+    Mesh cell degree. Using higher order (order 2) will be slower to assemble,
+    the default is order 1 (facets are straight lines or flat planes).
+
+.. describe:: diagonal
+
+    The same options as accepted by FEniCS dolfin mesh generators: ``right``,
+    ``left``, ``crossed``, ``right/left``, ``left/right``. This controls how
+    squares are split into triangles in 2D.
 
 
 Mesh file formats
@@ -57,20 +78,27 @@ Mesh file formats
 **Example:** using meshio_ to load all its supported formats (RECOMMENDED)
 
 .. code-block:: yaml
-        
+
     mesh:
         type: meshio
         mesh_file: mesh.msh
         meshio_type: gmsh
 
-The supported formats (as of November 2018) can be found `in this list 
-<https://github.com/nschloe/meshio/blob/8289814be4f714b6d6000e173ab6697d1f35655f/meshio/helpers.py#L130>`_
-in the meshio source on github.
+The supported format specifiers in meshio as of January 2019 are (`from the
+meshio source code on github
+<https://github.com/nschloe/meshio/blob/8289814be4f714b6d6000e173ab6697d1f35655f/meshio/helpers.py#L130>`_):
+``ansys``, ``ansys-ascii``, ``ansys-binary``, ``gmsh``, ``gmsh-ascii``,
+``gmsh-binary``, ``gmsh2``, ``gmsh2-ascii``, ``gmsh2-binary``, ``gmsh4``,
+``gmsh4-ascii``, ``gmsh4-binary``, ``med``, ``medit``, ``dolfin-xml``,
+``permas``, ``moab``, ``off``, ``stl``, ``stl-ascii``, ``stl-binary``,
+``vtu-ascii``, ``vtu-binary``, ``vtk-ascii``, ``vtk-binary``, ``xdmf``,
+``exodus``, ``abaqus``, ``mdpa``.
+
 
 **Example:** legacy DOLFIN XML format
 
 .. code-block:: yaml
-        
+
     mesh:
         type: XML
         mesh_file: mesh.xml
@@ -89,7 +117,7 @@ them. The *flow around Ocellaris* demo shows how it is done.
 **Example:** XDMF format
 
 .. code-block:: yaml
-        
+
     mesh:
         type: XDMF
         mesh_file: mesh.xdmf
@@ -97,7 +125,7 @@ them. The *flow around Ocellaris* demo shows how it is done.
 **Example:** Ocellaris HDF5 restart file format
 
 .. code-block:: yaml
-        
+
     mesh:
         type: HDF5
         mesh_file: ocellaris_savepoint000010.h5
@@ -120,11 +148,11 @@ An example is the following 140 meter long 2D wave tank which is 10 m high. To
 refine the mesh in the y-direction such that it is finest around ``x[1] = 7``
 meters—where the free surface is to be located—a function is specified which
 is zero on the boundaries (to avoid changing the domain size) and non-zero in
-the interior in order to move the nodes closer to the free surface. No refinement
-is performed in the x-direction (``x[0]``).
+the interior in order to move the nodes closer to the free surface. No'
+refinement is performed in the x-direction (``x[0]``).
 
 .. code-block:: yaml
-        
+
     mesh:
         type: Rectangle
         Nx: 140
@@ -140,16 +168,16 @@ in numpy::
 
     from matplotlib import pyplot
     import numpy
-    
+
     # Find a polynomial that refines the mesh
     y_target = [0, 4, 7.5, 10]
     dy_target = [0, 2.5, 0, 0]  # zero at the boundary
     P = numpy.polyfit(y_target, dy_target, 3)
-    
+
     # Realise the polynomial
     y = numpy.linspace(0, 10, 20)
     dy = numpy.polyval(P, y)
-    
+
     # Plot the results
     for ypos in (y + dy):
         pyplot.plot([0, 1], [ypos, ypos], '-k', lw=1)'
@@ -158,7 +186,8 @@ in numpy::
     pyplot.axhline(8, c='b', ls=':', lw=1)
 
 For more complicated meshes it is recommended to perform mesh grading and other
-mesh operation in an external mesh generator such as gmsh. 
+mesh operation in an external mesh generator such as gmsh.
+
 There is also some (not much used, hence possibly buggy) support for ALE where
 the mesh moves every timestep, but that is not covered by the ``mesh`` section
 of the input file.

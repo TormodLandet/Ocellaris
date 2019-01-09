@@ -6,6 +6,30 @@ Ocellaris input file description
    :local:
 
 
+Getting started
+---------------
+
+Starting from one of the demos is recommended. Most of the input options used
+in the demo input files (and most other input options) are explained in
+:ref:`inp_file_sections` below.
+
+As a general rule, based on what parts of Ocellaris are most used and best
+tested, the following options are good starting points for creating your own
+simulation input files:
+
+* Use a simple mesh (unit square or cube etc) or load your mesh with the meshio
+  reader, see :ref:`inp_mesh`.
+* Use the IPCS-A solver. If you are running on only one CPU then consider the
+  Coupled solver (but it lacks some functionality comapred to IPCS-A), see
+  :ref:`inp_solver` for the full list.
+* Use single phase or the standard algebraic VOF multi phase solver, see
+  ``BlendedAlgebraicVOF`` under :ref:`inp_multiphase_solver` for details.
+* Write restart files once in a while to be able to restart your long running
+  simulations should something hang, see :ref:`inp_output` for details on this.
+  You should also consider using the ``orun`` script to "babysit" your
+  simulations, see :ref:`script_orun`.
+
+
 File format
 -----------
 
@@ -134,9 +158,10 @@ Ocellaris will interpret the input as:
         C: 8
 
 
+.. _inp_file_sections:
+
 Input file sections
 -------------------
-
 
 .. toctree::
 
@@ -149,6 +174,7 @@ Input file sections
     solver
     multiphase_solver
     convection
+    slope_limiter
     fields
     forcing_zones
     output

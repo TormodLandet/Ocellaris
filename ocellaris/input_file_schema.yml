@@ -86,6 +86,7 @@ type MeshDolfinGeom:
     optional Nx: IntegerMin1
     optional Ny: IntegerMin1
     optional Nz: IntegerMin1
+    optional N: IntegerMin1
     optional startx: Float
     optional starty: Float
     optional startz: Float
