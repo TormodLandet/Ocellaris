@@ -9,16 +9,25 @@ Hooks allows you to run code at given times during a simulation
 * ``post_simulation``
 * ``pre_timestep``
 * ``post_timestep``
-* Custom hooks, most notably ``MultiPhaseModelUpdated``.
 
-.. csv-table::
-   :header: "key", "Default value", "Description"
+.. * Custom hooks, most notably ``MultiPhaseModelUpdated``.
 
-    "...", "**required input**", "FIXME: finish this table"
+Each hook is described be the following
 
+.. describe:: name
 
-Maintaining state with hook_data
---------------------------------
+    The name of the hook, used for better log and error messages
+
+.. describe:: enabled
+
+    Flag to turn the hook on or off. Default on
+
+.. describe:: code
+
+    The Python code to run. You can access the ``simulation`` object which
+    gives access to all fields and every part of the simulation that the normal
+    Ocallaris code can access. You also have all user code constants instantly
+    available just like all other code in the input file.
 
 The example below shows that each hook gets it's own dictionary ``hook_data``
 to store whatever it wants between calls. The example also shows how to read
@@ -35,3 +44,8 @@ how to perform output to file in a configurable manner:
                 hook_data['cf'] = File(prefix + '_c.pvd')
             if t > 1:
                 hook_data['cf'] << (c, t)
+
+The ``hook_data`` dictionary is saved to restart files and the contents are
+brought back as long as it consists of basic data types (lists, dicts, strings,
+numbers) since the data is internally serialized to ASCII YAML format before
+saving to HDF5 (which is the binary format of the restart file).
