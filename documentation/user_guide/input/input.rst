@@ -168,8 +168,8 @@ Input file sections
     user_code
     physical_properties
     mesh
-    boundary_conditions
     initial_conditions
+    boundary_conditions
     time
     solver
     multiphase_solver

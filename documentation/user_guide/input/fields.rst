@@ -219,6 +219,7 @@ Return the max or min of two fields
 
     Names of the two known field functions
 
+.. _inp_fields_freesurfacezone:
 
 FreeSurfaceZone
 ---------------
