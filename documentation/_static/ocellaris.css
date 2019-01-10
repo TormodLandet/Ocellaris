@@ -7,3 +7,29 @@ h3 a:link {
     font-weight: normal;
     font-size: 1em;
 }
+
+div.figure.align-center p {
+    color: #666;
+    text-align: center;
+    max-width: 80%;
+    margin: 3pt auto;
+}
+
+/* Hack to separate blog posts a bit more than standard section separation */
+div#ocellaris-news > div.section + div.section:before {
+    content: "";
+    display: block;
+    margin: 4em auto 4em auto;
+    background: repeating-linear-gradient(
+      90deg,
+      #ffffff,
+      #ffffff 3px,
+      #892601 3px,
+      #892601 57px,
+      #ffffff 57px,
+      #ffffff 60px
+    );
+    height: 2px;
+    min-width: 60px;
+    max-width: 600px;
+  }

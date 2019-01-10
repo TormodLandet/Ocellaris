@@ -36,14 +36,16 @@ how to perform output to file in a configurable manner:
 
 .. code-block:: yaml
 
-    -   name: save colour function field
-        enabled: yes
-        code: |
-            if not 'cf' in hook_data:
-                prefix = simulation.input.get_value('output/prefix')
-                hook_data['cf'] = File(prefix + '_c.pvd')
-            if t > 1:
-                hook_data['cf'] << (c, t)
+    hooks:
+        post_timestep:
+        -   name: save colour function field
+            enabled: yes
+            code: |
+                if not 'cf' in hook_data:
+                    prefix = simulation.input.get_value('output/prefix')
+                    hook_data['cf'] = File(prefix + '_c.pvd')
+                if t > 1:
+                    hook_data['cf'] << (c, t)
 
 The ``hook_data`` dictionary is saved to restart files and the contents are
 brought back as long as it consists of basic data types (lists, dicts, strings,
