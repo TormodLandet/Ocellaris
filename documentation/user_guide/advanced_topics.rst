@@ -1,6 +1,14 @@
 Advanced topics
 ===============
 
+You can extend Ocellaris in more ways than just adding user code for
+customizing the existing fluid solvers. You can for instance add brand new
+solvers while still taking advantage of the Ocellaris framework for input and
+output handling, post-processing and more.
+
+.. contents:: Contents
+    :local:
+
 
 .. _custom_solver:
 
@@ -62,3 +70,53 @@ Python file is loaded and the sets up the boundary conditions for the
 
 .. literalinclude:: ../../demos/custom_solver.inp
    :language: yaml
+
+
+.. _custom_multiphase_model:
+
+Writing a custom multiphase model
+---------------------------------
+
+Connecting a custom multi phase model to Ocellaris is done in the same way as
+connecting the main equation solver described above. How to register the model
+is shown in the following snippet
+
+.. code-block:: python
+
+    from ocellaris.solver_parts.multiphase import MultiPhaseModel, \
+                                                  register_multi_phase_model
+
+    class MyCustomMultiPhaseModel(MultiPhaseModel):
+        description = 'A fantastic multiphase model!'
+
+        # See the SinglePhase model for an example of the required
+        # API interface needed to work inside Ocellaris
+
+
+Writing other custom parts
+--------------------------
+
+Many more items are pluggable, some examples are
+
+* Boundary conditions
+* Convection schemes (used mostly in the VOF multi phase solver)
+* Known fields (for initial and boundary conditions, forcing zones and more)
+* Slope limiters (scalar fields)
+* Velocity slope limiters (solenoidal vector fields)
+
+You will have to look in the source code for the required API to implement, but
+the method for connecting the custom code to Ocellaris is the same as what is
+described above for the main equation solver. The registering functions are:
+
+.. code-block:: python
+
+    from ocellaris.solver_parts.boundary_conditions import register_boundary_condition
+    from ocellaris.solver_parts.convection import register_convection_scheme
+    from ocellaris.solver_parts.fields import register_known_field
+    from ocellaris.solver_parts.slope_limiter import register_slope_limiter
+    from ocellaris.solver_parts.slope_limiter_velocity import register_velocity_slope_limiter
+
+If you want to create a custom forcing zone or something else that is not
+currently pluggable, then please create a feature request on the issue tracker
+or submit a pull request with code following the same general framework as the
+pluggable pieces above.

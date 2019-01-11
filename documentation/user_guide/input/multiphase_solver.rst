@@ -5,7 +5,8 @@ Multi phase solver
 
 If you are creating a two fluid simulation you will have to specify some
 parameters of the multi-phase solver. The best tested options are the
-``SinglePhase`` and the ``BlendedAlgebraicVOF`` solvers.
+``SinglePhase`` and the ``BlendedAlgebraicVOF`` solvers. You can also add
+your own multi phase model, see :ref:`custom_multiphase_model`.
 
 
 Single phase
