@@ -1,4 +1,5 @@
 import sys
+import os
 import time
 import importlib
 import dolfin
@@ -148,6 +149,12 @@ def setup_user_code(simulation):
     """
     Setup custom path and user code imports
     """
+    # Add the directory where the input file resides to the path
+    if simulation.input.file_name is not None:
+        fn = os.path.abspath(simulation.input.file_name)
+        inp_dir = os.path.dirname(fn)
+        sys.path.insert(0, inp_dir)
+
     # Extend the Python search path
     paths = simulation.input.get_value('user_code/python_path', [], 'list(string)')
     for path in paths[::-1]:
