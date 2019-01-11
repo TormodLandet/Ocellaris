@@ -29,22 +29,31 @@ def test_setup_demo(demo_inp_file, monkeypatch):
     if demo_inp_file in need_gmsh:
         return pytest.skip()
 
-    slow = {'internal_soliton.inp', 'dead_water_2D.inp', 'dead_water_3D.inp',
-            'wave_tank_vof_3D.inp'}
+    slow = {
+        'internal_soliton.inp',
+        'dead_water_2D.inp',
+        'dead_water_3D.inp',
+        'wave_tank_vof_3D.inp',
+    }
     if demo_inp_file in slow and os.environ.get('OCELLARIS_RUN_SLOW_TEST') != '1':
         raise pytest.skip('Skipping slow test')
+
+    # Demos without time stepping
+    notime = {'custom_solver.inp'}
 
     monkeypatch.chdir(DEMODIR)
 
     # run python3 -m ocellaris DEMOFILE --set-inp time/tmax=0
     interpreter = sys.executable
     mainfile = os.path.join(DEMODIR, '..', 'ocellaris', '__main__.py')
-    cmd = [interpreter, mainfile, demo_inp_file, '--set-inp', 'time/tmax=0']
+    cmd = [interpreter, mainfile, demo_inp_file]
+    if demo_inp_file not in notime:
+        cmd.extend(['--set-inp', 'time/tmax=0'])
     subprocess.check_call(cmd)
 
     # Run as script (can lead to inter-demo disturbances with dolfin globals etc)
-    #from ocellaris import Simulation, setup_simulation
-    #sim = Simulation()
+    # from ocellaris import Simulation, setup_simulation
+    # sim = Simulation()
     # sim.input.read_yaml(demo_inp_file)
-    #success = setup_simulation(sim)
-    #assert success
+    # success = setup_simulation(sim)
+    # assert success
