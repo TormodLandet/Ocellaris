@@ -48,6 +48,8 @@ type UserCode:
         optional *: Any
     optional constants: Constants
     optional code: str
+    optional python_path: list(type=str)
+    optional modules: list(type=str)
 optional user_code: UserCode
 
 

@@ -1,0 +1,37 @@
+ocellaris:
+    type: input
+    version: 1.0
+
+user_code:
+    modules:
+    -   custom_solver
+
+mesh:
+    type: Rectangle
+    Nx: 10
+    Ny: 10
+
+solver:
+    type: PoissonDG
+    phi:
+        solver: cg
+        preconditioner: hypre_amg
+        parameters:
+            relative_tolerance: 1.0e-10
+            absolute_tolerance: 1.0e-15
+
+boundary_conditions:
+-   name: all walls
+    selector: code
+    inside_code: on_boundary
+    phi:
+        type: ConstantValue
+        value: 1.0
+
+output:
+    prefix: output/custom_solver
+    dolfin_log_level: warning
+    ocellaris_log_level: info
+    log_enabled: yes
+    solution_properties: off
+    xdmf_write_interval: 0

@@ -6,7 +6,8 @@ running Ocellaris.
 
 There are many possible simulations that can be correctly set up, but Ocellaris
 will fail to give the physically correct answer. You must validate the code and
-the configuration (input file) for your own purposes before trusting the results.
+the configuration (input file) for your own purposes before trusting the
+results.
 
 .. toctree::
 
@@ -16,3 +17,4 @@ the configuration (input file) for your own purposes before trusting the results
     demos
     inspector
     scripts
+    advanced_topics

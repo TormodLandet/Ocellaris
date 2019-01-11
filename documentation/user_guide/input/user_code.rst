@@ -71,3 +71,27 @@ initial condition is specified:
             cpp_code: py$ u0a.replace('*t)', '*(t - dt))')
         upp1:
             cpp_code: py$ u1a.replace('*t)', '*(t - dt))')
+
+
+Loading external Python files
+-----------------------------
+
+You can load additinal Python files which will be imported before simulation
+setup will run
+
+.. describe:: python_path
+
+    A list of directories which will be added to the Python module search path
+
+.. describe:: modules
+
+    A list of Python modules to load
+
+.. code-block:: yaml
+
+    user_code:
+        python_path:
+        -   /my/directory
+        modules:
+        -   custom_solver
+        -   custom_slope_limiter

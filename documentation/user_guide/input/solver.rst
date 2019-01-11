@@ -5,10 +5,10 @@ Navier Stokes solver
 
 Some parameters are shared between all the available velocity-pressure solvers.
 All the parameters in the following example have sensible defaults except for
-the solver ``type`` which you must set. For the other parameters in the example
-the values shown are the default values. The possible values for solver type
+the solver ``type`` which you must set. The other parameters in the example
+input shown below are the default values. The possible values for solver type
 (IPCS-A, SIMPLE, PISO etc) are listed in the sections below with a brief
-description.
+description. You can also write your own solver, see :ref:`custom_solver`.
 
 .. code-block:: yaml
 
