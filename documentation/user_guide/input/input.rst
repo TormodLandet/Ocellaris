@@ -1,5 +1,5 @@
-Ocellaris input file description
-================================
+Writing input files
+===================
 
 
 .. contents:: Contents
