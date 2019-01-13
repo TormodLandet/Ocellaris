@@ -11,9 +11,7 @@ class MeshMorpher(object):
         self.active = False
 
         # The user can give a mesh velocity function to simulate a piston or similar
-        prescribed_velocity_input = simulation.input.get_value(
-            'mesh/prescribed_velocity', None
-        )
+        prescribed_velocity_input = simulation.input.get_value('mesh/prescribed_velocity', None)
         if prescribed_velocity_input is not None:
             self.setup_prescribed_velocity(prescribed_velocity_input)
 
@@ -35,9 +33,7 @@ class MeshMorpher(object):
         Create mesh velocity and deformation functions
         """
         sim = self.simulation
-        assert (
-            self.active is False
-        ), 'Trying to setup mesh morphing twice in the same simulation'
+        assert self.active is False, 'Trying to setup mesh morphing twice in the same simulation'
 
         # Store previous cell volumes
         mesh = sim.data['mesh']
@@ -60,9 +56,7 @@ class MeshMorpher(object):
 
         # Create mesh displacement vector function
         self.displacement = dolfin.Function(Vmesh_vec)
-        self.assigners = [
-            dolfin.FunctionAssigner(Vmesh_vec.sub(d), Vmesh) for d in range(sim.ndim)
-        ]
+        self.assigners = [dolfin.FunctionAssigner(Vmesh_vec.sub(d), Vmesh) for d in range(sim.ndim)]
         self.active = True
 
     def setup_prescribed_velocity(self, input_dict):
@@ -72,15 +66,12 @@ class MeshMorpher(object):
         # Read and verify input
         assert input_dict['type'] == 'CppCodedValue'
         self.cpp_codes = input_dict['cpp_code']
-        assert (
-            isinstance(self.cpp_codes, list)
-            and len(self.cpp_codes) == self.simulation.ndim
-        )
+        assert isinstance(self.cpp_codes, list) and len(self.cpp_codes) == self.simulation.ndim
 
         # Setup mesh morphing every time step
         self.setup()
         self.simulation.hooks.add_pre_timestep_hook(
-            lambda it, t, dt: self.update_prescribed_mesh_velocity(),
+            lambda timestep_number, t, dt: self.update_prescribed_mesh_velocity(),
             'MeshMorpher - update prescribed mesh velocity',
         )
 
@@ -124,6 +115,6 @@ class MeshMorpher(object):
             cvolp.vector()[dofs[0]] = cell.volume()
 
         # Move the mesh according to the given displacements
-        mesh.move(self.displacement)
+        dolfin.ALE.move(mesh, self.displacement)
         mesh.bounding_box_tree().build(mesh)
         sim.update_mesh_data(connectivity_changed=False)

@@ -25,7 +25,7 @@ mesh:
     endx: 2
     endy: 2
     diagonal: left/right
-    _prescribed_velocity:
+    prescribed_velocity:
         type: CppCodedValue
         cpp_code:
         # A divergence free mesh deformation field which is zero at the boundaries
@@ -99,7 +99,7 @@ output:
     save_restart_file_at_end: no
 
 solver:
-    type: IPCS-A
+    type: Coupled
     num_inner_iter: 10
     #num_pressure_corr: 10
     #relaxation_u: 1.0
