@@ -152,6 +152,132 @@ something like this (untested, but the overall design should work):
             some_code_to_update_this_bc(self.bc_val_func)
 
 
+.. _custom_known_field:
+
+Writing a custom known field
+----------------------------
+
+Known fields are Python classes that provide a ``get_function`` method. The
+following example shows building and enabling a very simple field:
+
+.. code-block:: yaml
+
+    ocellaris:
+        type: input
+        version: 1.0
+
+    user_code:
+        modules:
+        -   custom_field
+
+    fields:
+    -   name: myfield
+        type: MyCustomField
+        myval: 42.0
+
+
+    # ...
+    # input can now refer to the 'myfield/gamma' function
+
+The ``custom_field.py`` file defines ``MyCustomField`` which defines a
+``gamma`` function. The code can be something like this:
+
+.. code-block:: python
+
+    import dolfin
+    from ocellaris.solver_parts.fields import register_known_field, KnownField
+
+    @register_known_field('MyCustomField')
+    class SimpleCustomField(KnownField):
+        description = 'Simple custom field'
+
+        def __init__(self, simulation, field_inp):
+            """
+            A scalar field
+            """
+            self.simulation = simulation
+            self.func = None
+            self.value = field_inp.get_value('myval', required_type='float')
+
+        def get_variable(self, name):
+            if name != 'gamma':
+                ocellaris_error(
+                    'Custom field does not define %r' % name,
+                    'This custom field defines only gamma',
+                )
+            if self.func is None:
+                V = self.simulation.data['Vu']
+                self.func = dolfin.Function(V)
+                arr = self.func.vector().get_local()
+                arr[:] = self.value
+                self.func.vector().set_local(arr)
+                self.func.vector().apply('insert')
+            return self.func
+
+
+A custom wave field
+...................
+
+A custom wave field can be made in the same way as the simple field above, but
+some benefits can be had from using the ``BaseWaveField`` base class which
+handles partial filling of cells in VOF simulations among other things.
+
+
+.. code-block:: python
+
+    import dolfin
+    from ocellaris.utils import ocellaris_error
+    from ocellaris.solver_parts.fields import register_known_field
+    from ocellaris.solver_parts.fields.base_wave_field import BaseWaveField
+
+
+    @register_known_field('MyCustomWaves')
+    class CustomWaveField(BaseWaveField):
+        description = 'Custom wave field'
+
+        def __init__(self, simulation, field_inp):
+            """
+            A custom wave field
+            """
+            super(RaschiiWaveField, self).__init__(simulation, field_inp)
+            simulation.log.info('Creating a custom wave field %r' % self.name)
+
+            # Read input
+            wave_height = field_inp.get_value('wave_height', required_type='float')
+            h = field_inp.get_value('depth', required_type='float')
+            still_water_pos = field_inp.get_value('still_water_position', required_type='float')
+
+            # Project the colour function to DG0 (set degree to -1 to prevent this)
+            # The special projection in BaseWaveField handles partial filling of cells
+            # by use of quadrature elements in the C++ expression and a DG0 projection
+            self.colour_projection_degree = 6
+            self.colour_projection_form = None
+
+            # Define the C++ code (YOU MUST CHANGE THESE TO SOME VALID C++ EXPRESSIONS)
+            # Use x[0] for the horizontal coordinate and x[2] for the vertical coordinate,
+            # conversion to 2D is done below if the simulation is 2D
+            cpp_e = 'C++ code for the wave elevation;'
+            cpp_u = 'C++ code for the particle velocity in the horizontal direction;'
+            cpp_w = 'C++ code for the particle velocity in the vertical direction;'
+
+            # Store the C++ code
+            self._cpp['elevation'] = cpp_e
+            self._cpp['uhoriz'] = cpp_u
+            self._cpp['uvert'] = cpp_w
+            self._cpp['c'] = 'x[2] <= (%s) ? 1.0 : 0.0' % cpp_e
+
+            # Adjust the z-coordinate such that the bottom is at z=0
+            # (make changes if your code assumes that the free surface is at z=0)
+            zdiff = still_water_pos - self.h
+            for k, v in list(self._cpp.items()):
+                self._cpp[k] = v.replace('x[2]', '(x[2] - %r)' % zdiff)
+
+            # Adjust the C++ code z-coordinate if the simulation is 2D (then z -> y)
+            if self.simulation.ndim == 2:
+                for k, v in list(self._cpp.items()):
+                    self._cpp[k] = v.replace('x[2]', 'x[1]')
+
+
 .. _custom_multiphase_model:
 
 Writing a custom multiphase model
