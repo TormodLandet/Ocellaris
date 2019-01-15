@@ -108,9 +108,9 @@ solver:
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
-    function_space_velocity: CG
-    function_space_pressure: CG
-    equation_subtype: CG
+    function_space_velocity: DG
+    function_space_pressure: DG
+    equation_subtype: DG
     u:
         use_ksp: yes
         petsc_ksp_type: gmres

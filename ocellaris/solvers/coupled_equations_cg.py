@@ -83,7 +83,6 @@ class CoupledEquationsCG(object):
         eq = 0
 
         # ALE mesh velocities
-        u_mesh = dolfin.Constant([0] * sim.ndim)
         if sim.mesh_morpher.active:
             u_mesh = sim.data['u_mesh']
 
