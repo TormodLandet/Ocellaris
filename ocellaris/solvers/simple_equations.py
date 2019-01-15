@@ -366,4 +366,4 @@ def create_block_partitions(simulation, V, Ncells):
     return partitions
 
 
-EQUATION_SUBTYPES = {'Default': SimpleEquations}
+EQUATION_SUBTYPES = {'Default': SimpleEquations, 'DG': SimpleEquations}

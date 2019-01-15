@@ -36,6 +36,8 @@ def test_taylor_green(solver_type, monkeypatch):
     def modifier(sim):
         sim.input.set_value('solver/type', solver_type)
         sim.input.set_value('solver/num_inner_iter', 10)
+        if 'prescribed_velocity' in sim.input['mesh']:
+            del sim.input['mesh']['prescribed_velocity']
         shared_regression_modifier(sim)
 
     # Run the Taylor-Green test case on a course mesh
