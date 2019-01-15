@@ -12,6 +12,7 @@ video has been uploaded to
 below.
 
 ..  youtube:: DZvvZKBaiKc
+    :width: 80%
 
 The input files, results and scripts will be available along with an upcoming
 paper.

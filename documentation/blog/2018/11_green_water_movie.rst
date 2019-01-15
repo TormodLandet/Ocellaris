@@ -11,6 +11,7 @@ been uploaded to `YouTube <https://www.youtube.com/watch?v=wuueXeeZ84I>`_ and
 is also embedded below.
 
 ..  youtube:: wuueXeeZ84I
+    :width: 80%
 
 The input files, results and scripts will be available along with an
 upcoming paper in 2019.

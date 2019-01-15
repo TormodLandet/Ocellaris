@@ -124,5 +124,9 @@ div#ocellaris-news > div.section + div.section:before {
     height: 2px;
     min-width: 60px;
     max-width: 600px;
-  }
+}
+
+div.youtube_wrapper {
+    margin: 0 auto;
+}
 
