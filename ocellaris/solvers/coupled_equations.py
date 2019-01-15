@@ -126,7 +126,7 @@ def define_dg_equations(
     pressure_continuity_factor=0,
 ):
     """
-    Define the coupled equations. Also in use by the SIMPLE solver
+    Define the coupled equations. Also used by the SIMPLE and IPCS-A solvers
 
     Weak form of the Navier-Stokes eq. with discontinuous elements
 
@@ -168,16 +168,17 @@ def define_dg_equations(
     eq = 0
 
     # ALE mesh velocities
-    u_mesh = dolfin.Constant([0] * sim.ndim)
     if sim.mesh_morpher.active:
         u_mesh = sim.data['u_mesh']
 
-        # Modification of the convective velocity
+        # Either modify the convective velocity or just include the mesh
+        # velocity on cell integral form. Only activate one of these lines
         # u_conv -= u_mesh
         eq -= dot(div(rho * dolfin.outer(u, u_mesh)), v) * dx
 
         # Divergence of u should balance expansion/contraction of the cell K
         # ∇⋅u = -∂x/∂t       (See below for definition of the ∇⋅u term)
+        # THIS IS SOMEWHAT EXPERIMENTAL
         cvol_new = dolfin.CellVolume(mesh)
         cvol_old = sim.data['cvolp']
         eq += (cvol_new - cvol_old) / dt * q * dx
@@ -231,16 +232,6 @@ def define_dg_equations(
 
         # Stabilizing term when w is not divergence free
         eq += 1 / 2 * div(u_conv) * u[d] * v[d] * dx
-
-        # ALE terms
-        if sim.mesh_morpher.active:
-            ud = u[d]
-            um = -u_mesh
-            u_mesh_nU = (dot(um, n) + abs(dot(um, n))) / 2.0
-            flux_mesh_nU = rho * ud * u_mesh_nU
-            flux_mesh = jump(flux_mesh_nU)
-            eq -= rho * ud * div(v[d] * um) * dx
-            eq += flux_mesh * jump(v[d]) * dS
 
         # Diffusion:
         # -∇⋅μ∇u

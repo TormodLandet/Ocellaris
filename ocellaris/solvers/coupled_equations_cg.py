@@ -87,7 +87,8 @@ class CoupledEquationsCG(object):
         if sim.mesh_morpher.active:
             u_mesh = sim.data['u_mesh']
 
-            # Modification of the convective velocity
+            # Either modify the convective velocity or just include the mesh
+            # velocity on cell integral form. Only activate one of these lines
             # u_conv -= u_mesh
             eq -= dot(div(rho * dolfin.outer(u, u_mesh)), v) * dx
 
@@ -120,11 +121,6 @@ class CoupledEquationsCG(object):
             # Convection
             # ∇⋅(ρ u ⊗ u_conv)
             eq += rho * dot(u_conv, grad(u[d])) * v[d] * dx
-
-            if sim.mesh_morpher.active:
-                ud = up
-                um = -u_mesh
-                eq += div(rho * ud * um) * v[d] * dx
 
             # Diffusion
             # -∇⋅μ(∇u)

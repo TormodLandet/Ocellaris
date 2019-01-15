@@ -18,7 +18,7 @@ from ..solver_parts import (
     SlopeLimiterVelocity,
     before_simulation,
     after_timestep,
-    update_timestep
+    update_timestep,
 )
 
 # Solvers - default values, can be changed in the input file
@@ -176,7 +176,7 @@ class SolverIPCSA(Solver):
         self.vel_is_discontinuous = Vu_family == 'Discontinuous Lagrange'
 
         # Velocity post_processing
-        default_postprocessing = BDM if self.vel_is_discontinuous else None
+        default_postprocessing = BDM if self.vel_is_discontinuous else 'none'
         self.velocity_postprocessing = sim.input.get_value(
             'solver/velocity_postprocessing', default_postprocessing, 'string'
         )

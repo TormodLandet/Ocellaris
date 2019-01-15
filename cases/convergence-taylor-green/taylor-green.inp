@@ -35,11 +35,12 @@ mesh:
         #-   -cos(pi/2*x[0])*sin(pi/2*x[1])*sin(pi/2*t)*0.05
         #-    sin(pi/2*x[0])*cos(pi/2*x[1])*sin(pi/2*t)*0.05
         # Diagonal displacement
-        - sin(pi/2*t)*0.05
-        - sin(pi/2*t)*0.05
+        - sin(pi / 2 * t) * 0.05
+        - sin(pi / 2 * t) * 0.05
         # A non-divergence free mesh deformation field
         #-   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
         #-   sin(0.5*pi*x[0])*sin(0.5*pi*x[1])*0.05*sin(pi/2*t)
+
 
 # Periodic boundary conditions. Not supported in FEniCS 1.5 for DG. Works for CG
 _boundary_conditions:
@@ -107,6 +108,9 @@ solver:
     allowable_error_inner: 1e-12
     polynomial_degree_velocity: overridden in script
     polynomial_degree_pressure: overridden in script
+    function_space_velocity: CG
+    function_space_pressure: CG
+    equation_subtype: CG
     u:
         use_ksp: yes
         petsc_ksp_type: gmres
