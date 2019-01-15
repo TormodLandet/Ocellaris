@@ -32,7 +32,7 @@ body {
         float: left;
     }
     div.topnav {
-        float: left;
+        float: right;
         padding-bottom: 1em;
     }
     div.topnav > p > a + a {
@@ -61,8 +61,15 @@ Remember: CSS pixels != device pixels (often factor 2 larger)
     div.header h2 {
         font-size: 0.8em;
     }
+    div.topnav {
+        float: left;
+    }
     div.topnav  p {
         margin: 0 0.3em 0 1em;
+    }
+    div.topnav  p a {
+        font-size: 1.4em;
+        color: #0c3762;
     }
     div.topnav > p > a + a {
         margin: 0 0 0 1em;
@@ -71,6 +78,17 @@ Remember: CSS pixels != device pixels (often factor 2 larger)
         margin: 15px 10px 40px 10px;
     }
 }
+
+/*
+Menu tweaks for small screens
+*/
+@media only screen and (max-width: 500px) {
+    div.topnav  p a {
+        font-size: 3.3vw;
+        color: #0c3762;
+    }
+}
+
 
 h3 a:link {
     color: #fb880c;
@@ -103,3 +121,4 @@ div#ocellaris-news > div.section + div.section:before {
     min-width: 60px;
     max-width: 600px;
   }
+
