@@ -2,6 +2,76 @@ body {
     background-color: white;
 }
 
+/* Large screen devices */
+@media only screen and (min-width: 800px) {
+    body {
+        min-width: 10em;
+    }
+    div.topnav > p > a + a {
+        margin-left: 3em
+    }
+}
+
+/* Tablets and phones */
+@media only screen and (max-width: 799px) {
+    body {
+        min-width: 10em;
+    }
+    div.header {
+        padding: 0 20px;
+    }
+    div.header img.rightlogo {
+        float: right;
+        width: 5em;
+    }
+    div.header h1.heading {
+        float: left;
+        font-size: 1.4em;
+    }
+    div.header h2 {
+        float: left;
+    }
+    div.topnav {
+        float: left;
+        padding-bottom: 1em;
+    }
+    div.topnav > p > a + a {
+        margin-left: 2em
+    }
+    div.content {
+        clear: both;
+    }
+}
+
+/*
+Special tweaks for phones and other small devices
+Should work down to 360x640 css pixels which is quite popular
+Remember: CSS pixels != device pixels (often factor 2 larger)
+*/
+@media only screen and (max-width: 650px) {
+    div.header {
+        padding: 0 1em;
+    }
+    div.header img.rightlogo {
+        display: none;
+    }
+    div.header h1.heading {
+        font-size: 1.3em;
+    }
+    div.header h2 {
+        font-size: 0.8em;
+    }
+    div.topnav  p {
+        margin: 0 0.3em 0 1em;
+    }
+    div.topnav > p > a + a {
+        margin: 0 0 0 1em;
+    }
+    div.content {
+        margin: 15px 10px 40px 10px;
+    }
+}
+
 h3 a:link {
     color: #fb880c;
     font-weight: normal;
