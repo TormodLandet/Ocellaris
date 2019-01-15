@@ -17,9 +17,7 @@ from ufl.corealg.map_dag import map_expr_dag
 # Utility functions:
 
 
-def split_form_into_matrix(
-    full_form, Wv, Wu, Sv=None, Su=None, empty_cell_value=None, check_zeros=True
-):
+def split_form_into_matrix(full_form, Wv, Wu, empty_cell_value=None, check_zeros=True):
     """
     Split a form into subforms which correspond to separate
     test and trial functions. Given a full form with multiple
@@ -28,12 +26,17 @@ def split_form_into_matrix(
     same way as the ordering of the input test and trial
     functions.
 
-    Given test functions (v, q) and trial functions (u, p)
-    the return values are is a tuple consisting of the two
-    lists:
+    Wv and Wu are the coupled test and trial functions. If
+    these consist of test functions (v, q) and trial functions
+    (u, p) then the return values from this function will be
+    two lists:
 
     * Bilinear forms: [[A(u,v), B(p, v)], [C(u,q), D(p,q)]]
     * Linear forms: [E(v), F(q)]
+
+    This operation requires advanced UFL usage. If FEniCS ever
+    implements form splitting natively then this code should be
+    scrapped to avoid problems as UFL is developed further.
     """
     N = Wv.num_sub_spaces()
     M = Wu.num_sub_spaces()
@@ -61,6 +64,12 @@ def is_zero_ufl_expression(expr, return_val=False):
     Is the given expression always identically zero or not
     Returns a boolean by default, but will return the actual
     evaluated expression value if return_val=True
+
+    This function is somewhat brittle. If the ufl library
+    changes how forms are processed (additional steps or other
+    complexity is added) then this function must be extended
+    to be able to break the expressions down into the smallest
+    possible parts.
     """
     # Reduce the complexity of the expression as much as possible
     expr = expand_derivatives(expr)
@@ -184,6 +193,9 @@ class EstimateZeroForms(MultiFunction):
     operator tree to calculate the scalar value of an expression
     in order to estimate if an UFL expression is allways identically
     zero or not.
+
+    Not all UFL expressions are supported, operators have been added
+    as they were needed in Ocellaris.
 
     The value returned is the evaluated/interpreted expression. The
     actual value of a non-zero return is not interesting in itself,
