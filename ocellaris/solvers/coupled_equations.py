@@ -172,9 +172,13 @@ def define_dg_equations(
         u_mesh = sim.data['u_mesh']
 
         # Either modify the convective velocity or just include the mesh
-        # velocity on cell integral form. Only activate one of these lines
-        # u_conv -= u_mesh
-        eq -= dot(div(rho * dolfin.outer(u, u_mesh)), v) * dx
+        # velocity on cell integral form. Only activate one of the lines below
+        # PS: currently the UFL form splitter (used in e.g. IPCS-A) has a
+        #     problem with line number 2, but the Coupled solver handles
+        #     both options with approximately the same resulting convergence
+        #     errors on the Taylor-Green test case (TODO: fix form splitter)
+        u_conv -= u_mesh
+        # eq -= dot(div(rho * dolfin.outer(u, u_mesh)), v) * dx
 
         # Divergence of u should balance expansion/contraction of the cell K
         # ∇⋅u = -∂x/∂t       (See below for definition of the ∇⋅u term)

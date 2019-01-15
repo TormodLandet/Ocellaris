@@ -100,7 +100,7 @@ output:
     save_restart_file_at_end: no
 
 solver:
-    type: Coupled
+    type: IPCS-A
     num_inner_iter: 10
     #num_pressure_corr: 10
     #relaxation_u: 1.0

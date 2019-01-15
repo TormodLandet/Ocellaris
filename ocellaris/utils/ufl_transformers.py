@@ -168,11 +168,7 @@ class IndexSimplificator(MultiFunction):
 
     def indexed(self, o, expr, multiindex):
         indices = list(multiindex)
-        while (
-            indices
-            and isinstance(expr, ListTensor)
-            and isinstance(indices[0], FixedIndex)
-        ):
+        while indices and isinstance(expr, ListTensor) and isinstance(indices[0], FixedIndex):
             index = indices.pop(0)
             expr = expr.ufl_operands[int(index)]
 
@@ -217,6 +213,9 @@ class EstimateZeroForms(MultiFunction):
     def facet_normal(self, o):
         assert len(o.ufl_shape) == 1
         return as_vector([1] * o.ufl_shape[0])
+
+    def cell_volume(self, o):
+        return 1
 
     def spatial_coordinate(self, o):
         assert len(o.ufl_shape) == 1
@@ -375,10 +374,7 @@ class EstimateZeroForms(MultiFunction):
             return as_vector([self.visit(op) for op in o.ufl_operands])
         elif len(shape) == 2:
             return as_vector(
-                [
-                    as_vector([self.visit(op) for op in row.ufl_operands])
-                    for row in o.ufl_operands
-                ]
+                [as_vector([self.visit(op) for op in row.ufl_operands]) for row in o.ufl_operands]
             )
         else:
             raise NotImplementedError()
