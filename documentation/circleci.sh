@@ -21,7 +21,7 @@ pip3 install sphinx --force --user
 pip3 install sphinxcontrib-newsfeed --user
 pip3 install sphinxcontrib-bibtex --user
 #pip3 install git+https://github.com/sphinx-contrib/youtube.git --user
-pip3 install git+https://github.com/TormodLandet/youtube.git --user
+pip3 install git+https://github.com/TormodLandet/youtube.git@tormod/allowfullscreen --user
 export PATH=~/.local/bin:$PATH
 make html
 
