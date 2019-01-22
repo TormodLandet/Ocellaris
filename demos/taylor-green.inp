@@ -79,9 +79,10 @@ output:
     prefix: output/taylor_green
     dolfin_log_level: warning
     ocellaris_log_level: info
+    xdmf_write_interval: 1
 
 solver:
-    type: PIMPLE
+    type: IPCS-A
     polynomial_degree_velocity: 2
     polynomial_degree_pressure: 1
     function_space_velocity: DG

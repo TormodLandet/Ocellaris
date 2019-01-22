@@ -1,3 +1,5 @@
+.. _user_guide_advanced_topics:
+
 Advanced topics
 ===============
 

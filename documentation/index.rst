@@ -11,7 +11,7 @@
 .. ##############################################################
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
    blog/index
    user_guide/user_guide

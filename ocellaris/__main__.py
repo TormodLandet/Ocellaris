@@ -103,7 +103,7 @@ def override_input_variables(simulation, input_override):
         # Find the correct input sub-dictionary
         path_elements = path.split('/')
         base_path = '/'.join(path_elements[:-1])
-        base = simulation.input.get_value(base_path)
+        base = simulation.input.ensure_path(base_path)
 
         # Convert value to Python object
         try:

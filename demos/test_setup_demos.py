@@ -3,52 +3,61 @@ import sys
 import subprocess
 import pytest
 
-
-DEMODIR = os.path.abspath(os.path.dirname(__file__))
+MY_DIR = os.path.abspath(os.path.dirname(__file__))
+SRC_DIR = os.path.join(MY_DIR, '..')
 
 
 def pytest_generate_tests(metafunc):
     """
     Setup input files to test (all *.inp files in the same
-    directory as this file
+    directory as this file and recursively in subdirctories)
     """
-    inpfiles = []
-    for fn in os.listdir(DEMODIR):
-        if fn.endswith('.inp'):
-            inpfiles.append(fn)
+
+    def find_inp_files(dirname):
+        path = os.path.abspath(os.path.join(SRC_DIR, dirname))
+        for fn in os.listdir(path):
+            pth_rel = os.path.join(dirname, fn)
+            pth_abs = os.path.join(path, fn)
+            if os.path.isdir(pth_abs):
+                yield from find_inp_files(pth_rel)
+            if fn.endswith('inp'):
+                yield pth_rel[2:]
+
+    inpfiles = list(find_inp_files('./demos'))
     metafunc.parametrize("demo_inp_file", inpfiles)
 
 
 def test_setup_demo(demo_inp_file, monkeypatch):
     "Run setup on demo input file"
-    skip = {'linear_sloshing.inp', 'falling_sphere.inp'}
-    if demo_inp_file in skip:
-        return pytest.skip()
 
-    need_gmsh = {'cylinder.inp'}
-    if demo_inp_file in need_gmsh:
-        return pytest.skip()
-
-    slow = {
+    # Skip some tests
+    skip = ['linear_sloshing.inp', 'falling_sphere.inp']
+    need_gmsh = ['cylinder.inp']
+    slow = [
         'internal_soliton.inp',
         'dead_water_2D.inp',
         'dead_water_3D.inp',
         'wave_tank_vof_3D.inp',
-    }
-    if demo_inp_file in slow and os.environ.get('OCELLARIS_RUN_SLOW_TEST') != '1':
-        raise pytest.skip('Skipping slow test')
+    ]
+    skip_patterns = skip + need_gmsh
+    if os.environ.get('OCELLARIS_RUN_SLOW_TEST') != '1':
+        skip_patterns += slow
+    for pattern in skip_patterns:
+        if pattern in demo_inp_file:
+            return pytest.skip()
 
-    # Demos without time stepping
-    notime = {'custom_solver.inp'}
+    # Run from the same directory as the demo file is located
+    file_pth = os.path.abspath(demo_inp_file)
+    dir_name = os.path.dirname(file_pth)
+    base_name = os.path.basename(file_pth)
+    monkeypatch.chdir(dir_name)
 
-    monkeypatch.chdir(DEMODIR)
-
-    # run python3 -m ocellaris DEMOFILE --set-inp time/tmax=0
+    # Run as command (like the user would from the command line)
+    # $ python3 -m ocellaris DEMOFILE --set-inp time/tmax=0
     interpreter = sys.executable
-    mainfile = os.path.join(DEMODIR, '..', 'ocellaris', '__main__.py')
-    cmd = [interpreter, mainfile, demo_inp_file]
-    if demo_inp_file not in notime:
-        cmd.extend(['--set-inp', 'time/tmax=0'])
+    mainfile = os.path.join(SRC_DIR, 'ocellaris', '__main__.py')
+    cmd = [interpreter, mainfile, base_name]
+    cmd.extend(['--set-inp', 'time/tmax=0'])
     subprocess.check_call(cmd)
 
     # Run as script (can lead to inter-demo disturbances with dolfin globals etc)

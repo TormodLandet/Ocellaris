@@ -53,7 +53,7 @@ time:
     tmax: 0.1
 
 output:
-    prefix: output/diagonal_advection_of_square_DG1_upwind
+    prefix: output/diagonal_advection_of_square
     dolfin_log_level: warning
     ocellaris_log_level: info
     xdmf_write_interval: 10
