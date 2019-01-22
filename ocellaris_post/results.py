@@ -224,13 +224,13 @@ def read_log_data(results):
     INP_START = '----------------------------- configuration begin -'
     INP_END = '------------------------------ configuration end -'
     in_input_section = False
-    input_strs = []
     data = {}
 
     # Read input and timestep reports from log file
     with open(results.file_name, 'rt') as f:
         for line in f:
             if line.startswith(INP_START):
+                input_strs = []
                 in_input_section = True
             elif line.startswith(INP_END):
                 in_input_section = False

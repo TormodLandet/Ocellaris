@@ -52,9 +52,15 @@ benchmark.
             <source src="https://trlandet.bitbucket.io/figures/dambreak2d.ogg" type="video/ogg">
             Your browser does not support the video tag.
         </video>
-        <p class="caption"><span class="caption-text">Paraview video of 2D dam
-        break VOF simulation with course mesh</span></p>
+        <p class="caption">
+            <span class="caption-text">
+                Course mesh 2D dam break VOF simulation. Video from Paraview.
+            </span>
+        </p>
     </div>
+
+The 2D simulaton takes approximately 30 minutes to run on 1 CPU on a 2018 model
+laptop.
 
 
 Taylor-Green
@@ -70,3 +76,7 @@ runs through a list of mesh resolutions and reports the convergence rates.
     :alt: Taylor-Green velocity field
 
     The velocity field magnitude from the Taylor-Green demo
+
+The simulation should only take a couple of seconds if the UFL has been
+compiled to C++. On the first run this will happen, so this may take a bit
+longer, but less than a minute.
