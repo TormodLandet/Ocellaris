@@ -12,7 +12,7 @@ fi
 
 # Script setup
 REPO=ocellarisbot@bitbucket.org:ocellarisproject/ocellarisproject.bitbucket.io.git
-CMESSAGE="CircleCI Ocellaris doc update"
+CMESSAGE="CircleCI Ocellaris doc update by Ocellarisbot"
 cd documentation/
 
 

@@ -84,8 +84,8 @@ should go to the Bitbucket repository.
 Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/trlandet/ocellaris/tree/master>`_
 and the current CI build status is |circleci_status|.
 
-.. |circleci_status| image:: https://circleci.com/bb/trlandet/ocellaris.svg?style=svg&circle-token=886a679594f958395d69c0720b04c4d88056f49d
-  :target: https://circleci.com/bb/trlandet/ocellaris/tree/master
+.. |circleci_status| image:: https://circleci.com/bb/ocellarisproject/ocellaris.svg?style=svg
+    :target: https://circleci.com/bb/ocellarisproject/ocellaris
 
 Copyright and license
 ---------------------
