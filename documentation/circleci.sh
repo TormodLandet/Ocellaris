@@ -11,7 +11,7 @@ fi
 
 
 # Script setup
-REPO=trlandet@bitbucket.org:trlandet/trlandet.bitbucket.io.git
+REPO=trlandet@bitbucket.org:ocellarisproject/ocellarisproject.bitbucket.io.git
 CMESSAGE="CircleCI Ocellaris doc update"
 cd documentation/
 
