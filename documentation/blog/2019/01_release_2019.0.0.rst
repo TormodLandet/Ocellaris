@@ -22,7 +22,7 @@ satisfactory results. A paper on these tests is on the way. And, as always, a
 set of shorter MMS tests such as Taylor-Green are run automatically on each
 change in the code, so the basic flow solver should be in good shape.
 
-.. figure:: https://trlandet.bitbucket.io/figures/cylinder_in_waves_500.png
+.. figure:: https://ocellarisproject.bitbucket.io/figures/cylinder_in_waves_500.png
     :align: center
     :alt: Waves passing a cylinder, Ocellaris + Paraview + Blender + Cycles
 

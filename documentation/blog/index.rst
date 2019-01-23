@@ -14,7 +14,7 @@ Ocellaris news
     :rss: index.rss
     :title: Ocellaris news
     :description: The Ocellaris project blog. Project news, releases and more
-    :link: https://trlandet.bitbucket.io/ocellaris/
+    :link: https://ocellarisproject.bitbucket.io/blog/
 
     2019/01_release_2019.0.0
     2019/01_numerical_wave_tank_video
