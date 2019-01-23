@@ -4,7 +4,7 @@ Demos
 =====
 
 The demo input files can be found in the `Ocellaris repository
-<https://bitbucket.org/trlandet/ocellaris/src/master/demos/>`_. Geometry files
+<https://bitbucket.org/ocellarisproject/ocellaris/src/master/demos/>`_. Geometry files
 (meshes) can be found in the ``datafiles`` subdirectory of the linked ``demos``
 directory for the demos that use more complicated geometries.
 
@@ -13,7 +13,7 @@ some of the demos take quite some time to run, the demos are not run all the
 way through. For this reason it may be that a change to Ocellaris can cause a
 problem for one of the demos without anyone noticing. If you test a demo that
 does not seem to work properly then please report an issue on the `Ocellaris
-bug tracker <https://bitbucket.org/trlandet/ocellaris/issues>`_.
+bug tracker <https://bitbucket.org/ocellarisproject/ocellaris/issues>`_.
 
 
 Selected demos

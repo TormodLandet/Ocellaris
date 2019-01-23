@@ -23,7 +23,7 @@ From: trlandet/fenics-dev:py3_CI
     # Install Ocellaris
     mkdir /source
     cd /source
-    git clone https://bitbucket.org/trlandet/ocellaris.git
+    git clone https://bitbucket.org/ocellarisproject/ocellaris.git
     cd ocellaris
     pip3 install .
     chown fenics:fenics -R /source

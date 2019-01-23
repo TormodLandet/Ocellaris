@@ -77,14 +77,14 @@ The documentation can be found on the `Ocellaris web page <https://ocellarisproj
 Development
 -----------
 
-Ocellaris is developed in Python and C++ on `Bitbucket <https://bitbucket.org/trlandet/ocellaris>`_
+Ocellaris is developed in Python and C++ on `Bitbucket <https://bitbucket.org/ocellarisproject/ocellaris>`_
 by use of the Git version control system. If you are reading this on github,
 please be aware that you are seeing a mirror that could potentially be months
 out of date. The github mirror is only updated sporadically—to trigger new
 Singularity and Docker Hub container builds. All pull requests and issues
 should go to the Bitbucket repository.
 
-Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/trlandet/ocellaris/tree/master>`_
+Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/ocellarisproject/ocellaris/tree/master>`_
 and the current CI build status is |circleci_status|.
 
 .. |circleci_status| image:: https://circleci.com/bb/ocellarisproject/ocellaris.svg?style=svg
