@@ -24,6 +24,7 @@ clownfish and is written as part of a PhD project at the University of Oslo.
     :align: center
     :alt: Picture of an Ocellaris clownfish in a triangulated style
 
+
 Installation and running
 ------------------------
 
@@ -43,6 +44,7 @@ Ocellaris source code and a description of the Ocellaris input file format and
 the possible input parameters is given in the `user guide`_.
 
 .. _user guide: https://ocellarisproject.bitbucket.io/ocellaris/user_guide/user_guide.html
+
 
 First steps
 ~~~~~~~~~~~
@@ -71,27 +73,32 @@ The documentation can be found on the `Ocellaris web page <https://ocellarisproj
 
 .. TOC_ENDS_HERE
 
+
 Development
 -----------
 
-Ocellaris is developed in Python and C++ on `Bitbucket <https://bitbucket.org/trlandet/ocellaris>`_
+Ocellaris is developed in Python and C++ on `Bitbucket <https://bitbucket.org/ocellarisproject/ocellaris>`_
 by use of the Git version control system. If you are reading this on github,
 please be aware that you are seeing a mirror that could potentially be months
 out of date. The github mirror is only updated sporadically—to trigger new
 Singularity and Docker Hub container builds. All pull requests and issues
 should go to the Bitbucket repository.
 
-Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/trlandet/ocellaris/tree/master>`_
+Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/ocellarisproject/ocellaris/tree/master>`_
 and the current CI build status is |circleci_status|.
 
 .. |circleci_status| image:: https://circleci.com/bb/ocellarisproject/ocellaris.svg?style=svg
     :target: https://circleci.com/bb/ocellarisproject/ocellaris
 
+
 Copyright and license
 ---------------------
 
-Ocellaris is copyright Tormod Landet, 2015-2019. Ocellaris is licensed under
-the Apache 2.0 license, a permissive free software license compatible with
-version 3 of the GNU GPL. See `License of Ocellaris`_ for the details.
+Ocellaris is copyright Tormod Landet, 2014-2019, and the `Ocellaris project
+contributors`_ from 2019
+and onwards. Ocellaris is licensed under the Apache 2.0 license, a permissive
+free software license compatible with version 3 of the GNU GPL. See `License of
+Ocellaris`_ for the details.
 
+.. _`Ocellaris project contributors`:  https://ocellarisproject.bitbucket.io/ocellaris/contributors.html
 .. _`License of Ocellaris`:  https://ocellarisproject.bitbucket.io/ocellaris/license.html

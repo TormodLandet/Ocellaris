@@ -21,4 +21,4 @@ can run::
 The containers do not include Ocellaris, but contains all dependencies. To
 install the latest version of Ocellaris inside the container you can run::
 
-    pip3 install git+https://bitbucket.org/trlandet/ocellaris.git --user
+    pip3 install git+https://bitbucket.org/ocellarisproject/ocellaris.git --user

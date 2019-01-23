@@ -49,11 +49,11 @@ Some of the more obscure parameters, which you do not want to use unless you
 are deep into the code of Ocellaris itself, are not included in the
 documentation on purpose. These parameters can still be found, either in the
 source code itself (of course) or in the `complete list of input parameters
-<https://bitbucket.org/trlandet/ocellaris/src/master/ocellaris/input_file_schema.yml>`_
+<https://bitbucket.org/ocellarisproject/ocellaris/src/master/ocellaris/input_file_schema.yml>`_
 that is used to warn the user about misspellings in the input file. If there is
 a parameter that you would like to see documented, or if something is unclear
 in the documentation of a parameter, then please `file an issue on the bug
-tracker <https://bitbucket.org/trlandet/ocellaris/issues>`_.
+tracker <https://bitbucket.org/ocellarisproject/ocellaris/issues>`_.
 
 
 Testing the new release

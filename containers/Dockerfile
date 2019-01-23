@@ -2,7 +2,7 @@
 # installed EXCEPT Ocellaris itself. Ocellaris can quickly be installed
 # from the latest master branch branch by running
 #
-#   pip3 install --user git+https://bitbucket.org/trlandet/ocellaris.git
+#   pip3 install --user git+https://bitbucket.org/ocellarisproject/ocellaris.git
 #
 # See '.circleci/config.yml' for details on how Ocellaris is tested using
 # this Docker image

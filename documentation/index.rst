@@ -17,6 +17,7 @@
    user_guide/user_guide
    programmers_guide/programmers_guide
    license
+   contributors
    zreferences
 
 .. not used currently ...

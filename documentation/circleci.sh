@@ -11,6 +11,7 @@ fi
 
 
 # Script setup
+# Notice that it is the "ocellarisbot" user that is used for updating the web page
 REPO=ocellarisbot@bitbucket.org:ocellarisproject/ocellarisproject.bitbucket.io.git
 CMESSAGE="CircleCI Ocellaris doc update by Ocellarisbot"
 cd documentation/
