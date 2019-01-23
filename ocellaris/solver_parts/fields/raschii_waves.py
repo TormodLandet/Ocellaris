@@ -13,7 +13,7 @@ class RaschiiWaveField(BaseWaveField):
         """
         Nonlinear regular waves using the Raschii Python library
         """
-        super(RaschiiWaveField, self).__init__(simulation, field_inp)
+        super().__init__(simulation, field_inp)
         self.read_input(field_inp)
         simulation.log.info('Creating nonlinear regular wave field %r' % self.name)
         simulation.log.info('    Wave depth below: %r' % self.h)

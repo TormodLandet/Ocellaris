@@ -14,7 +14,7 @@ DEFAULT_REPORT = 'Cof_max'
 
 class OcellarisReportsPanel(wx.Panel):
     def __init__(self, parent, inspector_state):
-        super(OcellarisReportsPanel, self).__init__(parent)
+        super().__init__(parent)
         self.istate = inspector_state
         self.need_update = True
         self.layout_widgets()

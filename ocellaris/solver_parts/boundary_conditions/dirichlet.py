@@ -15,7 +15,7 @@ class OcellarisDirichletBC(dolfin.DirichletBC):
         """
         A simple storage class for Dirichlet boundary conditions
         """
-        super(OcellarisDirichletBC, self).__init__(
+        super().__init__(
             V, value, subdomain_marker, subdomain_id, method='geometric'
         )
         self.simulation = simulation

@@ -5,7 +5,7 @@ from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 
 class OcellarisFilesPanel(wx.Panel):
     def __init__(self, parent, inspector_state):
-        super(OcellarisFilesPanel, self).__init__(parent)
+        super().__init__(parent)
         self.istate = inspector_state
         self.layout_widgets()
         self.reload_soon()

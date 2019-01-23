@@ -6,7 +6,7 @@ import wx
 
 class OcellarisClusterConnectorDialog(wx.Dialog):
     def __init__(self, parent, inspector_state, file_opener):
-        super(OcellarisClusterConnectorDialog, self).__init__(
+        super().__init__(
             parent,
             title='Cluster Connector',
             size=(550, 550),

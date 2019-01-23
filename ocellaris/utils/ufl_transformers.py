@@ -109,7 +109,7 @@ class FormPruner(MultiFunction):
         return map_expr_dag(self, expr)
 
     def __init__(self, index_test, index_trial=None):
-        super(FormPruner, self).__init__()
+        super().__init__()
         self._index_v = index_test
         self._index_u = index_trial
         self._cache = {}
