@@ -13,14 +13,14 @@ linear systems.
 
 .. contents:: Quick start
 
-.. _Ocellaris Blog: https://trlandet.bitbucket.io/ocellaris/blog/
+.. _Ocellaris Blog: https://ocellarisproject.bitbucket.io/ocellaris/blog/
 .. _FEniCS: https://fenicsproject.org/
 .. _PETSc: https://www.mcs.anl.gov/petsc/
 
 Ocellaris is named after the `Amphiprion Ocellaris <https://en.wikipedia.org/wiki/Ocellaris_clownfish>`_
 clownfish and is written as part of a PhD project at the University of Oslo.
 
-.. figure:: https://trlandet.bitbucket.io/figures/ocellaris_outlined_500.png
+.. figure:: https://ocellarisproject.bitbucket.io/figures/ocellaris_outlined_500.png
     :align: center
     :alt: Picture of an Ocellaris clownfish in a triangulated style
 
@@ -42,7 +42,7 @@ Example input files can be found in the ``demos/`` sub-directory of the
 Ocellaris source code and a description of the Ocellaris input file format and
 the possible input parameters is given in the `user guide`_.
 
-.. _user guide: https://trlandet.bitbucket.io/ocellaris/user_guide/user_guide.html
+.. _user guide: https://ocellarisproject.bitbucket.io/ocellaris/user_guide/user_guide.html
 
 First steps
 ~~~~~~~~~~~
@@ -67,7 +67,7 @@ Documentation
 
 .. TOC_STARTS_HERE  - in the Sphinx documentation a table of contents will be inserted here 
 
-The documentation can be found on the `Ocellaris web page <https://trlandet.bitbucket.io/ocellaris/index.html#documentation>`_.
+The documentation can be found on the `Ocellaris web page <https://ocellarisproject.bitbucket.io/ocellaris/index.html#documentation>`_.
 
 .. TOC_ENDS_HERE
 
@@ -94,4 +94,4 @@ Ocellaris is copyright Tormod Landet, 2015-2019. Ocellaris is licensed under
 the Apache 2.0 license, a permissive free software license compatible with
 version 3 of the GNU GPL. See `License of Ocellaris`_ for the details.
 
-.. _`License of Ocellaris`:  https://trlandet.bitbucket.io/ocellaris/license.html
+.. _`License of Ocellaris`:  https://ocellarisproject.bitbucket.io/ocellaris/license.html

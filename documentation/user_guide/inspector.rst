@@ -27,19 +27,19 @@ can start the Ocellaris Inspector by running::
 
     python3 -m ocellaris_post.inspector myfile.log otherfile_endpoint_001.h5
 
-This should show plots comparing the selected simulations. 
+This should show plots comparing the selected simulations.
 
 WxPython is not installed in Docker and Singularity containers for size
 reasons, but the whole ``ocellaris_post`` Python package is written to not
 depend on FEniCS or Ocellaris, so you can quite easily run it in a more
 "standard" Python environment. The Ocellaris inspector currently supports
 both Python 2 and Python 3 so you only need to install wxPython, numpy, h5py,
-PyYAML and matplotlib in your favourite Python install (or venv) to use the 
+PyYAML and matplotlib in your favourite Python install (or venv) to use the
 Ocellaris Inspector. Most of these are probably installed allready in a
 standard scientific Python installation.
 
 
-.. figure:: https://trlandet.bitbucket.io/figures/inspector_courant.png
+.. figure:: https://ocellarisproject.bitbucket.io/figures/inspector_courant.png
     :align: center
     :alt: The Ocellaris Inspector GUI - plotting Co = Courant number
     
@@ -59,11 +59,11 @@ the host name and mount directories for the HPC cluster login node. You **must**
 have enabled password-less SSH login to the head node, otherwise the cluster
 connector will not work
 
-.. figure:: https://trlandet.bitbucket.io/figures/cluster_connector.png
+.. figure:: https://ocellarisproject.bitbucket.io/figures/cluster_connector.png
     :align: center
-    :alt: The cluster connection GUI 
-    
-    The cluster connection GUI 
+    :alt: The cluster connection GUI
+
+    The cluster connection GUI
 
 You must also have mounted the cluster home directory somewhere on the local
 machine; via ``sshfs`` or other means. When the connection is established you

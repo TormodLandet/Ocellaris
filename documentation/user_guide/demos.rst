@@ -28,7 +28,7 @@ geometry file ``demos/datafiles/ocellaris.geo`` defines "physical regions" with
 numeric IDs that can be referenced when defining boundary conditions in the
 input file ``flow_around_ocellaris.inp``.
 
-.. figure:: https://trlandet.bitbucket.io/figures/flow_around_ocellaris.png
+.. figure:: https://ocellarisproject.bitbucket.io/figures/flow_around_ocellaris.png
     :align: center
     :alt: Streamlines of the flow around a 2D clownfish
 
@@ -48,8 +48,8 @@ benchmark.
 
     <div class="figure align-center">
         <video controls loop autoplay>
-            <source src="https://trlandet.bitbucket.io/figures/dambreak2d.mp4" type="video/mp4">
-            <source src="https://trlandet.bitbucket.io/figures/dambreak2d.ogg" type="video/ogg">
+            <source src="https://ocellarisproject.bitbucket.io/figures/dambreak2d.mp4" type="video/mp4">
+            <source src="https://ocellarisproject.bitbucket.io/figures/dambreak2d.ogg" type="video/ogg">
             Your browser does not support the video tag.
         </video>
         <p class="caption">
@@ -59,8 +59,10 @@ benchmark.
         </p>
     </div>
 
-The 2D simulaton takes approximately 30 minutes to run on 1 CPU on a 2018 model
-laptop.
+The 2D simulation takes approximately 30 minutes to run on 1 CPU on a 2018
+model laptop. Due to the course mesh it does not help using more CPUs. See
+also :doc:`this blog entry <../blog/2018/11_green_water_movie>` for a 3D dam
+breaking simulation that is a bit more impressive.
 
 
 Taylor-Green
@@ -71,7 +73,7 @@ want to run a convergence test then you should instead run the
 ``cases/convergence-taylor-green/convergence.py`` script which automatically
 runs through a list of mesh resolutions and reports the convergence rates.
 
-.. figure:: https://trlandet.bitbucket.io/figures/taylor-green.png
+.. figure:: https://ocellarisproject.bitbucket.io/figures/taylor-green.png
     :align: center
     :alt: Taylor-Green velocity field
 
