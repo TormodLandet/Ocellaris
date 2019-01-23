@@ -7,7 +7,7 @@ from .dialog_cluster_connector import OcellarisClusterConnectorDialog
 
 class OcellarisSetupPanel(ScrolledPanel):
     def __init__(self, parent, inspector_state):
-        super(OcellarisSetupPanel, self).__init__(parent)
+        super().__init__(parent)
         self.istate = inspector_state
         self.layout_widgets()
         self.SetupScrolling(scroll_x=False, scroll_y=True)

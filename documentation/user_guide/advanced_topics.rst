@@ -94,8 +94,10 @@ and then the input file can reference the custom BC type later on:
         version: 1.0
 
     user_code:
+        python_path:
+        -   /optional.path.to.my.modules/
         modules:
-        -   custom_bc_module
+        -   path.to.custom_bc_module
 
     # ...
 
@@ -169,8 +171,10 @@ following example shows building and enabling a very simple field:
         version: 1.0
 
     user_code:
+        python_path:
+        -   /optional.path.to.my.modules/
         modules:
-        -   custom_field
+        -   path.to.custom_field
 
     fields:
     -   name: myfield
@@ -241,14 +245,19 @@ handles partial filling of cells in VOF simulations among other things.
             """
             A custom wave field
             """
-            super(RaschiiWaveField, self).__init__(simulation, field_inp)
+            super().__init__(simulation, field_inp)
             simulation.log.info('Creating a custom wave field %r' % self.name)
 
             # Read input
+            # Optional: wave_height, h, and still_water_pos
+            # (can be provided if needed, for example, to adjust z-coordinate)
             wave_height = field_inp.get_value('wave_height', required_type='float')
             h = field_inp.get_value('depth', required_type='float')
             still_water_pos = field_inp.get_value('still_water_position', required_type='float')
 
+            # self.stationary boolean must be provided to indicate if c++ code has to be updated every time step.
+            # See BaseWaveField for details.
+            self.stationary = True
             # Project the colour function to DG0 (set degree to -1 to prevent this)
             # The special projection in BaseWaveField handles partial filling of cells
             # by use of quadrature elements in the C++ expression and a DG0 projection

@@ -13,7 +13,7 @@ from . import pub, TOPIC_METADATA, TOPIC_RELOAD
 
 class OcellarisSurfacesPanel(wx.Panel):
     def __init__(self, parent, inspector_state):
-        super(OcellarisSurfacesPanel, self).__init__(parent)
+        super().__init__(parent)
         self.istate = inspector_state
         self.layout_widgets()
         self.reset_surfaces()

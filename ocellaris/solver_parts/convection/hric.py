@@ -34,7 +34,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
           Vol. 47, No 3, pp. 279-290, June 2010
           Il-Ryong Park, Kwang-Soo Kim, Jin Kim and Suak-Ho Van
         """
-        super(ConvectionSchemeHric2D, self).__init__(simulation, func_name)
+        super().__init__(simulation, func_name)
         self.variant = simulation.input.get_value(
             'convection/%s/HRIC_version' % func_name, 'HRIC', 'string'
         )

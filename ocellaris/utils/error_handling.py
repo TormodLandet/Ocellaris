@@ -6,7 +6,7 @@ and controlled shutdown of Ocellaris
 
 class OcellarisError(Exception):
     def __init__(self, header, description):
-        super(OcellarisError, self).__init__('%s: %s' % (header, description))
+        super().__init__('%s: %s' % (header, description))
         self.header = header
         self.description = description
 

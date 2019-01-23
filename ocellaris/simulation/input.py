@@ -33,9 +33,9 @@ class Input(collections.OrderedDict):
         Holds the input values provided by the user
         """
         if values:
-            super(Input, self).__init__(values.items())
+            super().__init__(values.items())
         else:
-            super(Input, self).__init__()
+            super().__init__()
 
         self.simulation = simulation
         self.basepath = basepath

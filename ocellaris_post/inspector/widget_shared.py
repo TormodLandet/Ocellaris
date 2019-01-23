@@ -7,7 +7,7 @@ from numpy import *
 
 class PlotLimSelectors(wx.Panel):
     def __init__(self, parent, callback):
-        super(PlotLimSelectors, self).__init__(parent)
+        super().__init__(parent)
         self.callback = callback
         self.layout_widgets()
         self.timer = None
@@ -64,7 +64,7 @@ class PlotLimSelectors(wx.Panel):
 
 class PlotCustomLine(wx.Panel):
     def __init__(self, parent, callback):
-        super(PlotCustomLine, self).__init__(parent)
+        super().__init__(parent)
         self.callback = callback
         self.layout_widgets()
         self.timer = None

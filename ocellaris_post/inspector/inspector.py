@@ -13,7 +13,7 @@ from .panel_surfaces import OcellarisSurfacesPanel
 
 class OcellarisInspector(wx.Frame):
     def __init__(self, inspector_state):
-        super(OcellarisInspector, self).__init__(None, title='Ocellaris Report Inspector')
+        super().__init__(None, title='Ocellaris Report Inspector')
         self.istate = inspector_state
 
         # Keyboard shortcuts
@@ -76,7 +76,7 @@ class InspectorDropTarget(wx.FileDropTarget):
         """
         Support drag and drop of files to be visualised
         """
-        super(InspectorDropTarget, self).__init__()
+        super().__init__()
         self.opener = opener
 
     def OnDropFiles(self, x, y, file_names):

@@ -30,7 +30,7 @@ DEFAULT_CONTROL = 'Vel'
 
 class OcellarisStairsPanel(wx.Panel):
     def __init__(self, parent, inspector_state):
-        super(OcellarisStairsPanel, self).__init__(parent)
+        super().__init__(parent)
         self.istate = inspector_state
         self.need_update = True
         self.layout_widgets()

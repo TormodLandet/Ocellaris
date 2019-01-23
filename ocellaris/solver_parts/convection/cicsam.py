@@ -9,7 +9,7 @@ from . import ConvectionScheme, register_convection_scheme
 
 
 @register_convection_scheme('CICSAM')
-class ConvectionSchemeHric2D(ConvectionScheme):
+class ConvectionSchemeHric2D(ConvectionScheme): # is this the right name, or a copy/paste error?
     description = 'Compressive Interface Capturing Scheme for Arbitrary Meshes'
     need_alpha_gradient = True
 
@@ -22,7 +22,7 @@ class ConvectionSchemeHric2D(ConvectionScheme):
           Imperial College, London, 1997
           Onno Ubbink
         """
-        super(ConvectionSchemeHric2D, self).__init__(simulation, func_name)
+        super().__init__(simulation, func_name)
 
     def update(self, dt, velocity):
         """

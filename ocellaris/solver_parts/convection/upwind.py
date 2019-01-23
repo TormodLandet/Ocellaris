@@ -13,7 +13,7 @@ class ConvectionSchemeUpwind(ConvectionScheme):
         """
         Implementation of the upwind convection scheme
         """
-        super(ConvectionSchemeUpwind, self).__init__(simulation, func_name)
+        super().__init__(simulation, func_name)
 
         # Set downwind factor to 0.0
         self.blending_function.vector().zero()

@@ -143,7 +143,7 @@ class RegionSelector(dolfin.SubDomain):
         to apply boundary conditions. The code that runs in the inside()
         and map() methods is provided by the user on the input file
         """
-        super(RegionSelector, self).__init__()
+        super().__init__()
         self.simulation = simulation
 
     def set_inside_code(self, code_string, region_name):
