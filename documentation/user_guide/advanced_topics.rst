@@ -94,8 +94,10 @@ and then the input file can reference the custom BC type later on:
         version: 1.0
 
     user_code:
+        python_path:
+        -   /optional.path.to.my.modules/
         modules:
-        -   python.path.to.custom_bc_module
+        -  path.to.custom_bc_module
 
     # ...
 
@@ -169,8 +171,10 @@ following example shows building and enabling a very simple field:
         version: 1.0
 
     user_code:
+        python_path:
+        -   /optional.path.to.my.modules/
         modules:
-        -   python.path.to.custom_field
+        -  path.to.custom_field
 
     fields:
     -   name: myfield
