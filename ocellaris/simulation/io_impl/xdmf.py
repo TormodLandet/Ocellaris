@@ -70,6 +70,7 @@ class XDMFFileIO:
         self._vel_func, self._vel_func_assigner = create_vec_func(sim.data['Vu'])
         self._vel_func.rename('u', 'Velocity')
         if sim.mesh_morpher.active:
+            self.xdmf_file.parameters['rewrite_function_mesh'] = True
             self._mesh_vel_func, self._mesh_vel_func_assigner = create_vec_func(sim.data['Vmesh'])
             self._mesh_vel_func.rename('u_mesh', 'Velocity of the mesh')
 
