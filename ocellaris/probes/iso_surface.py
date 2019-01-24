@@ -20,6 +20,7 @@ class IsoSurface(Probe):
         assert (
             self.simulation.ndim == 2
         ), 'IsoSurface only implemented in 2D (contour line)'
+        assert self.simulation.mesh_morpher.active == False, 'IsoSurface does not support ALE yet'
 
         # Read input
         self.name = inp.get_value('name', required_type='string')
