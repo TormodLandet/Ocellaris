@@ -3,13 +3,6 @@
 # Runs as a part of the automated testing on CircleCI
 set -euxo pipefail
 
-# Only update documentation based on the master branch
-if [[ ! "$(git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
-  echo "Not on master branch, skipping documentation build"
-  exit 0
-fi
-
-
 # Script setup
 # Notice that it is the "ocellarisbot" user that is used for updating the web page
 REPO=ocellarisbot@bitbucket.org:ocellarisproject/ocellarisproject.bitbucket.io.git
@@ -26,6 +19,11 @@ pip3 install git+https://github.com/TormodLandet/youtube.git@tormod/allowfullscr
 export PATH=~/.local/bin:$PATH
 make html
 
+# Only update the web page when on the master branch
+if [[ ! "$(git rev-parse --abbrev-ref HEAD)" == "master" ]]; then
+  echo "Not on master branch, skipping documentation upload"
+  exit 0
+fi
 
 # Configure git
 # Git commit access given to CircleCI following this procedure
