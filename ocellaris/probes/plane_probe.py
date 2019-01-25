@@ -19,7 +19,7 @@ class PlaneProbe(Probe):
         self.degree = None
 
         assert self.simulation.ndim == 3, 'PlaneProbe only implemented in 3D'
-        assert self.simulation.mesh_morpher.active == False, 'PlaneProbe does not support ALE yet'
+        assert not self.simulation.mesh_morpher.active, 'PlaneProbe does not support ALE yet'
 
         # Read input
         inp = probe_input
