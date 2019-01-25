@@ -1,6 +1,6 @@
 {% extends "!layout.html" %}
 {% block extrahead %}
-<link rel="alternate" type="application/rss+xml" href="{{pathto('index.rss', 1)}}" />
+<link rel="alternate" type="application/rss+xml" href="{{pathto('index.rss', 1)}}">
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
@@ -14,6 +14,15 @@
 <meta name="msapplication-TileColor" content="#2b5797">
 <meta name="msapplication-config" content="{{ pathto('_static/favicon/browserconfig.xml', 1) }}">
 <meta name="theme-color" content="#ffffff">
+
+<!-- Open Graph protocol, http://ogp.me/ -->
+<meta property="og:title" content="{{ title|striptags|e }}">
+<meta property="og:description" content="Ocellaris is a DG FEM multi-phase flow solver">
+<meta property="og:image" content="https://ocellarisproject.bitbucket.io/figures/ocellaris_opengraph_1200x630.png">
+<meta property="og:image:alt" content="The Ocellaris project logo, an Amphiprion Ocellaris clownfish">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 
 {{ super() }}
 {% endblock %}
