@@ -4,6 +4,7 @@ syntax: glob
 !/.flake8
 *.pyc
 *.png
+*.pdf
 *.avi
 *.ogv
 *.out
