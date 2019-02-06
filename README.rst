@@ -82,7 +82,8 @@ by use of the Git version control system. If you are reading this on github,
 please be aware that you are seeing a mirror that could potentially be months
 out of date. The github mirror is only updated sporadically—to trigger new
 Singularity and Docker Hub container builds. All pull requests and issues
-should go to the Bitbucket repository.
+should go to the Bitbucket repository. If you want to contribute to Ocellaris,
+please read `the guide to contributing <https://ocellarisproject.bitbucket.io/ocellaris/programmers_guide/guidelines.html>`_.
 
 Ocellaris is automatically tested on `CircleCI <https://circleci.com/bb/ocellarisproject/ocellaris/tree/master>`_
 and the current CI build status is |circleci_status|.
