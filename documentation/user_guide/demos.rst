@@ -16,12 +16,8 @@ does not seem to work properly then please report an issue on the `Ocellaris
 bug tracker <https://bitbucket.org/ocellarisproject/ocellaris/issues>`_.
 
 
-Selected demos
---------------
-
-
 Flow around a clownfish
-.......................
+-----------------------
 
 This demo shows how to create a simple Ocellaris 2D simulation. The gmsh
 geometry file ``demos/datafiles/ocellaris.geo`` defines "physical regions" with
@@ -37,9 +33,12 @@ input file ``flow_around_ocellaris.inp``.
     velocity magnitude, and the white lines show the stream lines of the
     converged steady state solution.
 
+The demo input file can be found in the Ocellaris source code repository:
+`flow_around_ocellaris.inp <https://bitbucket.org/ocellarisproject/ocellaris/src/master/demos/flow_around_ocellaris.inp>`_.
+
 
 Dam break
-.........
+---------
 
 There are both 2D and 3D demos of the classic dam breaking two-phase flow
 benchmark.
@@ -64,9 +63,12 @@ model laptop. Due to the course mesh it does not help using more CPUs. See
 also :doc:`this blog entry <../blog/2018/11_green_water_movie>` for a 3D dam
 breaking simulation that is a bit more impressive.
 
+The demo input file can be found in the Ocellaris source code repository:
+`dam_break_2D.inp <https://bitbucket.org/ocellarisproject/ocellaris/src/master/demos/dam_break/dam_break_2D.inp>`_.
+
 
 Taylor-Green
-............
+------------
 
 This is the standard Taylor-Green single phase 2D analytical solution. If you
 want to run a convergence test then you should instead run the
@@ -82,3 +84,6 @@ runs through a list of mesh resolutions and reports the convergence rates.
 The simulation should only take a couple of seconds if the UFL has been
 compiled to C++. On the first run this will happen, so this may take a bit
 longer, but less than a minute.
+
+The demo input file can be found in the Ocellaris source code repository:
+`taylor_green.inp <https://bitbucket.org/ocellarisproject/ocellaris/src/master/demos/taylor-green.inp>`_.

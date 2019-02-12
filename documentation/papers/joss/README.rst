@@ -1,3 +1,5 @@
+:orphan: Avoid Sphinx warning about this file ...
+
 JOSS paper
 ----------
 
