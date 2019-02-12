@@ -12,7 +12,9 @@ This documentation shows the API of the most important classes and gives
 information about scripting Ocellaris from outside. You will also find an
 introduction which is meant to help you understand the main control flow of the
 Ocellaris code base which can be useful if you want to make changes to
-Ocellaris.
+Ocellaris. The development guidelines helps you get started contributing to
+the source code and contains pointers for appropriate git usage, unit testing
+and more.
 
 .. toctree::
 

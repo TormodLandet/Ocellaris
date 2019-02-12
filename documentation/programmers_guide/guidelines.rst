@@ -6,7 +6,7 @@ Development guidelines
 If you want to contribute code to Ocellaris then, first of all, Thank You! 🙌
 Please break your changes into reasonably sized pull requests and follow the
 rather standard and simple guidelines below. If you are afraid of doing
-something wrong then please just try! As long as you have made an effort to
+something wrong, don't let that stop you! As long as you have made an effort to
 follow the expected steps then you will get feedback and we will get any
 problems fixed. There is no guarantee that your pull request will be merged,
 but not submitting 1000 changed files with ugly code and no tests will help
@@ -17,7 +17,8 @@ your case significantly 😉
 
 Please keep in mind that the person/persons that can review your pull request
 may not get to it right away. In the worst case scenario they are on a month
-long tropical Holiday away from email (best case scenario! ☀️🌴🍹).
+long tropical Holiday away from email (best case scenario! ☀️🌴🍹). Do not get
+discouraged if we do not get to reviewing your changes right away!
 
 
 Git workflow

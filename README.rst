@@ -5,7 +5,8 @@ Ocellaris is a mass conserving DG FEM solver for sharp interface multiphase
 free surface flows. Ocellaris can simulate water entry and exit of objects in
 ocean waves with accurate capturing of the force on the object and the
 behaviour of the free surface. Some examples of what Ocellaris can do,
-including videos of the results, are shown in the `Ocellaris Blog`_.
+including videos of the results, are shown in the `Ocellaris Blog`_ on
+`www.ocellaris.org <http://www.ocellaris.org/>`_.
 
 Ocellaris is implemented in Python and C++ with FEniCS_ as the backend for the
 mesh and finite element assembly. PETSc_ is used for solving the resulting
@@ -29,7 +30,7 @@ Installation and running
 ------------------------
 
 Ocellaris requires a full installation of FEniCS_ with the PETSc linear algebra
-backend. You can install the dependecies yourself (you need at least dolfin,
+backend. You can install the dependencies yourself (you need at least dolfin,
 h5py, matplotlib and PyYAML), but the easiest way by far is to use a
 preconfigured Singularity or Docker container. More information on these and
 installation in general can be found in the `user guide`_.
@@ -67,11 +68,8 @@ Please feel free to test Ocellaris, but please keep in mind:
 Documentation
 -------------
 
-.. TOC_STARTS_HERE  - in the Sphinx documentation a table of contents will be inserted here 
+The documentation can be found on the `Ocellaris web page <https://www.ocellaris.org/index.html#sec-documentation-and-user-guide>`_.
 
-The documentation can be found on the `Ocellaris web page <https://www.ocellaris.org/index.html#documentation>`_.
-
-.. TOC_ENDS_HERE
 
 
 Development
