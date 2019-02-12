@@ -16,6 +16,7 @@ Ocellaris news
     :description: The Ocellaris project blog. Project news, releases and more
     :link: https://www.ocellaris.org/blog/
 
+    2019/02_new_web_and_repo_address
     2019/01_release_2019.0.0
     2019/01_numerical_wave_tank_video
     2018/11_green_water_movie
