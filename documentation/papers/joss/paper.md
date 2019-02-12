@@ -26,6 +26,6 @@ Low order finite volume method are currently the most used methods for Navier-St
 
 Ocellaris is an exactly incompressible Navier-Stokes solver for free surface flows with a DG FEM based numerical method that supports higher order finite elements and contains specially designed slope limiting stabilisation filters to be able to handle large density transitions [@OcellarisDoc]. Ocellaris is implemented in Python and C++ with FEniCS [@FEniCSBook; @FEniCS1.5] as the backend for the mesh and finite element assembly. PETSc is used for solving the resulting linear systems [@PETSc].
 
-![Cylinder in waves. Rendered in Blender after using Paraview to extract the free surface from an Ocellaris simulation.](https://ocellarisproject.bitbucket.io/figures/cylinder_in_waves.jpg)
+![Cylinder in waves. Rendered in Blender after using Paraview to extract the free surface from an Ocellaris simulation.](https://www.ocellaris.org/figures/cylinder_in_waves.jpg)
 
 # References

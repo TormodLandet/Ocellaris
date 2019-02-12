@@ -28,7 +28,7 @@ geometry file ``demos/datafiles/ocellaris.geo`` defines "physical regions" with
 numeric IDs that can be referenced when defining boundary conditions in the
 input file ``flow_around_ocellaris.inp``.
 
-.. figure:: https://ocellarisproject.bitbucket.io/figures/flow_around_ocellaris.png
+.. figure:: https://www.ocellaris.org/figures/flow_around_ocellaris.png
     :align: center
     :alt: Streamlines of the flow around a 2D clownfish
 
@@ -48,8 +48,8 @@ benchmark.
 
     <div class="figure align-center">
         <video controls loop autoplay>
-            <source src="https://ocellarisproject.bitbucket.io/figures/dambreak2d.mp4" type="video/mp4">
-            <source src="https://ocellarisproject.bitbucket.io/figures/dambreak2d.ogg" type="video/ogg">
+            <source src="https://www.ocellaris.org/figures/dambreak2d.mp4" type="video/mp4">
+            <source src="https://www.ocellaris.org/figures/dambreak2d.ogg" type="video/ogg">
             Your browser does not support the video tag.
         </video>
         <p class="caption">
@@ -73,7 +73,7 @@ want to run a convergence test then you should instead run the
 ``cases/convergence-taylor-green/convergence.py`` script which automatically
 runs through a list of mesh resolutions and reports the convergence rates.
 
-.. figure:: https://ocellarisproject.bitbucket.io/figures/taylor-green.png
+.. figure:: https://www.ocellaris.org/figures/taylor-green.png
     :align: center
     :alt: Taylor-Green velocity field
 

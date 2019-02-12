@@ -39,7 +39,7 @@ Ocellaris Inspector. Most of these are probably installed allready in a
 standard scientific Python installation.
 
 
-.. figure:: https://ocellarisproject.bitbucket.io/figures/inspector_courant.png
+.. figure:: https://www.ocellaris.org/figures/inspector_courant.png
     :align: center
     :alt: The Ocellaris Inspector GUI - plotting Co = Courant number
     
@@ -59,7 +59,7 @@ the host name and mount directories for the HPC cluster login node. You **must**
 have enabled password-less SSH login to the head node, otherwise the cluster
 connector will not work
 
-.. figure:: https://ocellarisproject.bitbucket.io/figures/cluster_connector.png
+.. figure:: https://www.ocellaris.org/figures/cluster_connector.png
     :align: center
     :alt: The cluster connection GUI
 

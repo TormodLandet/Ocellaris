@@ -79,6 +79,7 @@ master_doc = 'index'
 # General information about the project.
 project = u'Ocellaris'
 copyright = u'2015-2019, Tormod Landet'
+html_baseurl = 'https://www.ocellaris.org/'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

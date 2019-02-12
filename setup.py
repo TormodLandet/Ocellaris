@@ -80,7 +80,7 @@ setup(
     description='A discontinuous Galerkin FEM solver for multiphase free surface flows',
     long_description=long_description,
     # The project's main homepage.
-    url='https://ocellarisproject.bitbucket.io/ocellaris/',
+    url='https://www.ocellaris.org/',
     # Author details
     author='Tormod Landet and the Ocellaris project contributors',
     author_email='tormod@landet.net',
