@@ -62,6 +62,7 @@ extensions = [
     'sphinxcontrib.newsfeed',
     'sphinxcontrib.youtube',
     'sphinxcontrib.bibtex',
+    'sphinx_sitemap',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
