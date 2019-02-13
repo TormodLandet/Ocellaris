@@ -9,6 +9,10 @@ To build the pdf you must have ``pandoc`` and ``pandoc-citeproc`` installed and 
 
     pandoc --filter pandoc-citeproc paper.md -o paper.pdf
 
+You can also use a preconfigured Docker container that will use the same template as the Open Journals, see https://github.com/openbases/builder-pdf::
+
+    docker run -v $PWD:/data openbases/openbases-pdf pdf
+
 .. _rMarkdown: https://rmarkdown.rstudio.com/
 
 Tormod Landet, February 2019
