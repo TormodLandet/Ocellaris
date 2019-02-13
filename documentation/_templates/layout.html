@@ -1,4 +1,17 @@
 {% extends "!layout.html" %}
+
+{# Make sure the metatags variable is present, also if the meta directive has not been used #}
+{% if metatags is not defined %}
+{% set metatags = '' %}
+{% endif %}
+
+{# Use the meta RST directive description if defined, otherwise use the default description #}
+{% set page_description = get_meta_tag_content('description', metatags) %}
+{% if not page_description %}
+{% set page_description = default_description %}
+{% set metatags = metatags + '<meta name="description" content="%s">' % page_description %}
+{% endif %}
+
 {% block extrahead %}
 <link rel="alternate" type="application/rss+xml" href="{{pathto('index.rss', 1)}}">
 
@@ -17,7 +30,7 @@
 
 <!-- Open Graph protocol, http://ogp.me/ -->
 <meta property="og:title" content="{{ title|striptags|e }}">
-<meta property="og:description" content="Ocellaris is a DG FEM multi-phase flow solver">
+<meta property="og:description" content="{{ page_description }}">
 <meta property="og:image" content="https://www.ocellaris.org/figures/ocellaris_opengraph_1200x630.png">
 <meta property="og:image:alt" content="The Ocellaris project logo, an Amphiprion Ocellaris clownfish">
 <meta property="og:image:type" content="image/png">

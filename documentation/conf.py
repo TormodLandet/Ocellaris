@@ -81,6 +81,12 @@ master_doc = 'index'
 project = u'Ocellaris'
 copyright = u'2015-2019, Tormod Landet'
 html_baseurl = 'https://www.ocellaris.org/'
+default_description = ' '.join(
+    """
+    The Ocellaris user guide, documentation and news blog shows how to use the
+    Ocellaris higher order DG FEM Navier-Stokes solver to simulate free surface
+    flows such as the air/water flow in breaking ocean waves""".split()
+).strip()
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -163,7 +169,7 @@ html_logo = '_static/icon_128.png'
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = None
+# html_favicon = None  # we handle this explicitly in the theme
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -308,6 +314,7 @@ texinfo_documents = [
 autoclass_content = 'both'
 autodoc_default_flags = ['members', 'undoc-members', 'show-inheritance']
 
+###########################################################################
 # Monkey-patch functools.wraps
 # See: https://github.com/sphinx-doc/sphinx/issues/1711
 import functools
@@ -328,3 +335,42 @@ def no_op_wraps(func):
 
 functools.orig_wraps = functools.wraps
 functools.wraps = no_op_wraps
+
+###########################################################################
+# Cludge to work around the fact that docutils gives meta information
+# only as pre-rendered HTML. Arghh ... :-(
+
+
+def get_meta_tag_content(name, html_string):
+    """
+    Given input arguments
+        name='myname',
+        html_string='<... name="myname" ... content="a" ...>',
+    Return the string 'a'.
+    If the requested name is not found, return ''
+    """
+    if not html_string or '<' not in html_string:
+        return ''
+    for tag in html_string.split('<')[1:]:
+        # Check that we can expect to be able to parse this tag
+        if 'name="' not in tag:
+            print('ERROR: metatag without name found: %r' % tag)
+            print('ERROR: html_string=%r' % html_string)
+            continue
+        if 'content="' not in tag:
+            print('ERROR: metatag without content found: %r' % tag)
+            print('ERROR: html_string=%r' % html_string)
+            continue
+
+        # Parse the generated HTML and check for the correct tag name
+        tag_name = tag.split('name="')[1].split('"')[0]
+        tag_content = tag.split('content="')[1].split('"')[0]
+        if tag_name == name:
+            return tag_content
+    return ''
+
+
+html_context = {
+    'default_description': default_description,
+    'get_meta_tag_content': get_meta_tag_content,
+}

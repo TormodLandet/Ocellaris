@@ -8,6 +8,10 @@
 Ocellaris news
 ==============
 
+.. title:: Ocellaris release notes and project news blog
+.. meta::
+    :description: The Ocellaris news blog with information about new releases, interesting simulations that have been performed with Ocellaris and other project news
+
 .. feed created by the sphinxcontrib-newsfeed extension
 
 .. feed::

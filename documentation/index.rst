@@ -1,6 +1,8 @@
 About Ocellaris
 ###############
 
+.. title:: Ocellaris: a mass conserving higher order DG FEM solver for free surface flows
+
 Ocellaris is a mass conserving DG FEM solver for sharp interface multiphase free surface flows. Ocellaris can simulate water entry and exit of objects in ocean waves with accurate capturing of the force on the object and the behaviour of the free surface. Some examples of what Ocellaris can do, including videos of the results, are shown in the `Ocellaris Blog`_. Ocellaris is named after the `Amphiprion Ocellaris <https://en.wikipedia.org/wiki/Ocellaris_clownfish>`_ clownfish and is released under the Apache License, version 2.0.
 
 .. figure:: https://www.ocellaris.org/figures/cylinder_in_waves.jpg
