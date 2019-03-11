@@ -1,3 +1,6 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy
 from ocellaris.utils import ocellaris_error, verify_key
 from ocellaris.solver_parts.slope_limiter import SlopeLimiter

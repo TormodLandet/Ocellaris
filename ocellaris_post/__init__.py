@@ -1,3 +1,6 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 from .results import Results
 from .input import read_yaml_input_file  # noqa
 

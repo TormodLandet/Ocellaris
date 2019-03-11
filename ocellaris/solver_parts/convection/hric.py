@@ -1,3 +1,5 @@
+# Copyright (C) 2014-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 The HRIC upwind/downwind blending sheme
 """

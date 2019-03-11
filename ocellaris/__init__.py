@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 # Check for presence of FEniCS etc
 from .verify_environment import verify_env
 

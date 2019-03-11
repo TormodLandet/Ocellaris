@@ -1,3 +1,5 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 This plot panel is useful when a quasi static simulation contains multiple
 quasi-static periods separated by transitions

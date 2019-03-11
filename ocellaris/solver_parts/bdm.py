@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import dolfin
 from dolfin import FiniteElement, VectorElement, MixedElement, FunctionSpace, VectorFunctionSpace
 from dolfin import FacetNormal, TrialFunction, TestFunction, TestFunctions, Function

@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 from .vof_dg0_surface_locator import FreeSurfaceLocatorImplDG0
 
 

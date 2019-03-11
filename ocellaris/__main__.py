@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import sys
 import os
 from ocellaris import get_detailed_version, Simulation, setup_simulation, run_simulation

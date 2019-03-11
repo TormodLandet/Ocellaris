@@ -1,3 +1,6 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import dolfin
 from ocellaris.utils import OcellarisCppExpression, OcellarisError, verify_field_variable_definition
 from .robin import OcellarisRobinBC

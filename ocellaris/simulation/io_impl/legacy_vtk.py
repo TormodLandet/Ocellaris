@@ -1,3 +1,5 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Write legacy VTK format files (ASCII and BINARY format
 See, e.g., http://www.earthmodels.org/software/vtk-and-paraview/vtk-file-formats

@@ -1,3 +1,5 @@
+# Copyright (C) 2016-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Read a dolfin h5 file (Ocellaris restart file) and extract a 2D slice
 of velocities and pressures which is stored as a numpy array on disk

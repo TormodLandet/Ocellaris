@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import time
 import dolfin
 from ocellaris.utils import timeit, shift_fields, verify_field_variable_definition

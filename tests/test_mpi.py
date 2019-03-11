@@ -1,3 +1,6 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy
 import dolfin
 from ocellaris.utils import gather_lines_on_root, sync_arrays, get_local, set_local

@@ -1,3 +1,5 @@
+# Copyright (C) 2016-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Plot timestep reports from one or more Ocellaris restart files
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Plot the memory usage for an Ocellaris simulation based on log file data. You
 must have specified output/show_memory_usage: yes in the input file to have

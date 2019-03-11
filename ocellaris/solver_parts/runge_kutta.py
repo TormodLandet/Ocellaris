@@ -1,3 +1,6 @@
+# Copyright (C) 2016-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 from dolfin import Function, LocalSolver
 from ocellaris.solver_parts import SlopeLimiter
 

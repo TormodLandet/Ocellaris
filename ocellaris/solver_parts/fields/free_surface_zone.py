@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import dolfin
 from ocellaris.utils import OcellarisError
 from . import register_known_field, KnownField

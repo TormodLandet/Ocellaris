@@ -1,3 +1,6 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy
 from ocellaris.cpp import load_module
 from ocellaris.utils import get_dof_neighbours
