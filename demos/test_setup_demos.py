@@ -55,12 +55,23 @@ def test_setup_demo(demo_inp_file, monkeypatch):
     base_name = os.path.basename(file_pth)
     monkeypatch.chdir(dir_name)
 
+    # Some of the quicker simulations can run a couple of time steps
+    tmax_for_test_run = {
+        'lid_driven_cavity_flow.inp': 0.01,
+        'taylor-green.inp': 0.1,
+        'flow_around_ocellaris.inp': 0.001,
+        'dam_break_2D.inp': 0.001,
+        'dam_break_3D.inp': 0.0002,
+    }
+    tmax = tmax_for_test_run.get(base_name, 0.0)
+
     # Run as command (like the user would from the command line)
     # $ python3 -m ocellaris DEMOFILE --set-inp time/tmax=0
     interpreter = sys.executable
     mainfile = os.path.join(SRC_DIR, 'ocellaris', '__main__.py')
     cmd = [interpreter, mainfile, base_name]
-    cmd.extend(['--set-inp', 'time/tmax=0'])
+    cmd.extend(['--set-inp', 'time/tmax=%r' % tmax])
+    cmd.extend(['--set-inp', 'solver/num_inner_iter=2'])
     subprocess.check_call(cmd)
 
     # Run as script (can lead to inter-demo disturbances with dolfin globals etc)
