@@ -345,10 +345,6 @@ type ProbeLine:
     required startpos: FloatList
     required endpos: FloatList
     required Npoints: Integer
-    optional show_interval: Integer
-    optional target_name: str
-    optional target_abcissa: FloatList
-    optional target_ordinate: FloatList
 type ProbePlane:
     inherit: ProbeBase
     required type: str(equals='PlaneProbe')
