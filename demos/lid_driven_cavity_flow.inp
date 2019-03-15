@@ -37,6 +37,12 @@ mesh:
     type: Rectangle
     Nx: 40
     Ny: 40
+    # Make the mesh cells smaller towards the top and the two sides by fitting
+    # a second/third order polynomial to the desired mesh displacement, see
+    # https://www.ocellaris.org/user_guide/input/mesh.html#moving-the-mesh
+    # for details on how to do that.
+    # Here a move of +/- 0.07 is used at locations x=0.1, x=0.9 and y=0.9 with
+    # zero displacement at the boundaries
     move:
     -   -1.944444444*pow(x[0], 3) + 2.916666667*pow(x[0], 2) + -0.9722222222*x[0] + -7.771561172e-16
     -   -0.7777777778*pow(x[1], 2) + 0.7777777778*x[1] + 0
@@ -70,7 +76,7 @@ output:
     prefix: output/lid_driven_cavity_flow
     dolfin_log_level: warning
     ocellaris_log_level: info
-    xdmf_write_interval: 1
+    xdmf_write_interval: 100
 
 solver:
     type: IPCS-A
