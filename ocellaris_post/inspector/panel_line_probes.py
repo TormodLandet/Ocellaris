@@ -258,7 +258,7 @@ class OcellarisLineProbePanel(wx.Panel):
         if self.xlabel.Value == 'x-label' and abcissa_label:
             self.xlabel.ChangeValue(abcissa_label)
         if self.ylabel.Value == 'y-label':
-            self.xlabel.ChangeValue(line_probe_name)
+            self.ylabel.ChangeValue(line_probe_name)
 
         self.axes.set_title(self.title.GetValue())
         self.axes.set_xlabel(self.xlabel.GetValue())

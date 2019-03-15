@@ -180,10 +180,12 @@ in numpy::
 
     # Plot the results
     for ypos in (y + dy):
-        pyplot.plot([0, 1], [ypos, ypos], '-k', lw=1)'
+        pyplot.plot([0, 1], [ypos, ypos], '-k', lw=1)
     pyplot.axhline(7, c='b', ls=':')
     pyplot.axhline(6, c='b', ls=':', lw=1)
     pyplot.axhline(8, c='b', ls=':', lw=1)
+
+    print('%.9g*pow(x[1], 3) + %.10g*pow(x[1], 2) + %.10g*x[1] + %.10g' % tuple(P))
 
 For more complicated meshes it is recommended to perform mesh grading and other
 mesh operation in an external mesh generator such as gmsh.
