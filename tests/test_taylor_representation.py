@@ -1,3 +1,6 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy
 import dolfin
 from ocellaris.utils import lagrange_to_taylor, taylor_to_lagrange

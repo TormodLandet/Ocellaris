@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 from . import ocellaris_error, run_debug_console
 

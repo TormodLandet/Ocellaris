@@ -1,3 +1,5 @@
+# Copyright (C) 2014-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Error handling and assertions giving nice user input
 and controlled shutdown of Ocellaris

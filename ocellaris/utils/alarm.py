@@ -1,3 +1,5 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 A timeout context manager based on SIGALRM, Permits multiple
 SIGALRM events to be queued.

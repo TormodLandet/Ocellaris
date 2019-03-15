@@ -1,3 +1,6 @@
+// Copyright (C) 2015-2019 Tormod Landet
+// SPDX-License-Identifier: Apache-2.0
+
 #ifndef __GRADIENT_RECONSTRUCTION_H
 #define __GRADIENT_RECONSTRUCTION_H
 

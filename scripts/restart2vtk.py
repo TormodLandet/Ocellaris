@@ -1,3 +1,5 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Take one function from an Ocellaris restart h5 file and
 export it as a true DG field to a *.vtk file

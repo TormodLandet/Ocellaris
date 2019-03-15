@@ -1,3 +1,5 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Boundary conditions decomposed in wall normal and parallel
 directions. Can be used, e.g., for wall slip on walls that

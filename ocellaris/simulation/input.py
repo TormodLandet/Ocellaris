@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import collections
 from ocellaris.utils import ocellaris_error, OcellarisError, get_root_value

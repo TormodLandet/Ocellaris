@@ -1,3 +1,6 @@
+// Copyright (C) 2017-2019 Tormod Landet
+// SPDX-License-Identifier: Apache-2.0
+
 #include <dolfin/mesh/Facet.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/function/Function.h>

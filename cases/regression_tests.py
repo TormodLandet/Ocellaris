@@ -1,3 +1,5 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 This defines a set of small and relatively fast regression tests
 which can be run by use of pytest. Run

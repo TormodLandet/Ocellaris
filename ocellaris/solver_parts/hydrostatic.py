@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 from dolfin import dot, grad, dx, sqrt, Form, assemble, Timer
 from dolfin import TrialFunction, TestFunction, FunctionSpace, Function
 from dolfin import VectorSpaceBasis, as_backend_type

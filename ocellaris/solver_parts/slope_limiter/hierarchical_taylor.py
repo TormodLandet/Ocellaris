@@ -1,3 +1,6 @@
+# Copyright (C) 2016-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy
 import dolfin as df
 from ocellaris.utils import verify_key, OcellarisError

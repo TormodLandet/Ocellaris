@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import dolfin
 import numpy
 from ocellaris.utils import cell_dofmap, get_local, set_local

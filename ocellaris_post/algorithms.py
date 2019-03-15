@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 def get_stairs(all_results, report_name, min_length=50):
     """
     Given a list of Result objects and the name of a control variable

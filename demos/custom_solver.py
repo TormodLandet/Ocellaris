@@ -1,3 +1,6 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 import dolfin
 from dolfin import dot, grad, dx, dS, jump, avg
 from ocellaris.solvers import Solver, register_solver

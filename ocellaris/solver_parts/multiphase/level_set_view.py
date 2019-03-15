@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 from collections import deque
 import numpy
 import dolfin

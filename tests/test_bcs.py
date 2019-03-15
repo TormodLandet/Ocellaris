@@ -1,3 +1,5 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Test solving the Poisson equation with different boundary conditions
 This also test the whole Ocellaris solver framework with input file

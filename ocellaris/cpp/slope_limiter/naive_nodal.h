@@ -1,3 +1,6 @@
+// Copyright (C) 2016-2019 Tormod Landet
+// SPDX-License-Identifier: Apache-2.0
+
 #ifndef __SLOPE_LIMITER_BASIC_H
 #define __SLOPE_LIMITER_BASIC_H
 

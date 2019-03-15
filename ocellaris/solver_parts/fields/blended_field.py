@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 from ocellaris.utils import verify_key, verify_field_variable_definition
 from . import register_known_field, KnownField
 

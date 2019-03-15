@@ -1,3 +1,6 @@
+# Copyright (C) 2018-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 # This is a YSchema definition file for Ocellaris input files. This can
 # be used to validate the structure of the input file without running
 # Ocellaris setup(),  which can take a long time for big meshes.

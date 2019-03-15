@@ -1,3 +1,5 @@
+# Copyright (C) 2017-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
 """
 Plot convergence summary files 
 """

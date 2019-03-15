@@ -1,3 +1,6 @@
+# Copyright (C) 2015-2019 Tormod Landet
+# SPDX-License-Identifier: Apache-2.0
+
 # flake8: noqa
 from .boundary_conditions import BoundaryRegion, get_dof_region_marks, mark_cell_layers
 from .slope_limiter import SlopeLimiter, LocalMaximaMeasurer
