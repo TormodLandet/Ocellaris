@@ -69,9 +69,7 @@ class SolverIPCS(Solver):
         self.simulation = sim = simulation
         self.read_input()
         self.create_functions()
-        self.hydrostatic_pressure = setup_hydrostatic_pressure(
-            simulation, needs_initial_value=True
-        )
+        self.hydrostatic_pressure = setup_hydrostatic_pressure(simulation, needs_initial_value=True)
 
         # First time step timestepping coefficients
         sim.data['time_coeffs'] = dolfin.Constant([1, -1, 0])
@@ -80,12 +78,13 @@ class SolverIPCS(Solver):
         sim.data['dt'] = dolfin.Constant(simulation.dt)
 
         # Get equations
-        MomentumPredictionEquation, PressureCorrectionEquation, VelocityUpdateEquation = EQUATION_SUBTYPES[
-            self.equation_subtype
-        ]
+        (
+            MomentumPredictionEquation,
+            PressureCorrectionEquation,
+            VelocityUpdateEquation,
+        ) = EQUATION_SUBTYPES[self.equation_subtype]
 
         # Define the momentum prediction equations
-        self.eqs_mom_pred = []
         self.eqs_mom_pred = MomentumPredictionEquation(
             simulation,
             use_stress_divergence_form=self.use_stress_divergence_form,
@@ -107,18 +106,14 @@ class SolverIPCS(Solver):
             self.eqs_vel_upd.append(eq)
 
         # Slope limiter for the momentum equation velocity components
-        self.slope_limiter = SlopeLimiterVelocity(
-            sim, sim.data['u'], 'u', vel_w=sim.data['u_conv']
-        )
+        self.slope_limiter = SlopeLimiterVelocity(sim, sim.data['u'], 'u', vel_w=sim.data['u_conv'])
         self.using_limiter = self.slope_limiter.active
 
         # Projection for the velocity
         self.velocity_postprocessor = None
         if self.velocity_postprocessing == BDM:
             self.velocity_postprocessor = VelocityBDMProjection(
-                sim,
-                sim.data['u'],
-                incompressibility_flux_type=self.incompressibility_flux_type,
+                sim, sim.data['u'], incompressibility_flux_type=self.incompressibility_flux_type
             )
 
         # Storage for preassembled matrices
@@ -167,9 +162,7 @@ class SolverIPCS(Solver):
         self.equation_subtype = sim.input.get_value(
             'solver/equation_subtype', EQUATION_SUBTYPE, 'string'
         )
-        verify_key(
-            'equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'ipcs solver'
-        )
+        verify_key('equation sub-type', self.equation_subtype, EQUATION_SUBTYPES, 'ipcs solver')
 
         # Lagrange multiplicator or remove null space via PETSc
         self.remove_null_space = True
@@ -177,9 +170,7 @@ class SolverIPCS(Solver):
         self.use_lagrange_multiplicator = sim.input.get_value(
             'solver/use_lagrange_multiplicator', USE_LAGRANGE_MULTIPLICATOR, 'bool'
         )
-        has_dirichlet = (
-            self.simulation.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']
-        )
+        has_dirichlet = self.simulation.data['dirichlet_bcs'].get('p', []) or sim.data['outlet_bcs']
         if self.use_lagrange_multiplicator or has_dirichlet:
             self.remove_null_space = False
 
@@ -205,10 +196,7 @@ class SolverIPCS(Solver):
             'solver/velocity_postprocessing', default_postprocessing, 'string'
         )
         verify_key(
-            'velocity post processing',
-            self.velocity_postprocessing,
-            (None, BDM),
-            'ipcs solver',
+            'velocity post processing', self.velocity_postprocessing, (None, BDM), 'ipcs solver'
         )
 
         # Quasi-steady simulation input
@@ -274,11 +262,7 @@ class SolverIPCS(Solver):
         b = dolfin.as_backend_type(eq.assemble_rhs())
         self.assigner_merge.assign(uvw_star, list(sim.data['u']))
         self.niters_u = self.velocity_solver.inner_solve(
-            A,
-            uvw_star.vector(),
-            b,
-            in_iter=self.inner_iteration,
-            co_iter=self.co_inner_iter,
+            A, uvw_star.vector(), b, in_iter=self.inner_iteration, co_iter=self.co_inner_iter
         )
         self.assigner_split.assign(list(sim.data['u']), uvw_star)
 
@@ -368,7 +352,7 @@ class SolverIPCS(Solver):
         else:
             # Global projection
             for d in range(self.simulation.ndim):
-                eq = self.eqs_vel_upd
+                eq = self.eqs_vel_upd[d]
 
                 if self.Au_upd is None:
                     self.Au_upd = eq.assemble_lhs()
@@ -426,9 +410,7 @@ class SolverIPCS(Solver):
             # Get input values, these can possibly change over time
             dt = sim.input.get_value('time/dt', required_type='float')
             tmax = sim.input.get_value('time/tmax', required_type='float')
-            num_inner_iter = sim.input.get_value(
-                'solver/num_inner_iter', MAX_INNER_ITER, 'int'
-            )
+            num_inner_iter = sim.input.get_value('solver/num_inner_iter', MAX_INNER_ITER, 'int')
             allowable_error_inner = sim.input.get_value(
                 'solver/allowable_error_inner', ALLOWABLE_ERROR_INNER, 'float'
             )
