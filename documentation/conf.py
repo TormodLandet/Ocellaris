@@ -93,9 +93,11 @@ default_description = ' '.join(
 # built documents.
 
 # Get the Ocellaris version
-for line in open(os.path.join(main_dir, 'ocellaris', '__init__.py')):
-    if line.startswith('__version__'):
-        ocellaris_version = line.split('=')[1].strip()[1:-1]
+init_path = os.path.join(main_dir, 'ocellaris', '__init__.py')
+with open(init_path) as f:
+    for line in f:
+        if line.startswith('__version__'):
+            ocellaris_version = line.split('=')[1].strip()[1:-1]
 
 # The short X.Y version.
 version = ocellaris_version.split('.dev')[0]  # remove ".devX" postfix

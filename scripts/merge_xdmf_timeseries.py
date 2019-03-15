@@ -127,13 +127,14 @@ def delete_existing_file(out_file_name):
     h5_out_file = out_file_name.replace('.xdmf', '.h5')
     if os.path.isfile(out_file_name):
         told = -1
-        for line in open(out_file_name, 'rt'):
-            if '<Time Value=' in line:
-                try:
-                    tiold = float(line.split('"')[1])
-                except ValueError:
-                    continue
-                told = max(told, tiold)
+        with open(out_file_name, 'rt') as f:
+            for line in f:
+                if '<Time Value=' in line:
+                    try:
+                        tiold = float(line.split('"')[1])
+                    except ValueError:
+                        continue
+                    told = max(told, tiold)
         print('Deleting existing %s with max time = %r' % (out_file_name, told))
         os.unlink(out_file_name)
     if os.path.isfile(h5_out_file):
