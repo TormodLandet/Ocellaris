@@ -1,7 +1,6 @@
 import os
 import time
 from collections import OrderedDict
-import numpy
 from dolfin import compile_cpp_code
 
 
@@ -14,11 +13,13 @@ def _get_cpp_module(cpp_files, force_recompile=False):
     cpp_sources = []
     for cpp_filename in cpp_files:
         lines = []
-        for line in open(os.path.join(cpp_dir, cpp_filename), 'rt'):
-            if line.startswith('#include') and 'remove_in_jit' in line:
-                pass
-            else:
-                lines.append(line)
+        cpp_path = os.path.join(cpp_dir, cpp_filename)
+        with open(cpp_path, 'rt') as cpp_file_obj:
+            for line in cpp_file_obj:
+                if line.startswith('#include') and 'remove_in_jit' in line:
+                    pass
+                else:
+                    lines.append(line)
         cpp_sources.append(''.join(lines))
 
     # Force recompilation
@@ -70,13 +71,10 @@ class _ModuleCache(object):
 _MODULES = _ModuleCache()
 _MODULES.add_module('naive_nodal', ['slope_limiter/naive_nodal.h'])
 _MODULES.add_module(
-    'hierarchical_taylor',
-    ['slope_limiter/limiter_common.h', 'slope_limiter/hierarchical_taylor.h'],
+    'hierarchical_taylor', ['slope_limiter/limiter_common.h', 'slope_limiter/hierarchical_taylor.h']
 )
 _MODULES.add_module('measure_local_maxima', ['slope_limiter/measure_local_maxima.h'])
-_MODULES.add_module(
-    'linear_convection', ['gradient_reconstruction.h', 'linear_convection.h']
-)
+_MODULES.add_module('linear_convection', ['gradient_reconstruction.h', 'linear_convection.h'])
 
 
 def load_module(name, force_recompile=False):

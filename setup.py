@@ -14,9 +14,11 @@ with open(os.path.join(here, 'README.rst'), encoding='utf-8') as f:
 
 
 # Get the version
-for line in open(os.path.join(here, 'ocellaris', '__init__.py'), encoding='utf-8'):
-    if line.startswith('__version__'):
-        version = line.split('=')[1].strip()[1:-1]
+init_path = os.path.join(here, 'ocellaris', '__init__.py')
+with open(init_path) as f:
+    for line in f:
+        if line.startswith('__version__'):
+            version = line.split('=')[1].strip()[1:-1]
 
 
 # List packages we depend on

@@ -6,7 +6,8 @@ ocellaris_post package to read the time step reports
 """
 import os
 from io import StringIO
-import urllib, base64
+import urllib
+import base64
 import re
 import h5py
 import numpy
@@ -37,17 +38,18 @@ def read_reports_h5(h5_file_name, derived=True):
 
 def read_reports_log(log_file_name, derived=True):
     data = {}
-    for line in open(log_file_name, 'rt'):
-        if line.startswith('Reports for timestep'):
-            parts = line[12:].split(',')
-            for pair in parts:
-                try:
-                    key, value = pair.split('=')
-                    key = key.strip()
-                    value = float(value)
-                    data.setdefault(key, []).append(value)
-                except:
-                    break
+    with open(log_file_name, 'rt') as f:
+        for line in f:
+            if line.startswith('Reports for timestep'):
+                parts = line[12:].split(',')
+                for pair in parts:
+                    try:
+                        key, value = pair.split('=')
+                        key = key.strip()
+                        value = float(value)
+                        data.setdefault(key, []).append(value)
+                    except Exception:
+                        break
 
     reps = {}
     for key, values in data.items():
