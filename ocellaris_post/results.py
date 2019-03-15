@@ -7,7 +7,7 @@ import numpy
 import yaml
 from io import StringIO
 from .files import get_result_file_type
-from .readers import read_surfaces, read_point_probes
+from .readers import read_surfaces, read_point_probes, read_line_probes
 
 
 if sys.version[0] != '2':
@@ -41,6 +41,7 @@ class Results(object):
         self.reports_x = None
         self.surfaces = None
         self.point_probes = None
+        self.line_probes = None
         self.input = None
         self.warnings = []
 
@@ -113,8 +114,15 @@ class Results(object):
         if self.point_probes is None:
             read_point_probes(self)
         else:
-            for probe in self.point_probes.values():
-                probe.reload()
+            for pprobe in self.point_probes.values():
+                pprobe.reload()
+
+        # Read line probes
+        if self.line_probes is None:
+            read_line_probes(self)
+        else:
+            for lprobe in self.line_probes.values():
+                lprobe.reload()
 
         # Include point probe values among the time step reports
         if include_auxiliary_reports:
