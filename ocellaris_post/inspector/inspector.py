@@ -11,6 +11,7 @@ from .panel_results import OcellarisReportsPanel
 from .panel_files import OcellarisFilesPanel
 from .panel_stairs import OcellarisStairsPanel
 from .panel_surfaces import OcellarisSurfacesPanel
+from .panel_line_probes import OcellarisLineProbePanel
 
 
 class OcellarisInspector(wx.Frame):
@@ -46,6 +47,10 @@ class OcellarisInspector(wx.Frame):
         self.stairs_panel = OcellarisStairsPanel(nb, self.istate)
         nb.AddPage(self.stairs_panel, 'Stairs')
         self.stairs_panel.SetBackgroundColour(p.GetBackgroundColour())
+
+        self.line_probes_panel = OcellarisLineProbePanel(nb, self.istate)
+        nb.AddPage(self.line_probes_panel, 'Line probes')
+        self.line_probes_panel.SetBackgroundColour(p.GetBackgroundColour())
 
         self.surfaces_panel = OcellarisSurfacesPanel(nb, self.istate)
         nb.AddPage(self.surfaces_panel, 'Surfaces')
