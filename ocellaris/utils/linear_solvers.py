@@ -235,7 +235,11 @@ class KSPLinearSolverWrapper(object):
             if not param.startswith('petsc_'):
                 continue
 
-            option = prefix + param[6:]
+            # Citations are treated specially, does not work with prefix
+            if param == 'petsc_citations':
+                option = 'citations'
+            else:
+                option = prefix + param[6:]
             simulation.log.info('        %-50s: %20r' % (option, value))
 
             # Some options do not have a value, but we must have one on the input
