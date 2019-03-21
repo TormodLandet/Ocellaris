@@ -56,13 +56,13 @@ Installation using containers
 
 **Singularity**
 
-Ocellaris is developed (mostly) using Singularity_ containers. Singularity containers do not require root access to run, and are supported on (some) HPC clusters. You can either pull a pre-built image from SingularityHub,
+Ocellaris is developed (mostly) using Singularity_ containers. Singularity containers do not require root access to run, and are supported on (some) HPC clusters. The easiest way to get started is to download a pre-built image from the `Singularity Library <https://cloud.sylabs.io/library/trlandet/default/ocellaris>`_,
 
-.. code-block: bash
+.. code-block:: bash
 
   singularity pull library://trlandet/default/ocellaris:2019.0.2
 
- which will leave you with an ``ocellaris.sif`` file in the current director, or you you can use the build description described in the ``Singularity`` file inside the  containers_ subdirectory of the Ocellaris source code. To build a Singularity image from the master branch of Ocellaris run:
+which will leave you with an ``ocellaris_VERSION.sif`` file in the current directory. Rename this file to ``ocellaris.img`` to follow along with the commands shown below. You can also use the build description described in the ``Singularity`` file inside the  containers_ subdirectory of the Ocellaris source code to build a Singularity image from the master branch of Ocellaris:
 
 .. code:: shell
 
