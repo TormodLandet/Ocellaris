@@ -104,6 +104,8 @@ the test you write as helpers to protect you against future programmers
 breaking your code because they do not understand properly how it works. Often
 that future person is yourself two weeks after ... 🤣
 
+.. _label-running-tests:
+
 **Running the tests**
 
 The exact procedure for running the tests can be found in `config.yml
