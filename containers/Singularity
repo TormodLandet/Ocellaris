@@ -18,15 +18,19 @@ From: trlandet/fenics-dev:py3_CI
     # Update Python dependencies (same as CircleCI config.py)
     sudo pip3 install pip --upgrade
     sudo pip3 install pytest pytest-timeout pytest-instafail --upgrade
-    sudo pip3 install meshio raschii PyYAML yschema --upgrade
+    sudo pip3 install meshio raschii 'PyYAML<5.1' yschema --upgrade
 
     # Install Ocellaris
-    mkdir /source
-    cd /source
+    mkdir /tmp/ocellarisinstall
+    cd /tmp/ocellarisinstall
     git clone https://bitbucket.org/ocellarisproject/ocellaris.git
     cd ocellaris
     pip3 install .
-    chown fenics:fenics -R /source
+
+    # The Singularity file system is read only so there is no need to
+    # keep the source code around, it cannot be edited anyway
+    cd /
+    rm -r /tmp/ocellarisinstall 
 
 %environment
     export FENICS_PREFIX=/usr/local

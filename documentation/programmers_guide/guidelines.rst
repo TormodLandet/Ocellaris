@@ -103,3 +103,26 @@ and you will find about a billion articles extolling their virtues. Think of
 the test you write as helpers to protect you against future programmers
 breaking your code because they do not understand properly how it works. Often
 that future person is yourself two weeks after ... 🤣
+
+**Running the tests**
+
+The exact procedure for running the tests can be found in `config.yml
+<https://bitbucket.org/ocellarisproject/ocellaris/src/master/.circleci/config.yml>`_.
+Currently this is the following commands, run them in the repository base directory:
+
+.. code-block:: bash
+
+    # Install test dependencies
+    python3 -m pip install pytest pytest-timeout pytest-instafail
+
+    # Run unit tests
+    python3 -m pytest -v tests/ --instafail --timeout=300 --durations=10
+
+    # Run unit tests with MPI
+    mpirun -n 3 python3 -m pytest -v tests/ --maxfail=1 --timeout=300 --durations=10
+    
+    # Run regression tests
+    python3 -m pytest -v cases/regression_tests.py --instafail --timeout=300 --durations=0
+    
+    # Run demo tests
+    python3 -m pytest -v demos/ --instafail --timeout=300 --durations=0
