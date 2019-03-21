@@ -30,7 +30,13 @@ Ocellaris depends on the FEniCS_ finite element framework---version 2018.1 or ne
 
 **Python packages**
 
-When you have installed FEniCS, the rest of the dependencies can be handled by the Python installation program, ``pip``. Simply running ``python3 -m pip install ocellaris`` will install Ocellaris along with all dependencies (see :ref:`label-pip` for more details on using pip). For completeness, the Python package dependencies are also listed below:
+When you have installed FEniCS, the rest of the dependencies can be handled by the Python installation program, ``pip``. Simply running
+
+.. code-block:: bash
+
+  python3 -m pip install ocellaris
+  
+will install Ocellaris along with all dependencies (see :ref:`label-pip` for more details on using pip). For completeness, the Python package dependencies are also listed below:
 
 * PyYAML
 * h5py
@@ -50,7 +56,13 @@ Installation using containers
 
 **Singularity**
 
-Ocellaris is developed (mostly) using Singularity_ containers. Singularity containers do not require root access to run, and are supported on (some) HPC clusters. You can either convert the Docker CI container or use the Singularity build description described in the ``Singularity`` file inside the  containers_ subdirectory of the Ocellaris source code. To build a Singularity image from the master branch of Ocellaris run:
+Ocellaris is developed (mostly) using Singularity_ containers. Singularity containers do not require root access to run, and are supported on (some) HPC clusters. You can either pull a pre-built image from SingularityHub,
+
+.. code-block: bash
+
+  singularity pull library://trlandet/default/ocellaris:2019.0.2
+
+ which will leave you with an ``ocellaris.sif`` file in the current director, or you you can use the build description described in the ``Singularity`` file inside the  containers_ subdirectory of the Ocellaris source code. To build a Singularity image from the master branch of Ocellaris run:
 
 .. code:: shell
 
