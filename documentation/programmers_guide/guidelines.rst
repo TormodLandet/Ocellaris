@@ -15,11 +15,6 @@ your case significantly 😉
 .. contents:: Steps to get your code merged
     :local:
 
-Please keep in mind that the person/persons that can review your pull request
-may not get to it right away. In the worst case scenario they are on a month
-long tropical Holiday away from email (best case scenario! ☀️🌴🍹). Do not get
-discouraged if we do not get to reviewing your changes right away!
-
 
 Git workflow
 ------------
@@ -40,10 +35,6 @@ The following are examples of good branch names:
 Prefixing the branch name with your own name helps others know who is the main
 responsible for each branch, which can be useful if more people want to
 contribute to the Ocellaris development.
-
-You will get write access to the Ocellaris repositories if you ask nicely and
-have contributed a couple of pull requests. You will not be given access to
-merge to the master branch at once, though.
 
 
 Code style
@@ -128,3 +119,20 @@ Currently this is the following commands, run them in the repository base direct
     
     # Run demo tests
     python3 -m pytest -v demos/ --instafail --timeout=300 --durations=0
+
+
+Merging your code
+-----------------
+
+For your first patch you must fork the `Ocellaris repository on Bitbucket
+<https://bitbucket.org/ocellarisproject/ocellaris>`_, push your changes to your
+fork, and start a pull request from there, see the `Bitbucket documentation
+<https://confluence.atlassian.com/bitbucket/forking-a-repository-221449527.html>`_ 
+for details. You will get write access to the Ocellaris repositories if you ask
+nicely and have contributed a couple of pull requests. You will not be given
+access to merge to the master branch at once, though.
+
+Please keep in mind that the person/persons that can review your pull request
+may not get to it right away. In the worst case scenario they are on a month
+long tropical Holiday away from email (best case scenario! ☀️🌴🍹). Do not get
+discouraged if we do not get to reviewing your changes right away!

@@ -26,6 +26,7 @@ For help installing/running Ocellaris, please use the `issue tracker <https://bi
    :maxdepth: 3
 
    Ocellaris release notes and project news blog <blog/index>
+   community_guidelines
    user_guide/user_guide
    programmers_guide/programmers_guide
    license
