@@ -36,6 +36,93 @@ by the ``--set-input`` command line flag so that you can be sure to know
 exactly what you did run when you look back on an old simulation.
 
 
+Running a simulation on multiple CPUS with MPI
+..............................................
+
+The procedure for running in parallel with MPI is different depending on
+whether you are running on an HPC (high performance cluster/computer), or on a
+single machine. On a cluster---where you can run Ocellaris in parallel across
+many machines---the method of running will also depend on whether your cluster
+has FEniCS or Singularity installed. One of these must be installed for
+Ocellaris to work.
+
+**Not on HPC**
+
+If you want to run in parallel on a single machine, then you will need to
+specify the number of parallel processes to the ``mpirun`` command, and it
+will launch and handle the parallel simulation. This also works inside a
+Singularity or Docker container. To run on 8 CPUs:
+
+.. code-block:: sh
+
+    mpirun -np 8 ocellaris INPUTFILE.inp
+
+You can see the number of CPUs that are being used in the Ocellaris log file
+to verify that it is working as intended. The log file will also show the
+number of mesh cells and function space unknowns per CPU.
+
+**FEniCS installed on HPC**
+
+If you have an installation of FEniCS at your local HPC cluster, and this
+version of FEniCS is compiled for your clusters favourite MPI implementation,
+then you can run Ocellaris just like any other MPI software (with the correct
+``mpirun`` for the selected MPI implementation):
+
+.. code-block:: sh
+
+    # In a job-script for SLURM, Grid Engine, etc.
+    mpirun ocellaris INPUTFILE.inp
+
+The ``mpirun`` command (may also be called other names, check with your HPC
+documentation) will typically figure out how many CPUs you have been allocated,
+you normally do not have to specify this in the arguments to ``mpirun``. You
+must typically write the above command inside a job-script and ask the HPC
+scheduler to run the script for you with a given number of CPUs. How you write
+the job-script and how you give it to the scheduler depends on your local HPC
+machine, and should be documented by the HPC administrators.
+
+You can also use :ref:`the orun.py script <script_orun>` to babysit your
+simulation and make sure it is restarted if the cluster has a problem and the
+simulation freezes (this can unfortunately happen with complex parallel file
+system/MPI/Infiniband problems that are typically outside your control). You
+replace the call to ``mpirun`` with ``python3 orun.py ...``. The ``orun``
+script currently only supports SLURM, but it is relatively easy to extend it to
+other schedulers. Send us a patch if you do!
+
+**Singularity installed on HPC**
+
+If you want to run on an HPC system where you do not have FEniCS available,
+but you do have Singularity, then you can use an `MPICH ABI compatible
+<https://www.mpich.org/abi/>`_ mpirun from outside Singularity to launch
+your job:
+
+.. code-block:: sh
+
+    # With a scheduler
+    mpirun singularity run ocellaris.img INPUTFILE.inp
+
+    # Without a scheduler
+    mpirun -np 16 singularity run ocellaris.img INPUTFILE.inp
+
+You will need to use an MPICH ABI compatible ``mpirun``, such as Intel MPI or
+MVAPICH2. You will probably also need to modify the Singularity image file so
+that you include the appropriate Infiniband drivers. As an example, see
+`this description <https://www.nsc.liu.se/support/singularity/mpi/>`_ or 
+`this email <https://groups.google.com/a/lbl.gov/d/msg/singularity/50AhKYYQZVc/TAkx3oVhAQAJ>`_
+for inspiration. By using a compatible MPI inside and outside the container it
+should be just as fast as a local install (from other people's tests). This
+has not been tested on Ocellaris simulations, let us know if you have some data
+on this! Ocellaris is built with the standard MPICH library since this is what
+is used by the FEniCS Docker images that we use as a basis.
+
+Talk to your local HPC admin to figure out which libraries are necessary to
+install inside the Singularity container. They may already have documents on
+using Singularity if they have installed in on the HPC system. We cannot
+document the exact steps to get it running here as HPC documentation is
+unfortunately still very system specific. Hopefully tools like Singularity and
+the push for reproducible science will improve this situation over time.
+
+
 Restart files
 .............
 
