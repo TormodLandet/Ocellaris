@@ -53,7 +53,7 @@ Common errors
 
 Some errors that are easy to make when writing a YAML input file:
 
-- Boleans in YAML are written all lower case  (:code:`true, false`) unlike
+- Booleans in YAML are written all lower case  (:code:`true, false`) unlike
   in Python where the first letter is upper case (:code:`True, False`). It
   can be easier to use the alternatives :code:`on` or :code:`off` so this
   confusion is avoided.
