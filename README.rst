@@ -1,8 +1,8 @@
 Ocellaris
 =========
 
-Ocellaris is a mass conserving DG FEM solver for sharp interface multiphase
-free surface flows. Ocellaris can simulate water entry and exit of objects in
+Ocellaris is a mass-conserving DG FEM solver for sharp-interface multiphase
+free-surface flows. Ocellaris can simulate water entry and exit of objects in
 ocean waves with accurate capturing of the force on the object and the
 behaviour of the free surface. Some examples of what Ocellaris can do,
 including videos of the results, are shown in the `Ocellaris Blog`_ on
@@ -71,12 +71,11 @@ Documentation
 The documentation can be found on the `Ocellaris web page <https://www.ocellaris.org/index.html#sec-documentation-and-user-guide>`_.
 
 
-
 Development
 -----------
 
 Ocellaris is developed in Python and C++ on `Bitbucket <https://bitbucket.org/ocellarisproject/ocellaris>`_
-by use of the Git version control system. If you are reading this on github,
+by use of the Git version-control system. If you are reading this on github,
 please be aware that you are seeing a mirror that could potentially be months
 out of date. The github mirror is only updated sporadically—to trigger new
 Singularity and Docker Hub container builds. All pull requests and issues

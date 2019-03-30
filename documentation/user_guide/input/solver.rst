@@ -57,7 +57,7 @@ Incremental Pressure Correction Scheme on Algebraic form. This is an iterative
 Chorin/Temam type pressure correction solver.
 
 This is the most used solver and it typically has more advanced features than
-the other solvers.
+the other solvers. See :cite:`landet_pcorr_2019` for details.
 
 
 IPCS-D
@@ -70,7 +70,7 @@ algebraicly from matrices. The divergence of the velocity field is hence not
 very low and the method is not so strongly recommended for DG FEM, but it is
 one of the most common solvers for the Navier-Stokes equations outside of DG
 FEM and it has a smaller numerical stencil and may be faster than the IPCS-A
-method.
+method. See :cite:`landet_pcorr_2019` for details.
 
 
 SIMPLE
@@ -78,6 +78,8 @@ SIMPLE
 
 Semi-Implicit Method for Pressure-Linked Equations. The implementation of the
 algorithm is based on :cite:`klein_simple_2015`.
+See :cite:`landet_pcorr_2019` for a comparison with IPCS-A and IPCS-D.
+
 
 PISO
 ----

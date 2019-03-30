@@ -1,9 +1,9 @@
 About Ocellaris
 ###############
 
-.. title:: Ocellaris: a mass conserving higher order DG FEM solver for free surface flows
+.. title:: Ocellaris: a mass-conserving higher-order DG FEM solver for free-surface flows
 
-Ocellaris is a mass conserving DG FEM solver for sharp interface multiphase free surface flows. Ocellaris can simulate water entry and exit of objects in ocean waves with accurate capturing of the force on the object and the behaviour of the free surface. Some examples of what Ocellaris can do, including videos of the results, are shown in the `Ocellaris Blog`_. Ocellaris is named after the `Amphiprion Ocellaris <https://en.wikipedia.org/wiki/Ocellaris_clownfish>`_ clownfish and is released under the Apache License, version 2.0.
+Ocellaris is a mass-conserving DG FEM solver for sharp-interface multiphase free-surface flows. Ocellaris can simulate water entry and exit of objects in ocean waves with accurate capturing of the force on the object and the behaviour of the free surface. Some examples of what Ocellaris can do, including videos of the results, are shown in the `Ocellaris Blog`_. Ocellaris is named after the `Amphiprion Ocellaris <https://en.wikipedia.org/wiki/Ocellaris_clownfish>`_ clownfish and is released under the Apache License, version 2.0.
 
 .. figure:: https://www.ocellaris.org/figures/cylinder_in_waves.jpg
     :width: 50%
@@ -42,4 +42,4 @@ For help installing/running Ocellaris, please use the `issue tracker <https://bi
 .. |circleci_status| image:: https://circleci.com/bb/ocellarisproject/ocellaris.svg?style=svg
     :target: https://circleci.com/bb/ocellarisproject/ocellaris
 
-This documentation is written by Tormod Landet and the :doc:`Ocellaris contributers <contributors>` and is under the same :doc:`license <license>` as the rest of the Ocellaris source code repository contents. See :ref:`sec_citing` for how to reference Ocellaris in your research.
+This documentation is written by Tormod Landet and the :doc:`Ocellaris contributors <contributors>` and is under the same :doc:`license <license>` as the rest of the Ocellaris source code repository contents. See :ref:`sec_citing` for how to reference Ocellaris in your research.
